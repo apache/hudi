@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
@@ -72,7 +72,7 @@ public class OrcUtils extends BaseFileUtils {
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath) {
     try {
       Configuration conf = new Configuration(configuration);
-      conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
+      conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
       Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
 
       Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();

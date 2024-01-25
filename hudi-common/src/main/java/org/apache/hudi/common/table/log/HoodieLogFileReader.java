@@ -18,11 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.fs.BoundedFsDataInputStream;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.SchemeAwareFSDataInputStream;
-import org.apache.hudi.common.fs.StorageSchemes;
-import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -39,7 +35,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.CorruptedLogFileException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.hadoop.fs.BoundedFsDataInputStream;
+import org.apache.hudi.hadoop.fs.SchemeAwareFSDataInputStream;
+import org.apache.hudi.hadoop.fs.TimedFSDataInputStream;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.io.storage.StorageSchemes;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;

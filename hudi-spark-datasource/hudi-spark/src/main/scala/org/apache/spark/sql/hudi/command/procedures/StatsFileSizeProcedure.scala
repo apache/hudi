@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.common.fs.FSUtils
 import com.codahale.metrics.{Histogram, Snapshot, UniformReservoir}
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils
 import org.apache.spark.sql.Row

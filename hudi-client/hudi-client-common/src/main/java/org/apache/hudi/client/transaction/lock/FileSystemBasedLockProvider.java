@@ -22,8 +22,6 @@ package org.apache.hudi.client.transaction.lock;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -34,6 +32,8 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.storage.StorageSchemes;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -83,7 +83,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     this.lockFile = new Path(lockDirectory + Path.SEPARATOR + LOCK_FILE_NAME);
     this.lockInfo = new LockInfo();
     this.sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-    this.fs = FSUtils.getFs(this.lockFile.toString(), configuration);
+    this.fs = HadoopFSUtils.getFs(this.lockFile.toString(), configuration);
     List<String> customSupportedFSs = lockConfiguration.getConfig().getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
     if (!customSupportedFSs.contains(this.fs.getScheme()) && !StorageSchemes.isAtomicCreationSupported(this.fs.getScheme())) {
       throw new HoodieLockException("Unsupported scheme :" + this.fs.getScheme() + ", since this fs can not support atomic creation");

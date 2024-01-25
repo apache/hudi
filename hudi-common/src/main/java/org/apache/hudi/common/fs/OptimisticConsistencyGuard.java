@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.hadoop.fs.ConsistencyGuard;
+
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;

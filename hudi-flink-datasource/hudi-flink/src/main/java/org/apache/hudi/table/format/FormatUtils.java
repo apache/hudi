@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.EngineType;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -39,6 +38,7 @@ import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -153,7 +153,7 @@ public class FormatUtils {
       org.apache.flink.configuration.Configuration flinkConf,
       Configuration hadoopConf) {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
-    FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(split.getTablePath(), hadoopConf);
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(split.getTablePath())
@@ -197,7 +197,7 @@ public class FormatUtils {
       HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
           split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
       HoodieUnMergedLogRecordScanner.Builder scannerBuilder = HoodieUnMergedLogRecordScanner.newBuilder()
-          .withFileSystem(FSUtils.getFs(split.getTablePath(), hadoopConf))
+          .withFileSystem(HadoopFSUtils.getFs(split.getTablePath(), hadoopConf))
           .withBasePath(split.getTablePath())
           .withLogFilePaths(split.getLogPaths().get())
           .withReaderSchema(logSchema)
@@ -261,7 +261,7 @@ public class FormatUtils {
       Configuration hadoopConf) {
     String basePath = writeConfig.getBasePath();
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(FSUtils.getFs(basePath, hadoopConf))
+        .withFileSystem(HadoopFSUtils.getFs(basePath, hadoopConf))
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)
         .withReaderSchema(logSchema)

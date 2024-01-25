@@ -72,6 +72,7 @@
                   <include>commons-lang:commons-lang</include>
                   <include>commons-pool:commons-pool</include>
 
+                  <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>

@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
@@ -91,7 +91,7 @@ public class ParquetUtils extends BaseFileUtils {
     ParquetMetadata footer;
     try {
       // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader.readFooter(FSUtils.getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
+      footer = ParquetFileReader.readFooter(HadoopFSUtils.getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
     }
@@ -115,7 +115,7 @@ public class ParquetUtils extends BaseFileUtils {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
     Configuration conf = new Configuration(configuration);
-    conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
+    conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
     Set<Pair<String, Long>> rowKeys = new HashSet<>();
@@ -170,7 +170,7 @@ public class ParquetUtils extends BaseFileUtils {
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       Configuration conf = new Configuration(configuration);
-      conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
+      conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
       Schema readSchema = keyGeneratorOpt.map(keyGenerator -> {
         List<String> fields = new ArrayList<>();
         fields.addAll(keyGenerator.getRecordKeyFieldNames());

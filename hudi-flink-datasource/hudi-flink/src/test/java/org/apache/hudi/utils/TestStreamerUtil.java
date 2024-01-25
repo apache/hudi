@@ -18,12 +18,12 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -114,7 +114,7 @@ public class TestStreamerUtil {
 
     assertFalse(StreamerUtil.tableExists(basePath, HadoopConfigurations.getHadoopConf(conf)));
 
-    try (FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(conf))) {
+    try (FileSystem fs = HadoopFSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(conf))) {
       fs.mkdirs(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
       assertFalse(StreamerUtil.tableExists(basePath, HadoopConfigurations.getHadoopConf(conf)));
 
