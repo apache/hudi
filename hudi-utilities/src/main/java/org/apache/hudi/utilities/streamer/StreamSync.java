@@ -123,6 +123,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -274,11 +275,11 @@ public class StreamSync implements Serializable, Closeable {
     this.processedSchema = new SchemaSet();
     this.autoGenerateRecordKeys = KeyGenUtils.enableAutoGenerateRecordKeys(props);
     this.keyGenClassName = getKeyGeneratorClassName(new TypedProperties(props));
+    this.conf = conf;
 
     HoodieWriteConfig hoodieWriteConfig = getHoodieClientConfig();
     this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, hoodieWriteConfig);
     this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig);
-    this.conf = conf;
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, hoodieSparkContext, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
@@ -287,15 +288,11 @@ public class StreamSync implements Serializable, Closeable {
     Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, schemaProvider, metrics);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
-    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
-        Option.ofNullable(schemaProvider).map(SchemaProvider::getSourceSchema), this.errorTableWriter.isPresent());
-    if (this.cfg.operation == WriteOperationType.BULK_INSERT && source.getSourceType() == Source.SourceType.ROW
-        && this.props.getBoolean("hoodie.streamer.write.row.writer.enable", false)) {
-      // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
-      this.useRowWriter = true;
-    } else {
-      this.useRowWriter = false;
-    }
+    Supplier<Option<Schema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceSchema());
+    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), schemaSupplier, this.errorTableWriter.isPresent());
+    // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
+    this.useRowWriter = this.cfg.operation == WriteOperationType.BULK_INSERT && source.getSourceType() == Source.SourceType.ROW
+        && this.props.getBoolean("hoodie.streamer.write.row.writer.enable", false);
   }
 
   /**
