@@ -36,6 +36,7 @@ import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMe
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.File
+import java.util.concurrent.CountDownLatch
 
 class TestInsertTable extends HoodieSparkSqlTestBase {
 
@@ -2083,11 +2084,16 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  var listenerCallCount: Int = 0
+  var countDownLatch: CountDownLatch = _
+
   // add a listener for stages for parallelism checking with stage name
   class StageParallelismListener(var stageName: String) extends SparkListener {
     override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
       if (stageSubmitted.stageInfo.name.contains(stageName)) {
         assertResult(1)(stageSubmitted.stageInfo.numTasks)
+        listenerCallCount = listenerCallCount + 1
+        countDownLatch.countDown
       }
     }
 
@@ -2097,6 +2103,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
     withRecordType()(withTempDir { tmp =>
       val targetTable = generateTableName
+      countDownLatch = new CountDownLatch(1)
+      listenerCallCount = 0
       spark.sql(
         s"""
            |create table ${targetTable} (
@@ -2138,12 +2146,16 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         rddHead = rddHead.firstParent
       }
       assertResult(1)(rddHead.partitions.size)
+      countDownLatch.await
+      assert(listenerCallCount >= 1)
     })
   }
 
   test("Test single partiton field pruning") {
 
     withRecordType()(withTempDir { tmp =>
+      countDownLatch = new CountDownLatch(1)
+      listenerCallCount = 0
       val targetTable = generateTableName
       spark.sql(
         s"""
@@ -2186,6 +2198,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         rddHead = rddHead.firstParent
       }
       assertResult(1)(rddHead.partitions.size)
+      countDownLatch.await
+      assert(listenerCallCount >= 1)
     })
   }
 
