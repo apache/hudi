@@ -20,6 +20,7 @@ package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 
@@ -53,7 +54,7 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
   }
 
   public static void main(String[] args) {
-    final HiveSyncConfig.HiveSyncConfigParams params = new HiveSyncConfig.HiveSyncConfigParams();
+    final GlueCatalogSyncClientConfig.GlueSyncConfigParams params = new GlueCatalogSyncClientConfig.GlueSyncConfigParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
     cmd.parse(args);
     if (params.isHelp()) {
