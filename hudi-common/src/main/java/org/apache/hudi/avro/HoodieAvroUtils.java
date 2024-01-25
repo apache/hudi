@@ -323,7 +323,14 @@ public class HoodieAvroUtils {
     return mergedSchema;
   }
 
+  public static boolean isSchemaNull(Schema schema) {
+    return schema == null || schema.getType() == Schema.Type.NULL;
+  }
+
   public static Schema removeMetadataFields(Schema schema) {
+    if (isSchemaNull(schema)) {
+      return schema;
+    }
     return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
   }
 
