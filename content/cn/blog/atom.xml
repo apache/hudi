@@ -2,11 +2,66 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2023-12-28T00:00:00.000Z</updated>
+    <updated>2024-01-24T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Use Amazon Athena with Spark SQL for your open-source transactional table formats]]></title>
+        <id>/2024/01/24/Use-Amazon-Athena-with-Spark-SQL-for-your-open-source-transactional-table-formats</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/24/Use-Amazon-Athena-with-Spark-SQL-for-your-open-source-transactional-table-formats"/>
+        <updated>2024-01-24T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/use-amazon-athena-with-spark-sql-for-your-open-source-transactional-table-formats/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Pathik Shah, Raj Devnath</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Introduction to Apache Hudi]]></title>
+        <id>/2024/01/09/introduction-to-apache-hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/09/introduction-to-apache-hudi"/>
+        <updated>2024-01-09T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/blue-orange-digital/introduction-to-apache-hudi-209521970112">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Andrew Savchyns</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Small Talk about Apache Hudi]]></title>
+        <id>/2024/01/05/Small-Talk-about-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/05/Small-Talk-about-Apache-Hudi"/>
+        <updated>2024-01-05T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/small-talk-apache-hudi-ashok-kumar-kunkala-3ldge/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Ashok Kumar Kunkala</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Build a federated query solution with Apache Doris, Apache Flink, and Apache Hudi]]></title>
+        <id>/2024/01/02/Build-a-federated-query-solution-with-Apache-Doris-Apache-Flink-and-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/02/Build-a-federated-query-solution-with-Apache-Doris-Apache-Flink-and-Apache-Hudi"/>
+        <updated>2024-01-02T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://dev.to/apachedoris/build-a-federated-query-solution-with-apache-doris-apache-flink-and-apache-hudi-40io">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Apache Doris</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[From Data lake to Microservices: Unleashing the Power of Apache Hudi's Record Level Index with FastAPI and Spark Connect]]></title>
+        <id>/2024/01/01/From-Data-lake-to-Microservices-Unleashing-the-Power-of-Apache-Hudi-Record-Level-Index-with-FastAPI-and-Spark-Connect</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/01/From-Data-lake-to-Microservices-Unleashing-the-Power-of-Apache-Hudi-Record-Level-Index-with-FastAPI-and-Spark-Connect"/>
+        <updated>2024-01-01T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/from-datalake-microservices-unleashing-power-apache-hudis-soumil-shah-ylkoe/?trk=article-ssr-frontend-pulse_more-articles_related-content-card">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi 2023: A Year In Review]]></title>
         <id>/2023/12/28/apache-hudi-2023-a-year-in-review</id>
@@ -117,6 +172,28 @@ let&#x27;s continue to shape Hudi&#x27;s future and drive innovation in the open
 Here&#x27;s to an even more vibrant and successful 2024 ahead!</p>]]></content>
         <author>
             <name>Shiyan Xu</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[What is Apache Hudi]]></title>
+        <id>/2023/12/13/what-is-apache-hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/12/13/what-is-apache-hudi"/>
+        <updated>2023-12-13T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@karim.faiz/what-is-apache-hudi-e9363083830e">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Karim Faiz</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Getting started with Apache Hudi]]></title>
+        <id>/2023/12/09/Getting-started-with-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/12/09/Getting-started-with-Apache-Hudi"/>
+        <updated>2023-12-09T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://datacouch.medium.com/getting-started-with-apache-hudi-711b89c107aa">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>DataCouch</name>
         </author>
     </entry>
     <entry>

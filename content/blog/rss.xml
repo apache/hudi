@@ -4,9 +4,49 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Thu, 28 Dec 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 24 Jan 2024 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Use Amazon Athena with Spark SQL for your open-source transactional table formats]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/24/Use-Amazon-Athena-with-Spark-SQL-for-your-open-source-transactional-table-formats</link>
+            <guid>/2024/01/24/Use-Amazon-Athena-with-Spark-SQL-for-your-open-source-transactional-table-formats</guid>
+            <pubDate>Wed, 24 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/use-amazon-athena-with-spark-sql-for-your-open-source-transactional-table-formats/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Introduction to Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/09/introduction-to-apache-hudi</link>
+            <guid>/2024/01/09/introduction-to-apache-hudi</guid>
+            <pubDate>Tue, 09 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/blue-orange-digital/introduction-to-apache-hudi-209521970112">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Small Talk about Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/05/Small-Talk-about-Apache-Hudi</link>
+            <guid>/2024/01/05/Small-Talk-about-Apache-Hudi</guid>
+            <pubDate>Fri, 05 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/small-talk-apache-hudi-ashok-kumar-kunkala-3ldge/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Build a federated query solution with Apache Doris, Apache Flink, and Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/02/Build-a-federated-query-solution-with-Apache-Doris-Apache-Flink-and-Apache-Hudi</link>
+            <guid>/2024/01/02/Build-a-federated-query-solution-with-Apache-Doris-Apache-Flink-and-Apache-Hudi</guid>
+            <pubDate>Tue, 02 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://dev.to/apachedoris/build-a-federated-query-solution-with-apache-doris-apache-flink-and-apache-hudi-40io">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[From Data lake to Microservices: Unleashing the Power of Apache Hudi's Record Level Index with FastAPI and Spark Connect]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/01/From-Data-lake-to-Microservices-Unleashing-the-Power-of-Apache-Hudi-Record-Level-Index-with-FastAPI-and-Spark-Connect</link>
+            <guid>/2024/01/01/From-Data-lake-to-Microservices-Unleashing-the-Power-of-Apache-Hudi-Record-Level-Index-with-FastAPI-and-Spark-Connect</guid>
+            <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/from-datalake-microservices-unleashing-power-apache-hudis-soumil-shah-ylkoe/?trk=article-ssr-frontend-pulse_more-articles_related-content-card">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Apache Hudi 2023: A Year In Review]]></title>
             <link>https://hudi.apache.org/blog/2023/12/28/apache-hudi-2023-a-year-in-review</link>
@@ -115,6 +155,22 @@ starting point. Your involvement, whether it&#x27;s by contributing code, sharin
 <a href="https://github.com/apache/hudi/">our GitHub repository</a> a star, is greatly valued. Together,
 let&#x27;s continue to shape Hudi&#x27;s future and drive innovation in the open-source community.
 Here&#x27;s to an even more vibrant and successful 2024 ahead!</p>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[What is Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2023/12/13/what-is-apache-hudi</link>
+            <guid>/2023/12/13/what-is-apache-hudi</guid>
+            <pubDate>Wed, 13 Dec 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@karim.faiz/what-is-apache-hudi-e9363083830e">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Getting started with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2023/12/09/Getting-started-with-Apache-Hudi</link>
+            <guid>/2023/12/09/Getting-started-with-Apache-Hudi</guid>
+            <pubDate>Sat, 09 Dec 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://datacouch.medium.com/getting-started-with-apache-hudi-711b89c107aa">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Apache Hudi: From Zero To One (7/10)]]></title>
