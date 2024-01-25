@@ -47,6 +47,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
@@ -57,9 +61,7 @@ import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -99,6 +101,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   private static transient JavaSparkContext jsc;
   private static transient HoodieSparkEngineContext context;
   private static transient TimelineService timelineService;
+  private HoodieStorage storage;
   private FileSystem fileSystem;
 
   /**
@@ -142,9 +145,17 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return jsc.hadoopConfiguration();
   }
 
+  public HoodieStorage hoodieStorage() {
+    if (storage == null) {
+      storage = HoodieStorageUtils.getHoodieStorage(basePath(), hadoopConf());
+      fileSystem = (FileSystem) storage.getFileSystem();
+    }
+    return storage;
+  }
+
   public FileSystem fs() {
     if (fileSystem == null) {
-      fileSystem = FSUtils.getFs(basePath(), hadoopConf());
+      hoodieStorage();
     }
     return fileSystem;
   }
@@ -264,20 +275,26 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     if (doExplicitCommit) {
       client.commit(commitTime, statusesRdd);
     }
-    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
+    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
+        reloadedMetaClient.getHoodieStorage(),
+        new HoodieLocation(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
     HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), reloadedMetaClient);
 
-    Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
+    Option<HoodieInstant> deltaCommit =
+        reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getTimestamp(), "Delta commit should be specified value");
+    assertEquals(commitTime, deltaCommit.get().getTimestamp(),
+        "Delta commit should be specified value");
 
-    Option<HoodieInstant> commit = reloadedMetaClient.getActiveTimeline().getCommitTimeline().lastInstant();
+    Option<HoodieInstant> commit =
+        reloadedMetaClient.getActiveTimeline().getCommitTimeline().lastInstant();
     assertFalse(commit.isPresent());
 
-    FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
+    List<HoodieFileStatus> allFiles = listAllBaseFilesInPath(hoodieTable);
     TableFileSystemView.BaseFileOnlyView roView =
-        getHoodieTableFileSystemView(reloadedMetaClient, reloadedMetaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
+        getHoodieTableFileSystemView(reloadedMetaClient,
+            reloadedMetaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
     Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
     assertTrue(!dataFilesToRead.findAny().isPresent());
 
@@ -308,18 +325,22 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     if (doExplicitCommit) {
       client.commit(commitTime, statusesRdd);
     }
-    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
+    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
+        reloadedMetaClient.getHoodieStorage(),
+        new HoodieLocation(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
-    Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
+    Option<HoodieInstant> deltaCommit =
+        reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
     assertEquals(commitTime, deltaCommit.get().getTimestamp(),
         "Latest Delta commit should match specified time");
 
-    Option<HoodieInstant> commit = reloadedMetaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+    Option<HoodieInstant> commit =
+        reloadedMetaClient.getActiveTimeline().getCommitTimeline().firstInstant();
     assertFalse(commit.isPresent());
   }
 
-  protected FileStatus[] listAllBaseFilesInPath(HoodieTable table) throws IOException {
+  protected List<HoodieFileStatus> listAllBaseFilesInPath(HoodieTable table) throws IOException {
     return HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles(table.getBaseFileExtension());
   }
 

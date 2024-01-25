@@ -17,29 +17,32 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{common, DataSourceWriteOptions}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.io.storage.HoodieLocation
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
+
+import org.apache
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, not}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
+
+import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
-import scala.collection.{JavaConverters, mutable}
 
 class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
@@ -63,7 +66,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   override def setUp() {
     initPath()
     initSparkContexts()
-    initFileSystem()
+    initHoodieStorage()
     initTestDataGenerator()
 
     setTableName("hoodie_test")
@@ -120,15 +123,16 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
     val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
     val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
-    assertTrue(fs.delete(new Path(metaClient.getMetaPath, lastInstant.getFileName), false))
-    assertTrue(fs.delete(new Path(metadataTableMetaClient.getMetaPath, metadataTableLastInstant.getFileName), false))
+    assertTrue(storage.deleteFile(new HoodieLocation(metaClient.getMetaPath, lastInstant.getFileName)))
+    assertTrue(storage.deleteFile(new HoodieLocation(
+      metadataTableMetaClient.getMetaPath, metadataTableLastInstant.getFileName)))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
   protected def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    assertTrue(fs.delete(new Path(metaClient.getMetaPath, lastInstant.getFileName), false))
+    assertTrue(storage.deleteFile(new HoodieLocation(metaClient.getMetaPath, lastInstant.getFileName)))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
@@ -136,7 +140,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
   }
 
-  protected def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
+  protected def getLatestCompactionInstant(): common.util.Option[HoodieInstant] = {
     getLatestMetaClient(false).getActiveTimeline
       .filter(JavaConversions.getPredicate(s => Option(
         try {
@@ -151,7 +155,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
       .lastInstant()
   }
 
-  protected def getLatestClusteringInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
+  protected def getLatestClusteringInstant(): common.util.Option[HoodieInstant] = {
     getLatestMetaClient(false).getActiveTimeline.getCompletedReplaceTimeline.lastInstant()
   }
 

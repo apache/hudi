@@ -35,11 +35,11 @@ import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.io.util.RetryHelper;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -305,7 +305,9 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<BaseFileDTO> dataFiles = executeRequest(LATEST_DATA_FILE_ON_INSTANT_URL, paramsMap,
           BASE_FILE_DTOS_REFERENCE, RequestMethod.GET);
-      return Option.fromJavaOptional(dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile).findFirst());
+      return Option.fromJavaOptional(dataFiles.stream()
+          .map(BaseFileDTO::toHoodieBaseFile)
+          .findFirst());
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
@@ -617,7 +619,9 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<BaseFileDTO> dataFiles = executeRequest(LATEST_PARTITION_DATA_FILE_URL, paramsMap,
           BASE_FILE_DTOS_REFERENCE, RequestMethod.GET);
-      return Option.fromJavaOptional(dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile).findFirst());
+      return Option.fromJavaOptional(dataFiles.stream()
+          .map(BaseFileDTO::toHoodieBaseFile)
+          .findFirst());
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

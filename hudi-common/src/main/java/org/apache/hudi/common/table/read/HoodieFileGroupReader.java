@@ -37,11 +37,11 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -55,7 +55,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
-import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPathFromLocation;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 
@@ -165,8 +165,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return makeBootstrapBaseFileIterator(baseFile);
     }
 
-    return readerContext.getFileRecordIterator(baseFile.getHadoopPath(), start, length,
-         dataSchema, requiredSchema, hadoopConf);
+    return readerContext.getFileRecordIterator(
+        new HoodieLocation(baseFile.getPath()), start,
+        length,
+        dataSchema, requiredSchema, hadoopConf);
   }
 
   private Schema generateRequiredSchema() {
@@ -225,24 +227,34 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
     BaseFile dataFile = baseFile.getBootstrapBaseFile().get();
-    Pair<List<Schema.Field>,List<Schema.Field>> requiredFields = getDataAndMetaCols(requiredSchema);
-    Pair<List<Schema.Field>,List<Schema.Field>> allFields = getDataAndMetaCols(dataSchema);
+    Pair<List<Schema.Field>, List<Schema.Field>> requiredFields =
+        getDataAndMetaCols(requiredSchema);
+    Pair<List<Schema.Field>, List<Schema.Field>> allFields = getDataAndMetaCols(dataSchema);
 
-    Option<ClosableIterator<T>> dataFileIterator = requiredFields.getRight().isEmpty() ? Option.empty() :
-        Option.of(readerContext.getFileRecordIterator(dataFile.getHadoopPath(), 0, dataFile.getFileLen(),
-            createSchemaFromFields(allFields.getRight()), createSchemaFromFields(requiredFields.getRight()), hadoopConf));
+    Option<ClosableIterator<T>> dataFileIterator =
+        requiredFields.getRight().isEmpty() ? Option.empty() :
+            Option.of(readerContext.getFileRecordIterator(
+                new HoodieLocation(dataFile.getPath()), 0,
+                dataFile.getFileLen(),
+                createSchemaFromFields(allFields.getRight()),
+                createSchemaFromFields(requiredFields.getRight()), hadoopConf));
 
-    Option<ClosableIterator<T>> skeletonFileIterator = requiredFields.getLeft().isEmpty() ? Option.empty() :
-        Option.of(readerContext.getFileRecordIterator(baseFile.getHadoopPath(), 0, baseFile.getFileLen(),
-            createSchemaFromFields(allFields.getLeft()), createSchemaFromFields(requiredFields.getLeft()), hadoopConf));
+    Option<ClosableIterator<T>> skeletonFileIterator =
+        requiredFields.getLeft().isEmpty() ? Option.empty() :
+            Option.of(readerContext.getFileRecordIterator(
+                new HoodieLocation(baseFile.getPath()), 0,
+                baseFile.getFileLen(),
+                createSchemaFromFields(allFields.getLeft()),
+                createSchemaFromFields(requiredFields.getLeft()), hadoopConf));
     if (!dataFileIterator.isPresent() && !skeletonFileIterator.isPresent()) {
       throw new IllegalStateException("should not be here if only partition cols are required");
     } else if (!dataFileIterator.isPresent()) {
       return skeletonFileIterator.get();
     } else if (!skeletonFileIterator.isPresent()) {
-      return  dataFileIterator.get();
+      return dataFileIterator.get();
     } else {
-      return readerContext.mergeBootstrapReaders(skeletonFileIterator.get(), dataFileIterator.get());
+      return readerContext.mergeBootstrapReaders(skeletonFileIterator.get(),
+          dataFileIterator.get());
     }
   }
 
@@ -271,20 +283,21 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private void scanLogFiles() {
     String path = readerState.tablePath;
-    FileSystem fs = readerContext.getFs(path, hadoopConf);
+    HoodieStorage storage = readerContext.getHoodieStorage(path, hadoopConf);
 
     HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
         .withHoodieReaderContext(readerContext)
-        .withFileSystem(fs)
+        .withHoodieStorage(storage)
         .withBasePath(readerState.tablePath)
         .withLogFiles(logFiles)
         .withLatestInstantTime(readerState.latestCommitTime)
         .withReaderSchema(readerState.logRecordAvroSchema)
-        .withReadBlocksLazily(getBooleanWithAltKeys(props, HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
+        .withReadBlocksLazily(
+            getBooleanWithAltKeys(props, HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
         .withReverseReader(false)
         .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
-        .withPartition(getRelativePartitionPath(
-            new Path(readerState.tablePath), logFiles.get(0).getPath().getParent()))
+        .withPartition(getRelativePartitionPathFromLocation(
+            new HoodieLocation(readerState.tablePath), logFiles.get(0).getLocation().getParent()))
         .withRecordMerger(recordMerger)
         .withRecordBuffer(recordBuffer)
         .build();

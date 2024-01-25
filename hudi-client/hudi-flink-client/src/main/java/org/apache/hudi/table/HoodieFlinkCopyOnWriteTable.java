@@ -67,6 +67,7 @@ import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecuto
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -416,7 +417,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
                                                              String fileId) throws IOException {
-    if (upsertHandle.getOldFilePath() == null) {
+    if (upsertHandle.getOldFileLocation() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
@@ -425,7 +426,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
 
     // TODO(vc): This needs to be revisited
     if (upsertHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath() + ", "
+      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFileLocation() + ", "
           + upsertHandle.writeStatuses());
     }
 

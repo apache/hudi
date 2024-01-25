@@ -25,12 +25,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,11 +89,11 @@ public class FlinkCreateHandle<T, I, K, O>
     final String lastWriteToken = FSUtils.makeWriteToken(getPartitionId(), getStageId(), lastAttemptId);
     final String lastDataFileName = FSUtils.makeBaseFileName(instantTime,
         lastWriteToken, this.fileId, hoodieTable.getBaseFileExtension());
-    final Path path = makeNewFilePath(partitionPath, lastDataFileName);
+    final HoodieLocation fileLocationToDelete = makeNewFilePath(partitionPath, lastDataFileName);
     try {
-      if (fs.exists(path)) {
+      if (storage.exists(fileLocationToDelete)) {
         LOG.info("Deleting invalid INSERT file due to task retry: " + lastDataFileName);
-        fs.delete(path, false);
+        storage.deleteFile(fileLocationToDelete);
       }
     } catch (IOException e) {
       throw new HoodieException("Error while deleting the INSERT file due to task retry: " + lastDataFileName, e);
@@ -107,22 +107,22 @@ public class FlinkCreateHandle<T, I, K, O>
   }
 
   @Override
-  public Path makeNewPath(String partitionPath) {
-    Path path = super.makeNewPath(partitionPath);
+  public HoodieLocation makeNewPath(String partitionPath) {
+    HoodieLocation location = super.makeNewPath(partitionPath);
     // If the data file already exists, it means the write task write new data bucket multiple times
     // in one hoodie commit, rolls over to a new name instead.
 
     // Write to a new file which behaves like a different task write.
     try {
       int rollNumber = 0;
-      while (fs.exists(path)) {
-        Path existing = path;
-        path = newFilePathWithRollover(rollNumber++);
-        LOG.warn("Duplicate write for INSERT bucket with path: " + existing + ", rolls over to new path: " + path);
+      while (storage.exists(location)) {
+        HoodieLocation existing = location;
+        location = newFilePathWithRollover(rollNumber++);
+        LOG.warn("Duplicate write for INSERT bucket with path: " + existing + ", rolls over to new path: " + location);
       }
-      return path;
+      return location;
     } catch (IOException e) {
-      throw new HoodieException("Checking existing path for create handle error: " + path, e);
+      throw new HoodieException("Checking existing path for create handle error: " + location, e);
     }
   }
 
@@ -134,7 +134,7 @@ public class FlinkCreateHandle<T, I, K, O>
   /**
    * Use the writeToken + "-" + rollNumber as the new writeToken of a mini-batch write.
    */
-  private Path newFilePathWithRollover(int rollNumber) {
+  private HoodieLocation newFilePathWithRollover(int rollNumber) {
     final String dataFileName = FSUtils.makeBaseFileName(instantTime, writeToken + "-" + rollNumber, fileId,
         hoodieTable.getBaseFileExtension());
     return makeNewFilePath(partitionPath, dataFileName);
@@ -159,17 +159,17 @@ public class FlinkCreateHandle<T, I, K, O>
     } catch (Throwable throwable) {
       LOG.warn("Error while trying to dispose the CREATE handle", throwable);
       try {
-        fs.delete(path, false);
-        LOG.info("Deleting the intermediate CREATE data file: " + path + " success!");
+        storage.deleteFile(location);
+        LOG.info("Deleting the intermediate CREATE data file: " + location + " success!");
       } catch (IOException e) {
         // logging a warning and ignore the exception.
-        LOG.warn("Deleting the intermediate CREATE data file: " + path + " failed", e);
+        LOG.warn("Deleting the intermediate CREATE data file: " + location + " failed", e);
       }
     }
   }
 
   @Override
-  public Path getWritePath() {
-    return path;
+  public HoodieLocation getWritePath() {
+    return location;
   }
 }

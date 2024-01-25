@@ -56,7 +56,8 @@ public class FileGroupDTO {
     return dto;
   }
 
-  public static HoodieFileGroup toFileGroup(FileGroupDTO dto, HoodieTimeline fgTimeline) {
+  public static HoodieFileGroup toFileGroup(FileGroupDTO dto,
+                                            HoodieTimeline fgTimeline) {
     HoodieFileGroup fileGroup = new HoodieFileGroup(dto.partition, dto.id, fgTimeline);
     dto.slices.stream().map(FileSliceDTO::toFileSlice).forEach(fileGroup::addFileSlice);
     return fileGroup;

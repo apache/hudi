@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
@@ -26,6 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.FileCreateUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +34,7 @@ import org.springframework.shell.Shell;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -43,7 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A command use SparkLauncher need load jars under lib which generate during mvn package.
  * Use integration test instead of unit test.
  */
-@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false",
+    "spring.shell.command.script.enabled=false"})
 public class ITTestMarkersCommand extends HoodieCLIIntegrationTestBase {
 
   @Autowired
@@ -53,7 +55,7 @@ public class ITTestMarkersCommand extends HoodieCLIIntegrationTestBase {
   @BeforeEach
   public void init() throws IOException {
     String tableName = "test_table";
-    tablePath = basePath + Path.SEPARATOR + tableName;
+    tablePath = basePath + PATH_SEPARATOR + tableName;
 
     // Create table and connect
     new TableCommand().createTable(

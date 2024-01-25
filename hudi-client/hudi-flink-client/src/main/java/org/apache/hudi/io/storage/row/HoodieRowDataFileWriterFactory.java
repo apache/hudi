@@ -22,6 +22,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -68,7 +69,7 @@ public class HoodieRowDataFileWriterFactory {
     HoodieRowDataParquetWriteSupport writeSupport =
         new HoodieRowDataParquetWriteSupport(table.getHadoopConf(), rowType, filter);
     return new HoodieRowDataParquetWriter(
-        path, new HoodieParquetConfig<>(
+        new HoodieLocation(path.toUri()), new HoodieParquetConfig<>(
         writeSupport,
         writeConfig.getParquetCompressionCodec(),
         writeConfig.getParquetBlockSize(),

@@ -18,7 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.io.storage.HoodieLocation;
+
 import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -37,10 +38,10 @@ public class TestFileSlice {
     FileSlice fileSlice = new FileSlice("par1", baseInstant, "fg1");
     assertThat(fileSlice.getLatestInstantTime(), is(baseInstant));
 
-    fileSlice.addLogFile(new HoodieLogFile(new Path(getLogFileName(deltaInstant2))));
+    fileSlice.addLogFile(new HoodieLogFile(new HoodieLocation(getLogFileName(deltaInstant2))));
     assertThat(fileSlice.getLatestInstantTime(), is(baseInstant));
 
-    fileSlice.addLogFile(new HoodieLogFile(new Path(getLogFileName(deltaInstant4))));
+    fileSlice.addLogFile(new HoodieLogFile(new HoodieLocation(getLogFileName(deltaInstant4))));
     assertThat(fileSlice.getLatestInstantTime(), is(deltaInstant4));
   }
 

@@ -28,9 +28,9 @@ import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
 import org.apache.hudi.common.testutils.reader.HoodieRecordTestPayload;
 import org.apache.hudi.common.testutils.reader.HoodieTestReaderContext;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;

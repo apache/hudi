@@ -26,16 +26,16 @@ import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -548,22 +548,22 @@ public class ConfigUtils {
   }
 
   public static TypedProperties fetchConfigs(
-      FileSystem fs,
+      HoodieStorage storage,
       String metaPath,
       String propertiesFile,
       String propertiesBackupFile,
       int maxReadRetries,
       int maxReadRetryDelayInMs) throws IOException {
-    Path cfgPath = new Path(metaPath, propertiesFile);
-    Path backupCfgPath = new Path(metaPath, propertiesBackupFile);
+    HoodieLocation cfgPath = new HoodieLocation(metaPath, propertiesFile);
+    HoodieLocation backupCfgPath = new HoodieLocation(metaPath, propertiesBackupFile);
     int readRetryCount = 0;
     boolean found = false;
 
     TypedProperties props = new TypedProperties();
     while (readRetryCount++ < maxReadRetries) {
-      for (Path path : Arrays.asList(cfgPath, backupCfgPath)) {
+      for (HoodieLocation path : Arrays.asList(cfgPath, backupCfgPath)) {
         // Read the properties and validate that it is a valid file
-        try (FSDataInputStream is = fs.open(path)) {
+        try (InputStream is = storage.open(path)) {
           props.clear();
           props.load(is);
           found = true;
@@ -588,22 +588,24 @@ public class ConfigUtils {
 
     // If we are here then after all retries either no properties file was found or only an invalid file was found.
     if (found) {
-      throw new IllegalArgumentException("hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
+      throw new IllegalArgumentException(
+          "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
     } else {
       throw new HoodieIOException("Could not load Hoodie properties from " + cfgPath);
     }
   }
 
-  public static void recoverIfNeeded(FileSystem fs, Path cfgPath, Path backupCfgPath) throws IOException {
-    if (!fs.exists(cfgPath)) {
+  public static void recoverIfNeeded(HoodieStorage storage, HoodieLocation cfgPath,
+                                     HoodieLocation backupCfgPath) throws IOException {
+    if (!storage.exists(cfgPath)) {
       // copy over from backup
-      try (FSDataInputStream in = fs.open(backupCfgPath);
-           FSDataOutputStream out = fs.create(cfgPath, false)) {
+      try (InputStream in = storage.open(backupCfgPath);
+           OutputStream out = storage.create(cfgPath, false)) {
         FileIOUtils.copy(in, out);
       }
     }
     // regardless, we don't need the backup anymore.
-    fs.delete(backupCfgPath, false);
+    storage.deleteFile(backupCfgPath);
   }
 
   public static void upsertProperties(Properties current, Properties updated) {

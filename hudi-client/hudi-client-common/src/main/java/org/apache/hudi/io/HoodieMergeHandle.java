@@ -46,6 +46,7 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
@@ -106,8 +107,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected HoodieFileWriter fileWriter;
   private boolean preserveMetadata = false;
 
-  protected Path newFilePath;
-  protected Path oldFilePath;
+  protected HoodieLocation newFileLocation;
+  protected HoodieLocation oldFileLocation;
   protected long recordsWritten = 0;
   protected long recordsDeleted = 0;
   protected long updatedRecordsWritten = 0;
@@ -175,16 +176,17 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       String latestValidFilePath = baseFileToMerge.getFileName();
       writeStatus.getStat().setPrevCommit(baseFileToMerge.getCommitTime());
 
-      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
-          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
+          new HoodieLocation(config.getBasePath()),
+          FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave(getPartitionId());
 
       String newFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
       makeOldAndNewFilePaths(partitionPath, latestValidFilePath, newFileName);
 
-      LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
-          newFilePath.toString()));
+      LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFileLocation.toString(),
+          newFileLocation.toString()));
       // file name is same for all records, in this bunch
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
@@ -195,10 +197,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       // Create Marker file,
       // uses name of `newFilePath` instead of `newFileName`
       // in case the sub-class may roll over the file handle name.
-      createMarkerFile(partitionPath, newFilePath.getName());
+      createMarkerFile(partitionPath, newFileLocation.getName());
 
       // Create the writer for writing the new version file
-      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getHadoopConf(),
+      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFileLocation, hoodieTable.getHadoopConf(),
           config, writeSchemaWithMetaFields, taskContextSupplier, recordMerger.getRecordType());
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
@@ -209,12 +211,12 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   protected void setWriteStatusPath() {
-    writeStatus.getStat().setPath(new Path(config.getBasePath()), newFilePath);
+    writeStatus.getStat().setPath(new HoodieLocation(config.getBasePath()), newFileLocation);
   }
 
   protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
-    oldFilePath = makeNewFilePath(partitionPath, oldFileName);
-    newFilePath = makeNewFilePath(partitionPath, newFileName);
+    oldFileLocation = makeNewFilePath(partitionPath, oldFileName);
+    newFileLocation = makeNewFilePath(partitionPath, newFileName);
   }
 
   /**
@@ -381,7 +383,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         writeToFile(new HoodieKey(key, partitionPath), oldRecord, oldSchema, props, true);
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
-                key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
+                key, getOldFileLocation(), newFileLocation, writeSchemaWithMetaFields.toString(true));
         LOG.debug("Old record is " + oldRecord);
         throw new HoodieUpsertException(errMsg, e);
       }
@@ -392,7 +394,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
     // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
     //       file holding this record even in cases when overall metadata is preserved
-    MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
+    MetadataValues metadataValues = new MetadataValues().setFileName(newFileLocation.getName());
     HoodieRecord populatedRecord =
         record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
 
@@ -436,7 +438,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       fileWriter.close();
       fileWriter = null;
 
-      long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
+      long fileSizeInBytes = FSUtils.getFileSize(fs, new Path(newFileLocation.toUri()));
       HoodieWriteStat stat = writeStatus.getStat();
 
       stat.setTotalWriteBytes(fileSizeInBytes);
@@ -467,7 +469,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
 
     long oldNumWrites = 0;
-    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.recordMerger.getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath)) {
+    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.recordMerger.getRecordType()).getFileReader(hoodieTable.getHadoopConf(),
+        oldFileLocation)) {
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);
@@ -482,8 +485,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
   }
 
-  public Path getOldFilePath() {
-    return oldFilePath;
+  public HoodieLocation getOldFileLocation() {
+    return oldFileLocation;
   }
 
   @Override

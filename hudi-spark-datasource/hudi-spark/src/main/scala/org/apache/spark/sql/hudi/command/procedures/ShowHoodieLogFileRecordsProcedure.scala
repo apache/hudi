@@ -17,22 +17,25 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.avro.generic.IndexedRecord
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecordPayload}
-import org.apache.hudi.common.table.log.block.HoodieDataBlock
-import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
+import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.util.{FileIOUtils, ValidationUtils}
+import org.apache.hudi.io.storage.HoodieLocation
+
+import org.apache.avro.generic.IndexedRecord
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.Objects
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuilder {
@@ -55,16 +58,16 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     val limit: Int = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Int]
     val basePath = getBasePath(table)
     val client = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val fs = client.getFs
-    val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).iterator().asScala
-      .map(_.getPath.toString).toList
+    val storage = client.getHoodieStorage
+    val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new HoodieLocation(logFilePathPattern)).iterator().asScala
+      .map(_.getLocation.toString).toList
     ValidationUtils.checkArgument(logFilePaths.nonEmpty, "There is no log file")
     val converter = new AvroSchemaConverter()
     val allRecords: java.util.List[IndexedRecord] = new java.util.ArrayList[IndexedRecord]
     if (merge) {
-      val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.last))))
+      val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new HoodieLocation(logFilePaths.last))))
       val scanner = HoodieMergedLogRecordScanner.newBuilder
-        .withFileSystem(fs)
+        .withHoodieStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(logFilePaths.asJava)
         .withReaderSchema(schema)
@@ -86,8 +89,8 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     } else {
       logFilePaths.toStream.takeWhile(_ => allRecords.size() < limit).foreach {
         logFilePath => {
-          val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))))
-          val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(logFilePath), schema)
+          val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new HoodieLocation(logFilePath))))
+          val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePath), schema)
           while (reader.hasNext) {
             val block = reader.next()
             block match {

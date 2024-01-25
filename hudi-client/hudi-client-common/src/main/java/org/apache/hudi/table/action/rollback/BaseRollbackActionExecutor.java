@@ -36,12 +36,12 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,7 +89,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
     this.skipLocking = skipLocking;
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getHoodieStorage());
   }
 
   /**
@@ -174,7 +174,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
           && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
         // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
         try {
-          if (!HoodieHeartbeatClient.heartbeatExists(table.getMetaClient().getFs(),
+          if (!HoodieHeartbeatClient.heartbeatExists(table.getMetaClient().getHoodieStorage(),
               config.getBasePath(), instantTimeToRollback)) {
             throw new HoodieRollbackException(
                 "Found commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
@@ -315,10 +315,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       return;
     }
 
-    Path backupDir = new Path(config.getRollbackBackupDirectory());
+    HoodieLocation backupDir = new HoodieLocation(config.getRollbackBackupDirectory());
     if (!backupDir.isAbsolute()) {
       // Path specified is relative to the meta directory
-      backupDir = new Path(table.getMetaClient().getMetaPath(), config.getRollbackBackupDirectory());
+      backupDir = new HoodieLocation(table.getMetaClient().getMetaPath(), config.getRollbackBackupDirectory());
     }
 
     // Determine the instants to back up

@@ -47,6 +47,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
@@ -222,18 +224,20 @@ public class UtilHelpers {
   public static InitialCheckPointProvider createInitialCheckpointProvider(
       String className, TypedProperties props) throws IOException {
     try {
-      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[]{TypedProperties.class}, props);
+      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
     } catch (Throwable e) {
       throw new IOException("Could not load initial checkpoint provider class " + className, e);
     }
   }
 
-  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
+  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig,
+                                                      HoodieLocation cfgLocation,
+                                                      List<String> overriddenProps) {
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgLocation);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgPath);
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgLocation);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -259,7 +263,7 @@ public class UtilHelpers {
   public static TypedProperties buildProperties(Configuration hadoopConf, String propsFilePath, List<String> props) {
     return StringUtils.isNullOrEmpty(propsFilePath)
         ? UtilHelpers.buildProperties(props)
-        : UtilHelpers.readConfig(hadoopConf, new Path(propsFilePath), props)
+        : UtilHelpers.readConfig(hadoopConf, new HoodieLocation(propsFilePath), props)
         .getProps(true);
   }
 
@@ -554,19 +558,25 @@ public class UtilHelpers {
 
   public static SchemaProvider getSchemaProviderForKafkaSource(SchemaProvider provider, TypedProperties cfg, JavaSparkContext jssc) {
     if (KafkaOffsetPostProcessor.Config.shouldAddOffsets(cfg)) {
-      return new SchemaProviderWithPostProcessor(provider, Option.ofNullable(new KafkaOffsetPostProcessor(cfg, jssc)));
+      return new SchemaProviderWithPostProcessor(provider,
+          Option.ofNullable(new KafkaOffsetPostProcessor(cfg, jssc)));
     }
     return provider;
   }
 
-  public static SchemaProvider createRowBasedSchemaProvider(StructType structType, TypedProperties cfg, JavaSparkContext jssc) {
+  public static SchemaProvider createRowBasedSchemaProvider(StructType structType,
+                                                            TypedProperties cfg,
+                                                            JavaSparkContext jssc) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
 
-  public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc, FileSystem fs, String basePath, HoodieTableMetaClient tableMetaClient) {
+  public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc,
+                                                    HoodieStorage storage,
+                                                    String basePath,
+                                                    HoodieTableMetaClient tableMetaClient) {
     try {
-      if (FSUtils.isTableExists(basePath, fs)) {
+      if (FSUtils.isTableExists(basePath, storage)) {
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
 
         return tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false);

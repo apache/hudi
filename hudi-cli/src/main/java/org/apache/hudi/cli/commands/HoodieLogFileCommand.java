@@ -41,16 +41,14 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.common.util.Option;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.springframework.shell.standard.ShellComponent;
@@ -90,9 +88,10 @@ public class HoodieLogFileCommand {
               defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    FileSystem fs = HoodieCLI.getTableMetaClient().getFs();
-    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).stream()
-        .map(status -> status.getPath().toString()).collect(Collectors.toList());
+    HoodieStorage storage = HoodieCLI.getTableMetaClient().getHoodieStorage();
+    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(
+        storage, new HoodieLocation(logFilePathPattern)).stream()
+        .map(status -> status.getLocation().toString()).collect(Collectors.toList());
     Map<String, List<Tuple3<Tuple2<String, HoodieLogBlockType>, Tuple2<Map<HeaderMetadataType, String>,
         Map<HeaderMetadataType, String>>, Integer>>> commitCountAndMetadata =
         new HashMap<>();
@@ -101,20 +100,19 @@ public class HoodieLogFileCommand {
     String basePath = HoodieCLI.getTableMetaClient().getBasePathV2().toString();
 
     for (String logFilePath : logFilePaths) {
-      Path path = new Path(logFilePath);
-      String pathString = path.toString();
+      HoodieLocation location = new HoodieLocation(logFilePath);
+      String pathString = location.toString();
       String fileName;
       if (pathString.contains(basePath)) {
         String[] split = pathString.split(basePath);
         fileName = split[split.length - 1];
       } else {
-        fileName = path.getName();
+        fileName = location.getName();
       }
-      FileStatus[] fsStatus = fs.listStatus(path);
-      MessageType schema = TableSchemaResolver.readSchemaFromLogFile(fs, path);
+      MessageType schema = TableSchemaResolver.readSchemaFromLogFile(storage, location);
       Schema writerSchema = schema != null
           ? new AvroSchemaConverter().convert(Objects.requireNonNull(schema)) : null;
-      Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema);
+      Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(location), writerSchema);
 
       // read the avro blocks
       while (reader.hasNext()) {
@@ -205,9 +203,10 @@ public class HoodieLogFileCommand {
     System.out.println("===============> Showing only " + limit + " records <===============");
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    FileSystem fs = client.getFs();
-    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).stream()
-        .map(status -> status.getPath().toString()).sorted(Comparator.reverseOrder())
+    HoodieStorage storage = client.getHoodieStorage();
+    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(
+        storage, new HoodieLocation(logFilePathPattern)).stream()
+        .map(status -> status.getLocation().toString()).sorted(Comparator.reverseOrder())
         .collect(Collectors.toList());
 
     // logFilePaths size must > 1
@@ -218,7 +217,8 @@ public class HoodieLogFileCommand {
     Schema readerSchema = null;
     // get schema from last log file
     for (int i = logFilePaths.size() - 1; i >= 0; i--) {
-      MessageType schema = TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.get(i)));
+      MessageType schema = TableSchemaResolver.readSchemaFromLogFile(
+          storage, new HoodieLocation(logFilePaths.get(i)));
       if (schema != null) {
         readerSchema = converter.convert(schema);
         break;
@@ -231,7 +231,7 @@ public class HoodieLogFileCommand {
       System.out.println("===========================> MERGING RECORDS <===================");
       HoodieMergedLogRecordScanner scanner =
           HoodieMergedLogRecordScanner.newBuilder()
-              .withFileSystem(fs)
+              .withHoodieStorage(storage)
               .withBasePath(client.getBasePath())
               .withLogFilePaths(logFilePaths)
               .withReaderSchema(readerSchema)
@@ -260,11 +260,12 @@ public class HoodieLogFileCommand {
       }
     } else {
       for (String logFile : logFilePaths) {
-        MessageType schema = TableSchemaResolver.readSchemaFromLogFile(client.getFs(), new CachingPath(logFile));
+        MessageType schema = TableSchemaResolver.readSchemaFromLogFile(
+            client.getHoodieStorage(), new HoodieLocation(logFile));
         Schema writerSchema = schema != null
             ? new AvroSchemaConverter().convert(Objects.requireNonNull(schema)) : null;
-        HoodieLogFormat.Reader reader =
-            HoodieLogFormat.newReader(fs, new HoodieLogFile(new CachingPath(logFile)), writerSchema);
+        HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
+            storage, new HoodieLogFile(new HoodieLocation(logFile)), writerSchema);
         // read the avro blocks
         while (reader.hasNext()) {
           HoodieLogBlock n = reader.next();

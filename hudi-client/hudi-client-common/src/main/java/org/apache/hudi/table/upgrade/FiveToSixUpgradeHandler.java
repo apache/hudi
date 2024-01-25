@@ -26,9 +26,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,10 +64,10 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
     compactionTimeline.getInstantsAsStream().forEach(
         deleteInstant -> {
           LOG.info("Deleting instant " + deleteInstant + " in auxiliary meta path " + metaClient.getMetaAuxiliaryPath());
-          Path metaFile = new Path(metaClient.getMetaAuxiliaryPath(), deleteInstant.getFileName());
+          HoodieLocation metaFile = new HoodieLocation(metaClient.getMetaAuxiliaryPath(), deleteInstant.getFileName());
           try {
-            if (metaClient.getFs().exists(metaFile)) {
-              metaClient.getFs().delete(metaFile, false);
+            if (metaClient.getHoodieStorage().exists(metaFile)) {
+              metaClient.getHoodieStorage().deleteFile(metaFile);
               LOG.info("Deleted instant file in auxiliary meta path : " + metaFile);
             }
           } catch (IOException e) {

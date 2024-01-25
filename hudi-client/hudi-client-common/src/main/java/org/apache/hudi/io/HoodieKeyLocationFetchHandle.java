@@ -26,10 +26,9 @@ import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.hadoop.fs.Path;
 
 import java.util.List;
 import java.util.stream.Stream;
@@ -54,9 +53,9 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
   private List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieBaseFile baseFile) {
     BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
     if (keyGeneratorOpt.isPresent()) {
-      return baseFileUtils.fetchRecordKeysWithPositions(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
+      return baseFileUtils.fetchRecordKeysWithPositions(hoodieTable.getHadoopConf(), new HoodieLocation(baseFile.getPath()), keyGeneratorOpt);
     } else {
-      return baseFileUtils.fetchRecordKeysWithPositions(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
+      return baseFileUtils.fetchRecordKeysWithPositions(hoodieTable.getHadoopConf(), new HoodieLocation(baseFile.getPath()));
     }
   }
 

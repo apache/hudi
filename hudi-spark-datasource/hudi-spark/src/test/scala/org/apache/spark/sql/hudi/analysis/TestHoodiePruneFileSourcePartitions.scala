@@ -19,8 +19,10 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.ScalaAssertionSupport
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
+
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, IsNotNull, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Filter
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -46,7 +48,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
     spark = sqlContext.sparkSession
   }
 
-  override def getSparkSessionExtensionsInjector: org.apache.hudi.common.util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))

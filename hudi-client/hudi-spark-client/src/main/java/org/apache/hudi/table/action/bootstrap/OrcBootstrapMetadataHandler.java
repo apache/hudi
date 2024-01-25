@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
@@ -57,20 +58,23 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   }
 
   @Override
-  Schema getAvroSchema(Path sourceFilePath) throws IOException {
-    Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
+  Schema getAvroSchema(HoodieLocation sourceFileLocation) throws IOException {
+    Reader orcReader = OrcFile.createReader(
+        new Path(sourceFileLocation.toUri()), OrcFile.readerOptions(table.getHadoopConf()));
     TypeDescription orcSchema = orcReader.getSchema();
     return AvroOrcUtils.createAvroSchema(orcSchema);
   }
 
   @Override
-  void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle, Path sourceFilePath, KeyGeneratorInterface keyGenerator,
+  void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
+                        HoodieLocation sourceFileLocation, KeyGeneratorInterface keyGenerator,
                         String partitionPath, Schema avroSchema) throws Exception {
     // TODO support spark orc reader
     if (config.getRecordMerger().getRecordType() == HoodieRecordType.SPARK) {
       throw new UnsupportedOperationException();
     }
-    Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
+    Reader orcReader = OrcFile.createReader(
+        new Path(sourceFileLocation.toUri()), OrcFile.readerOptions(table.getHadoopConf()));
     TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
     HoodieExecutor<Void> executor = null;
     RecordReader reader = orcReader.rows(new Reader.Options(table.getHadoopConf()).schema(orcSchema));

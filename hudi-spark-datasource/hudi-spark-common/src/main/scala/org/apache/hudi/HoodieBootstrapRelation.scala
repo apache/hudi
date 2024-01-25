@@ -18,12 +18,14 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader}
+import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, projectReader, BaseFileReader}
 import org.apache.hudi.HoodieBootstrapRelation.{createPartitionedFile, validate}
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.io.storage.HoodieLocation
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -43,7 +45,7 @@ case class HoodieBootstrapSplit(dataFile: PartitionedFile,
 
 case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    private val userSchema: Option[StructType],
-                                   private val globPaths: Seq[Path],
+                                   private val globPaths: Seq[HoodieLocation],
                                    override val metaClient: HoodieTableMetaClient,
                                    override val optParams: Map[String, String],
                                    private val prunedDataSchema: Option[StructType] = None)
@@ -86,11 +88,11 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
  * @param optParams  DataSource options passed by the user
  */
 abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
-                                   private val userSchema: Option[StructType],
-                                   private val globPaths: Seq[Path],
-                                   override val metaClient: HoodieTableMetaClient,
-                                   override val optParams: Map[String, String],
-                                   private val prunedDataSchema: Option[StructType] = None)
+                                           private val userSchema: Option[StructType],
+                                           private val globPaths: Seq[HoodieLocation],
+                                           override val metaClient: HoodieTableMetaClient,
+                                           override val optParams: Map[String, String],
+                                           private val prunedDataSchema: Option[StructType] = None)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
 
   override type FileSplit = BaseHoodieBootstrapSplit
@@ -114,16 +116,17 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
       val baseFile = fileSlice.getBaseFile.get()
       if (baseFile.getBootstrapBaseFile.isPresent) {
         val partitionValues = getPartitionColumnsAsInternalRowInternal(baseFile.getBootstrapBaseFile.get.getFileStatus,
-            bootstrapBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
+          bootstrapBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
         val dataFile = createPartitionedFile(
-          partitionValues, baseFile.getBootstrapBaseFile.get.getFileStatus.getPath,
+          partitionValues, baseFile.getBootstrapBaseFile.get.getFileStatus.getLocation,
           0, baseFile.getBootstrapBaseFile.get().getFileLen)
-        val skeletonFile = Option(createPartitionedFile(InternalRow.empty, baseFile.getHadoopPath, 0, baseFile.getFileLen))
+        val skeletonFile = Option(createPartitionedFile(
+          InternalRow.empty, baseFile.getLocation, 0, baseFile.getFileLen))
 
         createFileSplit(fileSlice, dataFile, skeletonFile)
       } else {
         val dataFile = createPartitionedFile(
-          getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getHadoopPath, 0, baseFile.getFileLen)
+          getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getLocation, 0, baseFile.getFileLen)
         createFileSplit(fileSlice, dataFile, Option.empty)
       }
     }
@@ -259,10 +262,10 @@ object HoodieBootstrapRelation extends SparkAdapterSupport {
   }
 
   def createPartitionedFile(partitionValues: InternalRow,
-                            filePath: Path,
+                            fileLoc: HoodieLocation,
                             start: Long,
                             length: Long): PartitionedFile = {
     sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(
-      partitionValues, filePath, start, length)
+      partitionValues, fileLoc, start, length)
   }
 }

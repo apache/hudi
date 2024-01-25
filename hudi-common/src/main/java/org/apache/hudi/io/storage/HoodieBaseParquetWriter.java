@@ -18,13 +18,11 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -33,9 +31,8 @@ import org.apache.parquet.hadoop.api.WriteSupport;
 import java.io.Closeable;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.util.concurrent.atomic.AtomicLong;
-
 import java.lang.reflect.Method;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Base class of Hudi's custom {@link ParquetWriter} implementations
@@ -52,9 +49,10 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
   public static final String BLOOM_FILTER_EXPECTED_NDV = "parquet.bloom.filter.expected.ndv";
   public static final String BLOOM_FILTER_ENABLED = "parquet.bloom.filter.enabled";
 
-  public HoodieBaseParquetWriter(Path file,
+  public HoodieBaseParquetWriter(HoodieLocation location,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
-    ParquetWriter.Builder parquetWriterbuilder = new ParquetWriter.Builder(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf())) {
+    ParquetWriter.Builder parquetWriterbuilder = new ParquetWriter.Builder(
+        HoodieWrapperFileSystem.convertToHoodiePath(location, parquetConfig.getHadoopConf())) {
       @Override
       protected ParquetWriter.Builder self() {
         return this;
@@ -74,7 +72,7 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     parquetWriterbuilder.withDictionaryEncoding(parquetConfig.dictionaryEnabled());
     parquetWriterbuilder.withValidation(ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED);
     parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
-    parquetWriterbuilder.withConf(FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
+    parquetWriterbuilder.withConf(FSUtils.registerFileSystem(location, parquetConfig.getHadoopConf()));
     handleParquetBloomFilters(parquetWriterbuilder, parquetConfig.getHadoopConf());
 
     parquetWriter = parquetWriterbuilder.build();

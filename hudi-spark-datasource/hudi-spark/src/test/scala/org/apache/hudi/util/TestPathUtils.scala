@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util
 
+import org.apache.hudi.io.storage.HoodieStorageUtils
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.junit.jupiter.api.Assertions._
@@ -50,33 +52,29 @@ class TestPathUtils {
     folders.foreach(folder => new File(folder.toUri).mkdir())
     files.foreach(file => new File(file.toUri).createNewFile())
 
+    val storage = HoodieStorageUtils.getHoodieStorage(tempDir.getAbsolutePath, new Configuration())
     var paths = Seq(tempDir.getAbsolutePath + "/*")
-    var globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
+    var globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths, storage)
     assertEquals(folders.filterNot(entry => entry.toString.contains(".hoodie"))
       .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/*/*")
-    globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
+    globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths, storage)
     assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
       .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/folder1/*")
-    globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
+    globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths, storage)
     assertEquals(Seq(files(0), files(1)).sortWith(_.toString < _.toString),
       globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/folder2/*")
-    globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
+    globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths, storage)
     assertEquals(Seq(files(2), files(3)).sortWith(_.toString < _.toString),
       globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/folder1/*", tempDir.getAbsolutePath + "/folder2/*")
-    globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
+    globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths, storage)
     assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
       .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
   }

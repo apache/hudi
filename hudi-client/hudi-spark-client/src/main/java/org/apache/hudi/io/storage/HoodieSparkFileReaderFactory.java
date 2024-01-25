@@ -29,7 +29,7 @@ import java.io.IOException;
 
 public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
 
-  public HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
+  public HoodieFileReader newParquetFileReader(Configuration conf, HoodieLocation location) {
     conf.setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
     conf.setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
     conf.setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
@@ -38,7 +38,7 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
     // This is a required config since Spark 3.4.0: SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED
     // Using string value of this conf to preserve compatibility across spark versions.
     conf.setIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", "true");
-    return new HoodieSparkParquetReader(conf, path);
+    return new HoodieSparkParquetReader(conf, location);
   }
 
   protected HoodieFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {

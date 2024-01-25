@@ -91,6 +91,8 @@
               </transformers>
               <artifactSet>
                 <includes combine.children="append">
+                  <include>org.apache.hudi:hudi-io</include>
+                  <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>

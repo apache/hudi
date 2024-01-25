@@ -18,13 +18,14 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
+
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -36,52 +37,52 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestMarkerUtils extends HoodieCommonTestHarness {
 
-  private FileSystem fs;
+  private HoodieStorage storage;
 
   @BeforeEach
   public void setup() {
     initPath();
-    fs = FSUtils.getFs(basePath, new Configuration());
+    storage = HoodieStorageUtils.getHoodieStorage(basePath, new Configuration());
   }
 
   @Test
   public void testReadMarkerType() throws IOException {
     // mock markers file
     String markerDir = this.basePath + "/.hoodie/.temp/testReadMarkerType/";
-    if (MarkerUtils.doesMarkerTypeFileExist(fs, markerDir)) {
-      MarkerUtils.deleteMarkerTypeFile(fs, markerDir);
+    if (MarkerUtils.doesMarkerTypeFileExist(storage, markerDir)) {
+      MarkerUtils.deleteMarkerTypeFile(storage, markerDir);
     }
 
     try {
       // marker file does not exist
-      assertEquals(Option.empty(), MarkerUtils.readMarkerType(fs, markerDir),
+      assertEquals(Option.empty(), MarkerUtils.readMarkerType(storage, markerDir),
           "File does not exist, should be empty");
 
       // HUDI-6440: Fallback to default Marker Type if the content of marker file is empty
-      assertTrue(writeEmptyMarkerTypeToFile(fs, markerDir), "Failed to create empty marker type file");
-      assertEquals(Option.empty(), MarkerUtils.readMarkerType(fs, markerDir),
+      assertTrue(writeEmptyMarkerTypeToFile(storage, markerDir), "Failed to create empty marker type file");
+      assertEquals(Option.empty(), MarkerUtils.readMarkerType(storage, markerDir),
           "File exists but empty, should be empty");
 
       // marker type is DIRECT
-      MarkerUtils.deleteMarkerTypeFile(fs, markerDir);
-      MarkerUtils.writeMarkerTypeToFile(MarkerType.DIRECT, fs, markerDir);
-      assertEquals(Option.of(MarkerType.DIRECT), MarkerUtils.readMarkerType(fs, markerDir),
+      MarkerUtils.deleteMarkerTypeFile(storage, markerDir);
+      MarkerUtils.writeMarkerTypeToFile(MarkerType.DIRECT, storage, markerDir);
+      assertEquals(Option.of(MarkerType.DIRECT), MarkerUtils.readMarkerType(storage, markerDir),
           "File exists and contains DIRECT, should be DIRECT");
 
       // marker type is TIMELINE_SERVER_BASED
-      MarkerUtils.deleteMarkerTypeFile(fs, markerDir);
-      MarkerUtils.writeMarkerTypeToFile(MarkerType.TIMELINE_SERVER_BASED, fs, markerDir);
-      assertEquals(Option.of(MarkerType.TIMELINE_SERVER_BASED), MarkerUtils.readMarkerType(fs, markerDir),
+      MarkerUtils.deleteMarkerTypeFile(storage, markerDir);
+      MarkerUtils.writeMarkerTypeToFile(MarkerType.TIMELINE_SERVER_BASED, storage, markerDir);
+      assertEquals(Option.of(MarkerType.TIMELINE_SERVER_BASED), MarkerUtils.readMarkerType(storage, markerDir),
           "File exists and contains TIMELINE_SERVER_BASED, should be TIMELINE_SERVER_BASED");
     } finally {
-      MarkerUtils.deleteMarkerTypeFile(fs, markerDir);
+      MarkerUtils.deleteMarkerTypeFile(storage, markerDir);
     }
   }
 
-  private boolean writeEmptyMarkerTypeToFile(FileSystem fileSystem, String markerDir) {
-    Path markerTypeFilePath = new Path(markerDir, MARKER_TYPE_FILENAME);
+  private boolean writeEmptyMarkerTypeToFile(HoodieStorage storage, String markerDir) {
+    HoodieLocation markerTypeFilePath = new HoodieLocation(markerDir, MARKER_TYPE_FILENAME);
     try {
-      return fileSystem.createNewFile(markerTypeFilePath);
+      return storage.createNewFile(markerTypeFilePath);
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker type file " + markerTypeFilePath, e);
     }

@@ -38,7 +38,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -48,6 +47,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -66,7 +66,7 @@ public class TestCompletionTimeQueryView {
   @Test
   void testReadCompletionTime() throws Exception {
     String tableName = "testTable";
-    String tablePath = tempFile.getAbsolutePath() + Path.SEPARATOR + tableName;
+    String tablePath = tempFile.getAbsolutePath() + PATH_SEPARATOR + tableName;
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
@@ -95,7 +95,7 @@ public class TestCompletionTimeQueryView {
   @Test
   void testReadStartTime() throws Exception {
     String tableName = "testTable";
-    String tablePath = tempFile.getAbsolutePath() + Path.SEPARATOR + tableName;
+    String tablePath = tempFile.getAbsolutePath() + PATH_SEPARATOR + tableName;
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
@@ -143,8 +143,12 @@ public class TestCompletionTimeQueryView {
     writer.write(activeActions.subList(2, 4), Option.empty(), Option.empty());
     writer.write(activeActions.subList(4, 6), Option.empty(), Option.empty());
     // reconcile the active timeline
-    instants.subList(0, 3 * 6).forEach(instant -> HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), instant));
-    ValidationUtils.checkState(metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4, "should archive 6 instants with 4 as active");
+    instants.subList(0, 3 * 6).forEach(
+        instant -> HoodieActiveTimeline.deleteInstantFile(metaClient.getHoodieStorage(),
+            metaClient.getMetaPath(), instant));
+    ValidationUtils.checkState(
+        metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4,
+        "should archive 6 instants with 4 as active");
   }
 
   @SuppressWarnings("rawtypes")

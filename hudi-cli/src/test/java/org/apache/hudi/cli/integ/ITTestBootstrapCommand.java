@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.commands.TableCommand;
@@ -27,6 +26,7 @@ import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.functional.TestBootstrap;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +40,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -64,8 +65,8 @@ public class ITTestBootstrapCommand extends HoodieCLIIntegrationTestBase {
   public void init() {
     String srcName = "source";
     tableName = "test-table";
-    sourcePath = basePath + Path.SEPARATOR + srcName;
-    tablePath = basePath + Path.SEPARATOR + tableName;
+    sourcePath = basePath + PATH_SEPARATOR + srcName;
+    tablePath = basePath + PATH_SEPARATOR + tableName;
 
     // generate test data
     partitions = Arrays.asList("2018", "2019", "2020");
@@ -73,7 +74,7 @@ public class ITTestBootstrapCommand extends HoodieCLIIntegrationTestBase {
     for (int i = 0; i < partitions.size(); i++) {
       Dataset<Row> df = TestBootstrap.generateTestRawTripDataset(timestamp,
           i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, sqlContext);
-      df.write().parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i));
+      df.write().parquet(sourcePath + PATH_SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i));
     }
   }
 

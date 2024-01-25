@@ -24,10 +24,10 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.io.util.RetryHelper;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;

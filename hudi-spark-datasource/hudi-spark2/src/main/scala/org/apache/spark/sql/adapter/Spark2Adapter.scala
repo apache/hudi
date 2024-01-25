@@ -18,11 +18,12 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.hudi.io.storage.HoodieLocation
+
+import org.apache.avro.Schema
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -38,13 +39,14 @@ import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
+
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.convert.Wrappers.JConcurrentMapWrapper
 import scala.collection.mutable.ArrayBuffer
@@ -153,7 +155,7 @@ class Spark2Adapter extends SparkAdapter {
   override def createRelation(sqlContext: SQLContext,
                               metaClient: HoodieTableMetaClient,
                               schema: Schema,
-                              globPaths: Array[Path],
+                              globPaths: Array[HoodieLocation],
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)

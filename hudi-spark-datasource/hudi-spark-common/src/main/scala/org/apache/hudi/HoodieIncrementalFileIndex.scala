@@ -17,10 +17,12 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.io.storage.HoodieFileStatus
 import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -29,6 +31,7 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 
 class HoodieIncrementalFileIndex(override val spark: SparkSession,
@@ -58,11 +61,13 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
               if (slice.getBaseFile.isPresent) {
                 slice.getBaseFile.get().getFileStatus
               } else if (includeLogFiles && slice.getLogFiles.findAny().isPresent) {
-                slice.getLogFiles.findAny().get().getFileStatus
+                slice.getLogFiles.findAny().get().getFileInfo
               } else {
                 null
               }
             }).filter(slice => slice != null)
+              .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, 0,
+                fileInfo.getModificationTime, new Path(fileInfo.getLocation.toUri)))
             val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
               || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
               foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
@@ -77,14 +82,16 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
             val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
               val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
               val logFilesStatus = if (includeLogFiles) {
-                fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
+                fs.getLogFiles.map[HoodieFileStatus](JFunction.toJavaFunction[HoodieLogFile, HoodieFileStatus](lf => lf.getFileInfo))
               } else {
                 java.util.stream.Stream.empty()
               }
-              val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
+              val files = logFilesStatus.collect(Collectors.toList[HoodieFileStatus]).asScala
               baseFileStatusOpt.foreach(f => files.append(f))
               files
             })
+              .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, 0,
+                fileInfo.getModificationTime, new Path(fileInfo.getLocation.toUri)))
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
               partitionValues, allCandidateFiles)
           }
@@ -109,14 +116,14 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
     fileSlices.values.flatten.flatMap(fs => {
       val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
       val logFilesStatus = if (includeLogFiles) {
-        fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
+        fs.getLogFiles.map[HoodieFileStatus](JFunction.toJavaFunction[HoodieLogFile, HoodieFileStatus](lf => lf.getFileInfo))
       } else {
         java.util.stream.Stream.empty()
       }
-      val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
+      val files = logFilesStatus.collect(Collectors.toList[HoodieFileStatus]).asScala
       baseFileStatusOpt.foreach(f => files.append(f))
       files
-    }).map(fileStatus => fileStatus.getPath.toString).toArray
+    }).map(fileStatus => fileStatus.getLocation.toString).toArray
   }
 
   def getRequiredFilters: Seq[Filter] = {

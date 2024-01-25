@@ -17,21 +17,24 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.log.HoodieLogFormat
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.{HeaderMetadataType, HoodieLogBlockType}
 import org.apache.hudi.common.table.log.block.{HoodieCorruptBlock, HoodieDataBlock}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.{HeaderMetadataType, HoodieLogBlockType}
+import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.io.storage.{HoodieLocation, HoodieStorageUtils}
+
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
+
 import java.util.Objects
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+
 import scala.collection.JavaConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter}
 
 class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBuilder {
@@ -55,19 +58,19 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     val logFilePathPattern: String = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
     val limit: Int = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Int]
     val basePath = getBasePath(table)
-    val fs = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build.getFs
-    val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).iterator().asScala
-      .map(_.getPath.toString).toList
+    val storage = HoodieStorageUtils.getHoodieStorage(basePath, jsc.hadoopConfiguration())
+    val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new HoodieLocation(logFilePathPattern)).iterator().asScala
+      .map(_.getLocation.toString).toList
     val commitCountAndMetadata =
       new java.util.HashMap[String, java.util.List[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[HeaderMetadataType, String]), Int)]]()
     var numCorruptBlocks = 0
     var dummyInstantTimeCount = 0
     logFilePaths.foreach {
       logFilePath => {
-        val statuses = fs.listStatus(new Path(logFilePath))
+        val statuses = storage.listDirectEntries(new HoodieLocation(logFilePath))
         val schema = new AvroSchemaConverter()
-          .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))))
-        val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(statuses(0).getPath), schema)
+          .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new HoodieLocation(logFilePath))))
+        val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(statuses.get(0).getLocation), schema)
 
         // read the avro blocks
         while (reader.hasNext) {

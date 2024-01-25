@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -28,8 +26,13 @@ import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.io.consistency.NoOpConsistencyGuard;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -135,8 +138,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieInstant instant6 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "9");
     byte[] dummy = new byte[5];
     HoodieActiveTimeline oldTimeline = new HoodieActiveTimeline(
-        HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath())
-            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(metaClient.getConsistencyGuardConfig())
+        HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf())
+            .setBasePath(metaClient.getBasePath())
+            .setLoadActiveTimelineOnLoad(true)
+            .setConsistencyGuardConfig(metaClient.getConsistencyGuardConfig())
             .setFileSystemRetryConfig(metaClient.getFileSystemRetryConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(VERSION_0))).build());
     // Old Timeline writes both to aux and timeline folder
@@ -144,7 +149,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // Now use the latest timeline version
     timeline = timeline.reload();
     // Ensure aux file is present
-    assertTrue(metaClient.getFs().exists(new Path(metaClient.getMetaPath(), instant6.getFileName())));
+    assertTrue(metaClient.getHoodieStorage().exists(new HoodieLocation(metaClient.getMetaPath(),
+        instant6.getFileName())));
     // Read 5 bytes
     assertEquals(5, timeline.readCompactionPlanAsBytes(instant6).get().length);
 
@@ -703,18 +709,15 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   private void shouldAllowTempCommit(boolean allowTempCommit, Consumer<HoodieTableMetaClient> fun) {
     if (allowTempCommit) {
-      HoodieWrapperFileSystem fs = metaClient.getFs();
-      HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs.getFileSystem(), new NoOpConsistencyGuard()) {
-        @Override
-        protected boolean needCreateTempFile() {
-          return true;
-        }
-      };
-      metaClient.setFs(newFs);
+      HoodieStorage storage = metaClient.getHoodieStorage();
+      FileSystem fs = (FileSystem) storage.getFileSystem();
+      HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
+      // TODO
+      metaClient.setHoodieStorage(HoodieStorageUtils.getHoodieStorage(newFs));
       try {
         fun.accept(metaClient);
       } finally {
-        metaClient.setFs(fs);
+        metaClient.setHoodieStorage(storage);
       }
       return;
     }

@@ -25,11 +25,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,25 +41,29 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
+
 public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
   private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedEarlyConflictDetectionRunnable.class);
 
   private MarkerHandler markerHandler;
   private String markerDir;
   private String basePath;
-  private FileSystem fs;
+  private HoodieStorage storage;
   private AtomicBoolean hasConflict;
   private long maxAllowableHeartbeatIntervalInMs;
   private Set<HoodieInstant> completedCommits;
   private final boolean checkCommitConflict;
 
-  public MarkerBasedEarlyConflictDetectionRunnable(AtomicBoolean hasConflict, MarkerHandler markerHandler, String markerDir,
-                                                   String basePath, FileSystem fileSystem, long maxAllowableHeartbeatIntervalInMs,
+  public MarkerBasedEarlyConflictDetectionRunnable(AtomicBoolean hasConflict, MarkerHandler markerHandler,
+                                                   String markerDir,
+                                                   String basePath, HoodieStorage storage,
+                                                   long maxAllowableHeartbeatIntervalInMs,
                                                    Set<HoodieInstant> completedCommits, boolean checkCommitConflict) {
     this.markerHandler = markerHandler;
     this.markerDir = markerDir;
     this.basePath = basePath;
-    this.fs = fileSystem;
+    this.storage = storage;
     this.hasConflict = hasConflict;
     this.maxAllowableHeartbeatIntervalInMs = maxAllowableHeartbeatIntervalInMs;
     this.completedCommits = completedCommits;
@@ -77,7 +81,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
     try {
       Set<String> pendingMarkers = markerHandler.getPendingMarkersToProcess(markerDir);
 
-      if (!fs.exists(new Path(markerDir)) && pendingMarkers.isEmpty()) {
+      if (!storage.exists(new HoodieLocation(markerDir)) && pendingMarkers.isEmpty()) {
         return;
       }
 
@@ -87,9 +91,9 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
       // and the markers from the requests pending processing.
       currentInstantAllMarkers.addAll(markerHandler.getAllMarkers(markerDir));
       currentInstantAllMarkers.addAll(pendingMarkers);
-      Path tempPath = new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
+      HoodieLocation tempPath = new HoodieLocation(basePath + PATH_SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
 
-      List<Path> instants = MarkerUtils.getAllMarkerDir(tempPath, fs);
+      List<HoodieLocation> instants = MarkerUtils.getAllMarkerDir(tempPath, storage);
 
       HoodieTableMetaClient metaClient =
           HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(basePath)
@@ -97,9 +101,11 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
 
       List<String> candidate = MarkerUtils.getCandidateInstants(activeTimeline, instants,
-          MarkerUtils.markerDirToInstantTime(markerDir), maxAllowableHeartbeatIntervalInMs, fs, basePath);
+          MarkerUtils.markerDirToInstantTime(markerDir), maxAllowableHeartbeatIntervalInMs,
+          storage, basePath);
       Set<String> tableMarkers = candidate.stream().flatMap(instant -> {
-        return MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(instant, fs, new HoodieLocalEngineContext(new Configuration()), 100)
+        return MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(instant, storage,
+                new HoodieLocalEngineContext(new Configuration()), 100)
             .values().stream().flatMap(Collection::stream);
       }).collect(Collectors.toSet());
 

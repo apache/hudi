@@ -29,8 +29,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLookupResult;
+import org.apache.hudi.io.storage.HoodieLocation;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
 import org.slf4j.Logger;
@@ -128,7 +128,7 @@ public class HoodieFileProbingFunction implements
 
             final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
             List<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
-                new Path(dataFile.getPath()), candidateRecordKeys, hadoopConf.get());
+                new HoodieLocation(dataFile.getPath()), candidateRecordKeys, hadoopConf.get());
 
             LOG.debug(
                 String.format("Bloom filter candidates (%d) / false positives (%d), actual matches (%d)",

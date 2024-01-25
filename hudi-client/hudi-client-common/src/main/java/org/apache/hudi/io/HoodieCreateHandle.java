@@ -34,6 +34,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
@@ -56,7 +57,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCreateHandle.class);
 
   protected HoodieFileWriter fileWriter;
-  protected final Path path;
+  protected final HoodieLocation location;
   protected long recordsWritten = 0;
   protected long insertRecordsWritten = 0;
   protected long recordsDeleted = 0;
@@ -93,18 +94,21 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setStat(new HoodieWriteStat());
 
-    this.path = makeNewPath(partitionPath);
+    this.location = makeNewPath(partitionPath);
 
     try {
-      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
-          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
+          new HoodieLocation(config.getBasePath()),
+          FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave(getPartitionId());
-      createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
-      this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getHadoopConf(), config,
-        writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
+      createMarkerFile(partitionPath,
+          FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
+      this.fileWriter =
+          HoodieFileWriterFactory.getFileWriter(instantTime, location, hoodieTable.getHadoopConf(), config,
+              writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
     } catch (IOException e) {
-      throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
+      throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + location, e);
     }
     LOG.info("New CreateHandle for partition :" + partitionPath + " with fileId " + fileId);
   }
@@ -139,7 +143,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           return;
         }
 
-        MetadataValues metadataValues = new MetadataValues().setFileName(path.getName());
+        MetadataValues metadataValues = new MetadataValues().setFileName(location.getName());
         HoodieRecord populatedRecord =
             record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, config.getProps());
 
@@ -222,7 +226,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
-      throw new HoodieInsertException("Failed to close the Insert Handle for path " + path, e);
+      throw new HoodieInsertException("Failed to close the Insert Handle for path " + location, e);
     }
   }
 
@@ -239,10 +243,10 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     stat.setNumInserts(insertRecordsWritten);
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(writeStatus.getFileId());
-    stat.setPath(new Path(config.getBasePath()), path);
+    stat.setPath(new HoodieLocation(config.getBasePath()), location);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
 
-    long fileSize = FSUtils.getFileSize(fs, path);
+    long fileSize = FSUtils.getFileSize(fs, new Path(location.toUri()));
     stat.setTotalWriteBytes(fileSize);
     stat.setFileSizeInBytes(fileSize);
 

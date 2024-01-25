@@ -20,8 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.io.storage.HoodieLocation;
 
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 
 import java.util.Date;
@@ -43,18 +43,19 @@ public class TestHoodieWriteStat {
     String fileName = UUID.randomUUID().toString();
     String writeToken = "1-0-1";
 
-    Path basePath = new Path(basePathString);
-    Path partitionPath = new Path(basePath, partitionPathString);
+    HoodieLocation basePath = new HoodieLocation(basePathString);
+    HoodieLocation partitionPath = new HoodieLocation(basePath, partitionPathString);
 
-    Path finalizeFilePath = new Path(partitionPath, FSUtils.makeBaseFileName(instantTime, writeToken, fileName));
+    HoodieLocation finalizeFilePath = new HoodieLocation(
+        partitionPath, FSUtils.makeBaseFileName(instantTime, writeToken, fileName));
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setPath(basePath, finalizeFilePath);
-    assertEquals(finalizeFilePath, new Path(basePath, writeStat.getPath()));
+    assertEquals(finalizeFilePath, new HoodieLocation(basePath, writeStat.getPath()));
 
     // test for null tempFilePath
     writeStat = new HoodieWriteStat();
     writeStat.setPath(basePath, finalizeFilePath);
-    assertEquals(finalizeFilePath, new Path(basePath, writeStat.getPath()));
+    assertEquals(finalizeFilePath, new HoodieLocation(basePath, writeStat.getPath()));
     assertNull(writeStat.getTempPath());
   }
 }

@@ -51,6 +51,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -68,7 +72,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
@@ -125,7 +128,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   protected SparkSession sparkSession;
   protected Configuration hadoopConf;
   protected SQLContext sqlContext;
-  protected FileSystem fs;
+  protected HoodieStorage storage;
   protected ExecutorService executorService;
   protected HoodieTableMetaClient metaClient;
   protected SparkRDDWriteClient writeClient;
@@ -153,7 +156,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     initPath();
     initSparkContexts();
     initTestDataGenerator();
-    initFileSystem();
+    initHoodieStorage();
     initMetaClient();
     initTimelineService();
   }
@@ -249,7 +252,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   /**
    * Initializes a file system with the hadoop configuration of Spark context.
    */
-  protected void initFileSystem() {
+  protected void initHoodieStorage() {
     if (jsc == null) {
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
@@ -270,10 +273,10 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    * @throws IOException
    */
   protected void cleanupFileSystem() throws IOException {
-    if (fs != null) {
+    if (storage != null) {
       LOG.warn("Closing file-system instance used in previous test-run");
-      fs.close();
-      fs = null;
+      storage.close();
+      storage = null;
     }
   }
 
@@ -377,9 +380,9 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       throw new IllegalStateException("The base path has not been initialized.");
     }
 
-    fs = FSUtils.getFs(basePath, configuration);
-    if (fs instanceof LocalFileSystem) {
-      LocalFileSystem lfs = (LocalFileSystem) fs;
+    storage = HoodieStorageUtils.getHoodieStorage(basePath, configuration);
+    if (storage instanceof LocalFileSystem) {
+      LocalFileSystem lfs = (LocalFileSystem) storage;
       // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream
       // This causes ClassCastExceptions in LogRecordScanner (and potentially other places) calling fs.open
       // So, for the tests, we enforce checksum verification to circumvent the problem
@@ -406,12 +409,13 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     return metaClient;
   }
 
-  public HoodieTableFileSystemView getHoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-                                                                FileStatus[] fileStatuses) {
+  public HoodieTableFileSystemView getHoodieTableFileSystemView(HoodieTableMetaClient metaClient,
+                                                                HoodieTimeline visibleActiveTimeline,
+                                                                List<HoodieFileStatus> fileInfoList) {
     if (tableView == null) {
-      tableView = new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, fileStatuses);
+      tableView = new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, fileInfoList);
     } else {
-      tableView.init(metaClient, visibleActiveTimeline, fileStatuses);
+      tableView.init(metaClient, visibleActiveTimeline, fileInfoList);
     }
     return tableView;
   }
@@ -504,13 +508,17 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext);
     TableFileSystemView tableView = table.getHoodieView();
-    List<String> fullPartitionPaths = fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
-    Map<String, FileStatus[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
+    List<String> fullPartitionPaths =
+        fsPartitions.stream().map(partition -> basePath + "/" + partition)
+            .collect(Collectors.toList());
+    Map<String, List<HoodieFileStatus>> partitionToFilesMap =
+        tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
     assertEquals(fsPartitions.size(), partitionToFilesMap.size());
 
     fsPartitions.forEach(partition -> {
       try {
-        validateFilesPerPartition(testTable, tableMetadata, tableView, partitionToFilesMap, partition);
+        validateFilesPerPartition(testTable, tableMetadata, tableView, partitionToFilesMap,
+            partition);
       } catch (IOException e) {
         fail("Exception should not be raised: " + e);
       }
@@ -539,51 +547,56 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
         .create(hadoopConf, clientConfig, new HoodieSparkEngineContext(jsc));
   }
 
-  public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig, HoodieEngineContext hoodieEngineContext) {
-    return HoodieTableMetadata.create(hoodieEngineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
+  public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig,
+                                      HoodieEngineContext hoodieEngineContext) {
+    return HoodieTableMetadata.create(
+        hoodieEngineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
-  protected void validateFilesPerPartition(HoodieTestTable testTable, HoodieTableMetadata tableMetadata, TableFileSystemView tableView,
-                                           Map<String, FileStatus[]> partitionToFilesMap, String partition) throws IOException {
-    Path partitionPath;
+  protected void validateFilesPerPartition(HoodieTestTable testTable,
+                                           HoodieTableMetadata tableMetadata,
+                                           TableFileSystemView tableView,
+                                           Map<String, List<HoodieFileStatus>> partitionToFilesMap,
+                                           String partition) throws IOException {
+    HoodieLocation partitionPath;
     if (partition.equals("")) {
       // Should be the non-partitioned case
-      partitionPath = new Path(basePath);
+      partitionPath = new HoodieLocation(basePath);
     } else {
-      partitionPath = new Path(basePath, partition);
+      partitionPath = new HoodieLocation(basePath, partition);
     }
 
     FileStatus[] fsStatuses = testTable.listAllFilesInPartition(partition);
-    FileStatus[] metaStatuses = tableMetadata.getAllFilesInPartition(partitionPath);
+    List<HoodieFileStatus> metaStatuses = tableMetadata.getAllFilesInPartition(partitionPath);
     List<String> fsFileNames = Arrays.stream(fsStatuses)
         .map(s -> s.getPath().getName()).collect(Collectors.toList());
-    List<String> metadataFilenames = Arrays.stream(metaStatuses)
-        .map(s -> s.getPath().getName()).collect(Collectors.toList());
+    List<String> metadataFilenames = metaStatuses.stream()
+        .map(s -> s.getLocation().getName()).collect(Collectors.toList());
     Collections.sort(fsFileNames);
     Collections.sort(metadataFilenames);
 
     assertLinesMatch(fsFileNames, metadataFilenames);
-    assertEquals(fsStatuses.length, partitionToFilesMap.get(partitionPath.toString()).length);
+    assertEquals(fsStatuses.length, partitionToFilesMap.get(partitionPath.toString()).size());
 
-    // Block sizes should be valid
-    Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getBlockSize() > 0));
-    List<Long> fsBlockSizes = Arrays.stream(fsStatuses).map(FileStatus::getBlockSize).sorted().collect(Collectors.toList());
-    List<Long> metadataBlockSizes = Arrays.stream(metaStatuses).map(FileStatus::getBlockSize).sorted().collect(Collectors.toList());
-    assertEquals(fsBlockSizes, metadataBlockSizes);
-
-    assertEquals(fsFileNames.size(), metadataFilenames.size(), "Files within partition " + partition + " should match");
-    assertEquals(fsFileNames, metadataFilenames, "Files within partition " + partition + " should match");
+    assertEquals(fsFileNames.size(), metadataFilenames.size(),
+        "Files within partition " + partition + " should match");
+    assertEquals(fsFileNames, metadataFilenames,
+        "Files within partition " + partition + " should match");
 
     // FileSystemView should expose the same data
-    List<HoodieFileGroup> fileGroups = tableView.getAllFileGroups(partition).collect(Collectors.toList());
+    List<HoodieFileGroup> fileGroups =
+        tableView.getAllFileGroups(partition).collect(Collectors.toList());
     fileGroups.addAll(tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
     fileGroups.forEach(g -> LoggerFactory.getLogger(getClass()).info(g.toString()));
-    fileGroups.forEach(g -> g.getAllBaseFiles().forEach(b -> LoggerFactory.getLogger(getClass()).info(b.toString())));
-    fileGroups.forEach(g -> g.getAllFileSlices().forEach(s -> LoggerFactory.getLogger(getClass()).info(s.toString())));
+    fileGroups.forEach(g -> g.getAllBaseFiles()
+        .forEach(b -> LoggerFactory.getLogger(getClass()).info(b.toString())));
+    fileGroups.forEach(g -> g.getAllFileSlices()
+        .forEach(s -> LoggerFactory.getLogger(getClass()).info(s.toString())));
 
     long numFiles = fileGroups.stream()
-        .mapToLong(g -> g.getAllBaseFiles().count() + g.getAllFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())
+        .mapToLong(g -> g.getAllBaseFiles().count()
+            + g.getAllFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())
         .sum();
     assertEquals(metadataFilenames.size(), numFiles);
   }

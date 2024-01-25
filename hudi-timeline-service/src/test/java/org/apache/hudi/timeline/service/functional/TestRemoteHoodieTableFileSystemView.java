@@ -33,12 +33,12 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TestHoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,9 +49,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -73,7 +73,7 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
 
     try {
       server = new TimelineService(localEngineContext, new Configuration(),
-          TimelineService.Config.builder().serverPort(0).build(), FileSystem.get(new Configuration()),
+          TimelineService.Config.builder().serverPort(0).build(), HoodieStorageUtils.getHoodieStorage(new Configuration()),
           FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {
@@ -167,8 +167,10 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
   }
 
   private Stream<HoodieFileGroup> readFileGroupStream(String result, ObjectMapper mapper) throws IOException {
-    return DTOUtils.fileGroupDTOsToFileGroups((List<FileGroupDTO>) mapper.readValue(result, new TypeReference<List<FileGroupDTO>>() {}),
-        metaClient);
+    return DTOUtils.fileGroupDTOsToFileGroups(
+        (List<FileGroupDTO>) mapper.readValue(
+            result, new TypeReference<List<FileGroupDTO>>() {
+            }), metaClient);
   }
 
   private HoodieFileGroup createHoodieFileGroup() {

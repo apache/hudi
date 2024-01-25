@@ -62,9 +62,14 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
+import org.apache.hudi.io.storage.HoodieFileStatus;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -128,7 +133,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   protected Configuration hadoopConf;
   protected HoodieJavaEngineContext context;
   protected TestJavaTaskContextSupplier taskContextSupplier;
-  protected FileSystem fs;
+  protected HoodieStorage storage;
   protected ExecutorService executorService;
   protected HoodieTableFileSystemView tableView;
   protected HoodieJavaWriteClient writeClient;
@@ -197,9 +202,9 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       throw new IllegalStateException("The base path has not been initialized.");
     }
 
-    fs = FSUtils.getFs(basePath, hadoopConf);
-    if (fs instanceof LocalFileSystem) {
-      LocalFileSystem lfs = (LocalFileSystem) fs;
+    storage = HoodieStorageUtils.getHoodieStorage(basePath, hadoopConf);
+    if (storage.getFileSystem() instanceof LocalFileSystem) {
+      LocalFileSystem lfs = (LocalFileSystem) storage.getFileSystem();
       // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream
       // This causes ClassCastExceptions in LogRecordScanner (and potentially other places) calling fs.open
       // So, for the tests, we enforce checksum verification to circumvent the problem
@@ -208,10 +213,10 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   }
 
   protected void cleanupFileSystem() throws IOException {
-    if (fs != null) {
-      LOG.warn("Closing file-system instance used in previous test-run");
-      fs.close();
-      fs = null;
+    if (storage != null) {
+      LOG.warn("Closing HoodieStorage instance used in previous test-run");
+      storage.close();
+      storage = null;
     }
   }
 
@@ -312,13 +317,17 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieJavaTable.create(writeConfig, engineContext);
     TableFileSystemView tableView = table.getHoodieView();
-    List<String> fullPartitionPaths = fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
-    Map<String, FileStatus[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
+    List<String> fullPartitionPaths =
+        fsPartitions.stream().map(partition -> basePath + "/" + partition)
+            .collect(Collectors.toList());
+    Map<String, List<HoodieFileStatus>> partitionToFilesMap =
+        tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
     assertEquals(fsPartitions.size(), partitionToFilesMap.size());
 
     fsPartitions.forEach(partition -> {
       try {
-        validateFilesPerPartition(testTable, tableMetadata, tableView, partitionToFilesMap, partition);
+        validateFilesPerPartition(testTable, tableMetadata, tableView, partitionToFilesMap,
+            partition);
       } catch (IOException e) {
         fail("Exception should not be raised: " + e);
       }
@@ -330,47 +339,50 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     LOG.info("Validation time=" + timer.endTimer());
   }
 
-  protected void validateFilesPerPartition(HoodieTestTable testTable, HoodieTableMetadata tableMetadata, TableFileSystemView tableView,
-                                           Map<String, FileStatus[]> partitionToFilesMap, String partition) throws IOException {
-    Path partitionPath;
+  protected void validateFilesPerPartition(HoodieTestTable testTable,
+                                           HoodieTableMetadata tableMetadata,
+                                           TableFileSystemView tableView,
+                                           Map<String, List<HoodieFileStatus>> partitionToFilesMap,
+                                           String partition) throws IOException {
+    HoodieLocation partitionPath;
     if (partition.equals("")) {
       // Should be the non-partitioned case
-      partitionPath = new Path(basePath);
+      partitionPath = new HoodieLocation(basePath);
     } else {
-      partitionPath = new Path(basePath, partition);
+      partitionPath = new HoodieLocation(basePath, partition);
     }
 
     FileStatus[] fsStatuses = testTable.listAllFilesInPartition(partition);
-    FileStatus[] metaStatuses = tableMetadata.getAllFilesInPartition(partitionPath);
+    List<HoodieFileStatus> metaStatuses = tableMetadata.getAllFilesInPartition(partitionPath);
     List<String> fsFileNames = Arrays.stream(fsStatuses)
         .map(s -> s.getPath().getName()).collect(Collectors.toList());
-    List<String> metadataFilenames = Arrays.stream(metaStatuses)
-        .map(s -> s.getPath().getName()).collect(Collectors.toList());
+    List<String> metadataFilenames = metaStatuses.stream()
+        .map(s -> s.getLocation().getName()).collect(Collectors.toList());
     Collections.sort(fsFileNames);
     Collections.sort(metadataFilenames);
 
     assertLinesMatch(fsFileNames, metadataFilenames);
-    assertEquals(fsStatuses.length, partitionToFilesMap.get(partitionPath.toString()).length);
+    assertEquals(fsStatuses.length, partitionToFilesMap.get(partitionPath.toString()).size());
 
-    // Block sizes should be valid
-    Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getBlockSize() > 0));
-    List<Long> fsBlockSizes = Arrays.stream(fsStatuses).map(FileStatus::getBlockSize).sorted().collect(Collectors.toList());
-    List<Long> metadataBlockSizes = Arrays.stream(metaStatuses).map(FileStatus::getBlockSize).sorted().collect(Collectors.toList());
-    assertEquals(fsBlockSizes, metadataBlockSizes);
-
-    assertEquals(fsFileNames.size(), metadataFilenames.size(), "Files within partition " + partition + " should match");
-    assertEquals(fsFileNames, metadataFilenames, "Files within partition " + partition + " should match");
+    assertEquals(fsFileNames.size(), metadataFilenames.size(),
+        "Files within partition " + partition + " should match");
+    assertEquals(fsFileNames, metadataFilenames,
+        "Files within partition " + partition + " should match");
 
     // FileSystemView should expose the same data
-    List<HoodieFileGroup> fileGroups = tableView.getAllFileGroups(partition).collect(Collectors.toList());
+    List<HoodieFileGroup> fileGroups =
+        tableView.getAllFileGroups(partition).collect(Collectors.toList());
     fileGroups.addAll(tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
     fileGroups.forEach(g -> LoggerFactory.getLogger(getClass()).info(g.toString()));
-    fileGroups.forEach(g -> g.getAllBaseFiles().forEach(b -> LoggerFactory.getLogger(getClass()).info(b.toString())));
-    fileGroups.forEach(g -> g.getAllFileSlices().forEach(s -> LoggerFactory.getLogger(getClass()).info(s.toString())));
+    fileGroups.forEach(g -> g.getAllBaseFiles()
+        .forEach(b -> LoggerFactory.getLogger(getClass()).info(b.toString())));
+    fileGroups.forEach(g -> g.getAllFileSlices()
+        .forEach(s -> LoggerFactory.getLogger(getClass()).info(s.toString())));
 
     long numFiles = fileGroups.stream()
-        .mapToLong(g -> g.getAllBaseFiles().count() + g.getAllFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())
+        .mapToLong(g -> g.getAllBaseFiles().count()
+            + g.getAllFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())
         .sum();
     assertEquals(metadataFilenames.size(), numFiles);
   }
@@ -597,7 +609,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       List<HoodieKey> deleteRecords = keyGenFunction.apply(numRecordsInThisCommit);
 
       // check the partition metadata is written out
-      assertPartitionMetadataForKeys(basePath, deleteRecords, fs);
+      assertPartitionMetadataForKeys(basePath, deleteRecords, storage);
 
       Function3<List<WriteStatus>, HoodieJavaWriteClient, List<HoodieKey>, String> deleteFn = HoodieJavaWriteClient::delete;
       List<WriteStatus> result = deleteFn.apply(client, deleteRecords, newCommitTime);
@@ -685,7 +697,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       client.commit(newCommitTime, result);
     }
     // check the partition metadata is written out
-    assertPartitionMetadataForRecords(basePath, records, fs);
+    assertPartitionMetadataForRecords(basePath, records, storage);
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
@@ -706,7 +718,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       for (int i = 0; i < fullPartitionPaths.length; i++) {
         fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
       }
-      assertEquals(expTotalRecords, countRowsInPaths(basePath, fs, fullPartitionPaths),
+      assertEquals(expTotalRecords, countRowsInPaths(basePath, storage, fullPartitionPaths),
           "Must contain " + expTotalRecords + " records");
 
       if (filterForCommitTimeWithAssert) {
@@ -881,7 +893,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       for (int i = 0; i < fullPartitionPaths.length; i++) {
         fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
       }
-      assertEquals(expTotalRecords, countRowsInPaths(basePath, fs, fullPartitionPaths),
+      assertEquals(expTotalRecords, countRowsInPaths(basePath, storage, fullPartitionPaths),
           "Must contain " + expTotalRecords + " records");
 
       if (filerForCommitTimeWithAssert) {
@@ -905,7 +917,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
       return paths.values().stream().flatMap(path ->
-              BaseFileUtils.getInstance(path).readAvroRecords(context.getHadoopConf().get(), new Path(path)).stream())
+              BaseFileUtils.getInstance(path).readAvroRecords(context.getHadoopConf().get(), new HoodieLocation(path)).stream())
           .filter(record -> {
             if (filterByCommitTime) {
               Object commitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
@@ -925,28 +937,35 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
           HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
-      fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new Path(basePath)));
+      fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new HoodieLocation(basePath)));
     }
     return fileIdToFullPath;
   }
 
-  public long countRowsInPaths(String basePath, FileSystem fs, String... paths) {
+  public long countRowsInPaths(String basePath, HoodieStorage storage, String... paths) {
     try {
-      List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, fs, paths);
-      return latestFiles.stream().mapToLong(baseFile -> BaseFileUtils.getInstance(baseFile.getPath()).readAvroRecords(context.getHadoopConf().get(), new Path(baseFile.getPath())).size()).sum();
+      List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, storage, paths);
+      return latestFiles.stream().mapToLong(baseFile ->
+              BaseFileUtils.getInstance(baseFile.getPath())
+                  .readAvroRecords(context.getHadoopConf().get(), new HoodieLocation(baseFile.getPath())).size())
+          .sum();
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie table as a dataframe", e);
     }
   }
 
-  public static List<HoodieBaseFile> getLatestBaseFiles(String basePath, FileSystem fs,
+  public static List<HoodieBaseFile> getLatestBaseFiles(String basePath, HoodieStorage storage,
                                                         String... paths) {
     List<HoodieBaseFile> latestFiles = new ArrayList<>();
     try {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+          .setConf((Configuration) storage.getConf())
+          .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       for (String path : paths) {
-        TableFileSystemView.BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
-            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
+        TableFileSystemView.BaseFileOnlyView fileSystemView =
+            new HoodieTableFileSystemView(metaClient,
+                metaClient.getCommitsTimeline().filterCompletedInstants(),
+                storage.globEntries(new HoodieLocation(path)));
         latestFiles.addAll(fileSystemView.getLatestBaseFiles().collect(Collectors.toList()));
       }
     } catch (Exception e) {
@@ -967,7 +986,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
       String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
       if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        return Arrays.stream(paths).flatMap(path -> BaseFileUtils.getInstance(path).readAvroRecords(context.getHadoopConf().get(), new Path(path)).stream())
+        return Arrays.stream(paths).flatMap(path -> BaseFileUtils.getInstance(path).readAvroRecords(context.getHadoopConf().get(), new HoodieLocation(path)).stream())
             .filter(record -> {
               if (lastCommitTimeOpt.isPresent()) {
                 Object commitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
@@ -996,7 +1015,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     // TODO: this should be ported to use HoodieStorageReader
     List<GenericRecord> valuesAsList = new LinkedList<>();
 
-    FileSystem fs = FSUtils.getFs(paths[0], context.getHadoopConf().get());
+    FileSystem fs = HadoopFSUtils.getFs(paths[0], context.getHadoopConf().get());
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
     Schema schema = null;
     for (String path : paths) {

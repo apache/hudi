@@ -39,17 +39,17 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.expression.Expression;
-import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -64,8 +64,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
-import static org.apache.hudi.common.util.CollectionUtils.combine;
-import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 
 /**
  * Common (engine-agnostic) File Index implementation enabling individual query engines to
@@ -88,7 +86,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private final Option<String> specifiedQueryInstant;
   private final Option<String> beginInstantTime;
   private final Option<String> endInstantTime;
-  private final List<Path> queryPaths;
+  private final List<HoodieLocation> queryPaths;
 
   private final boolean shouldIncludePendingCommits;
   private final boolean shouldValidateInstant;
@@ -102,7 +100,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
   private final boolean shouldListLazily;
 
-  private final Path basePath;
+  private final HoodieLocation basePath;
 
   private final HoodieTableMetaClient metaClient;
   private final HoodieEngineContext engineContext;
@@ -135,7 +133,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                                   HoodieTableMetaClient metaClient,
                                   TypedProperties configProperties,
                                   HoodieTableQueryType queryType,
-                                  List<Path> queryPaths,
+                                  List<HoodieLocation> queryPaths,
                                   Option<String> specifiedQueryInstant,
                                   boolean shouldIncludePendingCommits,
                                   boolean shouldValidateInstant,
@@ -182,7 +180,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   /**
    * Returns table's base-path
    */
-  public Path getBasePath() {
+  public HoodieLocation getBasePath() {
     return basePath;
   }
 
@@ -200,7 +198,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return partitionColumns;
   }
 
-  protected List<Path> getQueryPaths() {
+  protected List<HoodieLocation> getQueryPaths() {
     return queryPaths;
   }
 
@@ -210,7 +208,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   protected List<PartitionPath> getAllQueryPartitionPaths() {
     if (cachedAllPartitionPaths == null) {
       List<String> queryRelativePartitionPaths = queryPaths.stream()
-          .map(path -> FSUtils.getRelativePartitionPath(basePath, path))
+          .map(path -> FSUtils.getRelativePartitionPathFromLocation(basePath, path))
           .collect(Collectors.toList());
 
       this.cachedAllPartitionPaths = listPartitionPaths(queryRelativePartitionPaths);
@@ -260,7 +258,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       validateTimestampAsOf(metaClient, specifiedQueryInstant.get());
     }
 
-    FileStatus[] allFiles = listPartitionPathFiles(partitions);
+    List<HoodieFileStatus> allFiles = listPartitionPathFiles(partitions);
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
 
@@ -374,45 +372,50 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   /**
    * Load partition paths and it's files under the query table path.
    */
-  private FileStatus[] listPartitionPathFiles(List<PartitionPath> partitions) {
-    List<Path> partitionPaths = partitions.stream()
+  private List<HoodieFileStatus> listPartitionPathFiles(List<PartitionPath> partitions) {
+    List<HoodieLocation> partitionPaths = partitions.stream()
         // NOTE: We're using [[createPathUnsafe]] to create Hadoop's [[Path]] objects
         //       instances more efficiently, provided that
         //          - We're using already normalized relative paths
         //          - Its scope limited to [[FileStatusCache]]
-        .map(partition -> createRelativePathUnsafe(partition.path))
+        .map(partition -> new HoodieLocation(partition.path))
         .collect(Collectors.toList());
 
     // Lookup in cache first
-    Map<Path, FileStatus[]> cachedPartitionPaths =
+    Map<HoodieLocation, List<HoodieFileStatus>> cachedPartitionPaths =
         partitionPaths.parallelStream()
             .map(partitionPath -> Pair.of(partitionPath, fileStatusCache.get(partitionPath)))
             .filter(partitionPathFilesPair -> partitionPathFilesPair.getRight().isPresent())
             .collect(Collectors.toMap(Pair::getKey, p -> p.getRight().get()));
 
-    Set<Path> missingPartitionPaths =
+    Set<HoodieLocation> missingPartitionPaths =
         CollectionUtils.diffSet(partitionPaths, cachedPartitionPaths.keySet());
 
     // NOTE: We're constructing a mapping of absolute form of the partition-path into
     //       its relative one, such that we don't need to reconstruct these again later on
-    Map<String, Path> missingPartitionPathsMap = missingPartitionPaths.stream()
+    Map<String, HoodieLocation> missingPartitionPathsMap = missingPartitionPaths.stream()
         .collect(Collectors.toMap(
-            relativePartitionPath -> new CachingPath(basePath, relativePartitionPath).toString(),
+            relativePartitionPath -> new HoodieLocation(basePath, relativePartitionPath.toString()).toString(),
             Function.identity()
         ));
 
     try {
-      Map<String, FileStatus[]> fetchedPartitionsMap =
+      Map<String, List<HoodieFileStatus>> fetchedPartitionsMap =
           tableMetadata.getAllFilesInPartitions(missingPartitionPathsMap.keySet());
 
       // Ingest newly fetched partitions into cache
       fetchedPartitionsMap.forEach((absolutePath, files) -> {
-        Path relativePath = missingPartitionPathsMap.get(absolutePath);
+        HoodieLocation relativePath = missingPartitionPathsMap.get(absolutePath);
         fileStatusCache.put(relativePath, files);
       });
 
-      return combine(flatMap(cachedPartitionPaths.values()),
-          flatMap(fetchedPartitionsMap.values()));
+      List<HoodieFileStatus> result = new ArrayList<>();
+      result.addAll(cachedPartitionPaths.values().stream()
+          .flatMap(e -> e.stream()).collect(Collectors.toList()));
+      result.addAll(fetchedPartitionsMap.values().stream()
+          .flatMap(e -> e.stream()).collect(Collectors.toList()));
+
+      return result;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to list partition paths", e);
     }
@@ -501,14 +504,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private static HoodieTableMetadata createMetadataTable(
       HoodieEngineContext engineContext,
       HoodieMetadataConfig metadataConfig,
-      Path basePath
+      HoodieLocation basePath
   ) {
     HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(), true);
     return newTableMetadata;
-  }
-
-  private static FileStatus[] flatMap(Collection<FileStatus[]> arrays) {
-    return arrays.stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
   }
 
   /**
@@ -543,12 +542,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   /**
-   * APIs for caching {@link FileStatus}.
+   * APIs for caching {@link HoodieFileStatus}.
    */
   protected interface FileStatusCache {
-    Option<FileStatus[]> get(Path path);
+    Option<List<HoodieFileStatus>> get(HoodieLocation path);
 
-    void put(Path path, FileStatus[] leafFiles);
+    void put(HoodieLocation path, List<HoodieFileStatus> leafFiles);
 
     void invalidate();
   }

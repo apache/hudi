@@ -19,15 +19,17 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hudi.io.storage.HoodieLocation
+
+import org.apache.hadoop.fs.FileStatus
 import org.apache.spark.sql.catalyst.InternalRow
 
 /**
  * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] for Spark 3.3.
  */
 object HoodieSpark33PartitionedFileUtils extends HoodieSparkPartitionedFileUtils {
-  override def getPathFromPartitionedFile(partitionedFile: PartitionedFile): Path = {
-    new Path(partitionedFile.filePath)
+  override def getPathFromPartitionedFile(partitionedFile: PartitionedFile): HoodieLocation = {
+    new HoodieLocation(partitionedFile.filePath)
   }
 
   override def getStringPathFromPartitionedFile(partitionedFile: PartitionedFile): String = {
@@ -35,10 +37,10 @@ object HoodieSpark33PartitionedFileUtils extends HoodieSparkPartitionedFileUtils
   }
 
   override def createPartitionedFile(partitionValues: InternalRow,
-                                     filePath: Path,
+                                     location: HoodieLocation,
                                      start: Long,
                                      length: Long): PartitionedFile = {
-    PartitionedFile(partitionValues, filePath.toUri.toString, start, length)
+    PartitionedFile(partitionValues, location.toUri.toString, start, length)
   }
 
   override def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus] = {

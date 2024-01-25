@@ -22,6 +22,9 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
 import org.apache.hadoop.conf.Configuration;
@@ -82,7 +85,7 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
   public void testMarkerConflictDetectionRunnable() throws IOException, InterruptedException {
 
     AtomicBoolean hasConflict = new AtomicBoolean(false);
-    FileSystem fs = new Path(basePath).getFileSystem(new Configuration());
+    HoodieStorage storage = HoodieStorageUtils.getHoodieStorage(basePath, new Configuration());
     MarkerHandler markerHandler = mock(MarkerHandler.class);
     String rootBaseMarkerDir = basePath + "/.hoodie/.temp";
     String partition = "2016";
@@ -91,14 +94,14 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
     String oldInstant = "001";
     Set<String> oldMarkers = Stream.of(partition + "/b21adfa2-7013-4452-a565-4cc39fea5b73-0_4-17-21_001.parquet.marker.CREATE",
         partition + "/4a266542-c7d5-426f-8fb8-fb85a2e88448-0_3-17-20_001.parquet.marker.CREATE").collect(Collectors.toSet());
-    prepareFiles(rootBaseMarkerDir, oldInstant, oldMarkers, fs);
+    prepareFiles(rootBaseMarkerDir, oldInstant, oldMarkers, storage);
 
     // here current markers and old markers have a common fileID b21adfa2-7013-4452-a565-4cc39fea5b73-0
     String currentInstantTime = "002";
     String currentMarkerDir = rootBaseMarkerDir + "/" + currentInstantTime;
     Set<String> currentMarkers = Stream.of(partition + "/b21adfa2-7013-4452-a565-4cc39fea5b73-0_40-170-210_002.parquet.marker.MERGE",
         partition + "/1228caeb-4188-4e19-a18d-848e6f9b0448-0_55-55-425_002.parquet.marker.MERGE").collect(Collectors.toSet());
-    prepareFiles(rootBaseMarkerDir, currentInstantTime, currentMarkers, fs);
+    prepareFiles(rootBaseMarkerDir, currentInstantTime, currentMarkers, storage);
 
     HashSet<HoodieInstant> oldInstants = new HashSet<>();
     oldInstants.add(new HoodieInstant(false, "commit", oldInstant));
@@ -106,7 +109,7 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
 
     ScheduledExecutorService detectorExecutor = Executors.newSingleThreadScheduledExecutor();
     detectorExecutor.submit(new MarkerBasedEarlyConflictDetectionRunnable(hasConflict, markerHandler, currentMarkerDir,
-        basePath, fs, Long.MAX_VALUE, oldInstants, true));
+        basePath, storage, Long.MAX_VALUE, oldInstants, true));
 
     detectorExecutor.shutdown();
     detectorExecutor.awaitTermination(60, TimeUnit.SECONDS);
@@ -114,10 +117,10 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
     assertTrue(hasConflict.get());
   }
 
-  private void prepareFiles(String baseMarkerDir, String instant, Set<String> markers, FileSystem fs) throws IOException {
-    fs.create(new Path(basePath + "/.hoodie/" + instant + ".commit"), true);
+  private void prepareFiles(String baseMarkerDir, String instant, Set<String> markers, HoodieStorage storage) throws IOException {
+    storage.create(new HoodieLocation(basePath + "/.hoodie/" + instant + ".commit"), true);
     String markerDir = baseMarkerDir + "/" + instant;
-    fs.mkdirs(new Path(markerDir));
+    storage.createDirectory(new HoodieLocation(markerDir));
     BufferedWriter out = new BufferedWriter(new FileWriter(markerDir + "/MARKERS0"));
     markers.forEach(ele -> {
       try {

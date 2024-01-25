@@ -435,11 +435,11 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     for (String partitionPath: partitionPaths) {
       fileSystemView.getLatestFileSlices(partitionPath).forEach(slice -> {
         HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-            .withFileSystem(metaClient.getFs())
+            .withHoodieStorage(metaClient.getHoodieStorage())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(slice.getLogFiles()
                 .sorted(HoodieLogFile.getLogFileComparator())
-                .map(file -> file.getPath().toString())
+                .map(file -> file.getLocation().toString())
                 .collect(Collectors.toList()))
             .withLatestInstantTime(instant)
             .withBufferSize(config.getMaxDFSStreamBufferSize())
@@ -449,11 +449,11 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         scanner.scan(true);
         List<String> prevInstants = scanner.getValidBlockInstants();
         HoodieUnMergedLogRecordScanner scanner2 = HoodieUnMergedLogRecordScanner.newBuilder()
-            .withFileSystem(metaClient.getFs())
+            .withHoodieStorage(metaClient.getHoodieStorage())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(slice.getLogFiles()
                 .sorted(HoodieLogFile.getLogFileComparator())
-                .map(file -> file.getPath().toString())
+                .map(file -> file.getLocation().toString())
                 .collect(Collectors.toList()))
             .withLatestInstantTime(currentInstant)
             .withBufferSize(config.getMaxDFSStreamBufferSize())

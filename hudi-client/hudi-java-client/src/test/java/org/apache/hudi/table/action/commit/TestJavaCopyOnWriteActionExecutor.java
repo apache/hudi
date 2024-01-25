@@ -40,6 +40,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.table.HoodieJavaCopyOnWriteTable;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
@@ -91,7 +92,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieJavaTable.create(config, context, metaClient);
 
-    Pair<Path, String> newPathWithWriteToken = Arrays.asList(1).stream().map(x -> {
+    Pair<HoodieLocation, String> newPathWithWriteToken = Arrays.asList(1).stream().map(x -> {
       HoodieRecord record = mock(HoodieRecord.class);
       when(record.getPartitionPath()).thenReturn(partitionPath);
       String writeToken = FSUtils.makeWriteToken(context.getTaskContextSupplier().getPartitionIdSupplier().get(),
@@ -99,7 +100,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
           context.getTaskContextSupplier().getAttemptIdSupplier().get());
       HoodieCreateHandle io = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileName,
           context.getTaskContextSupplier());
-      Pair<Path, String> result = Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      Pair<HoodieLocation, String> result = Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
       io.close();
       return result;
     }).collect(Collectors.toList()).get(0);
@@ -159,13 +160,13 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path filePath = allFiles[0].getPath();
-    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(hadoopConf, filePath);
+    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(hadoopConf, new HoodieLocation(filePath.toUri()));
     for (HoodieRecord record : records) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
 
     // Read the base file, check the record content
-    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(hadoopConf, filePath);
+    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(hadoopConf, new HoodieLocation(filePath.toUri()));
     GenericRecord newRecord;
     int index = 0;
     for (GenericRecord record : fileRecords) {
@@ -200,7 +201,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     // Check whether the record has been updated
     Path updatedFilePath = allFiles[0].getPath();
     BloomFilter updatedFilter =
-        fileUtils.readBloomFilterFromMetadata(hadoopConf, updatedFilePath);
+        fileUtils.readBloomFilterFromMetadata(hadoopConf, new HoodieLocation(updatedFilePath.toUri()));
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));
@@ -431,7 +432,9 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     WriteStatus writeStatus = ws.get(0).get(0);
     String fileId = writeStatus.getFileId();
-    metaClient.getFs().create(new Path(Paths.get(basePath, ".hoodie", "000.commit").toString())).close();
+    metaClient.getHoodieStorage()
+        .create(new HoodieLocation(Paths.get(basePath, ".hoodie", "000.commit").toString()))
+        .close();
     //TODO : Find race condition that causes the timeline sometime to reflect 000.commit and sometimes not
     final HoodieJavaCopyOnWriteTable reloadedTable = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, HoodieTableMetaClient.reload(metaClient));
 
@@ -504,13 +507,13 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path filePath = allFiles[0].getPath();
-    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(hadoopConf, filePath);
+    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(hadoopConf, new HoodieLocation(filePath.toUri()));
     for (HoodieRecord record : records) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
 
     // Read the base file, check the record content
-    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(hadoopConf, filePath);
+    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(hadoopConf, new HoodieLocation(filePath.toUri()));
     int index = 0;
     for (GenericRecord record : fileRecords) {
       assertEquals(records.get(index).getRecordKey(), record.get("_row_key").toString());
@@ -529,7 +532,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     filePath = allFiles[0].getPath();
     // Read the base file, check the record content
-    fileRecords = fileUtils.readAvroRecords(hadoopConf, filePath);
+    fileRecords = fileUtils.readAvroRecords(hadoopConf, new HoodieLocation(filePath.toUri()));
     // Check that the two records are deleted successfully
     assertEquals(1, fileRecords.size());
     assertEquals(records.get(1).getRecordKey(), fileRecords.get(0).get("_row_key").toString());
@@ -546,7 +549,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     filePath = allFiles[0].getPath();
     // Read the base file, check the record content
-    fileRecords = fileUtils.readAvroRecords(hadoopConf, filePath);
+    fileRecords = fileUtils.readAvroRecords(hadoopConf, new HoodieLocation(filePath.toUri()));
     // Check whether all records have been deleted
     assertEquals(0, fileRecords.size());
   }

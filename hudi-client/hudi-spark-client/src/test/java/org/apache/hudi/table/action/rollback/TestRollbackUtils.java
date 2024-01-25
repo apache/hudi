@@ -24,10 +24,9 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsPermission;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -42,10 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestRollbackUtils {
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
-  private FileStatus generateFileStatus(String filePath) {
-    Path dataFile1Path = new Path(filePath);
-    return new FileStatus(1, true, 1, 1, 1, 1,
-        FsPermission.valueOf("-rw-rw-rw-"), "one", "one", null, dataFile1Path);
+  private HoodieFileStatus generateFileStatus(String filePath) {
+    return new HoodieFileStatus(new HoodieLocation(filePath), 1, true, 1);
   }
 
   @Test
@@ -65,14 +62,14 @@ public class TestRollbackUtils {
     String partitionPath1 = "/partitionPath1/";
     String partitionPath2 = "/partitionPath2/";
     //prepare HoodieRollbackStat for different partition
-    Map<FileStatus, Boolean> dataFilesOnlyStat1Files = new HashMap<>();
+    Map<HoodieFileStatus, Boolean> dataFilesOnlyStat1Files = new HashMap<>();
     dataFilesOnlyStat1Files.put(generateFileStatus(partitionPath1 + "dataFile1" + BASE_FILE_EXTENSION), true);
     dataFilesOnlyStat1Files.put(generateFileStatus(partitionPath1 + "dataFile2" + BASE_FILE_EXTENSION), true);
     HoodieRollbackStat dataFilesOnlyStat1 = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath1)
         .withDeletedFileResults(dataFilesOnlyStat1Files).build();
 
-    Map<FileStatus, Boolean> dataFilesOnlyStat2Files = new HashMap<>();
+    Map<HoodieFileStatus, Boolean> dataFilesOnlyStat2Files = new HashMap<>();
     dataFilesOnlyStat2Files.put(generateFileStatus(partitionPath2 + "dataFile1" + BASE_FILE_EXTENSION), true);
     dataFilesOnlyStat2Files.put(generateFileStatus(partitionPath2 + "dataFile2" + BASE_FILE_EXTENSION), true);
     HoodieRollbackStat dataFilesOnlyStat2 = HoodieRollbackStat.newBuilder()
@@ -85,14 +82,14 @@ public class TestRollbackUtils {
     }, "different partition rollbackstat merge will failed");
 
     //prepare HoodieRollbackStat for failed and block append
-    Map<FileStatus, Boolean> dataFilesOnlyStat3Files = new HashMap<>();
+    Map<HoodieFileStatus, Boolean> dataFilesOnlyStat3Files = new HashMap<>();
     dataFilesOnlyStat3Files.put(generateFileStatus(partitionPath1 + "dataFile1.log"), true);
     dataFilesOnlyStat3Files.put(generateFileStatus(partitionPath1 + "dataFile3" + BASE_FILE_EXTENSION), false);
     HoodieRollbackStat dataFilesOnlyStat3 = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath1)
         .withDeletedFileResults(dataFilesOnlyStat3Files).build();
 
-    Map<FileStatus, Long> dataFilesOnlyStat4Files = new HashMap<>();
+    Map<HoodieFileStatus, Long> dataFilesOnlyStat4Files = new HashMap<>();
     dataFilesOnlyStat4Files.put(generateFileStatus(partitionPath1 + "dataFile1.log"), 10L);
     HoodieRollbackStat dataFilesOnlyStat4 = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath1)

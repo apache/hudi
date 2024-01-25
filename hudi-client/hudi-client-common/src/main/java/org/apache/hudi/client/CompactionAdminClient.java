@@ -39,10 +39,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.table.action.compact.OperationResult;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,15 +112,16 @@ public class CompactionAdminClient extends BaseHoodieClient {
     if (!dryRun) {
       // Overwrite compaction request with empty compaction operations
       HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
-      Path inflightPath = new Path(metaClient.getMetaPath(), inflight.getFileName());
-      if (metaClient.getFs().exists(inflightPath)) {
+      HoodieLocation inflightPath = new HoodieLocation(metaClient.getMetaPath(), inflight.getFileName());
+      if (metaClient.getHoodieStorage().exists(inflightPath)) {
         // We need to rollback data-files because of this inflight compaction before unscheduling
         throw new IllegalStateException("Please rollback the inflight compaction before unscheduling");
       }
       // Leave the trace in aux folder but delete from metapath.
       // TODO: Add a rollback instant but for compaction
       HoodieInstant instant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
-      boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
+      boolean deleted = metaClient.getHoodieStorage().deleteFile(
+          new HoodieLocation(metaClient.getMetaPath(), instant.getFileName()));
       ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
     }
     return new ArrayList<>();
@@ -146,8 +147,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
           CompactionUtils.getAllPendingCompactionOperations(metaClient).get(fgId);
       HoodieCompactionPlan plan =
           CompactionUtils.getCompactionPlan(metaClient, compactionOperationWithInstant.getKey());
-      List<HoodieCompactionOperation> newOps = plan.getOperations().stream().filter(
-          op -> (!op.getFileId().equals(fgId.getFileId())) && (!op.getPartitionPath().equals(fgId.getPartitionPath())))
+      List<HoodieCompactionOperation> newOps = plan.getOperations().stream().filter(op ->
+              (!op.getFileId().equals(fgId.getFileId())) && (!op.getPartitionPath().equals(fgId.getPartitionPath())))
           .collect(Collectors.toList());
       if (newOps.size() == plan.getOperations().size()) {
         return new ArrayList<>();
@@ -156,8 +157,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
           HoodieCompactionPlan.newBuilder().setOperations(newOps).setExtraMetadata(plan.getExtraMetadata()).build();
       HoodieInstant inflight =
           new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionOperationWithInstant.getLeft());
-      Path inflightPath = new Path(metaClient.getMetaPath(), inflight.getFileName());
-      if (metaClient.getFs().exists(inflightPath)) {
+      HoodieLocation inflightPath = new HoodieLocation(metaClient.getMetaPath(), inflight.getFileName());
+      if (metaClient.getHoodieStorage().exists(inflightPath)) {
         // revert if in inflight state
         metaClient.getActiveTimeline().revertInstantFromInflightToRequested(inflight);
       }
@@ -206,12 +207,14 @@ public class CompactionAdminClient extends BaseHoodieClient {
    */
   protected static void renameLogFile(HoodieTableMetaClient metaClient, HoodieLogFile oldLogFile,
       HoodieLogFile newLogFile) throws IOException {
-    FileStatus[] statuses = metaClient.getFs().listStatus(oldLogFile.getPath());
-    ValidationUtils.checkArgument(statuses.length == 1, "Only one status must be present");
-    ValidationUtils.checkArgument(statuses[0].isFile(), "Source File must exist");
-    ValidationUtils.checkArgument(oldLogFile.getPath().getParent().equals(newLogFile.getPath().getParent()),
+    List<HoodieFileStatus> statuses =
+        metaClient.getHoodieStorage().listDirectEntries(oldLogFile.getLocation());
+    ValidationUtils.checkArgument(statuses.size() == 1, "Only one status must be present");
+    ValidationUtils.checkArgument(statuses.get(0).isFile(), "Source File must exist");
+    ValidationUtils.checkArgument(
+        oldLogFile.getLocation().getParent().equals(newLogFile.getLocation().getParent()),
         "Log file must only be moved within the parent directory");
-    metaClient.getFs().rename(oldLogFile.getPath(), newLogFile.getPath());
+    metaClient.getHoodieStorage().rename(oldLogFile.getLocation(), newLogFile.getLocation());
   }
 
   /**
@@ -236,11 +239,11 @@ public class CompactionAdminClient extends BaseHoodieClient {
           FileSlice fs = fileSliceOptional.get();
           Option<HoodieBaseFile> df = fs.getBaseFile();
           if (operation.getDataFileName().isPresent()) {
-            String expPath = metaClient.getFs()
-                .getFileStatus(
-                    new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
-                        new Path(operation.getDataFileName().get())))
-                .getPath().toString();
+            String expPath = metaClient.getHoodieStorage()
+                .getFileStatus(new HoodieLocation(
+                    FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
+                    operation.getDataFileName().get()))
+                .toString();
             ValidationUtils.checkArgument(df.isPresent(),
                 "Data File must be present. File Slice was : " + fs + ", operation :" + operation);
             ValidationUtils.checkArgument(df.get().getPath().equals(expPath),
@@ -249,10 +252,11 @@ public class CompactionAdminClient extends BaseHoodieClient {
           Set<HoodieLogFile> logFilesInFileSlice = fs.getLogFiles().collect(Collectors.toSet());
           Set<HoodieLogFile> logFilesInCompactionOp = operation.getDeltaFileNames().stream().map(dp -> {
             try {
-              FileStatus[] fileStatuses = metaClient.getFs().listStatus(new Path(
-                  FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), new Path(dp)));
-              ValidationUtils.checkArgument(fileStatuses.length == 1, "Expect only 1 file-status");
-              return new HoodieLogFile(fileStatuses[0]);
+              List<HoodieFileStatus> fileStatuses = metaClient.getHoodieStorage()
+                  .listDirectEntries(new HoodieLocation(
+                      FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), dp));
+              ValidationUtils.checkArgument(fileStatuses.size() == 1, "Expect only 1 file-status");
+              return new HoodieLogFile(fileStatuses.get(0));
             } catch (FileNotFoundException fe) {
               throw new CompactionValidationException(fe.getMessage());
             } catch (IOException ioe) {
@@ -300,7 +304,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
         context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations: " + config.getTableName());
         return context.map(renameActions, lfPair -> {
           try {
-            LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
+            LOG.info("RENAME " + lfPair.getLeft().getLocation() + " => " + lfPair.getRight().getLocation());
             renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
             return new RenameOpResult(lfPair, true, Option.empty());
           } catch (IOException e) {
@@ -327,14 +331,14 @@ public class CompactionAdminClient extends BaseHoodieClient {
 
     public RenameOpResult(Pair<HoodieLogFile, HoodieLogFile> op, boolean success, Option<Exception> exception) {
       super(
-          new RenameInfo(op.getKey().getFileId(), op.getKey().getPath().toString(), op.getRight().getPath().toString()),
+          new RenameInfo(op.getKey().getFileId(), op.getKey().getLocation().toString(), op.getRight().getLocation().toString()),
           success, exception);
     }
 
     public RenameOpResult(Pair<HoodieLogFile, HoodieLogFile> op, boolean executed, boolean success,
         Option<Exception> exception) {
       super(
-          new RenameInfo(op.getKey().getFileId(), op.getKey().getPath().toString(), op.getRight().getPath().toString()),
+          new RenameInfo(op.getKey().getFileId(), op.getKey().getLocation().toString(), op.getRight().getLocation().toString()),
           executed, success, exception);
     }
   }

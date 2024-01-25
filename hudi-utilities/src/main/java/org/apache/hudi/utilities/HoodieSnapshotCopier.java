@@ -32,6 +32,10 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -78,7 +82,7 @@ public class HoodieSnapshotCopier implements Serializable {
 
   public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir,
                        final boolean useFileListingFromMetadata) throws IOException {
-    FileSystem fs = FSUtils.getFs(baseDir, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(baseDir, jsc.hadoopConfiguration());
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
     final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir).build();
     final BaseFileOnlyView fsView = new HoodieTableFileSystemView(tableMetadata,
@@ -110,15 +114,15 @@ public class HoodieSnapshotCopier implements Serializable {
 
       List<Tuple2<String, String>> filesToCopy = context.flatMap(partitions, partition -> {
         // Only take latest version files <= latestCommit.
-        FileSystem fs1 = FSUtils.getFs(baseDir, serConf.newCopy());
+        HoodieStorage storage1 = HoodieStorageUtils.getHoodieStorage(baseDir, serConf.newCopy());
         List<Tuple2<String, String>> filePaths = new ArrayList<>();
         Stream<HoodieBaseFile> dataFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
         dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
 
         // also need to copy over partition metadata
-        Path partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(fs1,
+        HoodieLocation partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(storage1,
             FSUtils.getPartitionPath(baseDir, partition)).get();
-        if (fs1.exists(partitionMetaFile)) {
+        if (storage1.exists(partitionMetaFile)) {
           filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
         }
 
@@ -128,8 +132,8 @@ public class HoodieSnapshotCopier implements Serializable {
       context.foreach(filesToCopy, tuple -> {
         String partition = tuple._1();
         Path sourceFilePath = new Path(tuple._2());
-        Path toPartitionPath = FSUtils.getPartitionPath(outputDir, partition);
-        FileSystem ifs = FSUtils.getFs(baseDir, serConf.newCopy());
+        Path toPartitionPath = FSUtils.getPartitionPathInPath(outputDir, partition);
+        FileSystem ifs = HadoopFSUtils.getFs(baseDir, serConf.newCopy());
 
         if (!ifs.exists(toPartitionPath)) {
           ifs.mkdirs(toPartitionPath);

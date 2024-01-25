@@ -17,19 +17,22 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties}
+import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties, DataSkippingFailureMode}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.io.storage.{HoodieFileStatus, HoodieLocation}
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
@@ -37,15 +40,16 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
+
+import javax.annotation.concurrent.NotThreadSafe
 
 import java.text.SimpleDateFormat
 import java.util.stream.Collectors
-import javax.annotation.concurrent.NotThreadSafe
+
 import scala.collection.JavaConverters._
-import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.
@@ -116,7 +120,7 @@ case class HoodieFileIndex(spark: SparkSession,
     .map(_.trim)
     .contains("org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
 
-  override def rootPaths: Seq[Path] = getQueryPaths.asScala
+  override def rootPaths: Seq[Path] = getQueryPaths.asScala.map(e => new Path(e.toUri))
 
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
@@ -126,7 +130,7 @@ case class HoodieFileIndex(spark: SparkSession,
    *
    * @return List of FileStatus for base files
    */
-  def allBaseFiles: Seq[FileStatus] = {
+  def allBaseFiles: Seq[HoodieFileStatus] = {
     getAllInputFileSlices.values.asScala.flatMap(_.asScala)
       .map(fs => fs.getBaseFile.orElse(null))
       .filter(_ != null)
@@ -139,12 +143,12 @@ case class HoodieFileIndex(spark: SparkSession,
    *
    * @return List of FileStatus for base files and log files
    */
-  private def allBaseFilesAndLogFiles: Seq[FileStatus] = {
+  private def allBaseFilesAndLogFiles: Seq[HoodieFileStatus] = {
     getAllInputFileSlices.values.asScala.flatMap(_.asScala)
       .flatMap(fs => {
         val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
-        val logFilesStatus = fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
-        val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
+        val logFilesStatus = fs.getLogFiles.map[HoodieFileStatus](JFunction.toJavaFunction[HoodieLogFile, HoodieFileStatus](lf => lf.getFileInfo))
+        val files = logFilesStatus.collect(Collectors.toList[HoodieFileStatus]).asScala
         baseFileStatusOpt.foreach(f => files.append(f))
         files
       }).toSeq
@@ -165,11 +169,13 @@ case class HoodieFileIndex(spark: SparkSession,
             if (slice.getBaseFile.isPresent) {
               slice.getBaseFile.get().getFileStatus
             } else if (includeLogFiles && slice.getLogFiles.findAny().isPresent) {
-              slice.getLogFiles.findAny().get().getFileStatus
+              slice.getLogFiles.findAny().get().getFileInfo
             } else {
               null
             }
           }).filter(slice => slice != null)
+            .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, 0,
+              fileInfo.getModificationTime, new Path(fileInfo.getLocation.toUri)))
           val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
@@ -185,14 +191,16 @@ case class HoodieFileIndex(spark: SparkSession,
           val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
             val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
             val logFilesStatus = if (includeLogFiles) {
-              fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
+              fs.getLogFiles.map[HoodieFileStatus](JFunction.toJavaFunction[HoodieLogFile, HoodieFileStatus](lf => lf.getFileInfo))
             } else {
               java.util.stream.Stream.empty()
             }
-            val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
+            val files = logFilesStatus.collect(Collectors.toList[HoodieFileStatus]).asScala
             baseFileStatusOpt.foreach(f => files.append(f))
             files
           })
+            .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, 0,
+              fileInfo.getModificationTime, new Path(fileInfo.getLocation.toUri)))
           sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
             InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
         }
@@ -256,10 +264,10 @@ case class HoodieFileIndex(spark: SparkSession,
           // Filter in candidate files based on the col-stats or record level index lookup
           val candidateFileSlices: Seq[FileSlice] = {
             fileSlices.filter(fs => {
-              val fileSliceFiles = fs.getLogFiles.map[String](JFunction.toJavaFunction[HoodieLogFile, String](lf => lf.getPath.getName))
+              val fileSliceFiles = fs.getLogFiles.map[String](JFunction.toJavaFunction[HoodieLogFile, String](lf => lf.getLocation.getName))
                 .collect(Collectors.toSet[String])
               val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
-              baseFileStatusOpt.exists(f => fileSliceFiles.add(f.getPath.getName))
+              baseFileStatusOpt.exists(f => fileSliceFiles.add(f.getLocation.getName))
               // NOTE: This predicate is true when {@code Option} is empty
               candidateFilesNamesOpt.forall(files => files.exists(elem => fileSliceFiles.contains(elem)))
             })
@@ -303,7 +311,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * In the fast bootstrap read code path, it gets the file status for the bootstrap base file instead of
    * skeleton file. Returns file status for the base file if available.
    */
-  protected def getBaseFileStatus(baseFileOpt: Option[HoodieBaseFile]): Option[FileStatus] = {
+  protected def getBaseFileStatus(baseFileOpt: Option[HoodieBaseFile]): Option[HoodieFileStatus] = {
     baseFileOpt.map(baseFile => {
       if (shouldFastBootstrap) {
         if (baseFile.getBootstrapBaseFile.isPresent) {
@@ -424,12 +432,12 @@ case class HoodieFileIndex(spark: SparkSession,
     hasPushedDownPartitionPredicates = false
   }
 
-  private def getAllFiles(): Seq[FileStatus] = {
+  private def getAllFiles(): Seq[HoodieFileStatus] = {
     if (includeLogFiles) allBaseFilesAndLogFiles else allBaseFiles
   }
 
   override def inputFiles: Array[String] =
-    getAllFiles().map(_.getPath.toString).toArray
+    getAllFiles().map(_.getLocation.toString).toArray
 
   override def sizeInBytes: Long = {
     val size = getTotalCachedFilesSize
@@ -560,7 +568,7 @@ object HoodieFileIndex extends Logging {
     }
   }
 
-  private def getQueryPaths(options: Map[String, String]): Seq[Path] = {
+  private def getQueryPaths(options: Map[String, String]): Seq[HoodieLocation] = {
     // NOTE: To make sure that globbing is appropriately handled w/in the
     //       `path`, we need to:
     //          - First, probe whether requested globbed paths has been resolved (and `glob.paths` was provided
@@ -575,6 +583,6 @@ object HoodieFileIndex extends Logging {
         Seq(path)
     }
 
-    paths.map(new Path(_))
+    paths.map(new HoodieLocation(_))
   }
 }

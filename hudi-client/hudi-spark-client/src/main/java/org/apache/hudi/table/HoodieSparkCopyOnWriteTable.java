@@ -30,8 +30,8 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -237,15 +237,16 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
                                                              String fileId) throws IOException {
-    if (upsertHandle.getOldFilePath() == null) {
+    if (upsertHandle.getOldFileLocation() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
       if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
         Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
-        Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
-            getMetaClient().getTableConfig().getBootstrapBasePath().get(),
-            upsertHandle.getWriterSchema(), getHadoopConf());
+        Object[] partitionValues =
+            SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
+                getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+                upsertHandle.getWriterSchema(), getHadoopConf());
         upsertHandle.setPartitionFields(partitionFields);
         upsertHandle.setPartitionValues(partitionValues);
       }
@@ -254,7 +255,7 @@ public class HoodieSparkCopyOnWriteTable<T>
 
     // TODO(vc): This needs to be revisited
     if (upsertHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath() + ", "
+      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFileLocation() + ", "
           + upsertHandle.writeStatuses());
     }
 

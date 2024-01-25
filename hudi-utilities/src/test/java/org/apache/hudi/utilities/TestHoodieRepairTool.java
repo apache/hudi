@@ -26,12 +26,13 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
@@ -136,13 +137,13 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   }
 
   private void cleanUpDanglingDataFilesInFS() {
-    FileSystem fs = metaClient.getFs();
+    HoodieStorage fs = metaClient.getHoodieStorage();
     DANGLING_DATA_FILE_LIST.forEach(
         relativeFilePath -> {
-          Path path = new Path(basePath, relativeFilePath);
+          HoodieLocation path = new HoodieLocation(basePath, relativeFilePath);
           try {
             if (fs.exists(path)) {
-              fs.delete(path, false);
+              fs.deleteFile(path);
             }
           } catch (IOException e) {
             throw new HoodieIOException("Unable to delete file: " + path);
@@ -152,8 +153,8 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   }
 
   private void cleanUpBackupTempDir() throws IOException {
-    FileSystem fs = metaClient.getFs();
-    fs.delete(new Path(backupTempDir.toAbsolutePath().toString()), true);
+    HoodieStorage fs = metaClient.getHoodieStorage();
+    fs.deleteDirectory(new HoodieLocation(backupTempDir.toAbsolutePath().toString()));
   }
 
   private static void initDanglingDataFileList() {
@@ -193,10 +194,14 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     SecureRandom random = new SecureRandom();
     long randomLong = random.nextLong();
     String emptyBackupPath = "/tmp/empty_backup_" + randomLong;
-    FSUtils.createPathIfNotExists(metaClient.getFs(), new Path(emptyBackupPath));
+    FSUtils.createPathIfNotExists(metaClient.getHoodieStorage(),
+        new HoodieLocation(emptyBackupPath));
     String nonEmptyBackupPath = "/tmp/nonempty_backup_" + randomLong;
-    FSUtils.createPathIfNotExists(metaClient.getFs(), new Path(nonEmptyBackupPath));
-    FSUtils.createPathIfNotExists(metaClient.getFs(), new Path(nonEmptyBackupPath, ".hoodie"));
+    FSUtils.createPathIfNotExists(metaClient.getHoodieStorage(),
+        new HoodieLocation(nonEmptyBackupPath));
+    FSUtils.createPathIfNotExists(metaClient.getHoodieStorage(),
+        new HoodieLocation(nonEmptyBackupPath,
+            ".hoodie"));
     Object[][] data = new Object[][] {
         {null, basePath, 0}, {"/tmp/backup", basePath, 0},
         {emptyBackupPath, basePath, 0}, {basePath + "/backup", basePath, -1},
@@ -303,7 +308,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   @Test
   public void testUndoWithNonExistentBackupPath() throws IOException {
     String backupPath = backupTempDir.toAbsolutePath().toString();
-    metaClient.getFs().delete(new Path(backupPath), true);
+    metaClient.getHoodieStorage().deleteDirectory(new HoodieLocation(backupPath));
 
     testRepairToolWithMode(
         Option.empty(), Option.empty(), HoodieRepairTool.Mode.UNDO.toString(),
@@ -356,33 +361,34 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   private void verifyFilesInFS(
       List<String> existFilePathList, List<String> nonExistFilePathList) throws IOException {
-    FileSystem fs = metaClient.getFs();
+    HoodieStorage storage = metaClient.getHoodieStorage();
 
     for (String filePath : existFilePathList) {
-      assertTrue(fs.exists(new Path(filePath)),
+      assertTrue(storage.exists(new HoodieLocation(filePath)),
           String.format("File %s should exist but it's not in the file system", filePath));
     }
 
     for (String filePath : nonExistFilePathList) {
-      assertFalse(fs.exists(new Path(filePath)),
+      assertFalse(storage.exists(new HoodieLocation(filePath)),
           String.format("File %s should not exist but it's in the file system", filePath));
     }
   }
 
   private List<String> createDanglingDataFilesInFS(String parentPath) {
-    FileSystem fs = metaClient.getFs();
-    return DANGLING_DATA_FILE_LIST.stream().map(relativeFilePath -> {
-      Path path = new Path(parentPath, relativeFilePath);
-      try {
-        fs.mkdirs(path.getParent());
-        if (!fs.exists(path)) {
-          fs.create(path, false);
-        }
-      } catch (IOException e) {
-        LOG.error("Error creating file: " + path);
-      }
-      return path.toString();
-    })
+    HoodieStorage fs = metaClient.getHoodieStorage();
+    return DANGLING_DATA_FILE_LIST.stream()
+        .map(relativeFilePath -> {
+          HoodieLocation path = new HoodieLocation(parentPath, relativeFilePath);
+          try {
+            fs.createDirectory(path.getParent());
+            if (!fs.exists(path)) {
+              fs.create(path, false);
+            }
+          } catch (IOException e) {
+            LOG.error("Error creating file: " + path);
+          }
+          return path.toString();
+        })
         .collect(Collectors.toList());
   }
 

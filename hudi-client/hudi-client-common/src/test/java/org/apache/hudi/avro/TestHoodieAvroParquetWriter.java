@@ -18,10 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DummyTaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -30,7 +26,12 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -70,10 +71,10 @@ public class TestHoodieAvroParquetWriter {
         new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE,
             ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024, hadoopConf, 0.1, true);
 
-    Path filePath = new Path(tmpDir.resolve("test.parquet").toAbsolutePath().toString());
+    HoodieLocation fileLocation = new HoodieLocation(tmpDir.resolve("test.parquet").toAbsolutePath().toString());
 
     try (HoodieAvroParquetWriter writer =
-        new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
+             new HoodieAvroParquetWriter(fileLocation, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
       for (GenericRecord record : records) {
         writer.writeAvro((String) record.get("_row_key"), record);
       }
@@ -82,7 +83,7 @@ public class TestHoodieAvroParquetWriter {
     ParquetUtils utils = new ParquetUtils();
 
     // Step 1: Make sure records are written appropriately
-    List<GenericRecord> readRecords = utils.readAvroRecords(hadoopConf, filePath);
+    List<GenericRecord> readRecords = utils.readAvroRecords(hadoopConf, fileLocation);
 
     assertEquals(toJson(records), toJson(readRecords));
 
@@ -92,7 +93,8 @@ public class TestHoodieAvroParquetWriter {
     String minKey = recordKeys.stream().min(Comparator.naturalOrder()).get();
     String maxKey = recordKeys.stream().max(Comparator.naturalOrder()).get();
 
-    FileMetaData parquetMetadata = ParquetUtils.readMetadata(hadoopConf, filePath).getFileMetaData();
+    FileMetaData parquetMetadata = ParquetUtils.readMetadata(
+        hadoopConf, fileLocation).getFileMetaData();
 
     Map<String, String> extraMetadata = parquetMetadata.getKeyValueMetaData();
 
@@ -101,7 +103,7 @@ public class TestHoodieAvroParquetWriter {
     assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE), BloomFilterTypeCode.DYNAMIC_V0.name());
 
     // Step 3: Make sure Bloom Filter contains all the record keys
-    BloomFilter bloomFilter = utils.readBloomFilterFromMetadata(hadoopConf, filePath);
+    BloomFilter bloomFilter = utils.readBloomFilterFromMetadata(hadoopConf, fileLocation);
     recordKeys.forEach(recordKey -> {
       assertTrue(bloomFilter.mightContain(recordKey));
     });

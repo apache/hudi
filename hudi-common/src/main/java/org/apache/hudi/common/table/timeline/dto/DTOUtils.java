@@ -49,7 +49,8 @@ public class DTOUtils {
     }
   }
 
-  public static Stream<HoodieFileGroup> fileGroupDTOsToFileGroups(List<FileGroupDTO> dtos, HoodieTableMetaClient metaClient) {
+  public static Stream<HoodieFileGroup> fileGroupDTOsToFileGroups(List<FileGroupDTO> dtos,
+                                                                  HoodieTableMetaClient metaClient) {
     if (dtos.isEmpty()) {
       return Stream.empty();
     }

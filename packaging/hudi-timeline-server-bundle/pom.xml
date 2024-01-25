@@ -158,6 +158,8 @@
                          Include hudi-timeline-server with javalin dependencies. 
                          hadoop deps are to be provided at runtime. see run_server.sh 
                       -->
+                      <include>org.apache.hudi:hudi-io</include>
+                      <include>org.apache.hudi:hudi-hadoop-common</include>
                       <include>org.apache.hudi:hudi-common</include>
                       <include>org.apache.hudi:hudi-timeline-service</include>
                       <include>org.mortbay.jetty:jetty</include>

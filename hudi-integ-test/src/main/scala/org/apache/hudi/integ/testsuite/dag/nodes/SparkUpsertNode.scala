@@ -59,7 +59,7 @@ class SparkUpsertNode(dagNodeConfig: Config) extends SparkInsertNode(dagNodeConf
     val pathToRead = context.getWriterContext.getCfg.inputBasePath + "/" + batchIdRecords.getKey()
     val avroDf = context.getWriterContext.getSparkSession.read.format("avro").load(pathToRead)
     val genRecsRDD = HoodieSparkUtils.createRdd(avroDf, "testStructName", "testNamespace", false,
-      org.apache.hudi.common.util.Option.of(new Schema.Parser().parse(context.getWriterContext.getHoodieTestSuiteWriter.getSchema)))
+      org.apache.hudi.util.Option.of(new Schema.Parser().parse(context.getWriterContext.getHoodieTestSuiteWriter.getSchema)))
 
     val inputDF = AvroConversionUtils.createDataFrame(genRecsRDD,
       context.getWriterContext.getHoodieTestSuiteWriter.getSchema,

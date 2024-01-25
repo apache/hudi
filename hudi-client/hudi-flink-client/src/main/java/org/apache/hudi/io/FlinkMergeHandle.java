@@ -26,11 +26,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +61,7 @@ public class FlinkMergeHandle<T, I, K, O>
   /**
    * Records the rolled over file paths.
    */
-  private List<Path> rolloverPaths;
+  private List<HoodieLocation> rolloverPaths;
 
   public FlinkMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
@@ -95,8 +95,8 @@ public class FlinkMergeHandle<T, I, K, O>
     final String lastWriteToken = FSUtils.makeWriteToken(getPartitionId(), getStageId(), lastAttemptId);
     final String lastDataFileName = FSUtils.makeBaseFileName(instantTime,
         lastWriteToken, this.fileId, hoodieTable.getBaseFileExtension());
-    final Path path = makeNewFilePath(partitionPath, lastDataFileName);
-    if (path.equals(oldFilePath)) {
+    final HoodieLocation location = makeNewFilePath(partitionPath, lastDataFileName);
+    if (location.equals(oldFileLocation)) {
       // In some rare cases, the old attempt file is used as the old base file to merge
       // because the flink index eagerly records that.
       //
@@ -105,9 +105,9 @@ public class FlinkMergeHandle<T, I, K, O>
       return;
     }
     try {
-      if (fs.exists(path)) {
+      if (storage.exists(location)) {
         LOG.info("Deleting invalid MERGE base file due to task retry: " + lastDataFileName);
-        fs.delete(path, false);
+        storage.deleteFile(location);
       }
     } catch (IOException e) {
       throw new HoodieException("Error while deleting the MERGE base file due to task retry: " + lastDataFileName, e);
@@ -134,21 +134,22 @@ public class FlinkMergeHandle<T, I, K, O>
     rolloverPaths = new ArrayList<>();
     try {
       int rollNumber = 0;
-      while (fs.exists(newFilePath)) {
+      while (storage.exists(newFileLocation)) {
         // in case there is empty file because of task failover attempt.
-        if (fs.getFileStatus(newFilePath).getLen() <= 0) {
-          fs.delete(newFilePath, false);
-          LOG.warn("Delete empty write file for MERGE bucket: " + newFilePath);
+        if (storage.getFileStatus(newFileLocation).getLength() <= 0) {
+          storage.deleteFile(newFileLocation);
+          LOG.warn("Delete empty write file for MERGE bucket: " + newFileLocation);
           break;
         }
 
-        rolloverPaths.add(newFilePath);
+        rolloverPaths.add(newFileLocation);
         newFileName = newFileNameWithRollover(rollNumber++);
-        newFilePath = makeNewFilePath(partitionPath, newFileName);
-        LOG.warn("Duplicate write for MERGE bucket with path: " + oldFilePath + ", rolls over to new path: " + newFilePath);
+        newFileLocation = makeNewFilePath(partitionPath, newFileName);
+        LOG.warn("Duplicate write for MERGE bucket with path: " + oldFileLocation
+            + ", rolls over to new path: " + newFileLocation);
       }
     } catch (IOException e) {
-      throw new HoodieException("Checking existing path for merge handle error: " + newFilePath, e);
+      throw new HoodieException("Checking existing path for merge handle error: " + newFileLocation, e);
     }
   }
 
@@ -163,7 +164,7 @@ public class FlinkMergeHandle<T, I, K, O>
   @Override
   protected void setWriteStatusPath() {
     // if there was rollover, should set up the path as the initial new file path.
-    writeStatus.getStat().setPath(new Path(config.getBasePath()), getWritePath());
+    writeStatus.getStat().setPath(new HoodieLocation(config.getBasePath()), getWritePath());
   }
 
   @Override
@@ -190,19 +191,20 @@ public class FlinkMergeHandle<T, I, K, O>
       return;
     }
 
-    for (Path path : rolloverPaths) {
+    for (HoodieLocation location : rolloverPaths) {
       try {
-        fs.delete(path, false);
-        LOG.info("Delete the rollover data file: " + path + " success!");
+        storage.deleteFile(location);
+        LOG.info("Delete the rollover data file: " + location + " success!");
       } catch (IOException e) {
-        throw new HoodieIOException("Error when clean the temporary rollover data file: " + path, e);
+        throw new HoodieIOException("Error when clean the temporary rollover data file: " + location, e);
       }
     }
-    final Path desiredPath = rolloverPaths.get(0);
+    final HoodieLocation desiredLocation = rolloverPaths.get(0);
     try {
-      fs.rename(newFilePath, desiredPath);
+      storage.rename(newFileLocation, desiredLocation);
     } catch (IOException e) {
-      throw new HoodieIOException("Error when rename the temporary roll file: " + newFilePath + " to: " + desiredPath, e);
+      throw new HoodieIOException(
+          "Error when rename the temporary roll file: " + newFileLocation + " to: " + desiredLocation, e);
     }
   }
 
@@ -216,17 +218,17 @@ public class FlinkMergeHandle<T, I, K, O>
     } catch (Throwable throwable) {
       LOG.warn("Error while trying to dispose the MERGE handle", throwable);
       try {
-        fs.delete(newFilePath, false);
-        LOG.info("Deleting the intermediate MERGE data file: " + newFilePath + " success!");
+        storage.deleteFile(newFileLocation);
+        LOG.info("Deleting the intermediate MERGE data file: " + newFileLocation + " success!");
       } catch (IOException e) {
         // logging a warning and ignore the exception.
-        LOG.warn("Deleting the intermediate MERGE data file: " + newFilePath + " failed", e);
+        LOG.warn("Deleting the intermediate MERGE data file: " + newFileLocation + " failed", e);
       }
     }
   }
 
   @Override
-  public Path getWritePath() {
-    return rolloverPaths.size() > 0 ? rolloverPaths.get(0) : newFilePath;
+  public HoodieLocation getWritePath() {
+    return rolloverPaths.size() > 0 ? rolloverPaths.get(0) : newFileLocation;
   }
 }

@@ -128,7 +128,8 @@ public class TestUtils {
   public static HoodieCommitMetadata deleteInstantFile(HoodieTableMetaClient metaClient, HoodieInstant instant) throws Exception {
     ValidationUtils.checkArgument(instant.isCompleted());
     HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
-    HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), instant);
+    HoodieActiveTimeline.deleteInstantFile(metaClient.getHoodieStorage(), metaClient.getMetaPath(),
+        instant);
     return metadata;
   }
 

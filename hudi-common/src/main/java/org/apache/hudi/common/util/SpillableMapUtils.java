@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -27,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap.FileEntry;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
+import org.apache.hudi.io.SizeAwareDataOutputStream;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;

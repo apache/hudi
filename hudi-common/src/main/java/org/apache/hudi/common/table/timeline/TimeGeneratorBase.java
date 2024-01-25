@@ -23,8 +23,8 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.io.util.RetryHelper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

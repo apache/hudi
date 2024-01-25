@@ -19,17 +19,17 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.io.consistency.ConsistencyGuard;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -41,22 +41,23 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
   private static final Logger LOG = LoggerFactory.getLogger(FailSafeConsistencyGuard.class);
 
-  protected final FileSystem fs;
+  protected final HoodieStorage storage;
   protected final ConsistencyGuardConfig consistencyGuardConfig;
 
-  public FailSafeConsistencyGuard(FileSystem fs, ConsistencyGuardConfig consistencyGuardConfig) {
-    this.fs = fs;
+  public FailSafeConsistencyGuard(HoodieStorage storage,
+                                  ConsistencyGuardConfig consistencyGuardConfig) {
+    this.storage = storage;
     this.consistencyGuardConfig = consistencyGuardConfig;
     ValidationUtils.checkArgument(consistencyGuardConfig.isConsistencyCheckEnabled());
   }
 
   @Override
-  public void waitTillFileAppears(Path filePath) throws TimeoutException {
+  public void waitTillFileAppears(HoodieLocation filePath) throws TimeoutException {
     waitForFileVisibility(filePath, FileVisibility.APPEAR);
   }
 
   @Override
-  public void waitTillFileDisappears(Path filePath) throws TimeoutException {
+  public void waitTillFileDisappears(HoodieLocation filePath) throws TimeoutException {
     waitForFileVisibility(filePath, FileVisibility.DISAPPEAR);
   }
 
@@ -79,7 +80,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
    * @throws TimeoutException
    */
   public void waitForFilesVisibility(String dirPath, List<String> files, FileVisibility event) throws TimeoutException {
-    Path dir = new Path(dirPath);
+    HoodieLocation dir = new HoodieLocation(dirPath);
     List<String> filesWithoutSchemeAndAuthority = getFilesWithoutSchemeAndAuthority(files);
     retryTillSuccess(dir, filesWithoutSchemeAndAuthority, event);
   }
@@ -87,14 +88,15 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   /**
    * Helper to check of file visibility.
    *
-   * @param filePath File Path
+   * @param location   File Path
    * @param visibility Visibility
    * @return true (if file visible in Path), false (otherwise)
    * @throws IOException -
    */
-  protected boolean checkFileVisibility(Path filePath, FileVisibility visibility) throws IOException {
+  protected boolean checkFileVisibility(HoodieLocation location, FileVisibility visibility)
+      throws IOException {
     try {
-      FileStatus status = fs.getFileStatus(filePath);
+      HoodieFileStatus status = storage.getFileStatus(location);
       switch (visibility) {
         case APPEAR:
           return status != null;
@@ -116,14 +118,15 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   /**
    * Helper function to wait till file either appears/disappears.
    *
-   * @param filePath File Path
+   * @param location File Path
    */
-  private void waitForFileVisibility(Path filePath, FileVisibility visibility) throws TimeoutException {
+  private void waitForFileVisibility(HoodieLocation location, FileVisibility visibility)
+      throws TimeoutException {
     long waitMs = consistencyGuardConfig.getInitialConsistencyCheckIntervalMs();
     int attempt = 0;
     while (attempt < consistencyGuardConfig.getMaxConsistencyChecks()) {
       try {
-        if (checkFileVisibility(filePath, visibility)) {
+        if (checkFileVisibility(location, visibility)) {
           return;
         }
       } catch (IOException ioe) {
@@ -141,12 +144,13 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   /**
    * Retries the predicate for configurable number of times till we the predicate returns success.
    *
-   * @param dir directory of interest in which list of files are checked for visibility
+   * @param dir   directory of interest in which list of files are checked for visibility
    * @param files List of files to check for visibility
-   * @param event {@link org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility} event of interest.
+   * @param event {@link ConsistencyGuard.FileVisibility} event of interest.
    * @throws TimeoutException when retries are exhausted
    */
-  private void retryTillSuccess(Path dir, List<String> files, FileVisibility event) throws TimeoutException {
+  private void retryTillSuccess(HoodieLocation dir, List<String> files, FileVisibility event)
+      throws TimeoutException {
     long waitMs = consistencyGuardConfig.getInitialConsistencyCheckIntervalMs();
     int attempt = 0;
     LOG.info("Max Attempts=" + consistencyGuardConfig.getMaxConsistencyChecks());
@@ -164,20 +168,22 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Helper to check for file visibility based on {@link org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility} event.
+   * Helper to check for file visibility based on {@link ConsistencyGuard.FileVisibility} event.
    *
    * @param retryNum retry attempt count.
-   * @param dir directory of interest in which list of files are checked for visibility
-   * @param files List of files to check for visibility
-   * @param event {@link org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility} event of interest.
+   * @param dir      directory of interest in which list of files are checked for visibility
+   * @param files    List of files to check for visibility
+   * @param event    {@link ConsistencyGuard.FileVisibility} event of interest.
    * @return {@code true} if condition succeeded. else {@code false}.
    */
-  protected boolean checkFilesVisibility(int retryNum, Path dir, List<String> files, FileVisibility event) {
+  protected boolean checkFilesVisibility(int retryNum, HoodieLocation dir, List<String> files,
+                                         FileVisibility event) {
     try {
       LOG.info("Trying " + retryNum);
-      FileStatus[] entries = fs.listStatus(dir);
-      List<String> gotFiles = Arrays.stream(entries).map(e -> Path.getPathWithoutSchemeAndAuthority(e.getPath()))
-          .map(Path::toString).collect(Collectors.toList());
+      List<HoodieFileStatus> entries = storage.listDirectEntries(dir);
+      List<String> gotFiles = entries.stream()
+          .map(e -> e.getLocation().getLocationWithoutSchemeAndAuthority())
+          .map(HoodieLocation::toString).collect(Collectors.toList());
       List<String> candidateFiles = new ArrayList<>(files);
       boolean altered = candidateFiles.removeAll(gotFiles);
 
@@ -204,7 +210,9 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
    * @return the filenames without scheme and authority.
    */
   protected List<String> getFilesWithoutSchemeAndAuthority(List<String> files) {
-    return files.stream().map(f -> Path.getPathWithoutSchemeAndAuthority(new Path(f))).map(Path::toString)
+    return files.stream()
+        .map(f -> new HoodieLocation(f).getLocationWithoutSchemeAndAuthority())
+        .map(HoodieLocation::toString)
         .collect(Collectors.toList());
   }
 

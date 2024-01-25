@@ -22,6 +22,8 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.io.storage.HoodieLocation
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -37,7 +39,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 
 import java.util.{Locale, TimeZone}
@@ -186,7 +188,7 @@ trait SparkAdapter extends Serializable {
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
                      schema: Schema,
-                     globPaths: Array[Path],
+                     globPaths: Array[HoodieLocation],
                      parameters: java.util.Map[String, String]): BaseRelation
 
   /**

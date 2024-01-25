@@ -23,8 +23,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.HoodieLocation;
 
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 
@@ -100,13 +100,13 @@ public class TestHoodieFileGroup {
 
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
 
-    HoodieLogFile logFile1 = new HoodieLogFile(new Path(getLogFileName("001")));
+    HoodieLogFile logFile1 = new HoodieLogFile(new HoodieLocation(getLogFileName("001")));
     fileGroup.addLogFile(queryView, logFile1);
     assertThat("no base file in the file group, returns the delta commit instant itself",
         fileGroup.getBaseInstantTime(queryView, logFile1), is("001"));
     assertThat(collectFileSlices(fileGroup), is("001"));
 
-    HoodieLogFile logFile2 = new HoodieLogFile(new Path(getLogFileName("002")));
+    HoodieLogFile logFile2 = new HoodieLogFile(new HoodieLocation(getLogFileName("002")));
     fileGroup.addLogFile(queryView, logFile2);
     assertThat("no base file in the file group, returns the earliest delta commit instant",
         fileGroup.getBaseInstantTime(queryView, logFile2), is("001"));
@@ -116,7 +116,7 @@ public class TestHoodieFileGroup {
     assertThat("Include the pending compaction instant time as constitute of the file slice base instant time list",
         collectFileSlices(fileGroup), is("001,003"));
 
-    HoodieLogFile logFile3 = new HoodieLogFile(new Path(getLogFileName("004")));
+    HoodieLogFile logFile3 = new HoodieLogFile(new HoodieLocation(getLogFileName("004")));
     fileGroup.addLogFile(queryView, logFile3);
     assertThat("Assign the log file to maximum base instant time that less than or equals its completion time",
         fileGroup.getBaseInstantTime(queryView, logFile2), is("003"));

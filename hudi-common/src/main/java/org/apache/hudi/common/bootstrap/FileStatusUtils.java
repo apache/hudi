@@ -19,9 +19,10 @@
 package org.apache.hudi.common.bootstrap;
 
 import org.apache.hudi.avro.model.HoodieFSPermission;
-import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -71,24 +72,23 @@ public class FileStatusUtils {
     return HoodieFSPermission.newBuilder().setUserAction(userAction).setGroupAction(grpAction)
         .setOtherAction(otherAction).setStickyBit(fsPermission.getStickyBit()).build();
   }
-  
-  public static FileStatus toFileStatus(HoodieFileStatus fileStatus) {
+
+  public static HoodieFileStatus toFileInfo(org.apache.hudi.avro.model.HoodieFileStatus fileStatus) {
     if (null == fileStatus) {
       return null;
     }
 
-    return new FileStatus(fileStatus.getLength(), fileStatus.getIsDir() == null ? false : fileStatus.getIsDir(),
-        fileStatus.getBlockReplication(), fileStatus.getBlockSize(), fileStatus.getModificationTime(),
-        fileStatus.getAccessTime(), toFSPermission(fileStatus.getPermission()), fileStatus.getOwner(),
-        fileStatus.getGroup(), toPath(fileStatus.getSymlink()), toPath(fileStatus.getPath()));
+    return new HoodieFileStatus(
+        new HoodieLocation(fileStatus.getPath().getUri()), fileStatus.getLength(),
+        fileStatus.getIsDir() == null ? false : fileStatus.getIsDir(), fileStatus.getModificationTime());
   }
 
-  public static HoodieFileStatus fromFileStatus(FileStatus fileStatus) {
+  public static org.apache.hudi.avro.model.HoodieFileStatus fromFileStatus(FileStatus fileStatus) {
     if (null == fileStatus) {
       return null;
     }
 
-    HoodieFileStatus fStatus = new HoodieFileStatus();
+    org.apache.hudi.avro.model.HoodieFileStatus fStatus = new org.apache.hudi.avro.model.HoodieFileStatus();
     try {
       fStatus.setPath(fromPath(fileStatus.getPath()));
       fStatus.setLength(fileStatus.getLen());
@@ -109,7 +109,8 @@ public class FileStatusUtils {
    * Used to safely handle FileStatus calls which might fail on some FileSystem implementation.
    * (DeprecatedLocalFileSystem)
    */
-  private static void safeReadAndSetMetadata(HoodieFileStatus fStatus, FileStatus fileStatus) {
+  private static void safeReadAndSetMetadata(org.apache.hudi.avro.model.HoodieFileStatus fStatus,
+                                             FileStatus fileStatus) {
     try {
       fStatus.setOwner(fileStatus.getOwner());
       fStatus.setGroup(fileStatus.getGroup());

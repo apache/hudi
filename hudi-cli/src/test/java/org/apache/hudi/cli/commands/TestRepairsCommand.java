@@ -38,6 +38,8 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.testutils.Assertions;
 
@@ -105,7 +107,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   public void init() throws IOException {
     String tableName = tableName();
     tablePath = tablePath(tableName);
-    fs = FSUtils.getFs(tablePath, hadoopConf());
+    fs = HadoopFSUtils.getFs(tablePath, hadoopConf());
 
     // Create table and connect
     new TableCommand().createTable(
@@ -139,7 +141,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // expected all 'No'.
-    String[][] rows = FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, tablePath)
+    String[][] rows = FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieStorageUtils.getHoodieStorage(fs), tablePath)
         .stream()
         .map(partition -> new String[] {partition, "No", "None"})
         .toArray(String[][]::new);
@@ -169,7 +171,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     Object result = shell.evaluate(() -> "repair addpartitionmeta --dryrun false");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
-    List<String> paths = FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, tablePath);
+    List<String> paths = FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieStorageUtils.getHoodieStorage(fs), tablePath);
     // after dry run, the action will be 'Repaired'
     String[][] rows = paths.stream()
         .map(partition -> new String[] {partition, "No", "Repaired"})

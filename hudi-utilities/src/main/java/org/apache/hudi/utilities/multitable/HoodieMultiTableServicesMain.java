@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.multitable;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.hudi.utilities.IdentitySplitter;
@@ -127,7 +128,7 @@ public class HoodieMultiTableServicesMain {
   }
 
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs).getProps(true);
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new HoodieLocation(cfg.propsFilePath), cfg.configs).getProps(true);
   }
 
   private boolean pathExists(String path) {

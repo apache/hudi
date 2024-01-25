@@ -43,11 +43,11 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -271,16 +271,17 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     if (fileSlice.getBaseFile().isPresent()) {
       // Read the base files using the latest writer schema.
       Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
-      HoodieAvroFileReader reader = TypeUtils.unsafeCast(HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(),
-          new Path(fileSlice.getBaseFile().get().getPath())));
+      HoodieAvroFileReader reader = TypeUtils.unsafeCast(HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
+          .getFileReader(metaClient.getHadoopConf(), new HoodieLocation(fileSlice.getBaseFile().get().getPath())));
       return new CloseableMappingIterator<>(reader.getRecordIterator(schema), HoodieRecord::getData);
     } else {
       // If there is no data file, fall back to reading log files
       HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-          .withFileSystem(metaClient.getFs())
+          .withHoodieStorage(metaClient.getHoodieStorage())
           .withBasePath(metaClient.getBasePath())
           .withLogFilePaths(
-              fileSlice.getLogFiles().map(l -> l.getPath().getName()).collect(Collectors.toList()))
+              fileSlice.getLogFiles().map(l -> l.getLocation().getName())
+                  .collect(Collectors.toList()))
           .withReaderSchema(new Schema.Parser().parse(schemaStr))
           .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline()
               .filterCompletedInstants().lastInstant().get().getTimestamp())

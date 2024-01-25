@@ -19,7 +19,10 @@
 package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
+import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
+import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -109,7 +112,7 @@ public class TestInLineFileSystemHFileInLining {
     long inlineLength = inlineBytes.length;
 
     // Generate phantom inline file
-    Path inlinePath = getPhantomFile(outerPath, startOffset, inlineLength);
+    Path inlinePath = new Path(getPhantomFile(new HoodieLocation(outerPath.toUri()), startOffset, inlineLength).toUri());
 
     InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(inlineConf);
     FSDataInputStream fin = inlineFileSystem.open(inlinePath);

@@ -23,13 +23,13 @@ import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -132,7 +132,7 @@ public class HoodieCommitMetadata implements Serializable {
     return this.operationType;
   }
 
-  public HashMap<String, String> getFileIdAndFullPaths(Path basePath) {
+  public HashMap<String, String> getFileIdAndFullPaths(HoodieLocation basePath) {
     HashMap<String, String> fullPaths = new HashMap<>();
     for (Map.Entry<String, String> entry : getFileIdAndRelativePaths().entrySet()) {
       String fullPath = entry.getValue() != null
@@ -148,7 +148,7 @@ public class HoodieCommitMetadata implements Serializable {
     if (getPartitionToWriteStats().get(partitionPath) != null) {
       for (HoodieWriteStat stat : getPartitionToWriteStats().get(partitionPath)) {
         if ((stat.getFileId() != null)) {
-          String fullPath = FSUtils.getPartitionPath(basePath, stat.getPath()).toString();
+          String fullPath = FSUtils.getPartitionPathInPath(basePath, stat.getPath()).toString();
           fullPaths.add(fullPath);
         }
       }
@@ -161,7 +161,7 @@ public class HoodieCommitMetadata implements Serializable {
     for (Map.Entry<String, List<HoodieWriteStat>> entry : getPartitionToWriteStats().entrySet()) {
       for (HoodieWriteStat stat : entry.getValue()) {
         HoodieFileGroupId fileGroupId = new HoodieFileGroupId(stat.getPartitionPath(), stat.getFileId());
-        Path fullPath = new Path(basePath, stat.getPath());
+        HoodieLocation fullPath = new HoodieLocation(basePath, stat.getPath());
         fileGroupIdToFullPaths.put(fileGroupId, fullPath.toString());
       }
     }
@@ -177,17 +177,20 @@ public class HoodieCommitMetadata implements Serializable {
    * @param basePath   The base path
    * @return the file full path to file status mapping
    */
-  public Map<String, FileStatus> getFullPathToFileStatus(Configuration hadoopConf, String basePath) {
-    Map<String, FileStatus> fullPathToFileStatus = new HashMap<>();
+  public Map<String, HoodieFileStatus> getFullPathToFileStatus(Configuration hadoopConf,
+                                                               String basePath) {
+    Map<String, HoodieFileStatus> fullPathToFileStatus = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
       // Iterate through all the written files.
       for (HoodieWriteStat stat : stats) {
         String relativeFilePath = stat.getPath();
-        Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
+        HoodieLocation fullPath = relativeFilePath != null
+            ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
         if (fullPath != null) {
-          long blockSize = FSUtils.getFs(fullPath.toString(), hadoopConf).getDefaultBlockSize(fullPath);
-          FileStatus fileStatus = new FileStatus(stat.getFileSizeInBytes(), false, 0, blockSize,
-              0, fullPath);
+          //long blockSize =
+          //    FSUtils.getFs(fullPath.toString(), hadoopConf).getDefaultBlockSize(fullPath);
+          HoodieFileStatus fileStatus = new HoodieFileStatus(
+              fullPath, stat.getFileSizeInBytes(), false, 0);
           fullPathToFileStatus.put(fullPath.getName(), fileStatus);
         }
       }
@@ -208,21 +211,24 @@ public class HoodieCommitMetadata implements Serializable {
    * @param basePath   The base path
    * @return the file ID to file status mapping
    */
-  public Map<String, FileStatus> getFileIdToFileStatus(Configuration hadoopConf, String basePath) {
-    Map<String, FileStatus> fileIdToFileStatus = new HashMap<>();
+  public Map<String, HoodieFileStatus> getFileIdToFileStatus(Configuration hadoopConf,
+                                                             String basePath) {
+    Map<String, HoodieFileStatus> fileIdToFileInfo = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
       // Iterate through all the written files.
       for (HoodieWriteStat stat : stats) {
         String relativeFilePath = stat.getPath();
-        Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
+        HoodieLocation fullPath =
+            relativeFilePath != null ? FSUtils.getPartitionPath(basePath,
+                relativeFilePath) : null;
         if (fullPath != null) {
-          FileStatus fileStatus = new FileStatus(stat.getFileSizeInBytes(), false, 0, 0,
-              0, fullPath);
-          fileIdToFileStatus.put(stat.getFileId(), fileStatus);
+          HoodieFileStatus fileStatus =
+              new HoodieFileStatus(fullPath, stat.getFileSizeInBytes(), false, 0);
+          fileIdToFileInfo.put(stat.getFileId(), fileStatus);
         }
       }
     }
-    return fileIdToFileStatus;
+    return fileIdToFileInfo;
   }
 
   public String toJsonString() throws IOException {

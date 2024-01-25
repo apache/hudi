@@ -18,9 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -34,7 +31,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.common.util.Option;
+
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -236,11 +236,12 @@ public class FileSystemViewCommand {
   private HoodieTableFileSystemView buildFileSystemView(String globRegex, String maxInstant, boolean basefileOnly,
                                                         boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(client.getHadoopConf()).setBasePath(client.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
-    FileSystem fs = HoodieCLI.fs;
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(client.getHadoopConf())
+        .setBasePath(client.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
     String globPath = String.format("%s/%s/*", client.getBasePath(), globRegex);
-    List<FileStatus> statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath));
+    List<HoodieFileStatus> statuses = FSUtils.getGlobStatusExcludingMetaFolder(
+        HoodieCLI.storage, new HoodieLocation(globPath));
     Stream<HoodieInstant> instantsStream;
 
     HoodieTimeline timeline;
@@ -270,6 +271,6 @@ public class FileSystemViewCommand {
 
     HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream,
         (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
-    return new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new FileStatus[0]));
+    return new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses);
   }
 }

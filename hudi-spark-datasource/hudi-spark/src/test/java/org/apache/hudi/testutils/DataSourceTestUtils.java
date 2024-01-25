@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
@@ -137,7 +138,7 @@ public class DataSourceTestUtils {
     while (files.hasNext()) {
       LocatedFileStatus file = files.next();
       // skip meta folder
-      if (file.isFile() && !file.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME + Path.SEPARATOR)) {
+      if (file.isFile() && !file.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME + PATH_SEPARATOR)) {
         if (FSUtils.isBaseFile(file.getPath())) {
           return false;
         }

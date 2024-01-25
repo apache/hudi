@@ -17,8 +17,10 @@
 
 package org.apache.hudi.util
 
-import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.io.storage.{HoodieLocation, HoodieStorage}
+
+import scala.jdk.CollectionConverters.asScalaBufferConverter
 
 /**
  * TODO convert to Java, move to hudi-common
@@ -29,7 +31,7 @@ object PathUtils {
    * This method copied from [[org.apache.spark.deploy.SparkHadoopUtil]].
    * [[org.apache.spark.deploy.SparkHadoopUtil]] becomes private since Spark 3.0.0 and hence we had to copy it locally.
    */
-  def isGlobPath(pattern: Path): Boolean = {
+  def isGlobPath(pattern: HoodieLocation): Boolean = {
     pattern.toString.exists("{}[]*?\\".toSet.contains)
   }
 
@@ -37,34 +39,34 @@ object PathUtils {
    * This method is inspired from [[org.apache.spark.deploy.SparkHadoopUtil]] with some modifications like
    * skipping meta paths.
    */
-  def globPath(fs: FileSystem, pattern: Path): Seq[Path] = {
+  def globPath(storage: HoodieStorage, pattern: HoodieLocation): Seq[HoodieLocation] = {
     // find base path to assist in skipping meta paths
     var basePath = pattern.getParent
     while (basePath.getName.equals("*")) {
       basePath = basePath.getParent
     }
 
-    Option(fs.globStatus(pattern)).map { statuses => {
-      val nonMetaStatuses = statuses.filterNot(entry => {
+    Option(storage.globEntries(pattern)).map { fileInfoList => {
+      val nonMetaStatuses = fileInfoList.asScala.filterNot(entry => {
         // skip all entries in meta path
-        var leafPath = entry.getPath
+        var leafPath = entry.getLocation
         // walk through every parent until we reach base path. if .hoodie is found anywhere, path needs to be skipped
         while (!leafPath.equals(basePath) && !leafPath.getName.equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
           leafPath = leafPath.getParent
         }
         leafPath.getName.equals(HoodieTableMetaClient.METAFOLDER_NAME)
       })
-      nonMetaStatuses.map(_.getPath.makeQualified(fs.getUri, fs.getWorkingDirectory)).toSeq
+      nonMetaStatuses.map(e => storage.makeQualified(e.getLocation))
     }
-    }.getOrElse(Seq.empty[Path])
+    }.getOrElse(Seq.empty[HoodieLocation])
   }
 
   /**
    * This method copied from [[org.apache.spark.deploy.SparkHadoopUtil]].
    * [[org.apache.spark.deploy.SparkHadoopUtil]] becomes private since Spark 3.0.0 and hence we had to copy it locally.
    */
-  def globPathIfNecessary(fs: FileSystem, pattern: Path): Seq[Path] = {
-    if (isGlobPath(pattern)) globPath(fs, pattern) else Seq(pattern)
+  def globPathIfNecessary(storage: HoodieStorage, pattern: HoodieLocation): Seq[HoodieLocation] = {
+    if (isGlobPath(pattern)) globPath(storage, pattern) else Seq(pattern)
   }
 
   /**
@@ -72,13 +74,13 @@ object PathUtils {
    * which match the glob pattern. Otherwise, returns original path
    *
    * @param paths List of absolute or globbed paths
-   * @param fs    File system
+   * @param fs    {@link HoodieStorage} instance
    * @return list of absolute file paths
    */
-  def checkAndGlobPathIfNecessary(paths: Seq[String], fs: FileSystem): Seq[Path] = {
+  def checkAndGlobPathIfNecessary(paths: Seq[String], storage: HoodieStorage): Seq[HoodieLocation] = {
     paths.flatMap(path => {
-      val qualified = new Path(path).makeQualified(fs.getUri, fs.getWorkingDirectory)
-      globPathIfNecessary(fs, qualified)
+      val qualified = storage.makeQualified(new HoodieLocation(path));
+      globPathIfNecessary(storage, qualified)
     })
   }
 }

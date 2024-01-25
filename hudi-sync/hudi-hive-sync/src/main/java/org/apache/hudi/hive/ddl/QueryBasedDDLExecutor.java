@@ -19,13 +19,13 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.io.storage.StorageSchemes;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
@@ -161,7 +161,8 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     StringBuilder alterSQL = getAlterTablePrefix(tableName);
     for (int i = 0; i < partitions.size(); i++) {
       String partitionClause = getPartitionClause(partitions.get(i));
-      String fullPartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), partitions.get(i)).toString();
+      String fullPartitionPath =
+          FSUtils.getPartitionPathInPath(config.getString(META_SYNC_BASE_PATH), partitions.get(i)).toString();
       alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '").append(fullPartitionPath)
           .append("' ");
       if ((i + 1) % batchSyncPartitionNum == 0) {
@@ -210,7 +211,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      Path partitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), partition);
+      Path partitionPath = FSUtils.getPartitionPathInPath(config.getString(META_SYNC_BASE_PATH), partition);
       String partitionScheme = partitionPath.toUri().getScheme();
       String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
           ? FSUtils.getDFSFullPartitionPath(config.getHadoopFileSystem(), partitionPath) : partitionPath.toString();

@@ -20,8 +20,6 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -33,10 +31,12 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
+import org.apache.hudi.io.storage.HoodieStorage;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
@@ -121,7 +121,7 @@ public class TestStreamWriteOperatorCoordinator {
   public void testTableInitialized() throws IOException {
     final org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(new Configuration());
     String basePath = tempFile.getAbsolutePath();
-    try (FileSystem fs = FSUtils.getFs(basePath, hadoopConf)) {
+    try (FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf)) {
       assertTrue(fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME)));
     }
   }
@@ -241,15 +241,18 @@ public class TestStreamWriteOperatorCoordinator {
     assertNotNull(heartbeatClient.getHeartbeat(instant), "Heartbeat is missing");
 
     String basePath = tempFile.getAbsolutePath();
-    HoodieWrapperFileSystem fs = coordinator.getWriteClient().getHoodieTable().getMetaClient().getFs();
+    HoodieStorage storage =
+        coordinator.getWriteClient().getHoodieTable().getMetaClient().getHoodieStorage();
 
-    assertTrue(HoodieHeartbeatClient.heartbeatExists(fs, basePath, instant), "Heartbeat is existed");
+    assertTrue(HoodieHeartbeatClient.heartbeatExists(storage, basePath, instant),
+        "Heartbeat is existed");
 
     // send bootstrap event to stop the heartbeat for this instant
     WriteMetadataEvent event1 = WriteMetadataEvent.emptyBootstrap(0);
     coordinator.handleEventFromOperator(0, event1);
 
-    assertFalse(HoodieHeartbeatClient.heartbeatExists(fs, basePath, instant), "Heartbeat is stopped and cleared");
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(storage, basePath, instant),
+        "Heartbeat is stopped and cleared");
   }
 
   @Test

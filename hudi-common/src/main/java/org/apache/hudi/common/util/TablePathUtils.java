@@ -20,10 +20,10 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,41 +36,42 @@ public class TablePathUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(TablePathUtils.class);
 
-  private static boolean hasTableMetadataFolder(FileSystem fs, Path path) {
+  private static boolean hasTableMetadataFolder(HoodieStorage storage, HoodieLocation path) {
     if (path == null) {
       return false;
     }
 
     try {
-      return fs.exists(new Path(path, HoodieTableMetaClient.METAFOLDER_NAME));
+      return storage.exists(new HoodieLocation(path, HoodieTableMetaClient.METAFOLDER_NAME));
     } catch (IOException ioe) {
       throw new HoodieException("Error checking Hoodie metadata folder for " + path, ioe);
     }
   }
 
-  public static boolean isHoodieTablePath(FileSystem fs, Path path) {
-    return hasTableMetadataFolder(fs, path);
+  public static boolean isHoodieTablePath(HoodieStorage storage, HoodieLocation path) {
+    return hasTableMetadataFolder(storage, path);
   }
 
-  public static Option<Path> getTablePath(FileSystem fs, Path path) throws HoodieException, IOException {
+  public static Option<HoodieLocation> getTablePath(HoodieStorage storage, HoodieLocation path) throws HoodieException, IOException {
     LOG.info("Getting table path from path : " + path);
 
-    FileStatus fileStatus = fs.getFileStatus(path);
-    Path directory = fileStatus.isFile() ? fileStatus.getPath().getParent() : fileStatus.getPath();
+    HoodieFileStatus fileStatus = storage.getFileStatus(path);
+    HoodieLocation directory =
+        fileStatus.isFile() ? fileStatus.getLocation().getParent() : fileStatus.getLocation();
 
-    if (hasTableMetadataFolder(fs, directory)) {
+    if (hasTableMetadataFolder(storage, directory)) {
       // Handle table folder itself
       return Option.of(directory);
     }
 
     // Handle metadata folder or metadata sub folder path
-    Option<Path> tablePath = getTablePathFromMetaFolderPath(directory);
+    Option<HoodieLocation> tablePath = getTablePathFromMetaFolderPath(directory);
     if (tablePath.isPresent()) {
       return tablePath;
     }
 
     // Handle partition folder
-    return getTablePathFromPartitionPath(fs, directory);
+    return getTablePathFromPartitionPath(storage, directory);
   }
 
   private static boolean isInsideTableMetaFolder(String path) {
@@ -81,30 +82,30 @@ public class TablePathUtils {
     return path != null && path.contains("/" + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
   }
 
-  private static Option<Path> getTablePathFromMetaFolderPath(Path path) {
+  private static Option<HoodieLocation> getTablePathFromMetaFolderPath(HoodieLocation path) {
     String pathStr = path.toString();
 
     // NOTE: Since Metadata Table itself resides w/in the Meta-folder, we need to make sure
     //       that we don't misinterpret attempt to read MT table itself
     if (isInsideTableMetaFolder(pathStr) && !isInsideMetadataTableInMetaFolder(pathStr)) {
       int index = pathStr.indexOf("/" + HoodieTableMetaClient.METAFOLDER_NAME);
-      return Option.of(new Path(pathStr.substring(0, index)));
+      return Option.of(new HoodieLocation(pathStr.substring(0, index)));
     }
 
     return Option.empty();
   }
 
-  private static Option<Path> getTablePathFromPartitionPath(FileSystem fs, Path partitionPath) {
+  private static Option<HoodieLocation> getTablePathFromPartitionPath(HoodieStorage storage, HoodieLocation partitionPath) {
     try {
-      if (HoodiePartitionMetadata.hasPartitionMetadata(fs, partitionPath)) {
-        HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, partitionPath);
+      if (HoodiePartitionMetadata.hasPartitionMetadata(storage, partitionPath)) {
+        HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, partitionPath);
         metadata.readFromFS();
         return Option.of(getNthParent(partitionPath, metadata.getPartitionDepth()));
       } else {
         // Simply traverse directory structure until found .hoodie folder
-        Path current = partitionPath;
+        HoodieLocation current = partitionPath;
         while (current != null) {
-          if (hasTableMetadataFolder(fs, current)) {
+          if (hasTableMetadataFolder(storage, current)) {
             return Option.of(current);
           }
           current = current.getParent();
@@ -117,8 +118,8 @@ public class TablePathUtils {
     }
   }
 
-  private static Path getNthParent(Path path, int n) {
-    Path parent = path;
+  private static HoodieLocation getNthParent(HoodieLocation path, int n) {
+    HoodieLocation parent = path;
     for (int i = 0; i < n; i++) {
       parent = parent.getParent();
     }

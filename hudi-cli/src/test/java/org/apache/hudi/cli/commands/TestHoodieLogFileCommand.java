@@ -29,7 +29,6 @@ import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -44,13 +43,14 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -64,13 +64,13 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -91,7 +91,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
   private HoodieAvroDataBlock dataBlock;
   private HoodieCommandBlock commandBlock;
   private String tablePath;
-  private FileSystem fs;
+  private HoodieStorage storage;
 
   private static final String INSTANT_TIME = "100";
 
@@ -108,12 +108,12 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
     Files.createDirectories(Paths.get(partitionPath));
-    fs = FSUtils.getFs(tablePath, hadoopConf());
+    storage = HoodieStorageUtils.getHoodieStorage(tablePath, hadoopConf());
 
     try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new Path(partitionPath))
+        .onParentPath(new HoodieLocation(partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-log-fileid1").withDeltaCommit("100").withFs(fs)
+        .withFileId("test-log-fileid1").withDeltaCommit("100").withHoodieStorage(storage)
         .withSizeThreshold(1).build()) {
 
       // write data to file
@@ -136,7 +136,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
 
   @AfterEach
   public void cleanUp() throws IOException {
-    fs.close();
+    storage.close();
   }
 
   /**
@@ -201,16 +201,18 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
 
     // write to path '2015/03/16'.
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    partitionPath = tablePath + Path.SEPARATOR + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+    partitionPath = tablePath + PATH_SEPARATOR + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     Files.createDirectories(Paths.get(partitionPath));
 
     HoodieLogFormat.Writer writer = null;
     try {
       // set little threshold to split file.
       writer =
-          HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionPath))
+          HoodieLogFormat.newWriterBuilder().onParentPath(new HoodieLocation(partitionPath))
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-              .withFileId("test-log-fileid1").withDeltaCommit(INSTANT_TIME).withFs(fs).withSizeThreshold(500).build();
+              .withFileId("test-log-fileid1").withDeltaCommit(INSTANT_TIME).withHoodieStorage(
+                  storage)
+              .withSizeThreshold(500).build();
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<HoodieRecord> records1 = testUtil.generateHoodieTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
@@ -226,14 +228,15 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     }
 
     Object result = shell.evaluate(() -> "show logfile records --logFilePathPattern "
-            + partitionPath + "/* --mergeRecords true");
+        + partitionPath + "/* --mergeRecords true");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // get expected result of 10 records.
-    List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(partitionPath + "/*")))
-        .map(status -> status.getPath().toString()).collect(Collectors.toList());
+    List<String> logFilePaths = storage.globEntries(new HoodieLocation(partitionPath + "/*"))
+        .stream()
+        .map(status -> status.getLocation().toString()).collect(Collectors.toList());
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withHoodieStorage(storage)
         .withBasePath(tablePath)
         .withLogFilePaths(logFilePaths)
         .withReaderSchema(schema)

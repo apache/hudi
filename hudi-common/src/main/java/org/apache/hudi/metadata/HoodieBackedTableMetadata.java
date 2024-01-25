@@ -50,12 +50,12 @@ import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
 import org.apache.hudi.util.Transient;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -449,7 +449,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (basefile.isPresent()) {
       String baseFilePath = basefile.get().getPath();
       baseFileReader = (HoodieSeekingFileReader<?>) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(getHadoopConf(), new Path(baseFilePath));
+          .getFileReader(getHadoopConf(), new HoodieLocation(baseFilePath));
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", baseFilePath,
           basefile.get().getCommitTime(), baseFileOpenMs));
@@ -467,7 +467,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieTimer timer = HoodieTimer.start();
     List<String> sortedLogFilePaths = logFiles.stream()
         .sorted(HoodieLogFile.getLogFileComparator())
-        .map(o -> o.getPath().toString())
+        .map(o -> o.getLocation().toString())
         .collect(Collectors.toList());
 
     // Only those log files which have a corresponding completed instant on the dataset should be read
@@ -484,7 +484,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(metadataConfig.getProps()).build();
     HoodieMetadataLogRecordReader logRecordScanner = HoodieMetadataLogRecordReader.newBuilder()
-        .withFileSystem(metadataMetaClient.getFs())
+        .withHoodieStorage(metadataMetaClient.getHoodieStorage())
         .withBasePath(metadataBasePath)
         .withLogFilePaths(sortedLogFilePaths)
         .withReaderSchema(schema)

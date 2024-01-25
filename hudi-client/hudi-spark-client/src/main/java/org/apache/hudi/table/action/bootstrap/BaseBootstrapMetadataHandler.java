@@ -20,19 +20,19 @@ package org.apache.hudi.table.action.bootstrap;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
-import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +53,8 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
   }
 
   public BootstrapWriteStatus runMetadataBootstrap(String srcPartitionPath, String partitionPath, KeyGeneratorInterface keyGenerator) {
-    Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
+    HoodiePath path = srcFileStatus.getPath();
+    HoodieLocation sourceFilePath = path != null ? new HoodieLocation(path.getUri()) : null;
     HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle = new HoodieBootstrapHandle(config, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
         table, partitionPath, FSUtils.createNewFileIdPfx(), table.getTaskContextSupplier());
     try {
@@ -78,8 +79,8 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
     return writeStatus;
   }
 
-  abstract Schema getAvroSchema(Path sourceFilePath) throws IOException;
+  abstract Schema getAvroSchema(HoodieLocation sourceFileLocation) throws IOException;
 
   abstract void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
-                                 Path sourceFilePath, KeyGeneratorInterface keyGenerator, String partitionPath, Schema avroSchema) throws Exception;
+                                 HoodieLocation sourceFileLocation, KeyGeneratorInterface keyGenerator, String partitionPath, Schema avroSchema) throws Exception;
 }

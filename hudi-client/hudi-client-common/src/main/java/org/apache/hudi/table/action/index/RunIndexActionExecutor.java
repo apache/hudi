@@ -40,10 +40,10 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,7 +101,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
   public RunIndexActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getHoodieStorage());
     if (config.getMetadataConfig().enableMetrics()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieIndexer")));
     } else {
@@ -216,7 +216,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     });
     table.getMetaClient().getTableConfig().setValue(TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightPartitions));
     table.getMetaClient().getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
-    HoodieTableConfig.update(table.getMetaClient().getFs(), new Path(table.getMetaClient().getMetaPath()), table.getMetaClient().getTableConfig().getProps());
+    HoodieTableConfig.update(table.getMetaClient().getHoodieStorage(),
+        new HoodieLocation(table.getMetaClient().getMetaPath()), table.getMetaClient().getTableConfig().getProps());
 
     // delete metadata partition
     requestedPartitions.forEach(partition -> {

@@ -22,15 +22,14 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.testutils.FunctionalTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -43,6 +42,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -64,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHDFSParquetImporter extends FunctionalTestHarness implements Serializable {
 
   private String basePath;
-  private transient Path hoodieFolder;
+  private transient HoodieLocation hoodieFolder;
   private transient Path srcFolder;
   private transient List<GenericRecord> insertData;
 
@@ -73,7 +73,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
     basePath = (new Path(dfsBasePath(), Thread.currentThread().getStackTrace()[1].getMethodName())).toString();
 
     // Hoodie root folder.
-    hoodieFolder = new Path(basePath, "testTarget");
+    hoodieFolder = new HoodieLocation(basePath, "testTarget");
 
     // Create generic records.
     srcFolder = new Path(basePath, "testSrc");
@@ -82,7 +82,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
 
   @AfterEach
   public void clean() throws IOException {
-    dfs().delete(new Path(basePath), true);
+    hoodieStorage().deleteDirectory(new HoodieLocation(basePath));
   }
 
   /**
@@ -120,14 +120,14 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
     // 3. total number of partitions == 4;
     boolean isCommitFilePresent = false;
     Map<String, Long> recordCounts = new HashMap<String, Long>();
-    RemoteIterator<LocatedFileStatus> hoodieFiles = dfs().listFiles(hoodieFolder, true);
-    while (hoodieFiles.hasNext()) {
-      LocatedFileStatus f = hoodieFiles.next();
-      isCommitFilePresent = isCommitFilePresent || f.getPath().toString().endsWith(HoodieTimeline.COMMIT_EXTENSION);
+    List<HoodieFileStatus> hoodieFiles = hoodieStorage().listFiles(hoodieFolder);
+    for (HoodieFileStatus fileInfo : hoodieFiles) {
+      isCommitFilePresent = isCommitFilePresent
+          || fileInfo.getLocation().toString().endsWith(HoodieTimeline.COMMIT_EXTENSION);
 
-      if (f.getPath().toString().endsWith("parquet")) {
-        String partitionPath = f.getPath().getParent().toString();
-        long count = sqlContext().read().parquet(f.getPath().toString()).count();
+      if (fileInfo.getLocation().toString().endsWith("parquet")) {
+        String partitionPath = fileInfo.getLocation().getParent().toString();
+        long count = sqlContext().read().parquet(fileInfo.getLocation().toString()).count();
         if (!recordCounts.containsKey(partitionPath)) {
           recordCounts.put(partitionPath, 0L);
         }
@@ -159,17 +159,22 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
   @Test
   public void testImportWithInsert() throws IOException, ParseException {
     insert(jsc());
-    Dataset<Row> ds = HoodieClientTestUtils.read(jsc(), basePath + "/testTarget", sqlContext(), dfs(), basePath + "/testTarget/*/*/*/*");
+    Dataset<Row> ds = HoodieClientTestUtils.read(
+        jsc(), basePath + "/testTarget", sqlContext(), hoodieStorage(),
+        basePath + "/testTarget/*/*/*/*");
 
-    List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
+    List<Row> readData =
+        ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat",
+            "end_lon").collectAsList();
     List<HoodieTripModel> result = readData.stream().map(row ->
-        new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
-            row.getDouble(5), row.getDouble(6), row.getDouble(7)))
+            new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3),
+                row.getDouble(4),
+                row.getDouble(5), row.getDouble(6), row.getDouble(7)))
         .collect(Collectors.toList());
 
     List<HoodieTripModel> expected = insertData.stream().map(g ->
-        new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
-            g.get("_row_key").toString(),
+            new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
+                g.get("_row_key").toString(),
             g.get("rider").toString(),
             g.get("driver").toString(),
             Double.parseDouble(g.get("begin_lat").toString()),
@@ -206,7 +211,9 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
     expectData.addAll(upsertData);
 
     // read latest data
-    Dataset<Row> ds = HoodieClientTestUtils.read(jsc(), basePath + "/testTarget", sqlContext(), dfs(), basePath + "/testTarget/*/*/*/*");
+    Dataset<Row> ds =
+        HoodieClientTestUtils.read(jsc(), basePath + "/testTarget", sqlContext(), hoodieStorage(),
+            basePath + "/testTarget/*/*/*/*");
 
     List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
     List<HoodieTripModel> result = readData.stream().map(row ->
@@ -272,7 +279,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
   }
 
   private void createSchemaFile(String schemaFile) throws IOException {
-    FSDataOutputStream schemaFileOS = dfs().create(new Path(schemaFile));
+    OutputStream schemaFileOS = hoodieStorage().create(new HoodieLocation(schemaFile));
     schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
     schemaFileOS.close();
   }
@@ -283,16 +290,17 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
   @Test
   public void testSchemaFile() throws Exception {
     // Hoodie root folder
-    Path hoodieFolder = new Path(basePath, "testTarget");
-    Path srcFolder = new Path(basePath.toString(), "srcTest");
-    Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
-    HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
-        "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1, schemaFile.toString());
+    HoodieLocation hoodieFolder = new HoodieLocation(basePath, "testTarget");
+    HoodieLocation srcFolder = new HoodieLocation(basePath.toString(), "srcTest");
+    HoodieLocation schemaFile = new HoodieLocation(basePath.toString(), "missingFile.schema");
+    HDFSParquetImporter.Config cfg =
+        getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
+            "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1, schemaFile.toString());
     HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
     // Should fail - return : -1.
     assertEquals(-1, dataImporter.dataImport(jsc(), 0));
 
-    dfs().create(schemaFile).write(getUTF8Bytes("Random invalid schema data"));
+    hoodieStorage().create(schemaFile).write(getUTF8Bytes("Random invalid schema data"));
     // Should fail - return : -1.
     assertEquals(-1, dataImporter.dataImport(jsc(), 0));
   }

@@ -21,6 +21,10 @@ package org.apache.hudi.common.fs;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.storage.HoodieHadoopStorage;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -32,6 +36,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -65,15 +70,22 @@ class TestHoodieWrapperFileSystem {
 
   @Test
   public void testCreateImmutableFileInPath() throws IOException {
-    HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(FSUtils.getFs(basePath, new Configuration()), new NoOpConsistencyGuard());
+    HoodieStorage storage = new HoodieHadoopStorage(
+        HadoopFSUtils.getFs(basePath, new Configuration())) {
+      @Override
+      public boolean needCreateTempFile() {
+        return true;
+      }
+    };
     String testContent = "test content";
-    Path testFile = new Path(basePath + Path.SEPARATOR + "clean.00000001");
+    HoodieLocation testFile = new HoodieLocation(basePath + PATH_SEPARATOR + "clean.00000001");
 
     // create same commit twice
-    fs.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
-    fs.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
+    storage.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
+    storage.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
 
-    assertEquals(1, fs.listStatus(new Path(basePath)).length,
-        "create same file twice should only have one file exists, files: " + fs.listStatus(new Path(basePath)));
+    assertEquals(1, storage.listDirectEntries(new HoodieLocation(basePath)).size(),
+        "create same file twice should only have one file exists, files: "
+            + storage.listDirectEntries(new HoodieLocation(basePath)).toString());
   }
 }

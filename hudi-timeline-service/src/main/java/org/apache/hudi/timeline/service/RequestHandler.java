@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieStorage;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
 import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
@@ -51,7 +52,6 @@ import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.Handler;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,22 +85,22 @@ public class RequestHandler {
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
 
   public RequestHandler(Javalin app, Configuration conf, TimelineService.Config timelineServiceConfig,
-                        HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
+                        HoodieEngineContext hoodieEngineContext, HoodieStorage storage,
                         FileSystemViewManager viewManager) throws IOException {
     this.timelineServiceConfig = timelineServiceConfig;
     this.viewManager = viewManager;
     this.app = app;
-    this.instantHandler = new TimelineHandler(conf, timelineServiceConfig, fileSystem, viewManager);
-    this.sliceHandler = new FileSliceHandler(conf, timelineServiceConfig, fileSystem, viewManager);
-    this.dataFileHandler = new BaseFileHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    this.instantHandler = new TimelineHandler(conf, timelineServiceConfig, storage, viewManager);
+    this.sliceHandler = new FileSliceHandler(conf, timelineServiceConfig, storage, viewManager);
+    this.dataFileHandler = new BaseFileHandler(conf, timelineServiceConfig, storage, viewManager);
     if (timelineServiceConfig.enableMarkerRequests) {
       this.markerHandler = new MarkerHandler(
-          conf, timelineServiceConfig, hoodieEngineContext, fileSystem, viewManager, metricsRegistry);
+          conf, timelineServiceConfig, hoodieEngineContext, storage, viewManager, metricsRegistry);
     } else {
       this.markerHandler = null;
     }
     if (timelineServiceConfig.enableInstantStateRequests) {
-      this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+      this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, storage, viewManager);
     } else {
       this.instantStateHandler = null;
     }

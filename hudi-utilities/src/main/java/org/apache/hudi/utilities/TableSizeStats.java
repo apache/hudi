@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -33,6 +32,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import com.beust.jcommander.JCommander;
@@ -128,7 +129,7 @@ public class TableSizeStats implements Serializable {
    * @return the {@link TypedProperties} instance.
    */
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new HoodieLocation(cfg.propsFilePath), cfg.configs)
         .getProps(true);
   }
 
@@ -357,7 +358,7 @@ public class TableSizeStats implements Serializable {
 
   private static List<String> getFilePaths(String propsPath, Configuration hadoopConf) {
     List<String> filePaths = new ArrayList<>();
-    FileSystem fs = FSUtils.getFs(
+    FileSystem fs = HadoopFSUtils.getFs(
         propsPath,
         Option.ofNullable(hadoopConf).orElseGet(Configuration::new)
     );

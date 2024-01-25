@@ -39,6 +39,7 @@ import org.apache.hudi.execution.JavaLazyInsertIterable;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -46,7 +47,6 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -99,7 +99,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       HoodieTableMetaClient metaClient = table.getMetaClient();
       HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
       try {
-        if (!metaClient.getFs().exists(new Path(metaClient.getMetaPath(), inflightInstant.getFileName()))) {
+        if (!metaClient.getHoodieStorage().exists(
+            new HoodieLocation(metaClient.getMetaPath(), inflightInstant.getFileName()))) {
           throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", e);
         }
       } catch (IOException ex) {
@@ -243,7 +244,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String fileId)
       throws IOException {
-    if (upsertHandle.getOldFilePath() == null) {
+    if (upsertHandle.getOldFileLocation() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
@@ -252,7 +253,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
     List<WriteStatus> statuses = upsertHandle.writeStatuses();
     if (upsertHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath() + ", " + statuses);
+      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFileLocation() + ", " + statuses);
     }
     return Collections.singletonList(statuses).iterator();
   }

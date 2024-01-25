@@ -18,9 +18,10 @@
 
 package org.apache.hudi.integ.testsuite.writer;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.UUID;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.io.storage.HoodieLocation;
+
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -30,10 +31,12 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.UUID;
 
 /**
  * Implementation of {@link DeltaInputWriter} that writes avro records to the result file.
@@ -65,10 +68,10 @@ public class AvroFileDeltaInputWriter implements DeltaInputWriter<GenericRecord>
     this.maxFileSize = maxFileSize;
     this.configuration = configuration;
     this.basePath = basePath;
-    Path path = new Path(basePath, new Path(UUID.randomUUID().toString() + AVRO_EXTENSION));
-    this.file = HoodieWrapperFileSystem.convertToHoodiePath(path, configuration);
+    HoodieLocation location = new HoodieLocation(basePath, UUID.randomUUID().toString() + AVRO_EXTENSION);
+    this.file = HoodieWrapperFileSystem.convertToHoodiePath(location, configuration);
     this.fs = (HoodieWrapperFileSystem) this.file
-        .getFileSystem(FSUtils.registerFileSystem(path, configuration));
+        .getFileSystem(FSUtils.registerFileSystem(location, configuration));
     this.output = this.fs.create(this.file);
     this.writer = new GenericDatumWriter(schema);
     this.dataFileWriter = new DataFileWriter<>(writer).create(schema, output);

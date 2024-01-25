@@ -36,8 +36,8 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
@@ -69,7 +69,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
   public void setUp() throws Exception {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     initTestDataGenerator();
     initMetaClient();
   }
@@ -346,7 +346,8 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = Paths.get(basePath, dataGen.getPartitionPaths()[i], "*").toString();
     }
-    Dataset<Row> dataSet = HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths);
+    Dataset<Row> dataSet =
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths);
     return dataSet;
   }
 

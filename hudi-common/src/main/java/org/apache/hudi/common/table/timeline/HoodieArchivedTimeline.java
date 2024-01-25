@@ -27,11 +27,11 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroParquetReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -235,9 +235,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
           .filter(fileName -> filter == null || LSMTimeline.isFileInRange(filter, fileName))
           .parallel().forEach(fileName -> {
             // Read the archived file
-            try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-                .getFileReader(metaClient.getHadoopConf(), new Path(metaClient.getArchivePath(), fileName))) {
-              try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
+            try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieFileReaderFactory.getReaderFactory(
+                    HoodieRecordType.AVRO)
+                .getFileReader(metaClient.getHadoopConf(), new HoodieLocation(metaClient.getArchivePath(), fileName))) {
+              try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(
+                  HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
                 while (iterator.hasNext()) {
                   GenericRecord record = (GenericRecord) iterator.next();
                   String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();
@@ -248,7 +250,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
                 }
               }
             } catch (IOException ioException) {
-              throw new HoodieIOException("Error open file reader for path: " + new Path(metaClient.getArchivePath(), fileName));
+              throw new HoodieIOException("Error open file reader for path: "
+                  + new HoodieLocation(metaClient.getArchivePath(), fileName));
             }
           });
     } catch (IOException e) {

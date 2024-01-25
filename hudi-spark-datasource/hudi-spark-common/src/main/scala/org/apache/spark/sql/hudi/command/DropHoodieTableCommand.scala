@@ -22,6 +22,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.util.ConfigUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.io.storage.{HoodieLocation, HoodieStorageUtils}
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
@@ -85,10 +88,10 @@ case class DropHoodieTableCommand(
     // Recursively delete table directories
     if (purge) {
       logInfo("Clean up " + basePath)
-      val targetPath = new Path(basePath)
+      val targetPath = new HoodieLocation(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
-      val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
+      val storage = HoodieStorageUtils.getHoodieStorage(basePath, sparkSession.sparkContext.hadoopConfiguration)
+      FSUtils.deleteDir(engineContext, storage, targetPath, sparkSession.sparkContext.defaultParallelism)
     }
   }
 

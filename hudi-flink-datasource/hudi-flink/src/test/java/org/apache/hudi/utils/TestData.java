@@ -39,6 +39,7 @@ import org.apache.hudi.sink.utils.ConsistentBucketStreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.InsertFunctionWrapper;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestFunctionWrapper;
+import org.apache.hudi.io.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -62,7 +63,6 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -854,13 +854,13 @@ public class TestData {
    *
    * <p>Note: Replace it with the Flink reader when it is supported.
    *
-   * @param fs         The file system
+   * @param storage    {@link HoodieStorage} instance.
    * @param baseFile   The file base to check, should be a directory
    * @param expected   The expected results mapping, the key should be the partition path
    * @param partitions The expected partition number
    */
   public static void checkWrittenDataMOR(
-      FileSystem fs,
+      HoodieStorage storage,
       File baseFile,
       Map<String, String> expected,
       int partitions) throws Exception {
@@ -893,10 +893,10 @@ public class TestData {
         HoodieMergedLogRecordScanner scanner = null;
         List<String> logPaths = fileSlice.getLogFiles()
             .sorted(HoodieLogFile.getLogFileComparator())
-            .map(logFile -> logFile.getPath().toString())
+            .map(logFile -> logFile.getLocation().toString())
             .collect(Collectors.toList());
         if (logPaths.size() > 0) {
-          scanner = getScanner(fs, basePath, logPaths, schema, latestInstant);
+          scanner = getScanner(storage, basePath, logPaths, schema, latestInstant);
         }
         String baseFilePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
         Set<String> keyToSkip = new HashSet<>();
@@ -946,13 +946,13 @@ public class TestData {
    * Returns the scanner to read avro log files.
    */
   private static HoodieMergedLogRecordScanner getScanner(
-      FileSystem fs,
+      HoodieStorage storage,
       String basePath,
       List<String> logPaths,
       Schema readSchema,
       String instant) {
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withHoodieStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)
         .withReaderSchema(readSchema)

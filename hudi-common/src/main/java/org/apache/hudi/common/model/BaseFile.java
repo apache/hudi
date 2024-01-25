@@ -18,10 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.hadoop.CachingPath;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import java.io.Serializable;
 import java.util.Objects;
@@ -34,7 +32,7 @@ public class BaseFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private transient FileStatus fileStatus;
+  private transient HoodieFileStatus fileStatus;
   private final String fullPath;
   protected final String fileName;
   private long fileLen;
@@ -46,18 +44,18 @@ public class BaseFile implements Serializable {
         dataFile.getFileLen());
   }
 
-  public BaseFile(FileStatus fileStatus) {
+  public BaseFile(HoodieFileStatus fileStatus) {
     this(fileStatus,
-        fileStatus.getPath().toString(),
-        fileStatus.getPath().getName(),
-        fileStatus.getLen());
+        fileStatus.getLocation().toString(),
+        fileStatus.getLocation().getName(),
+        fileStatus.getLength());
   }
 
   public BaseFile(String filePath) {
     this(null, filePath, getFileName(filePath), -1);
   }
 
-  private BaseFile(FileStatus fileStatus, String fullPath, String fileName, long fileLen) {
+  private BaseFile(HoodieFileStatus fileStatus, String fullPath, String fileName, long fileLen) {
     this.fileStatus = fileStatus;
     this.fullPath = fullPath;
     this.fileLen = fileLen;
@@ -68,19 +66,27 @@ public class BaseFile implements Serializable {
     return fullPath;
   }
 
+  /*
   public Path getHadoopPath() {
     if (fileStatus != null) {
       return fileStatus.getPath();
     }
 
     return new CachingPath(fullPath);
+  }*/
+
+  public HoodieLocation getLocation() {
+    if (fileStatus != null) {
+      return fileStatus.getLocation();
+    }
+    return new HoodieLocation(fullPath);
   }
 
   public String getFileName() {
     return fileName;
   }
 
-  public FileStatus getFileStatus() {
+  public HoodieFileStatus getFileStatus() {
     return fileStatus;
   }
 
@@ -119,6 +125,6 @@ public class BaseFile implements Serializable {
   }
 
   private static String getFileName(String fullPath) {
-    return new Path(fullPath).getName();
+    return new HoodieLocation(fullPath).getName();
   }
 }

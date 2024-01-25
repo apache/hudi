@@ -196,6 +196,36 @@ public class IOUtils {
     return length1 - length2;
   }
 
+
+  /**
+   * Returns the start position of the first occurrence of the specified {@code
+   * target} within {@code array}, or {@code -1} if there is no such occurrence.
+   *
+   * <p>More formally, returns the lowest index {@code i} such that the range
+   * [i, i + target.length) in {@code array} contains exactly the same elements
+   * as {@code target}.
+   *
+   * @param array  the array to search for the sequence {@code target}.
+   * @param target the array to search for as a sub-sequence of {@code array}.
+   * @return the start position if found; {@code -1} if there is no such occurrence.
+   */
+  public static int indexOf(byte[] array, byte[] target) {
+    if (target.length == 0) {
+      return 0;
+    }
+
+    outer:
+    for (int i = 0; i < array.length - target.length + 1; i++) {
+      for (int j = 0; j < target.length; j++) {
+        if (array[i + j] != target[j]) {
+          continue outer;
+        }
+      }
+      return i;
+    }
+    return -1;
+  }
+
   /**
    * @param bytes  input byte array.
    * @param offset offset to start reading.
@@ -209,6 +239,40 @@ public class IOUtils {
     }
     return sb.toString();
   }
+
+  /**
+   * Converts an int value to a byte array using big-endian.
+   * does.
+   *
+   * @param val value to convert.
+   * @return the byte array.
+   */
+  public static byte[] toBytes(int val) {
+    byte[] b = new byte[4];
+    for (int i = 3; i > 0; i--) {
+      b[i] = (byte) val;
+      val >>>= 8;
+    }
+    b[0] = (byte) val;
+    return b;
+  }
+
+  /**
+   * Converts a long value to a byte array using big-endian.
+   *
+   * @param val value to convert.
+   * @return the byte array.
+   */
+  public static byte[] toBytes(long val) {
+    byte[] b = new byte[8];
+    for (int i = 7; i > 0; i--) {
+      b[i] = (byte) val;
+      val >>>= 8;
+    }
+    b[0] = (byte) val;
+    return b;
+  }
+
 
   /**
    * @param bytes  byte array to hash.

@@ -30,6 +30,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,8 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     initPath();
     initMetaClient();
     this.writeConfig = getWriteConfig();
-    this.transactionManager = new TransactionManager(this.writeConfig, this.metaClient.getFs());
+    this.transactionManager =
+        new TransactionManager(this.writeConfig, this.metaClient.getHoodieStorage());
   }
 
   private HoodieWriteConfig getWriteConfig() {

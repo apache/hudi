@@ -33,8 +33,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 
-import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -121,7 +123,7 @@ public class BaseRollbackHelper implements Serializable {
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
         HoodieLogFormat.Writer writer = null;
-        final Path filePath;
+        final HoodieLocation fileLocation;
         try {
           String fileId = rollbackRequest.getFileId();
 
@@ -129,7 +131,7 @@ public class BaseRollbackHelper implements Serializable {
               .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
               .withDeltaCommit(instantToRollback.getTimestamp())
-              .withFs(metaClient.getFs())
+              .withHoodieStorage(metaClient.getHoodieStorage())
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
           // generate metadata
@@ -137,9 +139,9 @@ public class BaseRollbackHelper implements Serializable {
             Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
             // if update belongs to an existing log file
             // use the log file path from AppendResult in case the file handle may roll over
-            filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
+            fileLocation = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getLocation();
           } else {
-            filePath = writer.getLogFile().getPath();
+            fileLocation = writer.getLogFile().getLocation();
           }
         } catch (IOException | InterruptedException io) {
           throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
@@ -156,17 +158,17 @@ public class BaseRollbackHelper implements Serializable {
         // This step is intentionally done after writer is closed. Guarantees that
         // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
         // cloud-storage : HUDI-168
-        Map<FileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
-            metaClient.getFs().getFileStatus(Objects.requireNonNull(filePath)),
+        Map<HoodieFileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
+            metaClient.getHoodieStorage().getFileStatus(Objects.requireNonNull(fileLocation)),
             1L
         );
 
         return Collections.singletonList(
-            Pair.of(rollbackRequest.getPartitionPath(),
-                HoodieRollbackStat.newBuilder()
-                    .withPartitionPath(rollbackRequest.getPartitionPath())
-                    .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-                    .build()))
+                Pair.of(rollbackRequest.getPartitionPath(),
+                    HoodieRollbackStat.newBuilder()
+                        .withPartitionPath(rollbackRequest.getPartitionPath())
+                        .withRollbackBlockAppendResults(filesToNumBlocksRollback)
+                        .build()))
             .stream();
       } else {
         return Collections.singletonList(
@@ -191,7 +193,7 @@ public class BaseRollbackHelper implements Serializable {
         boolean isDeleted = true;
         if (doDelete) {
           try {
-            isDeleted = metaClient.getFs().delete(fullDeletePath);
+            isDeleted = ((FileSystem) metaClient.getHoodieStorage().getFileSystem()).delete(fullDeletePath);
           } catch (FileNotFoundException e) {
             // if first rollback attempt failed and retried again, chances that some files are already deleted.
             isDeleted = true;

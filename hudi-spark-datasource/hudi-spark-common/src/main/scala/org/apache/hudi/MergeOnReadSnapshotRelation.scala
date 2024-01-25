@@ -18,11 +18,12 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.{createPartitionedFile, isProjectionCompatible}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.io.storage.HoodieLocation
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -39,7 +40,7 @@ case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
 case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
                                        override val optParams: Map[String, String],
                                        override val metaClient: HoodieTableMetaClient,
-                                       private val globPaths: Seq[Path],
+                                       private val globPaths: Seq[HoodieLocation],
                                        private val userSchema: Option[StructType],
                                        private val prunedDataSchema: Option[StructType] = None)
   extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, globPaths, userSchema, prunedDataSchema) {
@@ -65,7 +66,7 @@ case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
 abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                                optParams: Map[String, String],
                                                metaClient: HoodieTableMetaClient,
-                                               globPaths: Seq[Path],
+                                               globPaths: Seq[HoodieLocation],
                                                userSchema: Option[StructType],
                                                prunedDataSchema: Option[StructType])
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
@@ -142,7 +143,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
       val partitionedBaseFile = baseFile.map { file =>
         createPartitionedFile(
-          getPartitionColumnsAsInternalRow(file.getFileStatus), file.getFileStatus.getPath, 0, file.getFileLen)
+          getPartitionColumnsAsInternalRow(file.getFileStatus), file.getFileStatus.getLocation, 0, file.getFileLen)
       }
 
       HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
@@ -168,7 +169,7 @@ object MergeOnReadSnapshotRelation extends SparkAdapterSupport {
     projectionCompatiblePayloadClasses.contains(tableState.recordPayloadClassName)
 
   def createPartitionedFile(partitionValues: InternalRow,
-                            filePath: Path,
+                            filePath: HoodieLocation,
                             start: Long,
                             length: Long): PartitionedFile = {
     sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(

@@ -19,8 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.JsonUtils;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import javax.annotation.Nullable;
 
@@ -364,7 +363,7 @@ public class HoodieWriteStat implements Serializable {
   /**
    * Set path and tempPath relative to the given basePath.
    */
-  public void setPath(Path basePath, Path path) {
+  public void setPath(HoodieLocation basePath, HoodieLocation path) {
     this.path = path.toString().replace(basePath + "/", "");
   }
 

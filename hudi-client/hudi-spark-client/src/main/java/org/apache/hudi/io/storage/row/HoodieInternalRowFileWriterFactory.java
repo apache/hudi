@@ -18,14 +18,15 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -39,7 +40,7 @@ public class HoodieInternalRowFileWriterFactory {
 
   /**
    * Factory method to assist in instantiating an instance of {@link HoodieInternalRowFileWriter}.
-   * @param path path of the RowFileWriter.
+   * @param location location of the RowFileWriter.
    * @param hoodieTable instance of {@link HoodieTable} in use.
    * @param writeConfig instance of {@link HoodieWriteConfig} to use.
    * @param schema schema of the dataset in use.
@@ -47,19 +48,19 @@ public class HoodieInternalRowFileWriterFactory {
    * @throws IOException if format is not supported or if any exception during instantiating the RowFileWriter.
    *
    */
-  public static HoodieInternalRowFileWriter getInternalRowFileWriter(Path path,
+  public static HoodieInternalRowFileWriter getInternalRowFileWriter(HoodieLocation location,
                                                                      HoodieTable hoodieTable,
                                                                      HoodieWriteConfig writeConfig,
                                                                      StructType schema)
       throws IOException {
-    final String extension = FSUtils.getFileExtension(path.getName());
+    final String extension = FSUtils.getFileExtension(location.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
+      return newParquetInternalRowFileWriter(location, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  private static HoodieInternalRowFileWriter newParquetInternalRowFileWriter(Path path,
+  private static HoodieInternalRowFileWriter newParquetInternalRowFileWriter(HoodieLocation location,
                                                                              HoodieTable table,
                                                                              HoodieWriteConfig writeConfig,
                                                                              StructType structType,
@@ -70,7 +71,7 @@ public class HoodieInternalRowFileWriterFactory {
             new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, bloomFilterOpt, writeConfig.getStorageConfig());
 
     return new HoodieInternalRowParquetWriter(
-        path,
+        location,
         new HoodieParquetConfig<>(
             writeSupport,
             writeConfig.getParquetCompressionCodec(),

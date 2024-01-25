@@ -40,6 +40,7 @@
     <module>hudi-client</module>
     <module>hudi-aws</module>
     <module>hudi-gcp</module>
+    <module>hudi-hadoop-common</module>
     <module>hudi-hadoop-mr</module>
     <module>hudi-io</module>
     <module>hudi-spark-datasource</module>

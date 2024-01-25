@@ -17,27 +17,30 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.avro.generic.IndexedRecord
-import org.apache.hadoop.fs.FileStatus
+import org.apache.hudi.{common, io, AvroConversionUtils, ColumnStatsIndexSupport}
 import org.apache.hudi.avro.model._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.io.storage.HoodieFileStatus
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport}
+
+import org.apache.avro.generic.IndexedRecord
+import org.apache.hudi
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.{Function, Supplier}
-import scala.collection.{JavaConversions, mutable}
+
+import scala.collection.{mutable, JavaConversions}
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter}
 
 class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
@@ -139,7 +142,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val maxInstant = metaClient.createNewInstantTime()
     val instants = timeline.getInstants.iterator().asScala.filter(_.getTimestamp < maxInstant)
 
-    val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
+    val details = new Function[HoodieInstant, common.util.Option[Array[Byte]]]
       with java.io.Serializable {
       override def apply(instant: HoodieInstant): HOption[Array[Byte]] = {
         metaClient.getActiveTimeline.getInstantDetails(instant)
@@ -149,7 +152,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val filteredTimeline = new HoodieDefaultTimeline(
       new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
 
-    new HoodieTableFileSystemView(metaClient, filteredTimeline, new Array[FileStatus](0))
+    new HoodieTableFileSystemView(metaClient, filteredTimeline, new java.util.ArrayList[HoodieFileStatus])
   }
 
   override def build: Procedure = new ShowMetadataTableColumnStatsProcedure()

@@ -19,12 +19,11 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
@@ -33,9 +32,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncConfigHolder;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -44,7 +45,6 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -137,7 +137,7 @@ public class HoodieDropPartitionsTool implements Serializable {
    * @return the {@link TypedProperties} instance.
    */
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new HoodieLocation(cfg.propsFilePath), cfg.configs)
         .getProps(true);
   }
 
@@ -380,7 +380,7 @@ public class HoodieDropPartitionsTool implements Serializable {
         + hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_URL)
         + ", basePath :" + cfg.basePath);
     LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
-    FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     HiveConf hiveConf = new HiveConf();
     if (!StringUtils.isNullOrEmpty(cfg.hiveHMSUris)) {
       hiveConf.set("hive.metastore.uris", cfg.hiveHMSUris);

@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
@@ -70,7 +71,7 @@ public class TestHoodieRealtimeFileSplit {
   @BeforeEach
   public void setUp(@TempDir java.nio.file.Path tempDir) throws Exception {
     basePath = tempDir.toAbsolutePath().toString();
-    Path logPath = new Path(basePath + "/1.log");
+    HoodieLocation logPath = new HoodieLocation(basePath + "/1.log");
     deltaLogFiles = Collections.singletonList(new HoodieLogFile(logPath, 0L));
     deltaLogPaths = Collections.singletonList(basePath + "/1.log");
     fileSplitName = basePath + "/test.file";

@@ -18,9 +18,7 @@
 
 package org.apache.hudi.table.format.cdc;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -28,9 +26,9 @@ import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -38,6 +36,9 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
@@ -333,16 +334,17 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       this.requiredPos = getRequiredPos(tableState.getAvroSchema(), this.requiredSchema);
       this.recordBuilder = new GenericRecordBuilder(requiredSchema);
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
-      Path hadoopTablePath = new Path(tablePath);
-      FileSystem fs = FSUtils.getFs(hadoopTablePath, hadoopConf);
+      HoodieLocation hadoopTablePath = new HoodieLocation(tablePath);
+      HoodieStorage storage = HoodieStorageUtils.getHoodieStorage(hadoopTablePath, hadoopConf);
       HoodieLogFile[] cdcLogFiles = fileSplit.getCdcFiles().stream().map(cdcFile -> {
         try {
-          return new HoodieLogFile(fs.getFileStatus(new Path(hadoopTablePath, cdcFile)));
+          return new HoodieLogFile(
+              storage.getFileStatus(new HoodieLocation(hadoopTablePath, cdcFile)));
         } catch (IOException e) {
           throw new HoodieIOException("Fail to call getFileStatus", e);
         }
       }).toArray(HoodieLogFile[]::new);
-      this.cdcItr = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcSchema);
+      this.cdcItr = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcSchema);
     }
 
     private int[] getRequiredPos(String tableSchema, Schema required) {
@@ -733,7 +735,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       long maxCompactionMemoryInBytes) {
     Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
         .sorted(HoodieLogFile.getLogFileComparator())
-        .map(logFile -> logFile.getPath().toString())
+        .map(logFile -> logFile.getLocation().toString())
         // filter out the cdc logs
         .filter(path -> !path.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
         .collect(Collectors.toList()));

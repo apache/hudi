@@ -18,12 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Snapshot;
-import com.codahale.metrics.UniformReservoir;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -34,6 +28,13 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Snapshot;
+import com.codahale.metrics.UniformReservoir;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -113,16 +114,18 @@ public class StatsCommand {
               defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    FileSystem fs = HoodieCLI.fs;
-    String globPath = String.format("%s/%s/*", HoodieCLI.getTableMetaClient().getBasePath(), globRegex);
-    List<FileStatus> statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath));
+    HoodieStorage storage = HoodieCLI.storage;
+    String globPath =
+        String.format("%s/%s/*", HoodieCLI.getTableMetaClient().getBasePath(), globRegex);
+    List<HoodieFileStatus> statuses = FSUtils.getGlobStatusExcludingMetaFolder(storage,
+        new HoodieLocation(globPath));
 
     // max, min, #small files < 10MB, 50th, avg, 95th
     Histogram globalHistogram = new Histogram(new UniformReservoir(MAX_FILES));
     HashMap<String, Histogram> commitHistoMap = new HashMap<>();
-    for (FileStatus fileStatus : statuses) {
-      String instantTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
-      long sz = fileStatus.getLen();
+    for (HoodieFileStatus fileStatus : statuses) {
+      String instantTime = FSUtils.getCommitTime(fileStatus.getLocation().getName());
+      long sz = fileStatus.getLength();
       if (!commitHistoMap.containsKey(instantTime)) {
         commitHistoMap.put(instantTime, new Histogram(new UniformReservoir(MAX_FILES)));
       }

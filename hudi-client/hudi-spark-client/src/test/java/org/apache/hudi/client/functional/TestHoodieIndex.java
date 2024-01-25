@@ -49,6 +49,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.RawTripTestPayloadKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -58,7 +59,6 @@ import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -123,7 +123,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   private void setUp(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex, boolean rollbackUsingMarkers) throws Exception {
     initPath();
     initSparkContexts();
-    initFileSystem();
+    initHoodieStorage();
 
     Properties keyGenProps = getPropsForKeyGen(indexType, populateMetaFields);
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, keyGenProps);
@@ -359,7 +359,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // We are trying to approximately imitate the case when the RDD is recomputed. For RDD creating, driver code is not
     // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
     // upsert will not run into conflicts.
-    metaClient.getFs().delete(new Path(metaClient.getMetaPath(), newCommitTime + ".inflight"));
+    metaClient.getHoodieStorage().deleteDirectory(
+        new HoodieLocation(metaClient.getMetaPath(), newCommitTime + ".inflight"));
 
     writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());
@@ -440,23 +441,28 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     final String fileId3 = "fileID3";
 
     Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
-    Path baseFilePath = testTable.forCommit("0000001").withInserts(p1, fileId1, Collections.singletonList(record1));
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    HoodieLocation baseFilePath =
+        testTable.forCommit("0000001").withInserts(p1, fileId1, Collections.singletonList(record1));
+    long baseFileLength = storage.getFileStatus(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(p1, k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation("0000001", WriteOperationType.UPSERT, Arrays.asList(p1, p2),
         partitionToFilesNameLengthMap, false, false);
 
     partitionToFilesNameLengthMap.clear();
-    baseFilePath = testTable.forCommit("0000002").withInserts(p1, fileId2, Collections.singletonList(record2));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
-    partitionToFilesNameLengthMap.computeIfAbsent(p1, k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
+    baseFilePath =
+        testTable.forCommit("0000002").withInserts(p1, fileId2, Collections.singletonList(record2));
+    baseFileLength = storage.getFileStatus(baseFilePath).getLength();
+    partitionToFilesNameLengthMap.computeIfAbsent(p1, k -> new ArrayList<>())
+        .add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation("0000002", WriteOperationType.UPSERT, Arrays.asList(p1, p2),
         partitionToFilesNameLengthMap, false, false);
 
     partitionToFilesNameLengthMap.clear();
-    baseFilePath = testTable.forCommit("0000003").withInserts(p2, fileId3, Collections.singletonList(record4));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
-    partitionToFilesNameLengthMap.computeIfAbsent(p2, k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
+    baseFilePath =
+        testTable.forCommit("0000003").withInserts(p2, fileId3, Collections.singletonList(record4));
+    baseFileLength = storage.getFileStatus(baseFilePath).getLength();
+    partitionToFilesNameLengthMap.computeIfAbsent(p2, k -> new ArrayList<>())
+        .add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation("0000003", WriteOperationType.UPSERT, Arrays.asList(p1, p2),
         partitionToFilesNameLengthMap, false, false);
 

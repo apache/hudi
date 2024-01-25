@@ -349,15 +349,16 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String fileId)
       throws IOException {
-    if (upsertHandle.getOldFilePath() == null) {
+    if (upsertHandle.getOldFileLocation() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
       if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
         Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
-        Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
-            table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
-            upsertHandle.getWriterSchema(), table.getHadoopConf());
+        Object[] partitionValues =
+            SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
+                table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+                upsertHandle.getWriterSchema(), table.getHadoopConf());
         upsertHandle.setPartitionFields(partitionFields);
         upsertHandle.setPartitionValues(partitionValues);
       }
@@ -367,7 +368,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
     // TODO(vc): This needs to be revisited
     if (upsertHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath() + ", "
+      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFileLocation() + ", "
           + upsertHandle.writeStatuses());
     }
 

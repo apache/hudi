@@ -26,13 +26,13 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.functional.TestHDFSParquetImporter;
 import org.apache.hudi.utilities.functional.TestHDFSParquetImporter.HoodieTripModel;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -44,12 +44,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.ParseException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -76,13 +78,13 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
   @BeforeEach
   public void init() throws IOException, ParseException {
     tableName = "test_table";
-    tablePath = basePath + Path.SEPARATOR + tableName;
+    tablePath = basePath + PATH_SEPARATOR + tableName;
     sourcePath = new Path(basePath, "source");
     targetPath = new Path(tablePath);
-    schemaFile = new Path(basePath, "file.schema").toString();
+    schemaFile = new HoodieLocation(basePath, "file.schema").toString();
 
     // create schema file
-    try (FSDataOutputStream schemaFileOS = fs.create(new Path(schemaFile))) {
+    try (OutputStream schemaFileOS = storage.create(new HoodieLocation(schemaFile))) {
       schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
     }
 
@@ -108,7 +110,7 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
         () -> assertEquals("Table imported to hoodie format", result.toString()));
 
     // Check hudi table exist
-    String metaPath = targetPath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
+    String metaPath = targetPath + PATH_SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
     assertTrue(Files.exists(Paths.get(metaPath)), "Hoodie table not exist.");
 
     // Load meta data
@@ -168,17 +170,21 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
    * Method to verify result is equals to expect.
    */
   private void verifyResultData(List<GenericRecord> expectData) {
-    Dataset<Row> ds = HoodieClientTestUtils.read(jsc, tablePath, sqlContext, fs, tablePath + "/*/*/*/*");
+    Dataset<Row> ds = HoodieClientTestUtils.read(jsc, tablePath, sqlContext,
+        storage, tablePath + "/*/*/*/*");
 
-    List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
+    List<Row> readData =
+        ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat",
+            "end_lon").collectAsList();
     List<HoodieTripModel> result = readData.stream().map(row ->
-        new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
-            row.getDouble(5), row.getDouble(6), row.getDouble(7)))
+            new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3),
+                row.getDouble(4),
+                row.getDouble(5), row.getDouble(6), row.getDouble(7)))
         .collect(Collectors.toList());
 
     List<HoodieTripModel> expected = expectData.stream().map(g ->
-        new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
-            g.get("_row_key").toString(),
+            new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
+                g.get("_row_key").toString(),
             g.get("rider").toString(),
             g.get("driver").toString(),
             Double.parseDouble(g.get("begin_lat").toString()),

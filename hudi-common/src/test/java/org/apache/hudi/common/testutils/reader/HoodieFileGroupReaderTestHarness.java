@@ -27,8 +27,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -95,7 +95,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
 
     Option<FileSlice> fileSliceOpt =
         HoodieFileSliceTestUtils.getFileSlice(
-            readerContext.getFs(basePath, hadoopConf),
+            readerContext.getHoodieStorage(basePath, hadoopConf),
             keyRanges.subList(0, numFiles),
             timestamps.subList(0, numFiles),
             operationTypes.subList(0, numFiles),

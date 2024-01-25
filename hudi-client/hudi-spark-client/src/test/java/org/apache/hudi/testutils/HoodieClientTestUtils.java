@@ -22,7 +22,6 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -36,11 +35,15 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.avro.Schema;
@@ -145,7 +148,7 @@ public class HoodieClientTestUtils {
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
           HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
-      fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new Path(basePath)));
+      fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new HoodieLocation(basePath)));
     }
     return fileIdToFullPath;
   }
@@ -225,18 +228,26 @@ public class HoodieClientTestUtils {
       }
       throw new HoodieException("Unsupported base file format for file :" + paths[0]);
     } catch (IOException e) {
-      throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTimeOpt.get(), e);
+      throw new HoodieException(
+          "Error pulling data incrementally from commitTimestamp :" + lastCommitTimeOpt.get(), e);
     }
   }
 
-  public static List<HoodieBaseFile> getLatestBaseFiles(String basePath, FileSystem fs,
-                                                String... paths) {
+  public static List<HoodieBaseFile> getLatestBaseFiles(String basePath,
+                                                        HoodieStorage storage,
+                                                        String... paths) {
     List<HoodieBaseFile> latestFiles = new ArrayList<>();
     try {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTableMetaClient metaClient =
+          HoodieTableMetaClient.builder()
+              .setConf((Configuration) storage.getConf())
+              .setBasePath(basePath)
+              .setLoadActiveTimelineOnLoad(true).build();
       for (String path : paths) {
-        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
-            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
+        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(
+            metaClient,
+            metaClient.getCommitsTimeline().filterCompletedInstants(),
+            storage.globEntries(new HoodieLocation(path)));
         latestFiles.addAll(fileSystemView.getLatestBaseFiles().collect(Collectors.toList()));
       }
     } catch (Exception e) {
@@ -248,11 +259,12 @@ public class HoodieClientTestUtils {
   /**
    * Reads the paths under the hoodie table out as a DataFrame.
    */
-  public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext, FileSystem fs,
+  public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
+                                  HoodieStorage storage,
                                   String... paths) {
     List<String> filteredPaths = new ArrayList<>();
     try {
-      List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, fs, paths);
+      List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, storage, paths);
       for (HoodieBaseFile file : latestFiles) {
         filteredPaths.add(file.getPath());
       }
@@ -275,7 +287,7 @@ public class HoodieClientTestUtils {
     // TODO: this should be ported to use HoodieStorageReader
     List<GenericRecord> valuesAsList = new LinkedList<>();
 
-    FileSystem fs = FSUtils.getFs(paths[0], jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(paths[0], jsc.hadoopConfiguration());
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
     Schema schema = null;
     for (String path : paths) {
@@ -322,7 +334,7 @@ public class HoodieClientTestUtils {
       TimelineService timelineService = new TimelineService(context, new Configuration(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          FileSystem.get(new Configuration()),
+          HoodieStorageUtils.getHoodieStorage(new Configuration()),
           FileSystemViewManager.createViewManager(context, config.getMetadataConfig(),
               config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();

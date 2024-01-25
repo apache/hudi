@@ -63,6 +63,9 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -140,21 +143,24 @@ public class HoodieTestTable {
   private final List<String> inflightCommits = new ArrayList<>();
 
   protected final String basePath;
+  protected final HoodieStorage storage;
   protected final FileSystem fs;
   protected HoodieTableMetaClient metaClient;
   protected String currentInstantTime;
   private boolean isNonPartitioned = false;
   protected Option<HoodieEngineContext> context;
 
-  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient) {
-    this(basePath, fs, metaClient, Option.empty());
+  protected HoodieTestTable(String basePath, HoodieStorage storage,
+                            HoodieTableMetaClient metaClient) {
+    this(basePath, storage, metaClient, Option.empty());
   }
 
-  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Option<HoodieEngineContext> context) {
+  protected HoodieTestTable(String basePath, HoodieStorage storage,
+                            HoodieTableMetaClient metaClient, Option<HoodieEngineContext> context) {
     ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath()));
-    ValidationUtils.checkArgument(Objects.equals(fs, metaClient.getRawFs()));
     this.basePath = basePath;
-    this.fs = fs;
+    this.storage = storage;
+    this.fs = (FileSystem) storage.getFileSystem();
     this.metaClient = metaClient;
     testTableState = HoodieTestTableState.of();
     this.context = context;
@@ -162,7 +168,7 @@ public class HoodieTestTable {
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
     testTableState = HoodieTestTableState.of();
-    return new HoodieTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient);
+    return new HoodieTestTable(metaClient.getBasePath(), metaClient.getHoodieStorage(), metaClient);
   }
 
   public void setNonPartitioned() {
@@ -578,7 +584,7 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable deleteSavepoint(String instantTime) throws IOException {
-    deleteSavepointCommit(basePath, instantTime, fs);
+    deleteSavepointCommit(basePath, instantTime, storage);
     return this;
   }
 
@@ -738,22 +744,26 @@ public class HoodieTestTable {
 
   public boolean logFileExists(String partition, String instantTime, String fileId, int version) {
     try {
-      return fs.exists(new Path(Paths.get(basePath, partition, logFileName(instantTime, fileId, version)).toString()));
+      return fs.exists(new Path(
+          Paths.get(basePath, partition, logFileName(instantTime, fileId, version)).toString()));
     } catch (IOException e) {
       throw new HoodieTestTableException(e);
     }
   }
 
   public Path getInflightCommitFilePath(String instantTime) {
-    return new Path(Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME, instantTime + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION).toUri());
+    return new Path(Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME,
+        instantTime + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION).toUri());
   }
 
-  public Path getCommitFilePath(String instantTime) {
-    return HoodieTestUtils.getCompleteInstantPath(fs, new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME), instantTime, HoodieTimeline.COMMIT_ACTION);
+  public HoodieLocation getCommitFilePath(String instantTime) {
+    return HoodieTestUtils.getCompleteInstantPath(storage, new HoodieLocation(basePath,
+        HoodieTableMetaClient.METAFOLDER_NAME), instantTime, HoodieTimeline.COMMIT_ACTION);
   }
 
   public Path getRequestedCompactionFilePath(String instantTime) {
-    return new Path(Paths.get(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME, instantTime + HoodieTimeline.REQUESTED_COMPACTION_EXTENSION).toUri());
+    return new Path(Paths.get(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME,
+        instantTime + HoodieTimeline.REQUESTED_COMPACTION_EXTENSION).toUri());
   }
 
   public Path getPartitionPath(String partition) {
@@ -791,33 +801,38 @@ public class HoodieTestTable {
     return this.inflightCommits;
   }
 
-  public FileStatus[] listAllBaseFiles() throws IOException {
+  public List<HoodieFileStatus> listAllBaseFiles() throws IOException {
     return listAllBaseFiles(HoodieFileFormat.PARQUET.getFileExtension());
   }
 
-  public FileStatus[] listAllBaseFiles(String fileExtension) throws IOException {
-    return FileSystemTestUtils.listRecursive(fs, new Path(basePath)).stream()
-        .filter(status -> status.getPath().getName().endsWith(fileExtension))
-        .toArray(FileStatus[]::new);
+  public List<HoodieFileStatus> listAllBaseFiles(String fileExtension) throws IOException {
+    return FileSystemTestUtils.listRecursive(storage, new HoodieLocation(basePath)).stream()
+        .filter(fileInfo -> fileInfo.getLocation().getName().endsWith(fileExtension))
+        .collect(Collectors.toList());
   }
 
-  public FileStatus[] listAllLogFiles() throws IOException {
+  public List<HoodieFileStatus> listAllLogFiles() throws IOException {
     return listAllLogFiles(HoodieFileFormat.HOODIE_LOG.getFileExtension());
   }
 
-  public FileStatus[] listAllLogFiles(String fileExtension) throws IOException {
-    return FileSystemTestUtils.listRecursive(fs, new Path(basePath)).stream()
-        .filter(status -> !status.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))
-        .filter(status -> status.getPath().getName().contains(fileExtension))
-        .toArray(FileStatus[]::new);
+  public List<HoodieFileStatus> listAllLogFiles(String fileExtension) throws IOException {
+    return FileSystemTestUtils.listRecursive(storage, new HoodieLocation(basePath)).stream()
+        .filter(
+            fileInfo -> !fileInfo.getLocation().toString()
+                .contains(HoodieTableMetaClient.METAFOLDER_NAME))
+        .filter(fileInfo -> fileInfo.getLocation().getName().contains(fileExtension))
+        .collect(Collectors.toList());
   }
 
-  public FileStatus[] listAllBaseAndLogFiles() throws IOException {
-    return Stream.concat(Stream.of(listAllBaseFiles()), Stream.of(listAllLogFiles())).toArray(FileStatus[]::new);
+  public List<HoodieFileStatus> listAllBaseAndLogFiles() throws IOException {
+    List<HoodieFileStatus> result = new ArrayList<>(listAllBaseFiles());
+    result.addAll(listAllLogFiles());
+    return result;
   }
 
   public FileStatus[] listAllFilesInPartition(String partitionPath) throws IOException {
-    return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, partitionPath).toString())).stream()
+    return FileSystemTestUtils.listRecursive(fs,
+            new Path(Paths.get(basePath, partitionPath).toString())).stream()
         .filter(entry -> {
           boolean toReturn = true;
           String filePath = entry.getPath().toString();

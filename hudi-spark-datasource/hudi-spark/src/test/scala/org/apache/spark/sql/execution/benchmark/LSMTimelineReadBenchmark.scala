@@ -20,19 +20,23 @@ package org.apache.spark.sql.execution.benchmark
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DummyActiveAction
+import org.apache.hudi.{common, io, DummyActiveAction}
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.client.timeline.LSMTimelineWriter
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.common.table.timeline.{ActiveAction, CompletionTimeQueryView, HoodieArchivedTimeline, HoodieInstant, LSMTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.table.HoodieJavaTable
+
+import org.apache.hudi
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
 
 import java.util
+
 import scala.collection.JavaConverters._
 
 object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
@@ -74,7 +78,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         instantBuffer.add(new DummyActiveAction(instant, serializedMetadata))
         if (i % batchSize == 0) {
           // archive 10 instants each time
-          writer.write(instantBuffer, org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty())
+          writer.write(instantBuffer, Option.empty(), common.util.Option.empty())
           writer.compactAndClean(engineContext)
           instantBuffer.clear()
         }

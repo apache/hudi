@@ -76,7 +76,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
   public void setUp() throws Exception {
     initPath();
     initSparkContexts();
-    initFileSystem();
+    initHoodieStorage();
     initMetaClient(tableType);
     initTestDataGenerator();
   }
@@ -206,7 +206,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         assertEquals(1, stat.getSuccessDeleteFiles().size());
         assertEquals(0, stat.getFailedDeleteFiles().size());
         assertEquals(0, stat.getCommandBlocksCount().size());
-        stat.getCommandBlocksCount().forEach((fileStatus, len) -> assertTrue(fileStatus.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
+        stat.getCommandBlocksCount().forEach((fileStatus, len) -> assertTrue(fileStatus.getLocation().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
       }
     }
   }

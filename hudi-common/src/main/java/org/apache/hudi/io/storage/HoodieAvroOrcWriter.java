@@ -23,9 +23,9 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.AvroOrcUtils;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -66,11 +66,11 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private String minRecordKey;
   private String maxRecordKey;
 
-  public HoodieAvroOrcWriter(String instantTime, Path file, HoodieOrcConfig config, Schema schema,
+  public HoodieAvroOrcWriter(String instantTime, HoodieLocation location, HoodieOrcConfig config, Schema schema,
                              TaskContextSupplier taskContextSupplier) throws IOException {
 
-    Configuration conf = FSUtils.registerFileSystem(file, config.getHadoopConf());
-    this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
+    Configuration conf = FSUtils.registerFileSystem(location, config.getHadoopConf());
+    this.file = HoodieWrapperFileSystem.convertToHoodiePath(location, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;

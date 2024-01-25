@@ -53,15 +53,15 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
     UtilitiesTestBase.initTestServices();
     UtilitiesTestBase.Helpers.copyToDFS(
         "streamer-config/sql-file-transformer.sql",
-        UtilitiesTestBase.fs,
+        UtilitiesTestBase.storage,
         UtilitiesTestBase.basePath + "/sql-file-transformer.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
         "streamer-config/sql-file-transformer-invalid.sql",
-        UtilitiesTestBase.fs,
+        UtilitiesTestBase.storage,
         UtilitiesTestBase.basePath + "/sql-file-transformer-invalid.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
         "streamer-config/sql-file-transformer-empty.sql",
-        UtilitiesTestBase.fs,
+        UtilitiesTestBase.storage,
         UtilitiesTestBase.basePath + "/sql-file-transformer-empty.sql");
   }
 

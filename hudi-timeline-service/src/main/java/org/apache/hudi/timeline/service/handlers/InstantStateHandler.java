@@ -21,16 +21,15 @@ package org.apache.hudi.timeline.service.handlers;
 import org.apache.hudi.common.table.timeline.dto.InstantStateDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -76,9 +75,10 @@ public class InstantStateHandler extends Handler {
    */
   private final AtomicLong requestCount;
 
-  public InstantStateHandler(Configuration conf, TimelineService.Config timelineServiceConfig, FileSystem fileSystem,
+  public InstantStateHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
+                             HoodieStorage storage,
                              FileSystemViewManager viewManager) throws IOException {
-    super(conf, timelineServiceConfig, fileSystem, viewManager);
+    super(conf, timelineServiceConfig, storage, viewManager);
     this.cachedInstantStates = new ConcurrentHashMap<>();
     this.requestCount = new AtomicLong();
   }
@@ -93,7 +93,7 @@ public class InstantStateHandler extends Handler {
       // Do refresh for every N requests to ensure the writers won't be blocked forever
       refresh(instantStatePath);
     }
-    return cachedInstantStates.computeIfAbsent(instantStatePath, k -> scanInstantState(new Path(k)));
+    return cachedInstantStates.computeIfAbsent(instantStatePath, k -> scanInstantState(new HoodieLocation(k)));
   }
 
   /**
@@ -103,7 +103,7 @@ public class InstantStateHandler extends Handler {
    */
   public boolean refresh(String instantStatePath) {
     try {
-      cachedInstantStates.put(instantStatePath, scanInstantState(new Path(instantStatePath)));
+      cachedInstantStates.put(instantStatePath, scanInstantState(new HoodieLocation(instantStatePath)));
       requestCount.set(0);
     } catch (Exception e) {
       LOG.error("Failed to load instant states, path: " + instantStatePath, e);
@@ -115,16 +115,17 @@ public class InstantStateHandler extends Handler {
   /**
    * Scan the instant states from file system.
    */
-  public List<InstantStateDTO> scanInstantState(Path instantStatePath) {
+  public List<InstantStateDTO> scanInstantState(HoodieLocation instantStateLocation) {
     try {
-      // Check instantStatePath exists before list status, see HUDI-5915
-      if (this.fileSystem.exists(instantStatePath)) {
-        return Arrays.stream(this.fileSystem.listStatus(instantStatePath)).map(InstantStateDTO::fromFileStatus).collect(Collectors.toList());
+      // Check instantStateLocation exists before list status, see HUDI-5915
+      if (this.storage.exists(instantStateLocation)) {
+        return this.storage.listDirectEntries(instantStateLocation).stream()
+            .map(InstantStateDTO::fromFileStatus).collect(Collectors.toList());
       } else {
         return Collections.emptyList();
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to load instant states, path: " + instantStatePath, e);
+      throw new HoodieIOException("Failed to load instant states, path: " + instantStateLocation, e);
     }
   }
 

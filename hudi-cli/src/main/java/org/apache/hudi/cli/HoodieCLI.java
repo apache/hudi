@@ -22,10 +22,12 @@ import org.apache.hudi.cli.utils.SparkTempViewProvider;
 import org.apache.hudi.cli.utils.TempViewProvider;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -39,7 +41,7 @@ public class HoodieCLI {
 
   public static Configuration conf;
   public static ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
-  public static FileSystem fs;
+  public static HoodieStorage storage;
   public static CLIState state = CLIState.INIT;
   public static String basePath;
   protected static HoodieTableMetaClient tableMetadata;
@@ -73,15 +75,17 @@ public class HoodieCLI {
 
   public static boolean initConf() {
     if (HoodieCLI.conf == null) {
-      HoodieCLI.conf = FSUtils.prepareHadoopConf(new Configuration());
+      HoodieCLI.conf = HadoopFSUtils.prepareHadoopConf(new Configuration());
       return true;
     }
     return false;
   }
 
   public static void initFS(boolean force) throws IOException {
-    if (fs == null || force) {
-      fs = (tableMetadata != null) ? tableMetadata.getFs() : FileSystem.get(conf);
+    if (storage == null || force) {
+      storage = (tableMetadata != null)
+          ? tableMetadata.getHoodieStorage()
+          : HoodieStorageUtils.getHoodieStorage(FileSystem.get(conf));
     }
   }
 

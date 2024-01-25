@@ -35,7 +35,8 @@ import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.io.storage.HoodieLocation;
+
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 
@@ -104,7 +105,7 @@ public abstract class HoodieSparkTable<T>
           context.getHadoopConf().get(), config, failedWritesCleaningPolicy, context,
           Option.of(triggeringInstantTimestamp));
       try {
-        if (isMetadataTableExists || metaClient.getFs().exists(new Path(
+        if (isMetadataTableExists || metaClient.getHoodieStorage().exists(new HoodieLocation(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
           isMetadataTableExists = true;
           return Option.of(metadataWriter);

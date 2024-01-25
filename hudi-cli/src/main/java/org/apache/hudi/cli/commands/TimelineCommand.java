@@ -31,11 +31,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
@@ -45,7 +45,6 @@ import org.springframework.shell.standard.ShellOption;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
@@ -85,13 +84,13 @@ public class TimelineCommand {
         HoodieTableMetaClient mtMetaClient = getMetadataTableMetaClient(metaClient);
         return printTimelineInfoWithMetadataTable(
             metaClient.getActiveTimeline(), mtMetaClient.getActiveTimeline(),
-            getInstantInfoFromTimeline(metaClient.getFs(), metaClient.getMetaPath()),
-            getInstantInfoFromTimeline(mtMetaClient.getFs(), mtMetaClient.getMetaPath()),
+            getInstantInfoFromTimeline(metaClient.getHoodieStorage(), metaClient.getMetaPath()),
+            getInstantInfoFromTimeline(mtMetaClient.getHoodieStorage(), mtMetaClient.getMetaPath()),
             limit, sortByField, descending, headerOnly, true, showTimeSeconds, showRollbackInfo);
       }
       return printTimelineInfo(
           metaClient.getActiveTimeline(),
-          getInstantInfoFromTimeline(metaClient.getFs(), metaClient.getMetaPath()),
+          getInstantInfoFromTimeline(metaClient.getHoodieStorage(), metaClient.getMetaPath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, showRollbackInfo);
     } catch (IOException e) {
       e.printStackTrace();
@@ -114,7 +113,7 @@ public class TimelineCommand {
     try {
       return printTimelineInfo(
           metaClient.getActiveTimeline().filterInflightsAndRequested(),
-          getInstantInfoFromTimeline(metaClient.getFs(), metaClient.getMetaPath()),
+          getInstantInfoFromTimeline(metaClient.getHoodieStorage(), metaClient.getMetaPath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, showRollbackInfo);
     } catch (IOException e) {
       e.printStackTrace();
@@ -136,7 +135,7 @@ public class TimelineCommand {
     try {
       return printTimelineInfo(
           metaClient.getActiveTimeline(),
-          getInstantInfoFromTimeline(metaClient.getFs(), metaClient.getMetaPath()),
+          getInstantInfoFromTimeline(metaClient.getHoodieStorage(), metaClient.getMetaPath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, false);
     } catch (IOException e) {
       e.printStackTrace();
@@ -158,7 +157,7 @@ public class TimelineCommand {
     try {
       return printTimelineInfo(
           metaClient.getActiveTimeline().filterInflightsAndRequested(),
-          getInstantInfoFromTimeline(metaClient.getFs(), metaClient.getMetaPath()),
+          getInstantInfoFromTimeline(metaClient.getHoodieStorage(), metaClient.getMetaPath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, false);
     } catch (IOException e) {
       e.printStackTrace();
@@ -175,14 +174,14 @@ public class TimelineCommand {
   }
 
   private Map<String, Map<HoodieInstant.State, HoodieInstantWithModTime>> getInstantInfoFromTimeline(
-      FileSystem fs, String metaPath) throws IOException {
+      HoodieStorage storage, String metaPath) throws IOException {
     Map<String, Map<HoodieInstant.State, HoodieInstantWithModTime>> instantMap = new HashMap<>();
-    Stream<HoodieInstantWithModTime> instantStream = Arrays.stream(
-        HoodieTableMetaClient.scanFiles(fs, new Path(metaPath), path -> {
+    Stream<HoodieInstantWithModTime> instantStream =
+        HoodieTableMetaClient.scanFiles(storage, new HoodieLocation(metaPath), path -> {
           // Include only the meta files with extensions that needs to be included
           String extension = HoodieInstant.getTimelineFileExtension(path.getName());
           return HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE.contains(extension);
-        })).map(HoodieInstantWithModTime::new);
+        }).stream().map(HoodieInstantWithModTime::new);
     instantStream.forEach(instant -> {
       instantMap.computeIfAbsent(instant.getTimestamp(), t -> new HashMap<>())
           .put(instant.getState(), instant);
@@ -369,7 +368,7 @@ public class TimelineCommand {
 
     private final long modificationTimeMs;
 
-    public HoodieInstantWithModTime(FileStatus fileStatus) {
+    public HoodieInstantWithModTime(HoodieFileStatus fileStatus) {
       super(fileStatus);
       this.modificationTimeMs = fileStatus.getModificationTime();
     }

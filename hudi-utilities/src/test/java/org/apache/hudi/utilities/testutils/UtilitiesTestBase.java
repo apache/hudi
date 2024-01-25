@@ -36,6 +36,9 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.testutils.HiveTestService;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
@@ -105,6 +108,7 @@ public class UtilitiesTestBase {
   @TempDir
   protected static java.nio.file.Path sharedTempDir;
   protected static FileSystem fs;
+  protected static HoodieStorage storage;
   protected static String basePath;
   protected static HdfsTestService hdfsTestService;
   protected static MiniDFSCluster dfsCluster;
@@ -144,6 +148,7 @@ public class UtilitiesTestBase {
       fs = FileSystem.getLocal(hadoopConf);
       basePath = sharedTempDir.toUri().toString();
     }
+    storage = HoodieStorageUtils.getHoodieStorage(fs);
 
     if (needsHive) {
       hiveTestService = new HiveTestService(hadoopConf);
@@ -256,7 +261,8 @@ public class UtilitiesTestBase {
       return sb.toString();
     }
 
-    public static String readFileFromAbsolutePath(String absolutePathForResource) throws IOException {
+    public static String readFileFromAbsolutePath(String absolutePathForResource)
+        throws IOException {
       BufferedReader reader =
           new BufferedReader(new InputStreamReader(new FileInputStream(absolutePathForResource)));
       StringBuffer sb = new StringBuffer();
@@ -264,14 +270,16 @@ public class UtilitiesTestBase {
       return sb.toString();
     }
 
-    public static void copyToDFS(String testResourcePath, FileSystem fs, String targetPath) throws IOException {
-      PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
+    public static void copyToDFS(String testResourcePath, HoodieStorage storage, String targetPath)
+        throws IOException {
+      PrintStream os = new PrintStream(storage.create(new HoodieLocation(targetPath), true));
       os.print(readFile(testResourcePath));
       os.flush();
       os.close();
     }
 
-    public static void copyToDFSFromAbsolutePath(String absolutePathForResource, FileSystem fs, String targetPath)
+    public static void copyToDFSFromAbsolutePath(String absolutePathForResource, FileSystem fs,
+                                                 String targetPath)
         throws IOException {
       PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
       os.print(readFileFromAbsolutePath(absolutePathForResource));
@@ -285,13 +293,13 @@ public class UtilitiesTestBase {
       }
     }
 
-    public static void savePropsToDFS(TypedProperties props, FileSystem fs, String targetPath) throws IOException {
+    public static void savePropsToDFS(TypedProperties props, HoodieStorage storage, String targetPath) throws IOException {
       String[] lines = props.keySet().stream().map(k -> String.format("%s=%s", k, props.get(k))).toArray(String[]::new);
-      saveStringsToDFS(lines, fs, targetPath);
+      saveStringsToDFS(lines, storage, targetPath);
     }
 
-    public static void saveStringsToDFS(String[] lines, FileSystem fs, String targetPath) throws IOException {
-      PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
+    public static void saveStringsToDFS(String[] lines, HoodieStorage storage, String targetPath) throws IOException {
+      PrintStream os = new PrintStream(storage.create(new HoodieLocation(targetPath), true));
       for (String l : lines) {
         os.println(l);
       }
@@ -390,7 +398,8 @@ public class UtilitiesTestBase {
     }
 
     public static TypedProperties setupSchemaOnDFS(String scope, String filename) throws IOException {
-      UtilitiesTestBase.Helpers.copyToDFS(scope + "/" + filename, fs, basePath + "/" + filename);
+      UtilitiesTestBase.Helpers.copyToDFS(scope + "/" + filename, storage,
+          basePath + "/" + filename);
       TypedProperties props = new TypedProperties();
       props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/" + filename);
       return props;

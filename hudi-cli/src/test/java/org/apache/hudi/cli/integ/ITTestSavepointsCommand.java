@@ -33,8 +33,8 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.io.storage.HoodieLocation;
 
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -44,6 +44,7 @@ import org.springframework.shell.Shell;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -65,7 +66,7 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
   @BeforeEach
   public void init() throws IOException {
     String tableName = "test_table";
-    tablePath = basePath + Path.SEPARATOR + tableName;
+    tablePath = basePath + PATH_SEPARATOR + tableName;
 
     // Create table and connect
     new TableCommand().createTable(
@@ -153,13 +154,14 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     HoodieTestDataGenerator.createSavepointFile(tablePath, savepoint, jsc.hadoopConfiguration());
 
     // re-bootstrap metadata table
-    Path metadataTableBasePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(HoodieCLI.basePath));
+    HoodieLocation metadataTableBasePath =
+        new HoodieLocation(HoodieTableMetadata.getMetadataTableBasePath(HoodieCLI.basePath));
     // then bootstrap metadata table at instant 104
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
     SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc)).close();
 
-    assertTrue(HoodieCLI.fs.exists(metadataTableBasePath));
+    assertTrue(HoodieCLI.storage.exists(metadataTableBasePath));
 
     // roll back to savepoint
     Object result = shell.evaluate(() ->

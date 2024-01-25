@@ -46,12 +46,12 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -173,25 +173,26 @@ public class HoodieIndexUtils {
   /**
    * Given a list of row keys and one file, return only row keys existing in that file.
    *
-   * @param filePath            - File to filter keys from
+   * @param fileLocation        - File to filter keys from
    * @param candidateRecordKeys - Candidate keys to filter
    * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static List<Pair<String, Long>> filterKeysFromFile(Path filePath, List<String> candidateRecordKeys,
+  public static List<Pair<String, Long>> filterKeysFromFile(HoodieLocation fileLocation,
+                                                            List<String> candidateRecordKeys,
                                                             Configuration configuration) throws HoodieIndexException {
-    checkArgument(FSUtils.isBaseFile(filePath));
+    checkArgument(FSUtils.isBaseFile(fileLocation));
     List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
     try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(configuration, filePath)) {
+        .getFileReader(configuration, fileLocation)) {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();
         Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys.stream().collect(Collectors.toSet()));
         foundRecordKeys.addAll(fileRowKeys);
-        LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
+        LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", fileLocation,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
         if (LOG.isDebugEnabled()) {
-          LOG.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
+          LOG.debug("Keys matching for file " + fileLocation + " => " + foundRecordKeys);
         }
       }
     } catch (Exception e) {

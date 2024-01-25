@@ -34,13 +34,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 import org.apache.hudi.testutils.HoodieFlinkWriteableTestTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -247,7 +247,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     List<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
-        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
+        new HoodieLocation(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));

@@ -19,8 +19,10 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.util.{Option => HOption}
 
 import java.{util => ju}
+
 import scala.collection.JavaConverters._
 
 object HoodieConversionUtils {
@@ -35,10 +37,10 @@ object HoodieConversionUtils {
     map.toMap
   }
 
-  def toJavaOption[T](opt: Option[T]): org.apache.hudi.common.util.Option[T] =
-    if (opt.isDefined) org.apache.hudi.common.util.Option.of(opt.get) else org.apache.hudi.common.util.Option.empty()
+  def toJavaOption[T](opt: Option[T]): HOption[T] =
+    if (opt.isDefined) HOption.of(opt.get) else HOption.empty()
 
-  def toScalaOption[T](opt: org.apache.hudi.common.util.Option[T]): Option[T] =
+  def toScalaOption[T](opt: HOption[T]): Option[T] =
     if (opt.isPresent) Some(opt.get) else None
 
   def toProperties(params: Map[String, String]): TypedProperties = {

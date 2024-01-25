@@ -21,14 +21,15 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -86,10 +87,10 @@ public class HoodieMultiTableStreamer {
     String configFolder = config.configFolder;
     ValidationUtils.checkArgument(!config.filterDupes || config.operation != WriteOperationType.UPSERT,
         "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
-    FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
-    TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<String>()).getProps();
+    TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new HoodieLocation(commonPropsFile), new ArrayList<String>()).getProps();
     //get the tables to be ingested and their corresponding config files from this properties instance
     populateTableExecutionContextList(commonProperties, configFolder, fs, config);
   }
@@ -130,7 +131,7 @@ public class HoodieMultiTableStreamer {
       String configFilePath = getStringWithAltKeys(properties, configProp, oldConfigProp,
           Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
       checkIfTableConfigFileExists(configFolder, fs, configFilePath);
-      TypedProperties tableProperties = UtilHelpers.readConfig(fs.getConf(), new Path(configFilePath), new ArrayList<>()).getProps();
+      TypedProperties tableProperties = UtilHelpers.readConfig(fs.getConf(), new HoodieLocation(configFilePath), new ArrayList<>()).getProps();
       properties.forEach((k, v) -> {
         if (tableProperties.get(k) == null) {
           tableProperties.setProperty(k.toString(), v.toString());

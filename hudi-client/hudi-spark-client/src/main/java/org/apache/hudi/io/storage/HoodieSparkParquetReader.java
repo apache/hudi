@@ -57,13 +57,13 @@ import static org.apache.parquet.avro.AvroSchemaConverter.ADD_LIST_ELEMENT_RECOR
 
 public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
-  private final Path path;
+  private final HoodieLocation location;
   private final Configuration conf;
   private final BaseFileUtils parquetUtils;
   private List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
-  public HoodieSparkParquetReader(Configuration conf, Path path) {
-    this.path = path;
+  public HoodieSparkParquetReader(Configuration conf, HoodieLocation location) {
+    this.location = location;
     this.conf = new Configuration(conf);
     // Avoid adding record in list element when convert parquet schema to avro schema
     conf.set(ADD_LIST_ELEMENT_RECORDS, "false");
@@ -72,17 +72,17 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public String[] readMinMaxRecordKeys() {
-    return parquetUtils.readMinMaxRecordKeys(conf, path);
+    return parquetUtils.readMinMaxRecordKeys(conf, location);
   }
 
   @Override
   public BloomFilter readBloomFilter() {
-    return parquetUtils.readBloomFilterFromMetadata(conf, path);
+    return parquetUtils.readBloomFilterFromMetadata(conf, location);
   }
 
   @Override
   public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
-    return parquetUtils.filterRowKeys(conf, path, candidateRowKeys);
+    return parquetUtils.filterRowKeys(conf, location, candidateRowKeys);
   }
 
   @Override
@@ -125,7 +125,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), requestedStructType.json());
     conf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(), (Boolean) SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()));
     conf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), (Boolean) SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()));
-    ParquetReader<InternalRow> reader = ParquetReader.<InternalRow>builder((ReadSupport) new ParquetReadSupport(), path)
+    ParquetReader<InternalRow> reader = ParquetReader.<InternalRow>builder((ReadSupport) new ParquetReadSupport(), new Path(location.toUri()))
         .withConf(conf)
         .build();
     ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
@@ -138,7 +138,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     // Some types in avro are not compatible with parquet.
     // Avro only supports representing Decimals as fixed byte array
     // and therefore if we convert to Avro directly we'll lose logical type-info.
-    MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(conf, path);
+    MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(conf, location);
     StructType structType = new ParquetToSparkSchemaConverter(conf).convert(messageType);
     return SparkAdapterSupport$.MODULE$.sparkAdapter()
         .getAvroSchemaConverters()
@@ -152,6 +152,6 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public long getTotalRecords() {
-    return parquetUtils.getRowCount(conf, path);
+    return parquetUtils.getRowCount(conf, location);
   }
 }

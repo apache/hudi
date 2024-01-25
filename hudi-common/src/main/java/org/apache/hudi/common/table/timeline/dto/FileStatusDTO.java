@@ -18,13 +18,10 @@
 
 package org.apache.hudi.common.table.timeline.dto;
 
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieFileStatus;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.hadoop.fs.FileStatus;
-
-import java.io.IOException;
 
 /**
  * The data transfer object of file status.
@@ -38,67 +35,25 @@ public class FileStatusDTO {
   long length;
   @JsonProperty("isdir")
   boolean isdir;
-  @JsonProperty("blockReplication")
-  short blockReplication;
-  @JsonProperty("blocksize")
-  long blocksize;
   @JsonProperty("modificationTime")
   long modificationTime;
-  @JsonProperty("accessTime")
-  long accessTime;
-  @JsonProperty("permission")
-  FSPermissionDTO permission;
-  @JsonProperty("owner")
-  String owner;
-  @JsonProperty("group")
-  String group;
-  @JsonProperty("symlink")
-  FilePathDTO symlink;
 
-  public static FileStatusDTO fromFileStatus(FileStatus fileStatus) {
+  public static FileStatusDTO fromFileStatus(HoodieFileStatus fileStatus) {
     if (null == fileStatus) {
       return null;
     }
 
     FileStatusDTO dto = new FileStatusDTO();
-    try {
-      dto.path = FilePathDTO.fromPath(fileStatus.getPath());
-      dto.length = fileStatus.getLen();
-      dto.isdir = fileStatus.isDirectory();
-      dto.blockReplication = fileStatus.getReplication();
-      dto.blocksize = fileStatus.getBlockSize();
-      dto.modificationTime = fileStatus.getModificationTime();
-      dto.accessTime = fileStatus.getAccessTime();
-      dto.symlink = fileStatus.isSymlink() ? FilePathDTO.fromPath(fileStatus.getSymlink()) : null;
-      safeReadAndSetMetadata(dto, fileStatus);
-    } catch (IOException ioe) {
-      throw new HoodieException(ioe);
-    }
+    dto.path = FilePathDTO.fromHoodieLocation(fileStatus.getLocation());
+    dto.length = fileStatus.getLength();
+    dto.isdir = fileStatus.isDirectory();
+    dto.modificationTime = fileStatus.getModificationTime();
+
     return dto;
   }
 
-  /**
-   * Used to safely handle FileStatus calls which might fail on some FileSystem implementation.
-   * (DeprecatedLocalFileSystem)
-   */
-  private static void safeReadAndSetMetadata(FileStatusDTO dto, FileStatus fileStatus) {
-    try {
-      dto.owner = fileStatus.getOwner();
-      dto.group = fileStatus.getGroup();
-      dto.permission = FSPermissionDTO.fromFsPermission(fileStatus.getPermission());
-    } catch (IllegalArgumentException ie) {
-      // Deprecated File System (testing) does not work well with this call
-      // skipping
-    }
-  }
-
-  public static FileStatus toFileStatus(FileStatusDTO dto) {
-    if (null == dto) {
-      return null;
-    }
-
-    return new FileStatus(dto.length, dto.isdir, dto.blockReplication, dto.blocksize, dto.modificationTime,
-        dto.accessTime, FSPermissionDTO.fromFsPermissionDTO(dto.permission), dto.owner, dto.group,
-        FilePathDTO.toPath(dto.symlink), FilePathDTO.toPath(dto.path));
+  public static HoodieFileStatus toHoodieFileStatus(FileStatusDTO dto) {
+    return new HoodieFileStatus(
+        FilePathDTO.toHoodieLocation(dto.path), dto.length, dto.isdir, dto.modificationTime);
   }
 }

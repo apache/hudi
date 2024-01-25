@@ -18,10 +18,15 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.io.storage.HoodieAvroHFileReader;
+import org.apache.hudi.io.storage.HoodieLocation;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -30,10 +35,6 @@ import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 
 import java.io.IOException;
 
@@ -47,8 +48,8 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
 
   public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
     FileSplit fileSplit = (FileSplit) split;
-    Path path = fileSplit.getPath();
-    reader = new HoodieAvroHFileReader(conf, path, new CacheConfig(conf));
+    HoodieLocation location = new HoodieLocation(fileSplit.getPath().toUri());
+    reader = new HoodieAvroHFileReader(conf, location, new CacheConfig(conf));
 
     schema = reader.getSchema();
     valueObj = new ArrayWritable(Writable.class, new Writable[schema.getFields().size()]);

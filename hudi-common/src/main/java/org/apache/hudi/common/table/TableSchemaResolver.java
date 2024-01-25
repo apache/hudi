@@ -43,6 +43,9 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.io.storage.HoodieAvroOrcReader;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.JsonProperties;
@@ -332,7 +335,8 @@ public class TableSchemaResolver {
   private MessageType readSchemaFromParquetBaseFile(Path parquetFilePath) throws IOException {
     LOG.info("Reading schema from " + parquetFilePath);
 
-    FileSystem fs = metaClient.getRawFs();
+    FileSystem fs = (FileSystem) metaClient.getHoodieStorage().getFileSystem();
+    HoodieFileReader reader;
     ParquetMetadata fileFooter =
         ParquetFileReader.readFooter(fs.getConf(), parquetFilePath, ParquetMetadataConverter.NO_FILTER);
     return fileFooter.getFileMetaData().getSchema();
@@ -341,18 +345,19 @@ public class TableSchemaResolver {
   private MessageType readSchemaFromHFileBaseFile(Path hFilePath) throws IOException {
     LOG.info("Reading schema from " + hFilePath);
 
-    FileSystem fs = metaClient.getRawFs();
+    FileSystem fs = (FileSystem) metaClient.getHoodieStorage().getFileSystem();
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
-    try (HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(), hFilePath, cacheConfig)) {
+    try (HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(),
+        new HoodieLocation(hFilePath.toUri()), cacheConfig)) {
       return convertAvroSchemaToParquet(hFileReader.getSchema());
     }
   }
 
-  private MessageType readSchemaFromORCBaseFile(Path orcFilePath) throws IOException {
-    LOG.info("Reading schema from " + orcFilePath);
+  private MessageType readSchemaFromORCBaseFile(HoodieLocation orcFileLocation) throws IOException {
+    LOG.info("Reading schema from " + orcFileLocation);
 
-    FileSystem fs = metaClient.getRawFs();
-    HoodieAvroOrcReader orcReader = new HoodieAvroOrcReader(fs.getConf(), orcFilePath);
+    FileSystem fs = (FileSystem) metaClient.getHoodieStorage().getFileSystem();
+    HoodieAvroOrcReader orcReader = new HoodieAvroOrcReader(fs.getConf(), orcFileLocation);
     return convertAvroSchemaToParquet(orcReader.getSchema());
   }
 
@@ -376,8 +381,8 @@ public class TableSchemaResolver {
     return readSchemaFromBaseFile(filePath);
   }
 
-  private MessageType readSchemaFromLogFile(Path path) throws IOException {
-    return readSchemaFromLogFile(metaClient.getRawFs(), path);
+  private MessageType readSchemaFromLogFile(HoodieLocation path) throws IOException {
+    return readSchemaFromLogFile(metaClient.getHoodieStorage(), path);
   }
 
   /**
@@ -385,8 +390,8 @@ public class TableSchemaResolver {
    *
    * @return
    */
-  public static MessageType readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
-    try (Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null)) {
+  public static MessageType readSchemaFromLogFile(HoodieStorage storage, HoodieLocation path) throws IOException {
+    try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), null)) {
       HoodieDataBlock lastBlock = null;
       while (reader.hasNext()) {
         HoodieLogBlock block = reader.next();
@@ -535,7 +540,7 @@ public class TableSchemaResolver {
       String filePath = filePaths.next();
       if (filePath.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
         // this is a log file
-        type = readSchemaFromLogFile(new Path(filePath));
+        type = readSchemaFromLogFile(new HoodieLocation(filePath));
       } else {
         type = readSchemaFromBaseFile(filePath);
       }
@@ -549,7 +554,7 @@ public class TableSchemaResolver {
     } else if (filePath.contains(HoodieFileFormat.HFILE.getFileExtension())) {
       return readSchemaFromHFileBaseFile(new Path(filePath));
     } else if (filePath.contains(HoodieFileFormat.ORC.getFileExtension())) {
-      return readSchemaFromORCBaseFile(new Path(filePath));
+      return readSchemaFromORCBaseFile(new HoodieLocation(filePath));
     } else {
       throw new IllegalArgumentException("Unknown base file format :" + filePath);
     }

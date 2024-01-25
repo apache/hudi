@@ -22,14 +22,17 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport}
+import org.apache.hudi.{common, io, AvroConversionUtils, ColumnStatsIndexSupport}
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.io.storage.HoodieLocation
+
+import org.apache.hudi
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.command.procedures.ShowColumnStatsOverlapProcedure.{MAX_VALUE_TYPE, MIN_VALUE_TYPE}
@@ -37,8 +40,9 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.{Function, Supplier}
+
 import scala.collection.JavaConversions.asScalaBuffer
-import scala.collection.{JavaConversions, mutable}
+import scala.collection.{mutable, JavaConversions}
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter, seqAsJavaListConverter}
 
 /**
@@ -256,16 +260,16 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
   def buildFileSystemView(table: Option[Any]): HoodieTableFileSystemView = {
     val basePath = getBasePath(table)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val fs = metaClient.getFs
+    val storage = metaClient.getHoodieStorage
     val globPath = s"$basePath/*/*/*"
-    val statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath))
+    val statuses = FSUtils.getGlobStatusExcludingMetaFolder(storage, new HoodieLocation(globPath))
 
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
 
     val maxInstant = metaClient.createNewInstantTime()
     val instants = timeline.getInstants.iterator().asScala.filter(_.getTimestamp < maxInstant)
 
-    val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
+    val details = new Function[HoodieInstant, common.util.Option[Array[Byte]]]
       with java.io.Serializable {
       override def apply(instant: HoodieInstant): HOption[Array[Byte]] = {
         metaClient.getActiveTimeline.getInstantDetails(instant)
@@ -275,7 +279,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val filteredTimeline = new HoodieDefaultTimeline(
       new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
 
-    new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new Array[FileStatus](statuses.size)))
+    new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
   }
 
   override def build: Procedure = new ShowColumnStatsOverlapProcedure()

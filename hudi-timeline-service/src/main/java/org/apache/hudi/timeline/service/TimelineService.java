@@ -23,16 +23,17 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
@@ -55,7 +56,7 @@ public class TimelineService {
   private final Config timelineServerConf;
   private final Configuration conf;
   private transient HoodieEngineContext context;
-  private transient FileSystem fs;
+  private transient HoodieStorage storage;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
@@ -65,12 +66,12 @@ public class TimelineService {
   }
 
   public TimelineService(HoodieEngineContext context, Configuration hadoopConf, Config timelineServerConf,
-                         FileSystem fileSystem, FileSystemViewManager globalFileSystemViewManager) throws IOException {
-    this.conf = FSUtils.prepareHadoopConf(hadoopConf);
+                         HoodieStorage storage, FileSystemViewManager globalFileSystemViewManager) throws IOException {
+    this.conf = HadoopFSUtils.prepareHadoopConf(hadoopConf);
     this.timelineServerConf = timelineServerConf;
     this.serverPort = timelineServerConf.serverPort;
     this.context = context;
-    this.fs = fileSystem;
+    this.storage = storage;
     this.fsViewsManager = globalFileSystemViewManager;
   }
 
@@ -378,7 +379,7 @@ public class TimelineService {
     });
 
     requestHandler = new RequestHandler(
-        app, conf, timelineServerConf, context, fs, fsViewsManager);
+        app, conf, timelineServerConf, context, storage, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
     int realServerPort = startServiceOnPort(serverPort);
@@ -442,8 +443,8 @@ public class TimelineService {
     return conf;
   }
 
-  public FileSystem getFs() {
-    return fs;
+  public HoodieStorage getStorage() {
+    return storage;
   }
 
   public static void main(String[] args) throws Exception {
@@ -454,11 +455,12 @@ public class TimelineService {
       System.exit(1);
     }
 
-    Configuration conf = FSUtils.prepareHadoopConf(new Configuration());
-    FileSystemViewManager viewManager = buildFileSystemViewManager(cfg, new SerializableConfiguration(conf));
+    Configuration conf = HadoopFSUtils.prepareHadoopConf(new Configuration());
+    FileSystemViewManager viewManager =
+        buildFileSystemViewManager(cfg, new SerializableConfiguration(conf));
     TimelineService service = new TimelineService(
-        new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
-        new Configuration(), cfg, FileSystem.get(new Configuration()), viewManager);
+        new HoodieLocalEngineContext(HadoopFSUtils.prepareHadoopConf(new Configuration())),
+        new Configuration(), cfg, HoodieStorageUtils.getHoodieStorage(new Configuration()), viewManager);
     service.run();
   }
 }

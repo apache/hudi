@@ -21,7 +21,6 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -30,10 +29,11 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -53,8 +53,8 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
  */
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
   @Override
-  public FileSystem getFs(String path, Configuration conf) {
-    return FSUtils.getFs(path, conf);
+  public HoodieStorage getHoodieStorage(String path, Configuration conf) {
+    return HoodieStorageUtils.getHoodieStorage(path, conf);
   }
 
   @Override

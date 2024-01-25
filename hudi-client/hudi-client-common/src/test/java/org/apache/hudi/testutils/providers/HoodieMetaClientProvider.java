@@ -25,11 +25,12 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieFileStatus;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 
 public interface HoodieMetaClientProvider {
@@ -37,8 +38,9 @@ public interface HoodieMetaClientProvider {
   HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException;
 
   default HoodieTableFileSystemView getHoodieTableFileSystemView(
-      HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, FileStatus[] fileStatuses) {
-    return new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, fileStatuses);
+      HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+      List<HoodieFileStatus> fileInfoList) {
+    return new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, fileInfoList);
   }
 
   default SyncableFileSystemView getFileSystemViewWithUnCommittedSlices(HoodieTableMetaClient metaClient) {

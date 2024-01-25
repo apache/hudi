@@ -17,19 +17,21 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.io.storage.HoodieFileStatus
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, In, Literal}
 
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.{mutable, JavaConverters}
 
 class RecordLevelIndexSupport(spark: SparkSession,
                               metadataConfig: HoodieMetadataConfig,
@@ -41,11 +43,12 @@ class RecordLevelIndexSupport(spark: SparkSession,
 
   /**
    * Returns the list of candidate files which store the provided record keys based on Metadata Table Record Index.
-   * @param allFiles - List of all files which needs to be considered for the query
+   *
+   * @param allFiles   - List of all files which needs to be considered for the query
    * @param recordKeys - List of record keys.
    * @return Sequence of file names which need to be queried
    */
-  def getCandidateFiles(allFiles: Seq[FileStatus], recordKeys: List[String]): Set[String] = {
+  def getCandidateFiles(allFiles: Seq[HoodieFileStatus], recordKeys: List[String]): Set[String] = {
     val recordKeyLocationsMap = metadataTable.readRecordIndex(JavaConverters.seqAsJavaListConverter(recordKeys).asJava)
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
@@ -53,10 +56,10 @@ class RecordLevelIndexSupport(spark: SparkSession,
       fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
     }
     for (file <- allFiles) {
-      val fileId = FSUtils.getFileIdFromFilePath(file.getPath)
+      val fileId = FSUtils.getFileIdFromFilePath(file.getLocation)
       val partitionOpt = fileIdToPartitionMap.get(fileId)
       if (partitionOpt.isDefined) {
-        candidateFiles += file.getPath.getName
+        candidateFiles += file.getLocation.getName
       }
     }
     candidateFiles.toSet
@@ -66,7 +69,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * Returns the configured record key for the table if it is a simple record key else returns empty option.
    */
   private def getRecordKeyConfig: Option[String] = {
-    val recordKeysOpt: org.apache.hudi.common.util.Option[Array[String]] = metaClient.getTableConfig.getRecordKeyFields
+    val recordKeysOpt: HOption[Array[String]] = metaClient.getTableConfig.getRecordKeyFields
     val recordKeyOpt = recordKeysOpt.map[String](JFunction.toJavaFunction[Array[String], String](arr =>
       if (arr.length == 1) {
         arr(0)

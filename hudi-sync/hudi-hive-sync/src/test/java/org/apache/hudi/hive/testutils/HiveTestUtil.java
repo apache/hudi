@@ -44,8 +44,8 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -57,6 +57,9 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -121,6 +124,7 @@ public class HiveTestUtil {
   public static String basePath;
   public static TypedProperties hiveSyncProps;
   public static HiveTestService hiveTestService;
+  public static HoodieStorage storage;
   public static FileSystem fileSystem;
   public static QueryBasedDDLExecutor ddlExecutor;
 
@@ -164,6 +168,7 @@ public class HiveTestUtil {
     }
     hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, hiveTestService.getHiveConf());
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
+    storage = HoodieStorageUtils.getHoodieStorage(fileSystem);
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf()));
@@ -247,22 +252,23 @@ public class HiveTestUtil {
   }
 
   public static void removeCommitFromActiveTimeline(String instantTime, String actionType) {
-    List<Path> pathsToDelete = new ArrayList<>();
-    Path metaFolderPath = new Path(basePath, METAFOLDER_NAME);
+    List<HoodieLocation> pathsToDelete = new ArrayList<>();
+    HoodieLocation metaFolderPath = new HoodieLocation(basePath, METAFOLDER_NAME);
     String actionSuffix = "." + actionType;
     try {
-      Path completeInstantPath = HoodieTestUtils
-          .getCompleteInstantPath(fileSystem, metaFolderPath, instantTime, actionType);
+      HoodieLocation completeInstantPath = HoodieTestUtils
+          .getCompleteInstantPath(storage, metaFolderPath, instantTime, actionType);
       pathsToDelete.add(completeInstantPath);
     } catch (HoodieIOException e) {
       // File doesn't exist
     }
-    pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix + ".requested"));
-    pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix + ".inflight"));
+    pathsToDelete.add(
+        new HoodieLocation(metaFolderPath, instantTime + actionSuffix + ".requested"));
+    pathsToDelete.add(new HoodieLocation(metaFolderPath, instantTime + actionSuffix + ".inflight"));
     pathsToDelete.forEach(path -> {
       try {
-        if (fileSystem.exists(path)) {
-          fileSystem.delete(path, false);
+        if (storage.exists(path)) {
+          storage.deleteFile(path);
         }
       } catch (IOException e) {
         LOG.warn("Error deleting file: ", e);
@@ -422,12 +428,12 @@ public class HiveTestUtil {
     for (Entry<String, List<HoodieWriteStat>> wEntry : partitionWriteStats.entrySet()) {
       String partitionPath = wEntry.getKey();
       for (HoodieWriteStat wStat : wEntry.getValue()) {
-        Path path = new Path(wStat.getPath());
-        HoodieBaseFile dataFile = new HoodieBaseFile(fileSystem.getFileStatus(path));
+        HoodieLocation path = new HoodieLocation(wStat.getPath());
+        HoodieBaseFile dataFile = new HoodieBaseFile(storage.getFileStatus(path));
         HoodieLogFile logFile = generateLogData(path, isLogSchemaSimple);
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
         writeStat.setFileId(dataFile.getFileId());
-        writeStat.setPath(logFile.getPath().toString());
+        writeStat.setPath(logFile.getLocation().toString());
         commitMetadata.addWriteStat(partitionPath, writeStat);
       }
     }
@@ -528,16 +534,18 @@ public class HiveTestUtil {
     writer.close();
   }
 
-  private static HoodieLogFile generateLogData(Path parquetFilePath, boolean isLogSchemaSimple)
+  private static HoodieLogFile generateLogData(HoodieLocation parquetFileLoc,
+                                               boolean isLogSchemaSimple)
       throws IOException, InterruptedException, URISyntaxException {
     Schema schema = getTestDataSchema(isLogSchemaSimple);
-    HoodieBaseFile dataFile = new HoodieBaseFile(fileSystem.getFileStatus(parquetFilePath));
+    HoodieBaseFile dataFile = new HoodieBaseFile(storage.getFileStatus(parquetFileLoc));
     // Write a log file for this parquet file
-    Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
+    Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFileLoc.getParent())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())
-        .withDeltaCommit(dataFile.getCommitTime()).withFs(fileSystem).build();
+        .withDeltaCommit(dataFile.getCommitTime()).withHoodieStorage(storage).build();
     List<HoodieRecord> records = (isLogSchemaSimple ? SchemaTestUtil.generateTestRecords(0, 100)
-        : SchemaTestUtil.generateEvolvedTestRecords(100, 100)).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
+        : SchemaTestUtil.generateEvolvedTestRecords(100, 100)).stream()
+        .map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());

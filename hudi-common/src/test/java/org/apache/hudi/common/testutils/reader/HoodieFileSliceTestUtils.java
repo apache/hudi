@@ -45,12 +45,13 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.io.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -163,21 +164,21 @@ public class HoodieFileSliceTestUtils {
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<IndexedRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      Path logFilePath
+      HoodieLocation logFileLocation
   ) {
     return createDataBlock(
         dataBlockType,
         records.stream().map(HoodieAvroIndexedRecord::new)
             .collect(Collectors.toList()),
         header,
-        logFilePath);
+        logFileLocation);
   }
 
   private static HoodieDataBlock createDataBlock(
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<HoodieRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      Path pathForReader
+      HoodieLocation locationForReader
   ) {
     switch (dataBlockType) {
       case CDC_DATA_BLOCK:
@@ -196,7 +197,7 @@ public class HoodieFileSliceTestUtils {
             records,
             header,
             Compression.Algorithm.GZ,
-            pathForReader);
+            locationForReader);
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,
@@ -265,7 +266,7 @@ public class HoodieFileSliceTestUtils {
         true);
 
     try (HoodieAvroParquetWriter writer = new HoodieAvroParquetWriter(
-        new Path(baseFilePath),
+        new HoodieLocation(baseFilePath),
         parquetConfig,
         baseInstantTime,
         new LocalTaskContextSupplier(),
@@ -279,7 +280,7 @@ public class HoodieFileSliceTestUtils {
   }
 
   public static HoodieLogFile createLogFile(
-      FileSystem fileSystem,
+      HoodieStorage storage,
       String logFilePath,
       List<IndexedRecord> records,
       Schema schema,
@@ -290,19 +291,19 @@ public class HoodieFileSliceTestUtils {
   ) throws InterruptedException, IOException {
     try (HoodieLogFormat.Writer writer =
              HoodieLogFormat.newWriterBuilder()
-                 .onParentPath(new Path(logFilePath).getParent())
+                 .onParentPath(new HoodieLocation(logFilePath).getParent())
                  .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
                  .withFileId(fileId)
                  .withDeltaCommit(logInstantTime)
                  .withLogVersion(version)
-                 .withFs(fileSystem).build()) {
+                 .withHoodieStorage(storage).build()) {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, logInstantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
 
       if (blockType != DELETE_BLOCK) {
         HoodieDataBlock dataBlock = getDataBlock(
-            blockType, records, header, new Path(logFilePath));
+            blockType, records, header, new HoodieLocation(logFilePath));
         writer.appendBlock(dataBlock);
       } else {
         HoodieDeleteBlock deleteBlock = getDeleteBlock(
@@ -317,7 +318,7 @@ public class HoodieFileSliceTestUtils {
    * Based on provided parameters to generate a {@link FileSlice} object.
    */
   public static FileSlice generateFileSlice(
-      FileSystem fileSystem,
+      HoodieStorage storage,
       String basePath,
       String fileId,
       String partitionPath,
@@ -355,7 +356,7 @@ public class HoodieFileSliceTestUtils {
       HoodieLogBlock.HoodieLogBlockType blockType =
           logFilePlan.getOperationType() == DELETE ? DELETE_BLOCK : PARQUET_DATA_BLOCK;
       logFiles.add(createLogFile(
-          fileSystem,
+          storage,
           logFile.toString(),
           records,
           schema,
@@ -375,7 +376,7 @@ public class HoodieFileSliceTestUtils {
    * Generate a {@link FileSlice} object which contains a {@link HoodieBaseFile} only.
    */
   public static Option<FileSlice> getBaseFileOnlyFileSlice(
-      FileSystem fileSystem,
+      HoodieStorage storage,
       KeyRange range,
       long timestamp,
       String basePath,
@@ -396,7 +397,7 @@ public class HoodieFileSliceTestUtils {
     plans.add(baseFilePlan);
 
     return Option.of(generateFileSlice(
-        fileSystem,
+        storage,
         basePath,
         fileId,
         partitionPath,
@@ -408,7 +409,7 @@ public class HoodieFileSliceTestUtils {
    * Generate a regular {@link FileSlice} containing both a base file and a number of log files.
    */
   public static Option<FileSlice> getFileSlice(
-      FileSystem fileSystem,
+      HoodieStorage storage,
       List<KeyRange> ranges,
       List<Long> timestamps,
       List<DataGenerationPlan.OperationType> operationTypes,
@@ -430,7 +431,7 @@ public class HoodieFileSliceTestUtils {
     }
 
     return Option.of(generateFileSlice(
-        fileSystem,
+        storage,
         basePath,
         fileId,
         partitionPath,

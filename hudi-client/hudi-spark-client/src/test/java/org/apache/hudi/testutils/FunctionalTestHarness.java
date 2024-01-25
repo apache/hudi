@@ -27,16 +27,17 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.testutils.providers.DFSProvider;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
 import org.apache.hudi.testutils.providers.HoodieWriteClientProvider;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
@@ -49,6 +50,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
@@ -66,7 +68,7 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
   private static transient HdfsTestService hdfsTestService;
   private static transient MiniDFSCluster dfsCluster;
-  private static transient DistributedFileSystem dfs;
+  private static transient HoodieStorage storage;
 
   /**
    * An indicator of the initialization status.
@@ -100,13 +102,14 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
   }
 
   @Override
-  public DistributedFileSystem dfs() {
-    return dfs;
+  public HoodieStorage hoodieStorage() {
+    return storage;
   }
 
   @Override
   public Path dfsBasePath() {
-    return dfs.getWorkingDirectory();
+    return new Path("/tmp");
+    // storage.getWorkingDirectory();
   }
 
   @Override
@@ -148,8 +151,8 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
       hdfsTestService = new HdfsTestService();
       dfsCluster = hdfsTestService.start(true);
-      dfs = dfsCluster.getFileSystem();
-      dfs.mkdirs(dfs.getWorkingDirectory());
+      storage = HoodieStorageUtils.getHoodieStorage(dfsCluster.getFileSystem());
+      storage.createDirectory(new HoodieLocation("/tmp"));
 
       Runtime.getRuntime().addShutdownHook(new Thread(() -> {
         hdfsTestService.stop();
@@ -173,11 +176,16 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
   @AfterAll
   public static synchronized void cleanUpAfterAll() throws IOException {
-    Path workDir = dfs.getWorkingDirectory();
-    FileSystem fs = workDir.getFileSystem(hdfsTestService.getHadoopConf());
-    FileStatus[] fileStatuses = dfs.listStatus(workDir);
-    for (FileStatus f : fileStatuses) {
-      fs.delete(f.getPath(), true);
+    HoodieLocation workDir = new HoodieLocation("/tmp");
+    HoodieStorage storage =
+        HoodieStorageUtils.getHoodieStorage(workDir, hdfsTestService.getHadoopConf());
+    List<HoodieFileStatus> fileStatuses = storage.listDirectEntries(workDir);
+    for (HoodieFileStatus f : fileStatuses) {
+      if (f.isDirectory()) {
+        storage.deleteDirectory(f.getLocation());
+      } else {
+        storage.deleteFile(f.getLocation());
+      }
     }
     if (hdfsTestService != null) {
       hdfsTestService.stop();

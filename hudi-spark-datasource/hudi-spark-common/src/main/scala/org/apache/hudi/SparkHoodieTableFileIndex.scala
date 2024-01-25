@@ -17,34 +17,38 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
+import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
+import org.apache.hudi.io.storage.{HoodieFileStatus, HoodieLocation}
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.{expressions, InternalRow}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 
-import java.util.Collections
 import javax.annotation.concurrent.NotThreadSafe
+
+import java.util.Collections
+
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 import scala.util.{Success, Try}
@@ -52,19 +56,19 @@ import scala.util.{Success, Try}
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
  *
- * @param spark spark session
- * @param metaClient Hudi table's meta-client
- * @param schemaSpec optional table's schema
- * @param configProperties unifying configuration (in the form of generic properties)
+ * @param spark                 spark session
+ * @param metaClient            Hudi table's meta-client
+ * @param schemaSpec            optional table's schema
+ * @param configProperties      unifying configuration (in the form of generic properties)
  * @param specifiedQueryInstant instant as of which table is being queried
- * @param fileStatusCache transient cache of fetched [[FileStatus]]es
+ * @param fileStatusCache       transient cache of fetched [[FileStatus]]es
  */
 @NotThreadSafe
 class SparkHoodieTableFileIndex(spark: SparkSession,
                                 metaClient: HoodieTableMetaClient,
                                 schemaSpec: Option[StructType],
                                 configProperties: TypedProperties,
-                                queryPaths: Seq[Path],
+                                queryPaths: Seq[HoodieLocation],
                                 specifiedQueryInstant: Option[String] = None,
                                 @transient fileStatusCache: FileStatusCache = NoopCache,
                                 beginInstantTime: Option[String] = None,
@@ -350,7 +354,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         // prefix to try to reduce the scope of the required file-listing
         val relativePartitionPathPrefix = composeRelativePartitionPath(staticPartitionColumnNameValuePairs)
 
-        if (!metaClient.getFs.exists(new Path(getBasePath, relativePartitionPathPrefix))) {
+        if (!metaClient.getHoodieStorage.exists(new HoodieLocation(getBasePath, relativePartitionPathPrefix))) {
           Seq()
         } else if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
           // In case composed partition path is complete, we can return it directly avoiding extra listing operation
@@ -396,7 +400,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   protected def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
-    HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
+    HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, new Path(getBasePath.toUri), schema,
       configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
       sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
   }
@@ -488,8 +492,14 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
 
   private def adapt(cache: FileStatusCache): BaseHoodieTableFileIndex.FileStatusCache = {
     new BaseHoodieTableFileIndex.FileStatusCache {
-      override def get(path: Path): org.apache.hudi.common.util.Option[Array[FileStatus]] = toJavaOption(cache.getLeafFiles(path))
-      override def put(path: Path, leafFiles: Array[FileStatus]): Unit = cache.putLeafFiles(path, leafFiles)
+      override def get(path: HoodieLocation): org.apache.hudi.common.util.Option[java.util.List[HoodieFileStatus]] =
+        toJavaOption(cache.getLeafFiles(new Path(path.toUri)).map(opt => opt.map(
+          e => new HoodieFileStatus(new HoodieLocation(e.getPath.toUri), e.getLen, e.isDirectory, e.getModificationTime)).toList.asJava))
+
+      override def put(path: HoodieLocation, leafFiles: java.util.List[HoodieFileStatus]): Unit =
+        cache.putLeafFiles(new Path(path.toUri), leafFiles.asScala.map(e => new FileStatus(
+          e.getLength, e.isDirectory, 0, 0, e.getModificationTime, new Path(e.getLocation.toUri))).toArray)
+
       override def invalidate(): Unit = cache.invalidateAll()
     }
   }

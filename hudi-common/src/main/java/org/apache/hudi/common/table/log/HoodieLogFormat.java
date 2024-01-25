@@ -23,10 +23,10 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,7 +123,7 @@ public interface HoodieLogFormat {
     // Replication for the log file
     private Short replication;
     // FileSystem
-    private FileSystem fs;
+    private HoodieStorage storage;
     // Size threshold for the log file. Useful when used with a rolling log appender
     private Long sizeThreshold;
     // Log File extension. Could be .avro.delta or .avro.commits etc
@@ -138,7 +138,7 @@ public interface HoodieLogFormat {
     // file len of this log file
     private Long fileLen = 0L;
     // Location of the directory containing the log
-    private Path parentPath;
+    private HoodieLocation parentPath;
     // Log File Write Token
     private String logWriteToken;
     // optional file suffix
@@ -173,8 +173,8 @@ public interface HoodieLogFormat {
       return this;
     }
 
-    public WriterBuilder withFs(FileSystem fs) {
-      this.fs = fs;
+    public WriterBuilder withHoodieStorage(HoodieStorage storage) {
+      this.storage = storage;
       return this;
     }
 
@@ -208,7 +208,7 @@ public interface HoodieLogFormat {
       return this;
     }
 
-    public WriterBuilder onParentPath(Path parentPath) {
+    public WriterBuilder onParentPath(HoodieLocation parentPath) {
       this.parentPath = parentPath;
       return this;
     }
@@ -220,7 +220,7 @@ public interface HoodieLogFormat {
 
     public Writer build() throws IOException {
       LOG.info("Building HoodieLogFormat Writer");
-      if (fs == null) {
+      if (storage == null) {
         throw new IllegalArgumentException("fs is not specified");
       }
       if (logFileId == null) {
@@ -250,7 +250,7 @@ public interface HoodieLogFormat {
         if (logWriteToken == null) {
           // if the log write toke is null, scans the fs to fetch the latest write token.
           Option<Pair<Integer, String>> versionAndWriteToken =
-              FSUtils.getLatestLogVersion(fs, parentPath, logFileId, fileExtension, instantTime);
+              FSUtils.getLatestLogVersion(storage, parentPath, logFileId, fileExtension, instantTime);
           if (versionAndWriteToken.isPresent()) {
             logVersion = versionAndWriteToken.get().getKey();
             logWriteToken = versionAndWriteToken.get().getValue();
@@ -281,21 +281,15 @@ public interface HoodieLogFormat {
         rolloverLogWriteToken = rolloverLogWriteToken + suffix;
       }
 
-      Path logPath = new Path(parentPath,
+      HoodieLocation logPath = new HoodieLocation(parentPath,
           FSUtils.makeLogFileName(logFileId, fileExtension, instantTime, logVersion, logWriteToken));
       LOG.info("HoodieLogFile on path " + logPath);
       HoodieLogFile logFile = new HoodieLogFile(logPath, fileLen);
 
-      if (bufferSize == null) {
-        bufferSize = FSUtils.getDefaultBufferSize(fs);
-      }
-      if (replication == null) {
-        replication = FSUtils.getDefaultReplication(fs, parentPath);
-      }
       if (sizeThreshold == null) {
         sizeThreshold = DEFAULT_SIZE_THRESHOLD;
       }
-      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold, rolloverLogWriteToken, fileCreationCallback);
+      return new HoodieLogFormatWriter(storage, logFile, bufferSize, replication, sizeThreshold, rolloverLogWriteToken, fileCreationCallback);
     }
   }
 
@@ -303,14 +297,14 @@ public interface HoodieLogFormat {
     return new WriterBuilder();
   }
 
-  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema)
+  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema)
       throws IOException {
-    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
+    return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
   }
 
-  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
+  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema,
       boolean readBlockLazily, boolean reverseReader) throws IOException {
-    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, readBlockLazily,
+    return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, readBlockLazily,
         reverseReader);
   }
 

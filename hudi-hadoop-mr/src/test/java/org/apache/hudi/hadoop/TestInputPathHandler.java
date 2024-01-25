@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestInputPathHandler {
@@ -167,12 +168,12 @@ public class TestInputPathHandler {
   static List<Path> generatePartitions(DistributedFileSystem dfs, String basePath)
       throws IOException {
     List<Path> paths = new ArrayList<>();
-    paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/21"));
-    paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/22"));
-    paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/23"));
-    paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/24"));
-    paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/25"));
-    for (Path path: paths) {
+    paths.add(new Path(basePath + PATH_SEPARATOR + "2019/05/21"));
+    paths.add(new Path(basePath + PATH_SEPARATOR + "2019/05/22"));
+    paths.add(new Path(basePath + PATH_SEPARATOR + "2019/05/23"));
+    paths.add(new Path(basePath + PATH_SEPARATOR + "2019/05/24"));
+    paths.add(new Path(basePath + PATH_SEPARATOR + "2019/05/25"));
+    for (Path path : paths) {
       dfs.mkdirs(path);
     }
     return paths;

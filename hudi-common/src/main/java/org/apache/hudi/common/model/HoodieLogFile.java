@@ -21,11 +21,9 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.exception.InvalidHoodiePathException;
-import org.apache.hudi.hadoop.CachingPath;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -50,8 +48,8 @@ public class HoodieLogFile implements Serializable {
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
 
-  private transient FileStatus fileStatus;
-  private transient Path path;
+  private transient HoodieFileStatus fileInfo;
+  private transient HoodieLocation path;
   private final String pathStr;
   private String fileId;
   private String deltaCommitTime;
@@ -62,8 +60,8 @@ public class HoodieLogFile implements Serializable {
   private long fileLen;
 
   public HoodieLogFile(HoodieLogFile logFile) {
-    this.fileStatus = logFile.getFileStatus();
-    this.path = logFile.getPath();
+    this.fileInfo = logFile.getFileInfo();
+    this.path = logFile.getLocation();
     this.pathStr = logFile.pathStr;
     this.fileId = logFile.getFileId();
     this.deltaCommitTime = logFile.getDeltaCommitTime();
@@ -74,15 +72,15 @@ public class HoodieLogFile implements Serializable {
     this.fileLen = logFile.getFileSize();
   }
 
-  public HoodieLogFile(FileStatus fileStatus) {
-    this(fileStatus, fileStatus.getPath(), fileStatus.getPath().toString(), fileStatus.getLen());
+  public HoodieLogFile(HoodieFileStatus fileInfo) {
+    this(fileInfo, fileInfo.getLocation(), fileInfo.getLocation().toString(), fileInfo.getLength());
   }
 
-  public HoodieLogFile(Path logPath) {
+  public HoodieLogFile(HoodieLocation logPath) {
     this(null, logPath, logPath.toString(), -1);
   }
 
-  public HoodieLogFile(Path logPath, long fileLen) {
+  public HoodieLogFile(HoodieLocation logPath, long fileLen) {
     this(null, logPath, logPath.toString(), fileLen);
   }
 
@@ -90,18 +88,17 @@ public class HoodieLogFile implements Serializable {
     this(null, null, logPathStr, -1);
   }
 
-  private HoodieLogFile(FileStatus fileStatus, Path logPath, String logPathStr, long fileLen) {
-    this.fileStatus = fileStatus;
+  private HoodieLogFile(HoodieFileStatus fileInfo, HoodieLocation logPath, String logPathStr, long fileLen) {
+    this.fileInfo = fileInfo;
     this.pathStr = logPathStr;
     this.fileLen = fileLen;
     this.logVersion = -1; // mark version as uninitialized
-    if (logPath instanceof CachingPath) {
-      this.path = logPath;
-    }
+    //if (logPath instanceof CachingPath) {
+    this.path = logPath;
   }
 
   private void parseFieldsFromPath() {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(getPath().getName());
+    Matcher matcher = LOG_FILE_PATTERN.matcher(getLocation().getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
@@ -159,15 +156,15 @@ public class HoodieLogFile implements Serializable {
     return suffix;
   }
 
-  public Path getPath() {
+  public HoodieLocation getLocation() {
     if (path == null) {
-      path = new CachingPath(pathStr);
+      path = new HoodieLocation(pathStr);
     }
     return path;
   }
 
   public String getFileName() {
-    return getPath().getName();
+    return getLocation().getName();
   }
 
   public void setFileLen(long fileLen) {
@@ -178,20 +175,20 @@ public class HoodieLogFile implements Serializable {
     return fileLen;
   }
 
-  public FileStatus getFileStatus() {
-    return fileStatus;
+  public HoodieFileStatus getFileInfo() {
+    return fileInfo;
   }
 
-  public void setFileStatus(FileStatus fileStatus) {
-    this.fileStatus = fileStatus;
+  public void setFileInfo(HoodieFileStatus fileInfo) {
+    this.fileInfo = fileInfo;
   }
 
-  public HoodieLogFile rollOver(FileSystem fs, String logWriteToken) {
+  public HoodieLogFile rollOver(HoodieStorage storage, String logWriteToken) {
     String fileId = getFileId();
     String deltaCommitTime = getDeltaCommitTime();
-    Path path = getPath();
+    HoodieLocation path = getLocation();
     String extension = "." + fileExtension;
-    return new HoodieLogFile(new CachingPath(path.getParent(),
+    return new HoodieLogFile(new HoodieLocation(path.getParent(),
         FSUtils.makeLogFileName(fileId, extension, deltaCommitTime, logVersion + 1, logWriteToken)));
   }
 

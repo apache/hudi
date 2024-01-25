@@ -17,8 +17,10 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.{ContentSummary, FileStatus, Path}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hadoop.fs.{ContentSummary, FileStatus, Path}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -57,7 +59,7 @@ class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
     val limit = getArgValueOrDefault(args, PARAMETERS(3))
 
     val path: Path = new Path(srcPath)
-    val fs = FSUtils.getFs(path, jsc.hadoopConfiguration())
+    val fs = HadoopFSUtils.getFs(path, jsc.hadoopConfiguration())
     val status: Array[FileStatus] = if (isSub) fs.listStatus(path) else fs.globStatus(path)
     val rows: java.util.List[Row] = new java.util.ArrayList[Row]()
 

@@ -26,7 +26,6 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -38,12 +37,13 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.slf4j.Logger;
@@ -106,16 +106,20 @@ public class ArchivedCommitsCommand {
       throws IOException {
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     String basePath = HoodieCLI.getTableMetaClient().getBasePath();
-    Path archivePath = new Path(HoodieCLI.getTableMetaClient().getArchivePath() + "/.commits_.archive*");
+    HoodieLocation archivePath = new HoodieLocation(
+        HoodieCLI.getTableMetaClient().getArchivePath() + "/.commits_.archive*");
     if (folder != null && !folder.isEmpty()) {
-      archivePath = new Path(basePath + "/.hoodie/" + folder);
+      archivePath = new HoodieLocation(basePath + "/.hoodie/" + folder);
     }
-    FileStatus[] fsStatuses = FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
+    List<HoodieFileStatus> fsStatuses =
+        HoodieStorageUtils.getHoodieStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
     List<Comparable[]> allStats = new ArrayList<>();
-    for (FileStatus fs : fsStatuses) {
+    for (HoodieFileStatus fs : fsStatuses) {
       // read the archived file
-      Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+      Reader reader = HoodieLogFormat.newReader(
+          HoodieStorageUtils.getHoodieStorage(basePath, HoodieCLI.conf),
+          new HoodieLogFile(fs.getLocation()),
+          HoodieArchivedMetaEntry.getClassSchema());
 
       List<IndexedRecord> readRecords = new ArrayList<>();
       // read the avro blocks
@@ -182,14 +186,17 @@ public class ArchivedCommitsCommand {
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     String basePath = metaClient.getBasePath();
-    Path archivePath = new Path(metaClient.getArchivePath() + "/.commits_.archive*");
-    FileStatus[] fsStatuses =
-        FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
+    HoodieLocation archivePath =
+        new HoodieLocation(metaClient.getArchivePath() + "/.commits_.archive*");
+    List<HoodieFileStatus> fsStatuses =
+        HoodieStorageUtils.getHoodieStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
     List<Comparable[]> allCommits = new ArrayList<>();
-    for (FileStatus fs : fsStatuses) {
+    for (HoodieFileStatus fs : fsStatuses) {
       // read the archived file
-      HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+      HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
+          HoodieStorageUtils.getHoodieStorage(basePath, HoodieCLI.conf),
+          new HoodieLogFile(fs.getLocation()),
+          HoodieArchivedMetaEntry.getClassSchema());
 
       List<IndexedRecord> readRecords = new ArrayList<>();
       // read the avro blocks

@@ -20,7 +20,6 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
-import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
+import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -41,17 +41,16 @@ import org.apache.hudi.io.storage.HoodieAvroParquetReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -99,9 +98,9 @@ public class LSMTimelineWriter {
       Option<Consumer<ActiveAction>> preWriteCallback,
       Option<Consumer<Exception>> exceptionHandler) throws HoodieCommitException {
     ValidationUtils.checkArgument(!activeActions.isEmpty(), "The instant actions to write should not be empty");
-    Path filePath = new Path(metaClient.getArchivePath(),
+    HoodieLocation fileLocation = new HoodieLocation(metaClient.getArchivePath(),
         newFileName(activeActions.get(0).getInstantTime(), activeActions.get(activeActions.size() - 1).getInstantTime(), FILE_LAYER_ZERO));
-    try (HoodieFileWriter writer = openWriter(filePath)) {
+    try (HoodieFileWriter writer = openWriter(fileLocation)) {
       Schema wrapperSchema = HoodieLSMTimelineInstant.getClassSchema();
       LOG.info("Writing schema " + wrapperSchema.toString());
       for (ActiveAction activeAction : activeActions) {
@@ -115,7 +114,7 @@ public class LSMTimelineWriter {
           exceptionHandler.ifPresent(handler -> handler.accept(e));
         }
       }
-      updateManifest(filePath.getName());
+      updateManifest(fileLocation.getName());
     } catch (Exception e) {
       throw new HoodieCommitException("Failed to write commits", e);
     }
@@ -164,17 +163,17 @@ public class LSMTimelineWriter {
     // version starts from 1 and increases monotonically
     int newVersion = currentVersion < 0 ? 1 : currentVersion + 1;
     // create manifest file
-    final Path manifestFilePath = LSMTimeline.getManifestFilePath(metaClient, newVersion);
-    metaClient.getFs().createImmutableFileInPath(manifestFilePath, Option.of(content));
+    final HoodieLocation manifestFilePath = LSMTimeline.getManifestFilePath(metaClient, newVersion);
+    metaClient.getHoodieStorage().createImmutableFileInPath(manifestFilePath, Option.of(content));
     // update version file
     updateVersionFile(newVersion);
   }
 
   private void updateVersionFile(int newVersion) throws IOException {
     byte[] content = getUTF8Bytes(String.valueOf(newVersion));
-    final Path versionFilePath = LSMTimeline.getVersionFilePath(metaClient);
-    metaClient.getFs().delete(versionFilePath, false);
-    metaClient.getFs().createImmutableFileInPath(versionFilePath, Option.of(content));
+    final HoodieLocation versionFilePath = LSMTimeline.getVersionFilePath(metaClient);
+    metaClient.getHoodieStorage().deleteFile(versionFilePath);
+    metaClient.getHoodieStorage().createImmutableFileInPath(versionFilePath, Option.of(content));
   }
 
   /**
@@ -254,11 +253,11 @@ public class LSMTimelineWriter {
 
   public void compactFiles(List<String> candidateFiles, String compactedFileName) {
     LOG.info("Starting to compact source files.");
-    try (HoodieFileWriter writer = openWriter(new Path(metaClient.getArchivePath(), compactedFileName))) {
+    try (HoodieFileWriter writer = openWriter(new HoodieLocation(metaClient.getArchivePath(), compactedFileName))) {
       for (String fileName : candidateFiles) {
         // Read the input source file
         try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-            .getFileReader(metaClient.getHadoopConf(), new Path(metaClient.getArchivePath(), fileName))) {
+            .getFileReader(metaClient.getHadoopConf(), new HoodieLocation(metaClient.getArchivePath(), fileName))) {
           // Read the meta entry
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), HoodieLSMTimelineInstant.getClassSchema())) {
             while (iterator.hasNext()) {
@@ -290,23 +289,27 @@ public class LSMTimelineWriter {
           .collect(Collectors.toSet());
       // delete the manifest file first
       List<String> manifestFilesToClean = new ArrayList<>();
-      Arrays.stream(LSMTimeline.listAllManifestFiles(metaClient)).forEach(fileStatus -> {
-        if (!versionsToKeep.contains(LSMTimeline.getManifestVersion(fileStatus.getPath().getName()))) {
-          manifestFilesToClean.add(fileStatus.getPath().toString());
+      LSMTimeline.listAllManifestFiles(metaClient).forEach(fileStatus -> {
+        if (!versionsToKeep.contains(
+            LSMTimeline.getManifestVersion(fileStatus.getLocation().getName()))) {
+          manifestFilesToClean.add(fileStatus.getLocation().toString());
         }
       });
-      FSUtils.deleteFilesParallelize(metaClient, manifestFilesToClean, context, config.getArchiveDeleteParallelism(), false);
+      FSUtils.deleteFilesParallelize(metaClient, manifestFilesToClean, context, config.getArchiveDeleteParallelism(),
+          false);
       // delete the data files
-      List<String> dataFilesToClean = Arrays.stream(LSMTimeline.listAllMetaFiles(metaClient))
-          .filter(fileStatus -> !filesToKeep.contains(fileStatus.getPath().getName()))
-          .map(fileStatus -> fileStatus.getPath().toString())
+      List<String> dataFilesToClean = LSMTimeline.listAllMetaFiles(metaClient).stream()
+          .filter(fileStatus -> !filesToKeep.contains(fileStatus.getLocation().getName()))
+          .map(fileStatus -> fileStatus.getLocation().toString())
           .collect(Collectors.toList());
-      FSUtils.deleteFilesParallelize(metaClient, dataFilesToClean, context, config.getArchiveDeleteParallelism(), false);
+      FSUtils.deleteFilesParallelize(metaClient, dataFilesToClean, context,
+          config.getArchiveDeleteParallelism(), false);
     }
   }
 
   private HoodieLSMTimelineManifest.LSMFileEntry getFileEntry(String fileName) throws IOException {
-    long fileLen = metaClient.getFs().getFileStatus(new Path(metaClient.getArchivePath(), fileName)).getLen();
+    long fileLen = metaClient.getHoodieStorage().getFileStatus(
+        new HoodieLocation(metaClient.getArchivePath(), fileName)).getLength();
     return HoodieLSMTimelineManifest.LSMFileEntry.getInstance(fileName, fileLen);
   }
 
@@ -363,9 +366,9 @@ public class LSMTimelineWriter {
     return this.writeConfig;
   }
 
-  private HoodieFileWriter openWriter(Path filePath) {
+  private HoodieFileWriter openWriter(HoodieLocation fileLocation) {
     try {
-      return HoodieFileWriterFactory.getFileWriter("", filePath, metaClient.getHadoopConf(), getOrCreateWriterConfig(),
+      return HoodieFileWriterFactory.getFileWriter("", fileLocation, metaClient.getHadoopConf(), getOrCreateWriterConfig(),
           HoodieLSMTimelineInstant.getClassSchema(), table.getTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO);
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize archiving writer", e);

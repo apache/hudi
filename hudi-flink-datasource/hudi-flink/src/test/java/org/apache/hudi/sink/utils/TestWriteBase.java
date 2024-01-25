@@ -20,7 +20,6 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,6 +30,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
@@ -41,8 +43,6 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.hamcrest.MatcherAssert;
 
 import java.io.File;
@@ -57,6 +57,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -452,8 +453,9 @@ public class TestWriteBase {
     }
 
     private void checkWrittenDataMor(File baseFile, Map<String, String> expected, int partitions) throws Exception {
-      FileSystem fs = FSUtils.getFs(basePath, new org.apache.hadoop.conf.Configuration());
-      TestData.checkWrittenDataMOR(fs, baseFile, expected, partitions);
+      HoodieStorage storage =
+          HoodieStorageUtils.getHoodieStorage(basePath, new org.apache.hadoop.conf.Configuration());
+      TestData.checkWrittenDataMOR(storage, baseFile, expected, partitions);
     }
 
     public TestHarness checkWrittenDataCOW(Map<String, List<String>> expected) throws IOException {
@@ -493,11 +495,14 @@ public class TestWriteBase {
 
     public TestHarness rollbackLastCompleteInstantToInflight() throws Exception {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-      Option<HoodieInstant> lastCompletedInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
-      HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), lastCompletedInstant.get());
+      Option<HoodieInstant> lastCompletedInstant =
+          metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+      HoodieActiveTimeline.deleteInstantFile(
+          metaClient.getHoodieStorage(), metaClient.getMetaPath(), lastCompletedInstant.get());
       // refresh the heartbeat in case it is timed out.
-      OutputStream outputStream =
-          metaClient.getFs().create(new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + this.lastComplete), true);
+      OutputStream outputStream = metaClient.getHoodieStorage().create(new HoodieLocation(
+          HoodieTableMetaClient.getHeartbeatFolderPath(basePath)
+              + PATH_SEPARATOR + this.lastComplete), true);
       outputStream.close();
       this.lastPending = this.lastComplete;
       this.lastComplete = lastCompleteInstant();

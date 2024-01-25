@@ -17,28 +17,29 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieReaderConfig}
-import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.model.{HoodieTableType, WriteConcurrencyMode}
+import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.io.storage.{HoodieLocation, HoodieStorageUtils}
 import org.apache.hudi.util.PathUtils
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions.mapAsJavaMap
@@ -87,10 +88,10 @@ class DefaultSource extends RelationProvider
     val readPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
     val allPaths = path.map(p => Seq(p)).getOrElse(Seq()) ++ readPaths
 
-    val fs = FSUtils.getFs(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
+    val storage = HoodieStorageUtils.getHoodieStorage(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
 
     val globPaths = if (path.exists(_.contains("*")) || readPaths.nonEmpty) {
-      PathUtils.checkAndGlobPathIfNecessary(allPaths, fs)
+      PathUtils.checkAndGlobPathIfNecessary(allPaths, storage)
     } else {
       Seq.empty
     }
@@ -106,14 +107,15 @@ class DefaultSource extends RelationProvider
 
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
-      DataSourceUtils.getTablePath(fs, globPaths.toArray)
+      DataSourceUtils.getTablePath(storage, globPaths.asJava)
     } else {
-      DataSourceUtils.getTablePath(fs, Array(new Path(path.get)))
+      DataSourceUtils.getTablePath(storage, Seq(new HoodieLocation(path.get)).asJava)
     }
     log.info("Obtained hudi table path: " + tablePath)
 
     val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.asJava)
-      .setConf(fs.getConf).setBasePath(tablePath).build()
+      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setBasePath(tablePath).build()
 
     DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
   }
@@ -218,7 +220,7 @@ object DefaultSource {
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
                      schema: StructType,
-                     globPaths: Seq[Path],
+                     globPaths: Seq[HoodieLocation],
                      parameters: Map[String, String]): BaseRelation = {
     val tableType = metaClient.getTableType
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
@@ -320,7 +322,7 @@ object DefaultSource {
   }
 
   private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
-                                             globPaths: Seq[Path],
+                                             globPaths: Seq[HoodieLocation],
                                              userSchema: Option[StructType],
                                              metaClient: HoodieTableMetaClient,
                                              parameters: Map[String, String]): BaseRelation = {
@@ -338,7 +340,7 @@ object DefaultSource {
   }
 
   private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
-                                          globPaths: Seq[Path],
+                                          globPaths: Seq[HoodieLocation],
                                           userSchema: Option[StructType],
                                           metaClient: HoodieTableMetaClient,
                                           optParams: Map[String, String]): BaseRelation = {

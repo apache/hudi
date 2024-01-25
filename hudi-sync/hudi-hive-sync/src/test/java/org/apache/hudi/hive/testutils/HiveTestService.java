@@ -22,7 +22,6 @@ import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
@@ -58,6 +57,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 
 public class HiveTestService {
 
@@ -220,7 +221,7 @@ public class HiveTestService {
   }
 
   private static String getHiveLocation(String baseLocation) {
-    return baseLocation + Path.SEPARATOR + "hive";
+    return baseLocation + PATH_SEPARATOR + "hive";
   }
 
   private HiveServer2 startHiveServer(HiveConf serverConf) {

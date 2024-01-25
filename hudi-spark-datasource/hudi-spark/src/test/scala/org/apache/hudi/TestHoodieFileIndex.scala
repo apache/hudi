@@ -29,6 +29,7 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPU
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -39,10 +40,13 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.io.storage.HoodieLocation
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
+
+import org.apache
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory}
@@ -56,6 +60,7 @@ import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, Va
 
 import java.util.Properties
 import java.util.function.Consumer
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.util.Random
@@ -77,7 +82,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
   )
 
-  override def getSparkSessionExtensionsInjector: org.apache.hudi.common.util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: common.util.Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) =>
@@ -654,14 +659,14 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
           (values.toSeq(Seq(StringType)), files)
       }.unzip
       val partitionPaths = perPartitionFilesSeq.flatten
-        .map(file => extractPartitionPathFromFilePath(file.getPath))
+        .map(file => extractPartitionPathFromFilePath(new HoodieLocation(file.getPath.toUri)))
         .distinct
         .sorted
       val expectedPartitionPaths = if (testCase._3) {
         testCase._4.map(e => e._1 + "/" + e._2)
       } else {
         fileIndex.allBaseFiles
-          .map(file => extractPartitionPathFromFilePath(file.getPath))
+          .map(file => extractPartitionPathFromFilePath(file.getLocation))
           .distinct
           .sorted
       }
@@ -674,8 +679,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     })
   }
 
-  private def extractPartitionPathFromFilePath(filePath: Path): String = {
-    val relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePathV2, filePath)
+  private def extractPartitionPathFromFilePath(filePath: HoodieLocation): String = {
+    val relativeFilePath = FSUtils.getRelativePartitionPathFromLocation(metaClient.getBasePathV2, filePath)
     val names = relativeFilePath.split("/")
     val fileName = names(names.length - 1)
     relativeFilePath.stripSuffix(fileName).stripSuffix("/")
@@ -813,9 +818,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     if (hiveStylePartitioning) {
       partitionNames.zip(partitionValues).map {
         case (name, value) => s"$name=$value"
-      }.mkString(Path.SEPARATOR)
+      }.mkString(PATH_SEPARATOR)
     } else {
-      partitionValues.mkString(Path.SEPARATOR)
+      partitionValues.mkString(PATH_SEPARATOR)
     }
   }
 }

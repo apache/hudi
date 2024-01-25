@@ -18,15 +18,18 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieLogFormat.WriterBuilder;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieStorage;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
 import org.apache.hadoop.ipc.RemoteException;
 import org.slf4j.Logger;
@@ -46,6 +49,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private HoodieLogFile logFile;
   private FSDataOutputStream output;
 
+  private final HoodieStorage storage;
   private final FileSystem fs;
   private final long sizeThreshold;
   private final Integer bufferSize;
@@ -56,25 +60,27 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private transient Thread shutdownThread = null;
 
   HoodieLogFormatWriter(
-      FileSystem fs,
+      HoodieStorage storage,
       HoodieLogFile logFile,
       Integer bufferSize,
       Short replication,
       Long sizeThreshold,
       String rolloverLogWriteToken,
       LogFileCreationCallback fileCreationHook) {
-    this.fs = fs;
+    this.storage = storage;
+    this.fs = (FileSystem) storage.getFileSystem();
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
-    this.bufferSize = bufferSize;
-    this.replication = replication;
+    this.bufferSize = bufferSize != null ? bufferSize : FSUtils.getDefaultBufferSize(fs);
+    this.replication = replication != null ? replication
+        : FSUtils.getDefaultReplication(fs, new Path(logFile.getLocation().getParent().toString()));
     this.rolloverLogWriteToken = rolloverLogWriteToken;
     this.fileCreationHook = fileCreationHook;
     addShutDownHook();
   }
 
   public FileSystem getFs() {
-    return fs;
+    return (FileSystem) storage.getFileSystem();
   }
 
   @Override
@@ -109,7 +115,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
           LOG.info("Created a new log file: {}", logFile);
           created = true;
         } catch (FileAlreadyExistsException ignored) {
-          LOG.info("File {} already exists, rolling over", logFile.getPath());
+          LOG.info("File {} already exists, rolling over", logFile.getLocation());
           rollOver();
         } catch (RemoteException re) {
           if (re.getClassName().contentEquals(AlreadyBeingCreatedException.class.getName())) {
@@ -220,14 +226,18 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void rollOver() throws IOException {
     closeStream();
-    this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
+    this.logFile = logFile.rollOver(storage, rolloverLogWriteToken);
     this.closed = false;
   }
 
   private void createNewFile() throws IOException {
     fileCreationHook.preFileCreation(this.logFile);
     this.output =
-        fs.create(this.logFile.getPath(), false, bufferSize, replication, WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
+        ((FileSystem) storage.getFileSystem()).create(
+            new Path(this.logFile.getLocation().toString()), false,
+            bufferSize,
+            replication,
+            WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
   }
 
   @Override

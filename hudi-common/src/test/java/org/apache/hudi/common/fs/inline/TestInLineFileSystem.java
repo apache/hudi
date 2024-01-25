@@ -20,6 +20,9 @@ package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
+import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -39,7 +42,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
-import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterFSPath;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -71,7 +73,7 @@ public class TestInLineFileSystem {
 
   @Test
   public void testReadInlineFile() throws IOException {
-    Path outerPath = getRandomOuterFSPath();
+    Path outerPath = new Path(FileSystemTestUtils.getRandomOuterFSLocation().toUri());
     listOfGeneratedPaths.add(outerPath);
 
     int totalSlices = 5; // embed n slices so that we can test N inline seqPaths
@@ -103,7 +105,8 @@ public class TestInLineFileSystem {
     for (int i = 0; i < totalSlices; i++) {
       Pair<Long, Integer> startOffsetLengthPair = startOffsetLengthPairs.get(i);
       byte[] expectedBytes = expectedByteArrays.get(i);
-      Path inlinePath = FileSystemTestUtils.getPhantomFile(outerPath, startOffsetLengthPair.getLeft(), startOffsetLengthPair.getRight());
+      Path inlinePath = new Path(FileSystemTestUtils.getPhantomFile(
+          new HoodieLocation(outerPath.toUri()), startOffsetLengthPair.getLeft(), startOffsetLengthPair.getRight()).toUri());
       InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(conf);
       FSDataInputStream fsDataInputStream = inlineFileSystem.open(inlinePath);
       assertTrue(inlineFileSystem.exists(inlinePath));
@@ -123,7 +126,8 @@ public class TestInLineFileSystem {
   @Test
   public void testFileSystemApis() throws IOException {
     OuterPathInfo outerPathInfo = generateOuterFileAndGetInfo(1000);
-    Path inlinePath = FileSystemTestUtils.getPhantomFile(outerPathInfo.outerPath, outerPathInfo.startOffset, outerPathInfo.length);
+    Path inlinePath = new Path(FileSystemTestUtils.getPhantomFile(
+        new HoodieLocation(outerPathInfo.outerPath.toUri()), outerPathInfo.startOffset, outerPathInfo.length).toUri());
     InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(conf);
     final FSDataInputStream fsDataInputStream = inlineFileSystem.open(inlinePath);
     byte[] actualBytes = new byte[outerPathInfo.expectedBytes.length];
@@ -215,7 +219,7 @@ public class TestInLineFileSystem {
 
   private OuterPathInfo generateOuterFileAndGetInfo(int inlineContentSize) throws IOException {
     OuterPathInfo toReturn = new OuterPathInfo();
-    Path outerPath = getRandomOuterFSPath();
+    Path outerPath = new Path(FileSystemTestUtils.getRandomOuterFSLocation().toUri());
     listOfGeneratedPaths.add(outerPath);
     toReturn.outerPath = outerPath;
     FSDataOutputStream wrappedOut = outerPath.getFileSystem(conf).create(outerPath, true);
@@ -296,61 +300,63 @@ public class TestInLineFileSystem {
     }, "Should have thrown exception");
   }
 
-  static class TestFSPath {
-    final Path inputPath;
-    final Path expectedInLineFSPath;
-    final Path transformedInputPath;
+  static class TestFSLocation {
+    final HoodieLocation inputLocation;
+    final HoodieLocation expectedInLineFSLocation;
+    final HoodieLocation transformedInputLocation;
 
-    TestFSPath(final Path inputPath, final Path expectedInLineFSPath, final Path transformedInputPath) {
-      this.inputPath = inputPath;
-      this.expectedInLineFSPath = expectedInLineFSPath;
-      this.transformedInputPath = transformedInputPath;
+    TestFSLocation(final HoodieLocation inputLocation, final HoodieLocation expectedInLineFSLocation, final HoodieLocation transformedInputLocation) {
+      this.inputLocation = inputLocation;
+      this.expectedInLineFSLocation = expectedInLineFSLocation;
+      this.transformedInputLocation = transformedInputLocation;
     }
   }
 
   @Test
   public void testInLineFSPathConversions() {
-    final List<TestFSPath> expectedInLinePaths = Arrays.asList(
-        new TestFSPath(
-            new Path("/zero/524bae7e-f01d-47ae-b7cd-910400a81336"),
-            new Path("inlinefs://zero/524bae7e-f01d-47ae-b7cd-910400a81336/file/?start_offset=10&length=10"),
-            new Path("file:/zero/524bae7e-f01d-47ae-b7cd-910400a81336")),
-        new TestFSPath(
-            new Path("file:/one/524bae7e-f01d-47ae-b7cd-910400a81336"),
-            new Path("inlinefs://one/524bae7e-f01d-47ae-b7cd-910400a81336/file/?start_offset=10&length=10"),
-            new Path("file:/one/524bae7e-f01d-47ae-b7cd-910400a81336")),
-        new TestFSPath(
-            new Path("file://two/524bae7e-f01d-47ae-b7cd-910400a81336"),
-            new Path("inlinefs://two/524bae7e-f01d-47ae-b7cd-910400a81336/file/?start_offset=10&length=10"),
-            new Path("file:/two/524bae7e-f01d-47ae-b7cd-910400a81336")),
-        new TestFSPath(
-            new Path("hdfs://three/524bae7e-f01d-47ae-b7cd-910400a81336"),
-            new Path("inlinefs://three/524bae7e-f01d-47ae-b7cd-910400a81336/hdfs/?start_offset=10&length=10"),
-            new Path("hdfs://three/524bae7e-f01d-47ae-b7cd-910400a81336")),
-        new TestFSPath(
-            new Path("s3://four/524bae7e-f01d-47ae-b7cd-910400a81336"),
-            new Path("inlinefs://four/524bae7e-f01d-47ae-b7cd-910400a81336/s3/?start_offset=10&length=10"),
-            new Path("s3://four/524bae7e-f01d-47ae-b7cd-910400a81336")),
-        new TestFSPath(
-            new Path("s3a://five/524bae7e-f01d-47ae-b7cd-910400a81336"),
-            new Path("inlinefs://five/524bae7e-f01d-47ae-b7cd-910400a81336/s3a/?start_offset=10&length=10"),
-            new Path("s3a://five/524bae7e-f01d-47ae-b7cd-910400a81336"))
+    final List<TestFSLocation> expectedInLinePaths = Arrays.asList(
+        new TestFSLocation(
+            new HoodieLocation("/zero/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new HoodieLocation("inlinefs://zero/524bae7e-f01d-47ae-b7cd-910400a81336/file/?start_offset=10&length=10"),
+            new HoodieLocation("file:/zero/524bae7e-f01d-47ae-b7cd-910400a81336")),
+        new TestFSLocation(
+            new HoodieLocation("file:/one/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new HoodieLocation("inlinefs://one/524bae7e-f01d-47ae-b7cd-910400a81336/file/?start_offset=10&length=10"),
+            new HoodieLocation("file:/one/524bae7e-f01d-47ae-b7cd-910400a81336")),
+        new TestFSLocation(
+            new HoodieLocation("file://two/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new HoodieLocation("inlinefs://two/524bae7e-f01d-47ae-b7cd-910400a81336/file/?start_offset=10&length=10"),
+            new HoodieLocation("file:/two/524bae7e-f01d-47ae-b7cd-910400a81336")),
+        new TestFSLocation(
+            new HoodieLocation("hdfs://three/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new HoodieLocation("inlinefs://three/524bae7e-f01d-47ae-b7cd-910400a81336/hdfs/?start_offset=10&length=10"),
+            new HoodieLocation("hdfs://three/524bae7e-f01d-47ae-b7cd-910400a81336")),
+        new TestFSLocation(
+            new HoodieLocation("s3://four/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new HoodieLocation("inlinefs://four/524bae7e-f01d-47ae-b7cd-910400a81336/s3/?start_offset=10&length=10"),
+            new HoodieLocation("s3://four/524bae7e-f01d-47ae-b7cd-910400a81336")),
+        new TestFSLocation(
+            new HoodieLocation("s3a://five/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new HoodieLocation("inlinefs://five/524bae7e-f01d-47ae-b7cd-910400a81336/s3a/?start_offset=10&length=10"),
+            new HoodieLocation("s3a://five/524bae7e-f01d-47ae-b7cd-910400a81336"))
     );
 
-    for (TestFSPath entry : expectedInLinePaths) {
-      final Path inputPath = entry.inputPath;
-      final Path expectedInLineFSPath = entry.expectedInLineFSPath;
-      final Path expectedTransformedInputPath = entry.transformedInputPath;
+    for (TestFSLocation entry : expectedInLinePaths) {
+      final HoodieLocation inputLocation = entry.inputLocation;
+      final HoodieLocation expectedInLineFSLocation = entry.expectedInLineFSLocation;
+      final HoodieLocation expectedTransformedInputLocation = entry.transformedInputLocation;
 
       String scheme = "file";
-      if (inputPath.toString().contains(":")) {
-        scheme = inputPath.toString().split(":")[0];
+      if (inputLocation.toString().contains(":")) {
+        scheme = inputLocation.toString().split(":")[0];
       }
-      final Path actualInLineFSPath = InLineFSUtils.getInlineFilePath(inputPath, scheme, 10, 10);
-      assertEquals(expectedInLineFSPath, actualInLineFSPath);
+      final HoodieLocation actualInLineFSLocation = InLineFSUtils.getInlineFileLocation(
+          new HoodieLocation(inputLocation.toUri()), scheme, 10, 10);
+      assertEquals(expectedInLineFSLocation, actualInLineFSLocation);
 
-      final Path actualOuterFilePath = InLineFSUtils.getOuterFilePathFromInlinePath(actualInLineFSPath);
-      assertEquals(expectedTransformedInputPath, actualOuterFilePath);
+      final HoodieLocation actualOuterFileLocation =
+          InLineFSUtils.getOuterFilePathFromInlinePath(actualInLineFSLocation);
+      assertEquals(expectedTransformedInputLocation, actualOuterFileLocation);
     }
   }
 
@@ -361,9 +367,10 @@ public class TestInLineFileSystem {
   }
 
   private Path getRandomInlinePath() {
-    Path outerPath = getRandomOuterFSPath();
+    Path outerPath = new Path(FileSystemTestUtils.getRandomOuterFSLocation().toUri());
     listOfGeneratedPaths.add(outerPath);
-    return FileSystemTestUtils.getPhantomFile(outerPath, 100, 100);
+    return new Path(FileSystemTestUtils.getPhantomFile(
+        new HoodieLocation(outerPath.toUri()), 100, 100).toUri());
   }
 
   private void verifyFileStatus(FileStatus expected, Path inlinePath, long expectedLength, FileStatus actual) {

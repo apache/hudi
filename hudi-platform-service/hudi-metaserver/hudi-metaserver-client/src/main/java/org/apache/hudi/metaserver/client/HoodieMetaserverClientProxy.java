@@ -19,7 +19,7 @@
 package org.apache.hudi.metaserver.client;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
-import org.apache.hudi.common.util.RetryHelper;
+import org.apache.hudi.io.util.RetryHelper;
 
 import java.io.Serializable;
 import java.lang.reflect.InvocationHandler;

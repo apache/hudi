@@ -46,8 +46,8 @@ import static org.mockito.Mockito.when;
 public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
 
   @Override
-  protected Path getFilePath() {
-    return new Path(tempDir.toString() + "/f1_1-0-1_000.orc");
+  protected HoodieLocation getFileLocation() {
+    return new HoodieLocation(tempDir.toString() + "/f1_1-0-1_000.orc");
   }
 
   @Override
@@ -64,18 +64,19 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
     when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
     when(partitionSupplier.get()).thenReturn(10);
     String instantTime = "000";
-    return new HoodieAvroOrcWriter(instantTime, getFilePath(), config, avroSchema, mockTaskContextSupplier);
+    return new HoodieAvroOrcWriter(instantTime, getFileLocation(), config, avroSchema, mockTaskContextSupplier);
   }
 
   @Override
   protected HoodieAvroFileReader createReader(
       Configuration conf) throws Exception {
-    return (HoodieAvroFileReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(conf, getFilePath());
+    return (HoodieAvroFileReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(conf, getFileLocation());
   }
 
   @Override
   protected void verifyMetadata(Configuration conf) throws IOException {
-    Reader orcReader = OrcFile.createReader(getFilePath(), OrcFile.readerOptions(conf));
+    Reader orcReader = OrcFile.createReader(new Path(getFileLocation().toUri()), OrcFile.readerOptions(conf));
     assertEquals(4, orcReader.getMetadataKeys().size());
     assertTrue(orcReader.getMetadataKeys().contains(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER));
     assertTrue(orcReader.getMetadataKeys().contains(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER));
@@ -87,7 +88,7 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
 
   @Override
   protected void verifySchema(Configuration conf, String schemaPath) throws IOException {
-    Reader orcReader = OrcFile.createReader(getFilePath(), OrcFile.readerOptions(conf));
+    Reader orcReader = OrcFile.createReader(new Path(getFileLocation().toUri()), OrcFile.readerOptions(conf));
     if ("/exampleSchema.avsc".equals(schemaPath)) {
       assertEquals("struct<_row_key:string,time:string,number:int>",
           orcReader.getSchema().toString());

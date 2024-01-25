@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.bucket;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -27,6 +26,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
@@ -36,8 +38,6 @@ import org.apache.hudi.utils.TestSQL;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -52,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -85,9 +86,10 @@ public class ITTestBucketStreamWrite {
 
     if (isCow) {
       TestData.checkWrittenData(tempFile, EXPECTED, 4);
-    } else  {
-      FileSystem fs = FSUtils.getFs(tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
-      TestData.checkWrittenDataMOR(fs, tempFile, EXPECTED, 4);
+    } else {
+      HoodieStorage storage = HoodieStorageUtils.getHoodieStorage(tempFile.getAbsolutePath(),
+          new org.apache.hadoop.conf.Configuration());
+      TestData.checkWrittenDataMOR(storage, tempFile, EXPECTED, 4);
     }
   }
 
@@ -105,12 +107,13 @@ public class ITTestBucketStreamWrite {
     String filename = activeCompletedTimeline.getInstants().get(0).getFileName();
 
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(),
+            HoodieCommitMetadata.class);
 
     // delete successful commit to simulate an unsuccessful write
-    FileSystem fs = metaClient.getFs();
-    Path path = new Path(metaClient.getMetaPath() + Path.SEPARATOR + filename);
-    fs.delete(path);
+    HoodieStorage storage = metaClient.getHoodieStorage();
+    HoodieLocation path = new HoodieLocation(metaClient.getMetaPath() + PATH_SEPARATOR + filename);
+    storage.deleteDirectory(path);
 
     commitMetadata.getFileIdAndRelativePaths().forEach((fileId, relativePath) -> {
       // hacky way to reconstruct markers ¯\_(ツ)_/¯

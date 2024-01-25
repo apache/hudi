@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 /**
  * The hoodie archived log file.
@@ -28,16 +28,16 @@ public class HoodieArchivedLogFile extends HoodieLogFile {
 
   public static final String ARCHIVE_EXTENSION = ".archive";
 
-  public HoodieArchivedLogFile(FileStatus fileStatus) {
+  public HoodieArchivedLogFile(HoodieFileStatus fileStatus) {
     super(fileStatus);
   }
 
-  public HoodieArchivedLogFile(Path logPath) {
+  public HoodieArchivedLogFile(HoodieLocation logPath) {
     super(logPath);
   }
 
   @Override
   public String toString() {
-    return "HoodieArchivedLogFile {" + super.getPath() + '}';
+    return "HoodieArchivedLogFile {" + super.getLocation() + '}';
   }
 }

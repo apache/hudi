@@ -31,7 +31,6 @@ import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 
@@ -41,7 +40,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
 
   @Override
   protected HoodieFileWriter newParquetFileWriter(
-      String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
+      String instantTime, HoodieLocation location, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     Option<BloomFilter> filter = enableBloomFilter(populateMetaFields, config) ? Option.of(createBloomFilter(config)) : Option.empty();
@@ -63,7 +62,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
         config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
     parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
 
-    return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
+    return new HoodieSparkParquetWriter(location, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
   }
 
   protected HoodieFileWriter newParquetFileWriter(
@@ -90,14 +89,14 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   }
 
   @Override
-  protected HoodieFileWriter newHFileFileWriter(String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+  protected HoodieFileWriter newHFileFileWriter(String instantTime, HoodieLocation location, Configuration conf, HoodieConfig config, Schema schema,
+                                                TaskContextSupplier taskContextSupplier) throws IOException {
     throw new HoodieIOException("Not support write to HFile");
   }
 
   @Override
-  protected HoodieFileWriter newOrcFileWriter(String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+  protected HoodieFileWriter newOrcFileWriter(String instantTime, HoodieLocation location, Configuration conf, HoodieConfig config, Schema schema,
+                                              TaskContextSupplier taskContextSupplier) throws IOException {
     throw new HoodieIOException("Not support write to Orc file");
   }
 }

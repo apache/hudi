@@ -155,7 +155,7 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
         .setPartitionPath(slice.getPartitionPath())
         .setFileId(slice.getFileId())
         .setDataFilePath(slice.getBaseFile().map(BaseFile::getPath).orElse(StringUtils.EMPTY_STRING))
-        .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toList()))
+        .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getLocation().toString()).collect(Collectors.toList()))
         .setBootstrapFilePath(slice.getBaseFile().map(bf -> bf.getBootstrapBaseFile().map(bbf -> bbf.getPath()).orElse(StringUtils.EMPTY_STRING)).orElse(StringUtils.EMPTY_STRING))
         .build()).collect(Collectors.toList());
   }

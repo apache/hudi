@@ -54,6 +54,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -146,7 +147,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
     assertEquals("Metadata for table " + tableName + " loaded", result.toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    assertEquals(metaPath + Path.SEPARATOR + "archive", client.getArchivePath());
+    assertEquals(metaPath + PATH_SEPARATOR + "archive", client.getArchivePath());
     assertEquals(tablePath, client.getBasePath());
     assertEquals(metaPath, client.getMetaPath());
     assertEquals(HoodieTableType.MERGE_ON_READ, client.getTableType());
@@ -185,7 +186,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
   private void testRefreshCommand(String command) throws IOException {
     // clean table matedata
     FileSystem fs = FileSystem.get(hadoopConf());
-    fs.delete(new Path(tablePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME), true);
+    fs.delete(new Path(tablePath + PATH_SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME), true);
 
     // Create table
     assertTrue(prepareTable());

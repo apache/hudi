@@ -19,9 +19,9 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,24 +35,24 @@ public class TestHoodieBaseFile {
 
   @Test
   void createFromHoodieBaseFile() {
-    FileStatus fileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(pathStr));
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileStatus);
-    assertFileGetters(fileStatus, new HoodieBaseFile(hoodieBaseFile), length, Option.empty());
+    HoodieFileStatus fileInfo = new HoodieFileStatus(new HoodieLocation(pathStr), length, false, 0);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileInfo);
+    assertFileGetters(fileInfo, new HoodieBaseFile(hoodieBaseFile), length, Option.empty());
   }
 
   @Test
   void createFromFileStatus() {
-    FileStatus fileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(pathStr));
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileStatus);
-    assertFileGetters(fileStatus, hoodieBaseFile, length, Option.empty());
+    HoodieFileStatus fileInfo = new HoodieFileStatus(new HoodieLocation(pathStr), length, false, 0);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileInfo);
+    assertFileGetters(fileInfo, hoodieBaseFile, length, Option.empty());
   }
 
   @Test
   void createFromFileStatusAndBootstrapBaseFile() {
     HoodieBaseFile bootstrapBaseFile = new HoodieBaseFile(pathStr);
-    FileStatus fileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(pathStr));
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileStatus, bootstrapBaseFile);
-    assertFileGetters(fileStatus, hoodieBaseFile, length, Option.of(bootstrapBaseFile));
+    HoodieFileStatus fileInfo = new HoodieFileStatus(new HoodieLocation(pathStr), length, false, 0);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileInfo, bootstrapBaseFile);
+    assertFileGetters(fileInfo, hoodieBaseFile, length, Option.of(bootstrapBaseFile));
   }
 
   @Test
@@ -71,26 +71,34 @@ public class TestHoodieBaseFile {
   @Test
   void createFromExternalFileStatus() {
     String fileName = "parquet_file_1.parquet";
-    String storedPathString = "file:/tmp/hoodie/2021/01/01/" + fileName + "_" + baseCommitTime + "_hudiext";
+    String storedPathString =
+        "file:/tmp/hoodie/2021/01/01/" + fileName + "_" + baseCommitTime + "_hudiext";
     String expectedPathString = "file:/tmp/hoodie/2021/01/01/" + fileName;
-    FileStatus inputFileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(storedPathString));
-    FileStatus expectedFileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(expectedPathString));
+    HoodieFileStatus inputFileStatus = new HoodieFileStatus(
+        new HoodieLocation(storedPathString), length, false, 0);
+    HoodieFileStatus expectedFileInfo = new HoodieFileStatus(
+        new HoodieLocation(expectedPathString), length, false, 0);
     HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(inputFileStatus);
 
-    assertFileGetters(expectedFileStatus, hoodieBaseFile, length, Option.empty(), fileName, expectedPathString, fileName);
+    assertFileGetters(expectedFileInfo, hoodieBaseFile, length, Option.empty(), fileName,
+        expectedPathString, fileName);
   }
 
-  private void assertFileGetters(FileStatus fileStatus, HoodieBaseFile hoodieBaseFile, long fileLength, Option<HoodieBaseFile> bootstrapBaseFile) {
-    assertFileGetters(fileStatus, hoodieBaseFile, fileLength, bootstrapBaseFile, fileId, pathStr, fileName);
+  private void assertFileGetters(HoodieFileStatus fileInfo, HoodieBaseFile hoodieBaseFile,
+                                 long fileLength, Option<HoodieBaseFile> bootstrapBaseFile) {
+    assertFileGetters(fileInfo, hoodieBaseFile, fileLength, bootstrapBaseFile, fileId, pathStr,
+        fileName);
   }
 
-  private void assertFileGetters(FileStatus fileStatus, HoodieBaseFile hoodieBaseFile, long fileLength, Option<HoodieBaseFile> bootstrapBaseFile, String fileId, String pathStr, String fileName) {
+  private void assertFileGetters(HoodieFileStatus fileStatus, HoodieBaseFile hoodieBaseFile,
+                                 long fileLength, Option<HoodieBaseFile> bootstrapBaseFile,
+                                 String fileId, String pathStr, String fileName) {
     assertEquals(fileId, hoodieBaseFile.getFileId());
     assertEquals(baseCommitTime, hoodieBaseFile.getCommitTime());
     assertEquals(bootstrapBaseFile, hoodieBaseFile.getBootstrapBaseFile());
     assertEquals(fileName, hoodieBaseFile.getFileName());
     assertEquals(pathStr, hoodieBaseFile.getPath());
-    assertEquals(new Path(pathStr), hoodieBaseFile.getHadoopPath());
+    assertEquals(new HoodieLocation(pathStr), hoodieBaseFile.getLocation());
     assertEquals(fileLength, hoodieBaseFile.getFileSize());
     assertEquals(fileStatus, hoodieBaseFile.getFileStatus());
   }

@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 
@@ -55,33 +54,34 @@ public class HoodieFileReaderFactory {
     }
   }
 
-  public HoodieFileReader getFileReader(Configuration conf, Path path) throws IOException {
-    final String extension = FSUtils.getFileExtension(path.toString());
+  public HoodieFileReader getFileReader(Configuration conf, HoodieLocation location) throws IOException {
+    final String extension = FSUtils.getFileExtension(location.toString());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetFileReader(conf, path);
+      return newParquetFileReader(conf, location);
     }
     if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileReader(conf, path);
+      return newHFileFileReader(conf, location);
     }
     if (ORC.getFileExtension().equals(extension)) {
-      return newOrcFileReader(conf, path);
+      return newOrcFileReader(conf, location);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  public HoodieFileReader getFileReader(Configuration conf, Path path, HoodieFileFormat format) throws IOException {
-    return this.newParquetFileReader(conf, path);
+  public HoodieFileReader getFileReader(Configuration conf, HoodieLocation location, HoodieFileFormat format)
+      throws IOException {
+    return this.newParquetFileReader(conf, location);
   }
 
-  protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
+  protected HoodieFileReader newParquetFileReader(Configuration conf, HoodieLocation location) {
     throw new UnsupportedOperationException();
   }
 
-  protected HoodieFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
+  protected HoodieFileReader newHFileFileReader(Configuration conf, HoodieLocation location) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
+  protected HoodieFileReader newOrcFileReader(Configuration conf, HoodieLocation location) {
     throw new UnsupportedOperationException();
   }
 

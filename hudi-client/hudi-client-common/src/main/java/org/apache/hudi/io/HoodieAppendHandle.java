@@ -55,6 +55,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
@@ -202,8 +203,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       try {
         // Save hoodie partition meta in the partition path
-        HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
-            new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+        HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
+            new HoodieLocation(config.getBasePath()),
+            FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
             hoodieTable.getPartitionMetafileFormat());
         partitionMetadata.trySave(getPartitionId());
 
@@ -490,7 +492,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         }
       }
     } catch (Exception e) {
-      throw new HoodieAppendException("Failed while appending records to " + writer.getLogFile().getPath(), e);
+      throw new HoodieAppendException("Failed while appending records to " + writer.getLogFile().getLocation(), e);
     }
   }
 
@@ -682,7 +684,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         return new HoodieAvroDataBlock(records, shouldWriteRecordPositions, header, keyField);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(
-            records, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()));
+            records, header, writeConfig.getHFileCompressionAlgorithm(), new HoodieLocation(writeConfig.getBasePath()));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,

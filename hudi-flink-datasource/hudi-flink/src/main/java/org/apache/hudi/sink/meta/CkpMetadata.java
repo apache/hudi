@@ -39,6 +39,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
+
 /**
  * The checkpoint metadata for bookkeeping the checkpoint messages.
  *
@@ -219,7 +221,8 @@ public class CkpMetadata implements Serializable, AutoCloseable {
 
   protected static String ckpMetaPath(String basePath, String uniqueId) {
     // .hoodie/.aux/ckp_meta
-    String metaPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
+    String metaPath = basePath + PATH_SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME
+        + PATH_SEPARATOR + CKP_META;
     return StringUtils.isNullOrEmpty(uniqueId) ? metaPath : metaPath + "_" + uniqueId;
   }
 

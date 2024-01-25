@@ -18,14 +18,10 @@
 
 package org.apache.hudi.common.table.timeline.dto;
 
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.hadoop.fs.Path;
-
-import java.net.URI;
-import java.net.URISyntaxException;
 
 /**
  * The data transfer object of file path.
@@ -36,24 +32,20 @@ public class FilePathDTO {
   @JsonProperty("uri")
   private String uri;
 
-  public static FilePathDTO fromPath(Path path) {
+  public static FilePathDTO fromHoodieLocation(HoodieLocation path) {
     if (null == path) {
       return null;
     }
     FilePathDTO dto = new FilePathDTO();
-    dto.uri = path.toUri().toString();
+    dto.uri = path.toString();
     return dto;
   }
 
-  public static Path toPath(FilePathDTO dto) {
+  public static HoodieLocation toHoodieLocation(FilePathDTO dto) {
     if (null == dto) {
       return null;
     }
 
-    try {
-      return new CachingPath(new URI(dto.uri));
-    } catch (URISyntaxException e) {
-      throw new RuntimeException(e);
-    }
+    return new HoodieLocation(dto.uri);
   }
 }

@@ -34,7 +34,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.avro.HoodieAvroParquetReaderBuilder;
@@ -53,16 +52,16 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
  */
 public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
-  private final Path path;
+  private final HoodieLocation location;
   private final Configuration conf;
   private final BaseFileUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
-  public HoodieAvroParquetReader(Configuration configuration, Path path) {
+  public HoodieAvroParquetReader(Configuration configuration, HoodieLocation location) {
     // We have to clone the Hadoop Config as it might be subsequently modified
     // by the Reader (for proper config propagation to Parquet components)
     this.conf = tryOverrideDefaultConfigs(new Configuration(configuration));
-    this.path = path;
+    this.location = location;
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
   }
 
@@ -77,17 +76,17 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
   @Override
   public String[] readMinMaxRecordKeys() {
-    return parquetUtils.readMinMaxRecordKeys(conf, path);
+    return parquetUtils.readMinMaxRecordKeys(conf, location);
   }
 
   @Override
   public BloomFilter readBloomFilter() {
-    return parquetUtils.readBloomFilterFromMetadata(conf, path);
+    return parquetUtils.readBloomFilterFromMetadata(conf, location);
   }
 
   @Override
   public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
-    return parquetUtils.filterRowKeys(conf, path, candidateRowKeys);
+    return parquetUtils.filterRowKeys(conf, location, candidateRowKeys);
   }
 
   @Override
@@ -102,7 +101,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
   @Override
   public Schema getSchema() {
-    return parquetUtils.readAvroSchema(conf, path);
+    return parquetUtils.readAvroSchema(conf, location);
   }
 
   @Override
@@ -112,7 +111,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
   @Override
   public long getTotalRecords() {
-    return parquetUtils.getRowCount(conf, path);
+    return parquetUtils.getRowCount(conf, location);
   }
 
   private static Configuration tryOverrideDefaultConfigs(Configuration conf) {
@@ -166,7 +165,8 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
       AvroReadSupport.setAvroReadSchema(conf, requestedSchema.get());
       AvroReadSupport.setRequestedProjection(conf, requestedSchema.get());
     }
-    ParquetReader<IndexedRecord> reader = new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(conf).build();
+    ParquetReader<IndexedRecord> reader =
+        new HoodieAvroParquetReaderBuilder<IndexedRecord>(location).withConf(conf).build();
     ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;

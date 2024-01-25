@@ -18,13 +18,13 @@
 
 package org.apache.hudi.table.catalog;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 
@@ -55,6 +55,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
@@ -123,7 +124,7 @@ public class TableOptionProperties {
       Map<String, String> options,
       boolean isOverwrite) throws IOException {
     Path propertiesFilePath = getPropertiesFilePath(basePath);
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
     try (FSDataOutputStream outputStream = fs.create(propertiesFilePath, isOverwrite)) {
       Properties properties = new Properties();
       properties.putAll(options);
@@ -141,7 +142,7 @@ public class TableOptionProperties {
     Map<String, String> options = new HashMap<>();
     Properties props = new Properties();
 
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
     try (FSDataInputStream inputStream = fs.open(propertiesFilePath)) {
       props.load(inputStream);
       for (final String name : props.stringPropertyNames()) {
@@ -155,7 +156,7 @@ public class TableOptionProperties {
   }
 
   private static Path getPropertiesFilePath(String basePath) {
-    String auxPath = basePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
+    String auxPath = basePath + PATH_SEPARATOR + AUXILIARYFOLDER_NAME;
     return new Path(auxPath, FILE_NAME);
   }
 

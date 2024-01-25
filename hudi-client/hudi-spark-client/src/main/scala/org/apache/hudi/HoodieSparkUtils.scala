@@ -18,14 +18,16 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.hadoop.CachingPath
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.hadoop.fs.CachingPath
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -80,7 +82,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
    */
   @Deprecated
   def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
-                latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
+                latestTableSchema: HOption[Schema] = HOption.empty()): RDD[GenericRecord] = {
     createRdd(df, structName, recordNamespace, toScalaOption(latestTableSchema))
   }
 
@@ -131,7 +133,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     new SQLConfInjectingRDD(rdd, conf)
 
   def safeCreateRDD(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
-                    latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()):
+                    latestTableSchema: HOption[Schema] = HOption.empty()):
   Tuple2[RDD[GenericRecord], RDD[String]] = {
     var latestTableSchemaConverted: Option[Schema] = None
 

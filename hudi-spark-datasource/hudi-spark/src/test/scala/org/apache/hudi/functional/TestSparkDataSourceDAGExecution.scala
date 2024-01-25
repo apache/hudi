@@ -17,26 +17,29 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.FileSystem
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, ScalaAssertionSupport}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, ScalaAssertionSupport}
+
+import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageCompleted}
 import org.apache.spark.sql._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
+
 import scala.collection.JavaConversions._
 
 /**
@@ -61,7 +64,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
-  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
@@ -73,7 +76,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach

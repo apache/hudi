@@ -40,10 +40,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +59,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPathFromLocation;
 
 /**
  * Scans through all the blocks in a list of HoodieLogFile and builds up a compacted/merged list of records which will
@@ -91,7 +91,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
-  private HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+  private HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
                                        String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
                                        boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                        Option<InstantRange> instantRange,
@@ -103,7 +103,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                        Option<String> keyFieldOverride,
                                        boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
                                       Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
+    super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
         hoodieTableMetaClientOption);
     try {
@@ -315,7 +315,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
   public static class Builder extends AbstractHoodieLogRecordReader.Builder {
-    private FileSystem fs;
+    private HoodieStorage storage;
     private String basePath;
     private List<String> logFilePaths;
     private Schema readerSchema;
@@ -342,8 +342,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected HoodieTableMetaClient hoodieTableMetaClient;
 
     @Override
-    public Builder withFileSystem(FileSystem fs) {
-      this.fs = fs;
+    public Builder withHoodieStorage(HoodieStorage storage) {
+      this.storage = storage;
       return this;
     }
 
@@ -465,11 +465,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
-        this.partitionName = getRelativePartitionPath(new Path(basePath), new Path(this.logFilePaths.get(0)).getParent());
+        this.partitionName = getRelativePartitionPathFromLocation(
+            new HoodieLocation(basePath), new HoodieLocation(this.logFilePaths.get(0)).getParent());
       }
       ValidationUtils.checkArgument(recordMerger != null);
 
-      return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
+      return new HoodieMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,

@@ -22,11 +22,11 @@ import org.apache.avro.Schema;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -142,7 +142,7 @@ public class CloudObjectsSelectorCommon {
   private static boolean checkIfFileExists(String storageUrlSchemePrefix, String bucket, String filePathUrl,
                                           Configuration configuration) {
     try {
-      FileSystem fs = FSUtils.getFs(storageUrlSchemePrefix + bucket, configuration);
+      FileSystem fs = HadoopFSUtils.getFs(storageUrlSchemePrefix + bucket, configuration);
       return fs.exists(new Path(filePathUrl));
     } catch (IOException ioe) {
       String errMsg = String.format("Error while checking path exists for %s ", filePathUrl);

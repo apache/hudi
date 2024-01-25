@@ -26,9 +26,9 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -46,8 +46,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
 
   protected WriteMarkers writeMarkers;
-  protected FileSystem fs;
-  protected Path markerFolderPath;
+  protected HoodieStorage storage;
+  protected HoodieLocation markerFolderLocation;
   protected JavaSparkContext jsc;
   protected HoodieSparkEngineContext context;
 
@@ -58,10 +58,10 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   }
 
   private void createInvalidFile(String partitionPath, String invalidFileName) {
-    Path path = FSUtils.getPartitionPath(markerFolderPath.toString(), partitionPath);
-    Path invalidFilePath = new Path(path, invalidFileName);
+    HoodieLocation path = FSUtils.getPartitionPath(markerFolderLocation, partitionPath);
+    HoodieLocation invalidFilePath = new HoodieLocation(path, invalidFileName);
     try {
-      fs.create(invalidFilePath, false).close();
+      storage.create(invalidFilePath, false).close();
     } catch (IOException e) {
       throw new HoodieException("Failed to create invalid file " + invalidFilePath, e);
     }
@@ -76,7 +76,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     createSomeMarkers(isTablePartitioned);
 
     // then
-    assertTrue(fs.exists(markerFolderPath));
+    assertTrue(storage.exists(markerFolderLocation));
     verifyMarkersInFileSystem(isTablePartitioned);
   }
 
@@ -107,8 +107,8 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     createSomeMarkers(isTablePartitioned);
     // add invalid file
     createInvalidFile(isTablePartitioned ? "2020/06/01" : "", "invalid_file3");
-    long fileSize = FileSystemTestUtils.listRecursive(fs, markerFolderPath).stream()
-        .filter(fileStatus -> !fileStatus.getPath().getName().contains(MarkerUtils.MARKER_TYPE_FILENAME))
+    long fileSize = FileSystemTestUtils.listRecursive(storage, markerFolderLocation).stream()
+        .filter(fileStatus -> !fileStatus.getLocation().getName().contains(MarkerUtils.MARKER_TYPE_FILENAME))
         .count();
     assertEquals(fileSize, 4);
 

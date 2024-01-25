@@ -17,12 +17,13 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieTimer
+import org.apache.hudi.io.storage.HoodieLocation
 import org.apache.hudi.metadata.{HoodieTableMetadata, SparkHoodieBackedTableMetadataWriter}
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
@@ -49,17 +50,17 @@ class CreateMetadataTableProcedure extends BaseProcedure with ProcedureBuilder w
 
     val basePath = getBasePath(tableName)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val metadataPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath))
+    val metadataPath = new HoodieLocation(HoodieTableMetadata.getMetadataTableBasePath(basePath))
 
     try {
-      val statuses = metaClient.getFs.listStatus(metadataPath)
-      if (statuses.nonEmpty) {
+      val statuses = metaClient.getHoodieStorage.listDirectEntries(metadataPath)
+      if (!statuses.isEmpty) {
         throw new RuntimeException("Metadata directory (" + metadataPath.toString + ") not empty.")
       }
     } catch {
       case e: FileNotFoundException =>
         // Metadata directory does not exist yet
-        metaClient.getFs.mkdirs(metadataPath)
+        metaClient.getHoodieStorage.createDirectory(metadataPath)
     }
     val timer = HoodieTimer.start
     val writeConfig = getWriteConfig(basePath)

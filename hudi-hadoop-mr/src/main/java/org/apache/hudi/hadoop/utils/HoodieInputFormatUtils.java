@@ -39,14 +39,18 @@ import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.HoodieHFileInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
+import org.apache.hudi.io.storage.HoodieFileStatus;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
@@ -63,6 +67,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -75,6 +80,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 
@@ -244,7 +250,8 @@ public class HoodieInputFormatUtils {
       return Option.empty();
     }
     String incrementalInputPaths = partitionsToList.stream()
-        .map(s -> StringUtils.isNullOrEmpty(s) ? tableMetaClient.getBasePath() : tableMetaClient.getBasePath() + Path.SEPARATOR + s)
+        .map(s -> StringUtils.isNullOrEmpty(s)
+            ? tableMetaClient.getBasePath() : tableMetaClient.getBasePath() + PATH_SEPARATOR + s)
         .filter(s -> {
           /*
            * Ensure to return only results from the original input path that has incremental changes
@@ -353,15 +360,15 @@ public class HoodieInputFormatUtils {
    */
   public static HoodieTableMetaClient getTableMetaClientForBasePathUnchecked(Configuration conf, Path partitionPath) throws IOException {
     Path baseDir = partitionPath;
-    FileSystem fs = partitionPath.getFileSystem(conf);
-    if (HoodiePartitionMetadata.hasPartitionMetadata(fs, partitionPath)) {
-      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, partitionPath);
+    HoodieStorage storage = HoodieStorageUtils.getHoodieStorage(partitionPath.toString(), conf);
+    if (HoodiePartitionMetadata.hasPartitionMetadata(storage, new HoodieLocation(partitionPath.toString()))) {
+      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, new HoodieLocation(partitionPath.toString()));
       metadata.readFromFS();
       int levels = metadata.getPartitionDepth();
       baseDir = HoodieHiveUtils.getNthParent(partitionPath, levels);
     } else {
       for (int i = 0; i < partitionPath.depth(); i++) {
-        if (fs.exists(new Path(baseDir, METAFOLDER_NAME))) {
+        if (storage.exists(new HoodieLocation(baseDir.toString(), METAFOLDER_NAME))) {
           break;
         } else if (i == partitionPath.depth() - 1) {
           throw new TableNotFoundException(partitionPath.toString());
@@ -371,20 +378,26 @@ public class HoodieInputFormatUtils {
       }
     }
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
-    return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).build();
+    return HoodieTableMetaClient.builder().setConf(
+        (Configuration) storage.getConf()).setBasePath(baseDir.toString()).build();
   }
 
   public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
+    FileStatus fileStatus = HadoopFSUtils.convertToHadoopFileStatus(baseFile.getFileStatus());
+
+    // TODO(HUDI-6497): check why we need this
     if (baseFile.getBootstrapBaseFile().isPresent()) {
-      if (baseFile.getFileStatus() instanceof LocatedFileStatus) {
-        return new LocatedFileStatusWithBootstrapBaseFile((LocatedFileStatus) baseFile.getFileStatus(),
-            baseFile.getBootstrapBaseFile().get().getFileStatus());
+      if (fileStatus instanceof LocatedFileStatus) {
+        return new LocatedFileStatusWithBootstrapBaseFile((LocatedFileStatus) fileStatus,
+            HadoopFSUtils.convertToHadoopFileStatus(
+                baseFile.getBootstrapBaseFile().get().getFileStatus()));
       } else {
-        return new FileStatusWithBootstrapBaseFile(baseFile.getFileStatus(),
-            baseFile.getBootstrapBaseFile().get().getFileStatus());
+        return new FileStatusWithBootstrapBaseFile(fileStatus,
+            HadoopFSUtils.convertToHadoopFileStatus(
+                baseFile.getBootstrapBaseFile().get().getFileStatus()));
       }
     }
-    return baseFile.getFileStatus();
+    return fileStatus;
   }
 
   /**
@@ -399,7 +412,12 @@ public class HoodieInputFormatUtils {
    */
   public static List<FileStatus> filterIncrementalFileStatus(Job job, HoodieTableMetaClient tableMetaClient,
                                                              HoodieTimeline timeline, FileStatus[] fileStatuses, List<HoodieInstant> commitsToCheck) throws IOException {
-    TableFileSystemView.BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline, fileStatuses);
+    TableFileSystemView.BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline,
+        Arrays.stream(fileStatuses)
+            .map(e -> new HoodieFileStatus(
+                new HoodieLocation(e.getPath().toUri()), e.getLen(), e.isDirectory(),
+                e.getModificationTime()))
+            .collect(Collectors.toList()));
     List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();
@@ -480,12 +498,13 @@ public class HoodieInputFormatUtils {
    * @return
    */
   private static HoodieBaseFile refreshFileStatus(Configuration conf, HoodieBaseFile dataFile) {
-    Path dataPath = dataFile.getFileStatus().getPath();
+    HoodieLocation dataPath = dataFile.getFileStatus().getLocation();
     try {
       if (dataFile.getFileSize() == 0) {
-        FileSystem fs = dataPath.getFileSystem(conf);
+        HoodieStorage storage = HoodieStorageUtils.getHoodieStorage(dataPath, conf);
         LOG.info("Refreshing file status " + dataFile.getPath());
-        return new HoodieBaseFile(fs.getFileStatus(dataPath), dataFile.getBootstrapBaseFile().orElse(null));
+        return new HoodieBaseFile(storage.getFileStatus(dataPath),
+            dataFile.getBootstrapBaseFile().orElse(null));
       }
       return dataFile;
     } catch (IOException e) {
@@ -503,14 +522,16 @@ public class HoodieInputFormatUtils {
    * @param metadataList The metadata list to read the data from
    * @return the affected file status array
    */
-  public static FileStatus[] listAffectedFilesForCommits(Configuration hadoopConf, Path basePath, List<HoodieCommitMetadata> metadataList) {
+  public static List<HoodieFileStatus> listAffectedFilesForCommits(Configuration hadoopConf,
+                                                                   HoodieLocation basePath,
+                                                                   List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
-    HashMap<String, FileStatus> fullPathToFileStatus = new HashMap<>();
+    HashMap<String, HoodieFileStatus> fullPathToFileStatus = new HashMap<>();
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata : metadataList) {
       fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(hadoopConf, basePath.toString()));
     }
-    return fullPathToFileStatus.values().toArray(new FileStatus[0]);
+    return new ArrayList<>(fullPathToFileStatus.values());
   }
 
   /**

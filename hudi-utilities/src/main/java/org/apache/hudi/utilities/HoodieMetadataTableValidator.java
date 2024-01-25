@@ -57,6 +57,8 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieLocation;
+import org.apache.hudi.io.storage.HoodieStorage;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.utilities.util.BloomFilterData;
@@ -64,7 +66,6 @@ import org.apache.hudi.utilities.util.BloomFilterData;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
@@ -101,7 +102,7 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
+import static org.apache.hudi.hadoop.fs.CachingPath.getPathWithoutSchemeAndAuthority;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -226,7 +227,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    * @return the {@link TypedProperties} instance.
    */
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new HoodieLocation(cfg.propsFilePath), cfg.configs)
         .getProps(true);
   }
 
@@ -586,7 +587,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     // ignore partitions created by uncommitted ingestion.
     allPartitionPathsFromFS = allPartitionPathsFromFS.stream().parallel().filter(part -> {
       HoodiePartitionMetadata hoodiePartitionMetadata =
-          new HoodiePartitionMetadata(metaClient.getFs(), FSUtils.getPartitionPath(basePath, part));
+          new HoodiePartitionMetadata(metaClient.getHoodieStorage(), FSUtils.getPartitionPath(basePath, part));
 
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
@@ -1055,9 +1056,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieTableMetaClient metaClient,
       Map<String, Set<String>> committedFilesMap) {
     Set<String> fs1LogPathSet =
-        fs1.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toSet());
+        fs1.getLogFiles().map(f -> f.getLocation().toString()).collect(Collectors.toSet());
     Set<String> fs2LogPathSet =
-        fs2.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toSet());
+        fs2.getLogFiles().map(f -> f.getLocation().toString()).collect(Collectors.toSet());
     Set<String> commonLogPathSet = new HashSet<>(fs1LogPathSet);
     commonLogPathSet.retainAll(fs2LogPathSet);
     // Only keep log file paths that differ
@@ -1065,14 +1066,14 @@ public class HoodieMetadataTableValidator implements Serializable {
     fs2LogPathSet.removeAll(commonLogPathSet);
     // Check if the remaining log files are uncommitted.  If there is any log file
     // that is committed, the committed log files of two file slices are different
-    FileSystem fileSystem = metaClient.getFs();
+    HoodieStorage storage = metaClient.getHoodieStorage();
 
-    if (hasCommittedLogFiles(fileSystem, fs1LogPathSet, metaClient, committedFilesMap)) {
+    if (hasCommittedLogFiles(storage, fs1LogPathSet, metaClient, committedFilesMap)) {
       LOG.error("The first file slice has committed log files that cause mismatching: " + fs1
           + "; Different log files are: " + fs1LogPathSet);
       return false;
     }
-    if (hasCommittedLogFiles(fileSystem, fs2LogPathSet, metaClient, committedFilesMap)) {
+    if (hasCommittedLogFiles(storage, fs2LogPathSet, metaClient, committedFilesMap)) {
       LOG.error("The second file slice has committed log files that cause mismatching: " + fs2
           + "; Different log files are: " + fs2LogPathSet);
       return false;
@@ -1081,7 +1082,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   private boolean hasCommittedLogFiles(
-      FileSystem fs,
+      HoodieStorage storage,
       Set<String> logFilePathSet,
       HoodieTableMetaClient metaClient,
       Map<String, Set<String>> committedFilesMap) {
@@ -1099,7 +1100,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieLogFormat.Reader reader = null;
       try {
         MessageType messageType =
-            TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePathStr));
+            TableSchemaResolver.readSchemaFromLogFile(storage, new HoodieLocation(logFilePathStr));
         if (messageType == null) {
           LOG.warn(String.format("Cannot read schema from log file %s. "
               + "Skip the check as it's likely being written by an inflight instant.", logFilePathStr));
@@ -1107,7 +1108,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         }
         Schema readerSchema = converter.convert(messageType);
         reader =
-            HoodieLogFormat.newReader(fs, new HoodieLogFile(logFilePathStr), readerSchema);
+            HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePathStr), readerSchema);
         // read the avro blocks
         if (reader.hasNext()) {
           HoodieLogBlock block = reader.next();
@@ -1334,7 +1335,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return baseFileNameList.stream().flatMap(filename ->
                 new ParquetUtils().readRangeFromParquetMetadata(
                     metaClient.getHadoopConf(),
-                    new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPath), filename),
+                    new HoodieLocation(FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPath), filename),
                     allColumnNameList).stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
@@ -1375,16 +1376,18 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
-      Path path = new Path(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath), filename);
+      HoodieLocation location = new HoodieLocation(
+          FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath).toString(), filename);
       BloomFilter bloomFilter;
-      try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(), path)) {
+      try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(
+          HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(), location)) {
         bloomFilter = fileReader.readBloomFilter();
         if (bloomFilter == null) {
-          LOG.error("Failed to read bloom filter for " + path);
+          LOG.error("Failed to read bloom filter for " + location);
           return Option.empty();
         }
       } catch (IOException e) {
-        LOG.error("Failed to get file reader for " + path + " " + e.getMessage());
+        LOG.error("Failed to get file reader for " + location + " " + e.getMessage());
         return Option.empty();
       }
       return Option.of(BloomFilterData.builder()

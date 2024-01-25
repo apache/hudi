@@ -18,12 +18,13 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX
 import org.apache.hudi.HoodieBaseRelation.projectReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
+import org.apache.hudi.io.storage.{HoodieFileStatus, HoodieLocation}
+
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -50,7 +51,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
                                 override val metaClient: HoodieTableMetaClient,
                                 override val optParams: Map[String, String],
                                 private val userSchema: Option[StructType],
-                                private val globPaths: Seq[Path],
+                                private val globPaths: Seq[HoodieLocation],
                                 private val prunedDataSchema: Option[StructType] = None)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema)
     with SparkAdapterSupport {
@@ -112,11 +113,11 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
     val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
     val fileSplits = fileSlices.flatMap { fileSlice =>
       // TODO fix, currently assuming parquet as underlying format
-      val fs = fileSlice.getBaseFile.get.getFileStatus
+      val fileInfo: HoodieFileStatus = fileSlice.getBaseFile.get.getFileStatus
       HoodieDataSourceHelper.splitFiles(
         sparkSession = sparkSession,
-        file = fs,
-        partitionValues = getPartitionColumnsAsInternalRow(fs)
+        file = fileInfo,
+        partitionValues = getPartitionColumnsAsInternalRow(fileInfo)
       )
     }
       // NOTE: It's important to order the splits in the reverse order of their

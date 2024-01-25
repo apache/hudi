@@ -18,28 +18,28 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.expression.ArrayData;
-import org.apache.hudi.hadoop.CachingPath;
-import org.apache.hudi.hadoop.SerializablePath;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.io.storage.HoodieLocation;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.fs.FSUtils.PATH_SEPARATOR;
+
 public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata {
 
   protected transient HoodieEngineContext engineContext;
 
   protected final SerializableConfiguration hadoopConf;
-  protected final SerializablePath dataBasePath;
+  protected final HoodieLocation dataBasePath;
 
   // TODO get this from HoodieConfig
   protected final boolean caseSensitive = false;
@@ -47,7 +47,7 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
   public AbstractHoodieTableMetadata(HoodieEngineContext engineContext, SerializableConfiguration conf, String dataBasePath) {
     this.engineContext = engineContext;
     this.hadoopConf = conf;
-    this.dataBasePath = new SerializablePath(new CachingPath(dataBasePath));
+    this.dataBasePath = new HoodieLocation(dataBasePath);
   }
 
   protected static int getPathPartitionLevel(Types.RecordType partitionFields, String path) {
@@ -57,14 +57,14 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
 
     int level = 1;
     for (int i = 1; i < path.length() - 1; i++) {
-      if (path.charAt(i) == Path.SEPARATOR_CHAR) {
+      if (path.charAt(i) == HoodieLocation.SEPARATOR_CHAR) {
         level++;
       }
     }
-    if (path.startsWith(Path.SEPARATOR)) {
+    if (path.startsWith(PATH_SEPARATOR)) {
       level--;
     }
-    if (path.endsWith(Path.SEPARATOR)) {
+    if (path.endsWith(PATH_SEPARATOR)) {
       level--;
     }
     return level;

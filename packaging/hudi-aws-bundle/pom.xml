@@ -72,6 +72,8 @@
                             </transformers>
                             <artifactSet>
                                 <includes combine.children="append">
+                                    <include>org.apache.hudi:hudi-io</include>
+                                    <include>org.apache.hudi:hudi-hadoop-common</include>
                                     <include>org.apache.hudi:hudi-hadoop-mr</include>
                                     <include>org.apache.hudi:hudi-sync-common</include>
                                     <include>org.apache.hudi:hudi-hive-sync</include>

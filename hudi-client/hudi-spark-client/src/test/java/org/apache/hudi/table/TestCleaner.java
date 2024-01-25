@@ -73,12 +73,12 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.io.storage.HoodieLocation;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieCleanerTestBase;
 
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
@@ -86,6 +86,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -405,8 +406,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
       assertEquals(cleanMetadata.getPartitionMetadata().get(NO_PARTITION_PATH).getSuccessDeleteFiles().size(), 1);
       assertTrue(filePathToClean.contains(cleanMetadata.getPartitionMetadata().get(NO_PARTITION_PATH).getSuccessDeleteFiles().get(0)));
       // ensure table is not fully cleaned and has a file group
-      assertTrue(FSUtils.isTableExists(basePath, fs));
-      assertTrue(table.getFileSystemView().getAllFileGroups(NO_PARTITION_PATH).findAny().isPresent());
+      assertTrue(FSUtils.isTableExists(basePath, storage));
+      assertTrue(
+          table.getFileSystemView().getAllFileGroups(NO_PARTITION_PATH).findAny().isPresent());
     }
   }
 
@@ -858,9 +860,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition1).size());
     assertEquals(version1Plan.getFilesToBeDeletedPerPartition().get(partition2).size(),
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition2).size());
-    assertEquals(new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partition1), fileName1).toString(),
+    assertEquals(new Path(FSUtils.getPartitionPathInPath(metaClient.getBasePath(), partition1), fileName1).toString(),
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition1).get(0).getFilePath());
-    assertEquals(new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partition2), fileName2).toString(),
+    assertEquals(new Path(FSUtils.getPartitionPathInPath(metaClient.getBasePath(), partition2), fileName2).toString(),
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition2).get(0).getFilePath());
 
     // Downgrade and verify version 1 plan
@@ -1016,9 +1018,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
         HoodieTimeline.makeRequestedCleanerFileName(commitTime),
         HoodieTimeline.makeInflightCleanerFileName(commitTime));
     for (String f : cleanerFileNames) {
-      Path commitFile = new Path(Paths
+      HoodieLocation commitFile = new HoodieLocation(Paths
           .get(metaClient.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME, f).toString());
-      try (FSDataOutputStream os = metaClient.getFs().create(commitFile, true)) {
+      try (OutputStream os = metaClient.getHoodieStorage().create(commitFile, true)) {
         // Write empty clean metadata
         os.write(new byte[0]);
       }
@@ -1338,7 +1340,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       return Pair.of(FSUtils.getFileId(fileName), FSUtils.getCommitTime(fileName));
     });
     Stream<Pair<String, String>> stream2 = paths.stream().filter(rtFilePredicate).map(path -> Pair.of(FSUtils.getFileIdFromLogPath(new Path(path)),
-        FSUtils.getDeltaCommitTimeFromLogPath(new Path(path))));
+        FSUtils.getDeltaCommitTimeFromLogPath(new HoodieLocation(path))));
     return Stream.concat(stream1, stream2);
   }
 

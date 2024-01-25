@@ -33,6 +33,8 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
+import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.io.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -75,6 +77,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
   private static HdfsTestService hdfsTestService;
+  private static HoodieStorage storage;
   private static FileSystem fs;
 
   @BeforeAll
@@ -82,6 +85,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     hdfsTestService = new HdfsTestService();
     fs = hdfsTestService.start(true).getFileSystem();
+    storage = HoodieStorageUtils.getHoodieStorage(fs);
   }
 
   @AfterAll
@@ -89,6 +93,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     hdfsTestService.stop();
     if (fs != null) {
       fs.close();
+      storage.close();
     }
   }
 
@@ -279,7 +284,8 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // insert 1000 update records to log file 2
     // now fileid0, fileid1 has no log files, fileid2 has log file
     HoodieLogFormat.Writer writer =
-        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid2", commitTime, newCommitTime,
+        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid2",
+            commitTime, newCommitTime,
             numRecords, numRecords, 0);
     writer.close();
 
@@ -347,17 +353,20 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // insert 1000 update records to log file 0
     String newCommitTime = "101";
     HoodieLogFormat.Writer writer =
-        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", commitTime, newCommitTime,
+        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid0",
+            commitTime, newCommitTime,
             numRecords, numRecords, 0);
     writer.close();
     // insert 1000 update records to log file 1
     writer =
-        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid1", commitTime, newCommitTime,
+        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid1",
+            commitTime, newCommitTime,
             numRecords, numRecords, 0);
     writer.close();
     // insert 1000 update records to log file 2
     writer =
-        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid2", commitTime, newCommitTime,
+        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid2",
+            commitTime, newCommitTime,
             numRecords, numRecords, 0);
     writer.close();
 
