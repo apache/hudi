@@ -579,6 +579,14 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
+  public List<FieldSchema> getMetastoreFieldSchemas(String tableName) {
+    Map<String, String> schema = getMetastoreSchema(tableName);
+    return schema.entrySet().stream()
+          .map(f -> new FieldSchema(f.getKey(), f.getValue()))
+          .collect(Collectors.toList());
+  }
+
+  @Override
   public boolean tableExists(String tableName) {
     GetTableRequest request = GetTableRequest.builder()
         .databaseName(databaseName)
