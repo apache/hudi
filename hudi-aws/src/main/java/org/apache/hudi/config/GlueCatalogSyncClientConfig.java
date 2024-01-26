@@ -22,6 +22,9 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 /**
  * Hoodie Configs for Glue.
@@ -46,4 +49,20 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Makes athena use the metadata table to list partitions and files. Currently it won't benefit from other features such stats indexes");
+
+  public static final ConfigProperty<Boolean> META_SYNC_PARTITION_INDEX_FIELDS_ENABLE = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_index_fields.enable")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable aws glue partition index feature, to speedup partition based query pattern");
+
+  public static final ConfigProperty<String> META_SYNC_PARTITION_INDEX_FIELDS = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_index_fields")
+      .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+          .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
+      .sinceVersion("1.0.0")
+      .withDocumentation(String.join(" ", "Specify the partitions fields to index on aws glue. Separate the fields by semicolon.",
+          "By default, when the feature is enabled, all the partition will be indexed.",
+          "You can create up to three indexes, separate them by comma. Eg: col1;col2;col3,col2,col3"));
 }
