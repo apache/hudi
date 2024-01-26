@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 
@@ -41,6 +43,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 /**
@@ -57,12 +60,14 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
   public HoodiePositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                                   Schema readerSchema,
                                                   Schema baseFileSchema,
+                                                  InternalSchema internalSchema,
+                                                  HoodieTableMetaClient hoodieTableMetaClient,
                                                   Option<String> partitionNameOverrideOpt,
                                                   Option<String[]> partitionPathFieldOpt,
                                                   HoodieRecordMerger recordMerger,
                                                   TypedProperties payloadProps) {
-    super(readerContext, readerSchema, baseFileSchema, partitionNameOverrideOpt, partitionPathFieldOpt,
-        recordMerger, payloadProps);
+    super(readerContext, readerSchema, baseFileSchema, internalSchema, hoodieTableMetaClient,
+        partitionNameOverrideOpt, partitionPathFieldOpt, recordMerger, payloadProps);
   }
 
   @Override
@@ -91,6 +96,18 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock);
 
+    Option<Pair<Function<T,T>, Schema>> schemaEvolutionTransformerOpt =
+        composeEvolvedSchemaTransformer(dataBlock);
+
+    // In case when schema has been evolved original persisted records will have to be
+    // transformed to adhere to the new schema
+    Function<T,T> transformer =
+        schemaEvolutionTransformerOpt.map(Pair::getLeft)
+            .orElse(Function.identity());
+
+    Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
+        .orElseGet(dataBlock::getSchema);
+
     // TODO: return an iterator that can generate sequence number with the record.
     //  Then we can hide this logic into data block.
     try (ClosableIterator<T> recordIterator = dataBlock.getEngineRecordIterator(readerContext)) {
@@ -105,9 +122,11 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
         }
 
         long recordPosition = recordPositions.get(recordIndex++);
+
+        T evolvedNextRecord = transformer.apply(nextRecord);
         processNextDataRecord(
-            nextRecord,
-            readerContext.generateMetadataForRecord(nextRecord, readerSchema),
+            evolvedNextRecord,
+            readerContext.generateMetadataForRecord(evolvedNextRecord, evolvedSchema),
             recordPosition
         );
       }

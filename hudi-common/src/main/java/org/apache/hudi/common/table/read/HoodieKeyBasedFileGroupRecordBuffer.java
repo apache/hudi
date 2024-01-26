@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 
@@ -49,12 +51,13 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   public HoodieKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                              Schema readerSchema,
                                              Schema baseFileSchema,
+                                             InternalSchema internalSchema,
+                                             HoodieTableMetaClient hoodieTableMetaClient,
                                              Option<String> partitionNameOverrideOpt,
                                              Option<String[]> partitionPathFieldOpt,
                                              HoodieRecordMerger recordMerger,
                                              TypedProperties payloadProps) {
-    super(readerContext, readerSchema, baseFileSchema, partitionNameOverrideOpt, partitionPathFieldOpt,
-        recordMerger, payloadProps);
+    super(readerContext, readerSchema, baseFileSchema, internalSchema, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt, recordMerger, payloadProps);
   }
 
   @Override

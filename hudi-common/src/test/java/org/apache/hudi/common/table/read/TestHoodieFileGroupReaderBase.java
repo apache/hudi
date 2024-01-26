@@ -177,6 +177,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         avroSchema,
         avroSchema,
         Option.empty(),
+        metaClient,
         props,
         metaClient.getTableConfig(),
         0,

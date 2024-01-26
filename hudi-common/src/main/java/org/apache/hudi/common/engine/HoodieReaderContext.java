@@ -214,6 +214,10 @@ public abstract class HoodieReaderContext<T> {
    */
   public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
 
+  public UnaryOperator<T> projectRecordUnsafe(Schema from, Schema to, Map<String, String> renamedColumns) {
+    throw new UnsupportedOperationException("Schema on read is not supported for this reader.");
+  }
+
   /**
    * Extracts the record position value from the record itself.
    *

@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.CachingIterator;
@@ -113,6 +114,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                Schema dataSchema,
                                Schema requestedSchema,
                                Option<InternalSchema> internalSchemaOpt,
+                               HoodieTableMetaClient hoodieTableMetaClient,
                                TypedProperties props,
                                HoodieTableConfig tableConfig,
                                long start,
@@ -146,11 +148,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? null
         : this.shouldMergeWithPosition
         ? new HoodiePositionBasedFileGroupRecordBuffer<>(
-        readerContext, requiredSchema, requiredSchema, Option.empty(), Option.empty(),
-        recordMerger, props)
+        readerContext, requiredSchema, requiredSchema, internalSchema, hoodieTableMetaClient,
+        Option.empty(), Option.empty(), recordMerger, props)
         : new HoodieKeyBasedFileGroupRecordBuffer<>(
-        readerContext, requiredSchema, requiredSchema, Option.empty(), Option.empty(),
-        recordMerger, props);
+        readerContext, requiredSchema, requiredSchema, internalSchema, hoodieTableMetaClient,
+        Option.empty(), Option.empty(), recordMerger, props);
   }
 
   /**
