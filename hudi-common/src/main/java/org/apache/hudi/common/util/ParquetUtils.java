@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -33,6 +34,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
@@ -40,13 +42,16 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.Types;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,6 +65,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collector;
@@ -285,6 +291,23 @@ public class ParquetUtils extends BaseFileUtils {
       rowCount += b.getRowCount();
     }
     return rowCount;
+  }
+
+  @Override
+  public void writeMetaFile(FileSystem fs, Path filePath, Properties props) throws IOException {
+    // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
+    // parameters are not important.
+    Schema schema = HoodieAvroUtils.getRecordKeySchema();
+    MessageType type = Types.buildMessage()
+        .optional(PrimitiveType.PrimitiveTypeName.INT64).named("dummyint").named("dummy");
+    HoodieAvroWriteSupport writeSupport =
+        new HoodieAvroWriteSupport(type, schema, Option.empty(), new Properties());
+    try (ParquetWriter writer = new ParquetWriter(
+        filePath, writeSupport, CompressionCodecName.UNCOMPRESSED, 1024, 1024)) {
+      for (String key : props.stringPropertyNames()) {
+        writeSupport.addFooterMetadata(key, props.getProperty(key));
+      }
+    }
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {
