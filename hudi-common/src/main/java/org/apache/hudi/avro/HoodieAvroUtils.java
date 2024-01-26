@@ -65,7 +65,6 @@ import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.avro.util.Utf8;
-import org.apache.hadoop.util.VersionUtil;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -1310,11 +1309,11 @@ public class HoodieAvroUtils {
   }
 
   public static boolean gteqAvro1_9() {
-    return VersionUtil.compareVersions(AVRO_VERSION, "1.9") >= 0;
+    return StringUtils.compareVersions(AVRO_VERSION, "1.9") >= 0;
   }
 
   public static boolean gteqAvro1_10() {
-    return VersionUtil.compareVersions(AVRO_VERSION, "1.10") >= 0;
+    return StringUtils.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
 
   /**
