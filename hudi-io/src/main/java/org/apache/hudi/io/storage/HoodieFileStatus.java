@@ -19,11 +19,18 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
+
 import java.io.Serializable;
 
 /**
  * Represents the information of a directory or a file.
+ * The APIs are mainly based on {@code org.apache.hadoop.fs.FileStatus} class
+ * with simplification based on what Hudi needs.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public class HoodieFileStatus implements Serializable {
   private final HoodieLocation location;
   private final long length;
@@ -43,6 +50,7 @@ public class HoodieFileStatus implements Serializable {
   /**
    * @return the location.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public HoodieLocation getLocation() {
     return location;
   }
@@ -50,6 +58,7 @@ public class HoodieFileStatus implements Serializable {
   /**
    * @return the length of a file in bytes.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public long getLength() {
     return length;
   }
@@ -57,6 +66,7 @@ public class HoodieFileStatus implements Serializable {
   /**
    * @return whether this is a file.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public boolean isFile() {
     return !isDirectory;
   }
@@ -64,6 +74,7 @@ public class HoodieFileStatus implements Serializable {
   /**
    * @return whether this is a directory.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public boolean isDirectory() {
     return isDirectory;
   }
@@ -71,6 +82,7 @@ public class HoodieFileStatus implements Serializable {
   /**
    * @return the modification of a file.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public long getModificationTime() {
     return modificationTime;
   }

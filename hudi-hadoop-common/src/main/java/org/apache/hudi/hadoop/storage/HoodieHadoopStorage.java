@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 /**
  * Implementation of {@link HoodieStorage} using Hadoop's {@link FileSystem}
  */
-public class HoodieHadoopStorage implements HoodieStorage {
+public class HoodieHadoopStorage extends HoodieStorage {
   private final FileSystem fs;
 
   public HoodieHadoopStorage(FileSystem fs) {

@@ -19,6 +19,9 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -35,15 +38,18 @@ import java.util.List;
 
 /**
  * Provides I/O APIs on files and directories on storage.
+ * The APIs are mainly based on {@code org.apache.hadoop.fs.FileSystem} class.
  */
-public interface HoodieStorage extends Closeable {
-  Logger LOG = LoggerFactory.getLogger(HoodieStorage.class);
-  String TMP_PATH_POSTFIX = ".tmp";
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
+public abstract class HoodieStorage implements Closeable {
+  public static final Logger LOG = LoggerFactory.getLogger(HoodieStorage.class);
+  public static final String TMP_PATH_POSTFIX = ".tmp";
 
   /**
    * @return the scheme of the storage.
    */
-  String getScheme();
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract String getScheme();
 
   /**
    * Creates an OutputStream at the indicated location.
@@ -54,7 +60,8 @@ public interface HoodieStorage extends Closeable {
    * @return the OutputStream to write to.
    * @throws IOException IO error.
    */
-  OutputStream create(HoodieLocation location, boolean overwrite) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract OutputStream create(HoodieLocation location, boolean overwrite) throws IOException;
 
   /**
    * Opens an InputStream at the indicated location.
@@ -63,7 +70,8 @@ public interface HoodieStorage extends Closeable {
    * @return the InputStream to read from.
    * @throws IOException IO error.
    */
-  InputStream open(HoodieLocation location) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract InputStream open(HoodieLocation location) throws IOException;
 
   /**
    * Appends to an existing file (optional operation).
@@ -72,7 +80,8 @@ public interface HoodieStorage extends Closeable {
    * @return the OutputStream to write to.
    * @throws IOException IO error.
    */
-  OutputStream append(HoodieLocation location) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract OutputStream append(HoodieLocation location) throws IOException;
 
   /**
    * Checks if a location exists.
@@ -81,7 +90,8 @@ public interface HoodieStorage extends Closeable {
    * @return {@code true} if the location exists.
    * @throws IOException IO error.
    */
-  boolean exists(HoodieLocation location) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract boolean exists(HoodieLocation location) throws IOException;
 
   /**
    * Returns a file status object that represents the location.
@@ -91,7 +101,8 @@ public interface HoodieStorage extends Closeable {
    * @throws FileNotFoundException when the path does not exist.
    * @throws IOException           IO error.
    */
-  HoodieFileStatus getFileStatus(HoodieLocation location) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract HoodieFileStatus getFileStatus(HoodieLocation location) throws IOException;
 
   /**
    * Creates the directory and non-existent parent directories.
@@ -100,7 +111,8 @@ public interface HoodieStorage extends Closeable {
    * @return {@code true} if the directory was created.
    * @throws IOException IO error.
    */
-  boolean createDirectory(HoodieLocation location) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract boolean createDirectory(HoodieLocation location) throws IOException;
 
   /**
    * Lists the statuses of the direct files/directories in the given location if the path is a directory.
@@ -110,7 +122,8 @@ public interface HoodieStorage extends Closeable {
    * @throws FileNotFoundException when the location does not exist.
    * @throws IOException           IO error.
    */
-  List<HoodieFileStatus> listDirectEntries(HoodieLocation location) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract List<HoodieFileStatus> listDirectEntries(HoodieLocation location) throws IOException;
 
   /**
    * Lists the statuses of all files under the give location recursively.
@@ -120,7 +133,8 @@ public interface HoodieStorage extends Closeable {
    * @throws FileNotFoundException when the location does not exist.
    * @throws IOException           IO error.
    */
-  List<HoodieFileStatus> listFiles(HoodieLocation location) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract List<HoodieFileStatus> listFiles(HoodieLocation location) throws IOException;
 
   /**
    * Lists the statuses of the direct files/directories in the given location
@@ -132,8 +146,9 @@ public interface HoodieStorage extends Closeable {
    * @throws FileNotFoundException when the location does not exist.
    * @throws IOException           IO error.
    */
-  List<HoodieFileStatus> listDirectEntries(HoodieLocation location,
-                                           HoodieLocationFilter filter) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract List<HoodieFileStatus> listDirectEntries(HoodieLocation location,
+                                                           HoodieLocationFilter filter) throws IOException;
 
   /**
    * Returns all the files that match the locationPattern and are not checksum files,
@@ -144,8 +159,9 @@ public interface HoodieStorage extends Closeable {
    * @return the statuses of the files.
    * @throws IOException IO error.
    */
-  List<HoodieFileStatus> globEntries(HoodieLocation locationPattern, HoodieLocationFilter filter)
-      throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract List<HoodieFileStatus> globEntries(HoodieLocation locationPattern,
+                                                     HoodieLocationFilter filter) throws IOException;
 
   /**
    * Renames the location from old to new.
@@ -155,7 +171,9 @@ public interface HoodieStorage extends Closeable {
    * @return {@true} if rename is successful.
    * @throws IOException IO error.
    */
-  boolean rename(HoodieLocation oldLocation, HoodieLocation newLocation) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract boolean rename(HoodieLocation oldLocation,
+                                 HoodieLocation newLocation) throws IOException;
 
   /**
    * Deletes a directory at location.
@@ -164,7 +182,8 @@ public interface HoodieStorage extends Closeable {
    * @return {@code true} if successful.
    * @throws IOException IO error.
    */
-  boolean deleteDirectory(HoodieLocation location) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract boolean deleteDirectory(HoodieLocation location) throws IOException;
 
   /**
    * Deletes a file at location.
@@ -173,7 +192,8 @@ public interface HoodieStorage extends Closeable {
    * @return {@code true} if successful.
    * @throws IOException IO error.
    */
-  boolean deleteFile(HoodieLocation location) throws IOException;
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract boolean deleteFile(HoodieLocation location) throws IOException;
 
   /**
    * Qualifies a path to one which uses this storage and, if relative, made absolute.
@@ -181,29 +201,20 @@ public interface HoodieStorage extends Closeable {
    * @param location to qualify.
    * @return Qualified location.
    */
-  HoodieLocation makeQualified(HoodieLocation location);
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract HoodieLocation makeQualified(HoodieLocation location);
 
   /**
    * @return the underlying file system instance if exists.
    */
-  Object getFileSystem();
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract Object getFileSystem();
 
   /**
    * @return the underlying configuration instance if exists.
    */
-  Object getConf();
-
-  /**
-   * Create an OutputStream at the indicated location.
-   * The file is overwritten by default.
-   *
-   * @param location the file to create.
-   * @return the OutputStream to write to.
-   * @throws IOException IO error.
-   */
-  default OutputStream create(HoodieLocation location) throws IOException {
-    return create(location, true);
-  }
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract Object getConf();
 
   /**
    * Creates a new file with overwrite set to false. This ensures files are created
@@ -214,8 +225,9 @@ public interface HoodieStorage extends Closeable {
    * @param location file Path.
    * @param content  content to be stored.
    */
-  default void createImmutableFileInPath(HoodieLocation location,
-                                         Option<byte[]> content) throws IOException {
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public final void createImmutableFileInPath(HoodieLocation location,
+                                              Option<byte[]> content) throws IOException {
     OutputStream fsout = null;
     HoodieLocation tmpLocation = null;
 
@@ -274,13 +286,35 @@ public interface HoodieStorage extends Closeable {
   }
 
   /**
+   * @return whether a temporary file needs to be created for immutability.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public final boolean needCreateTempFile() {
+    return StorageSchemes.HDFS.getScheme().equals(getScheme());
+  }
+
+  /**
+   * Create an OutputStream at the indicated location.
+   * The file is overwritten by default.
+   *
+   * @param location the file to create.
+   * @return the OutputStream to write to.
+   * @throws IOException IO error.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public OutputStream create(HoodieLocation location) throws IOException {
+    return create(location, true);
+  }
+
+  /**
    * Creates an empty new file at the indicated location.
    *
    * @param location the file to create.
    * @return {@code true} if successfully created; {@code false} if already exists.
    * @throws IOException IO error.
    */
-  default boolean createNewFile(HoodieLocation location) throws IOException {
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public boolean createNewFile(HoodieLocation location) throws IOException {
     if (exists(location)) {
       return false;
     } else {
@@ -298,7 +332,8 @@ public interface HoodieStorage extends Closeable {
    * @throws FileNotFoundException when the location does not exist.
    * @throws IOException           IO error.
    */
-  default List<HoodieFileStatus> listDirectEntries(List<HoodieLocation> locationList) throws IOException {
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public List<HoodieFileStatus> listDirectEntries(List<HoodieLocation> locationList) throws IOException {
     List<HoodieFileStatus> result = new ArrayList<>();
     for (HoodieLocation location : locationList) {
       result.addAll(listDirectEntries(location));
@@ -313,14 +348,8 @@ public interface HoodieStorage extends Closeable {
    * @return the statuses of the files.
    * @throws IOException IO error.
    */
-  default List<HoodieFileStatus> globEntries(HoodieLocation locationPattern) throws IOException {
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public List<HoodieFileStatus> globEntries(HoodieLocation locationPattern) throws IOException {
     return globEntries(locationPattern, e -> true);
-  }
-
-  /**
-   * @return whether a temporary file needs to be created for immutability.
-   */
-  default boolean needCreateTempFile() {
-    return StorageSchemes.HDFS.getScheme().equals(getScheme());
   }
 }

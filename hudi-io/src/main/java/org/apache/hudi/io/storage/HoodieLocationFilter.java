@@ -19,11 +19,24 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
+
 import java.io.Serializable;
 
 /**
  * Filter for {@link HoodieLocation}
+ * The APIs are mainly based on {@code org.apache.hadoop.fs.PathFilter} class.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface HoodieLocationFilter extends Serializable {
+  /**
+   * Tests whether the specified location should be included in a location list.
+   *
+   * @param location the location to be tested.
+   * @return {@code true} if and only if <code>location</code> should be included.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   boolean accept(HoodieLocation location);
 }

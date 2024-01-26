@@ -19,6 +19,10 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
+
 import java.io.Serializable;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -26,7 +30,9 @@ import java.net.URISyntaxException;
 /**
  * Names a file or directory on storage.
  * Location strings use slash (`/`) as the directory separator.
+ * The APIs are mainly based on {@code org.apache.hadoop.fs.Path} class.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public class HoodieLocation implements Comparable<HoodieLocation>, Serializable {
   public static final char SEPARATOR_CHAR = '/';
   public static final char COLON_CHAR = ':';
@@ -114,10 +120,12 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
     }
   }
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public boolean isAbsolute() {
     return uri.getPath().startsWith(SEPARATOR);
   }
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public HoodieLocation getParent() {
     // This value could be overwritten concurrently and that's okay, since
     // {@code HoodieLocation} is immutable
@@ -139,6 +147,7 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
     return cachedParent;
   }
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getName() {
     // This value could be overwritten concurrently and that's okay, since
     // {@code HoodieLocation} is immutable
@@ -150,6 +159,7 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
     return cachedName;
   }
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public HoodieLocation getLocationWithoutSchemeAndAuthority() {
     try {
       return new HoodieLocation(
@@ -159,6 +169,7 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
     }
   }
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public int depth() {
     String path = uri.getPath();
     int depth = 0;
@@ -170,6 +181,7 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
     return depth;
   }
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public URI toUri() {
     return uri;
   }
