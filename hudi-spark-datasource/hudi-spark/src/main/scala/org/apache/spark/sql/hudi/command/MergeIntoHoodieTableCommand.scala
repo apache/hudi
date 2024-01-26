@@ -275,7 +275,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     if (HoodieSparkUtils.isSpark2) {
       //already enabled by default for spark 3+
       sparkSession.conf.set("spark.sql.crossJoin.enabled", "true")
-    } else if (HoodieSparkUtils.isSpark3_1 &&
+    } else if ((HoodieSparkUtils.isSpark3_1 || HoodieSparkUtils.isSpark3_0)&&
       hoodieCatalogTable.tableConfig.getTableType.equals(HoodieTableType.MERGE_ON_READ) &&
       sparkSession.conf.get("hoodie.index.type", "").toLowerCase.contains("global")) {
       sparkSession.conf.set(PARQUET_VECTORIZED_READER_ENABLED.key, "false")
