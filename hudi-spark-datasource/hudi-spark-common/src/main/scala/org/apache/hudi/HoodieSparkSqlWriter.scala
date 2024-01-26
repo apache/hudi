@@ -141,15 +141,9 @@ object HoodieSparkSqlWriter {
   def deduceWriterSchema(sourceSchema: Schema,
                          latestTableSchemaOpt: Option[Schema],
                          internalSchemaOpt: Option[InternalSchema],
-                         opts: Map[String, String]): Schema = {
-    HoodieSchemaUtils.deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, opts)
-  }
-
-  def deduceWriterSchema(sourceSchema: Schema,
-                         latestTableSchemaOpt: Option[Schema],
-                         internalSchemaOpt: Option[InternalSchema],
                          props: TypedProperties): Schema = {
-    deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, HoodieConversionUtils.fromProperties(props))
+    HoodieSchemaUtils.deduceWriterSchema(sourceSchema, latestTableSchemaOpt,
+      internalSchemaOpt, HoodieConversionUtils.fromProperties(props))
   }
 
   def cleanup(): Unit = {

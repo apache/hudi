@@ -70,6 +70,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.testutils.HiveTestService.HS2_JDBC_URL;
@@ -608,6 +609,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         cfg.schemaProviderClassName = schemaProviderClassName;
       }
       List<String> cfgs = new ArrayList<>();
+      cfgs.add(SET_NULL_FOR_MISSING_COLUMNS.key() + "=true");
       cfgs.add("hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt=" + addReadLatestOnMissingCkpt);
       cfgs.add("hoodie.deltastreamer.source.hoodieincr.path=" + srcBasePath);
       // No partition
