@@ -658,7 +658,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val countDownLatch = new CountDownLatch(2)
     for (x <- 1 to 2) {
       val thread = new Thread(new UpdateThread(dataGen, spark, commonOpts, basePath, x + "00", countDownLatch, numRetries))
-      thread.setName((x + "00_THREAD").toString())
+      thread.setName(x + "00_THREAD")
       thread.start()
     }
     countDownLatch.await(1, TimeUnit.MINUTES)
@@ -682,15 +682,18 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       val insertRecs = recordsToStrings(dataGen.generateInserts(instantTime, 1000)).toList
       val updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecs, 2))
       val insertDf = spark.read.json(spark.sparkContext.parallelize(insertRecs, 2))
-      updateDf.union(insertDf).write.format("org.apache.hudi")
-        .options(commonOpts)
-        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
-        .option("hoodie.cleaner.policy.failed.writes", "LAZY")
-        .option("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider")
-        .option(HoodieWriteConfig.NUM_RETRIES_ON_CONFLICT_FAILURES.key(), numRetries.toString)
-        .mode(SaveMode.Append)
-        .save(basePath)
-      countDownLatch.countDown()
+      try {
+        updateDf.union(insertDf).write.format("org.apache.hudi")
+          .options(commonOpts)
+          .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
+          .option("hoodie.cleaner.policy.failed.writes", "LAZY")
+          .option("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+          .option(HoodieWriteConfig.NUM_RETRIES_ON_CONFLICT_FAILURES.key(), numRetries.toString)
+          .mode(SaveMode.Append)
+          .save(basePath)
+      } finally {
+        countDownLatch.countDown()
+      }
     }
   }
 

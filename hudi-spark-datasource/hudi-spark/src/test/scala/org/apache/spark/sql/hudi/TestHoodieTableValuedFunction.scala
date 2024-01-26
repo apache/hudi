@@ -21,6 +21,8 @@ import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.spark.sql.functions.{col, from_json}
 
+import scala.collection.Seq
+
 class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
 
   test(s"Test hudi_query Table-Valued Function") {
@@ -557,5 +559,71 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
         }
       }
     }
+  }
+
+  test(s"Test hudi_metadata Table-Valued Function") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          val identifier = tableName
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  ts long,
+               |  price int
+               |) using hudi
+               |partitioned by (price)
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts',
+               |  hoodie.datasource.write.recordkey.field = 'id',
+               |  hoodie.metadata.record.index.enable = 'true',
+               |  hoodie.metadata.index.column.stats.enable = 'true',
+               |  hoodie.metadata.index.column.stats.column.list = 'price'
+               |)
+               |location '${tmp.getCanonicalPath}/$tableName'
+               |""".stripMargin
+          )
+
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1', 1000, 10), (2, 'a2', 2000, 20), (3, 'a3', 3000, 30)
+               | """.stripMargin
+          )
+
+          val result2DF = spark.sql(
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=1"
+          )
+          assert(result2DF.count() == 1)
+
+          val result3DF = spark.sql(
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=2"
+          )
+          assert(result3DF.count() == 3)
+
+          val result4DF = spark.sql(
+            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=3"
+          )
+          assert(result4DF.count() == 3)
+
+          val result5DF = spark.sql(
+            s"select type, key, recordIndexMetadata from hudi_metadata('$identifier') where type=5"
+          )
+          assert(result5DF.count() == 3)
+
+          val result6DF = spark.sql(
+            s"select type, key, BloomFilterMetadata from hudi_metadata('$identifier') where BloomFilterMetadata is not null"
+          )
+          assert(result6DF.count() == 0)
+        }
+      }
+    }
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
   }
 }

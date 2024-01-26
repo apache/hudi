@@ -27,8 +27,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -43,7 +43,7 @@ public class TimelineHandler extends Handler {
 
   public List<InstantDTO> getLastInstant(String basePath) {
     return viewManager.getFileSystemView(basePath).getLastInstant().map(InstantDTO::fromInstant)
-        .map(Arrays::asList).orElse(new ArrayList<>());
+        .map(Arrays::asList).orElse(Collections.emptyList());
   }
 
   public TimelineDTO getTimeline(String basePath) {

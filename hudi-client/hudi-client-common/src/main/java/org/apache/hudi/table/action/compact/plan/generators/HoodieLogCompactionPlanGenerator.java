@@ -98,6 +98,7 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
         .withOptimizedLogBlocksScan(true)
         .withRecordMerger(writeConfig.getRecordMerger())
+        .withTableMetaClient(metaClient)
         .build();
     scanner.scan(true);
     int totalBlocks = scanner.getCurrentInstantLogBlocks().size();

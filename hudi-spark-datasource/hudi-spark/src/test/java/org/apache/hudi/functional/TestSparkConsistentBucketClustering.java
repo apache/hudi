@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy;
@@ -49,19 +50,15 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
-import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.serde2.io.DoubleWritable;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
@@ -72,7 +69,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -83,6 +79,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
@@ -161,6 +158,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
 
   /**
    * Test running archival after clustering
+   *
    * @throws IOException
    */
   @ParameterizedTest
@@ -220,8 +218,8 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
    * @throws IOException
    */
   @ParameterizedTest
-  @ValueSource(strings = {"_row_key", "begin_lat"})
-  public void testClusteringColumnSort(String sortColumn) throws IOException {
+  @MethodSource("configParamsForSorting")
+  public void testClusteringColumnSort(String sortColumn, boolean rowWriterEnable) throws IOException {
     Map<String, String> options = new HashMap<>();
     // Record key is handled specially
     if (sortColumn.equals("_row_key")) {
@@ -229,8 +227,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     } else {
       options.put(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), sortColumn);
     }
-    // TODO: row writer does not support sort for consistent hashing index
-    options.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
+    options.put("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
     setup(128 * 1024 * 1024, options);
 
     writeData(writeClient.createNewInstantTime(), 500, true);
@@ -240,33 +237,35 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
 
     // Check the specified column is in sort order
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    List<String> inputPaths = Arrays.stream(dataGen.getPartitionPaths()).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList());
 
-    // Get record reader for file groups and check each file group independently
-    List<RecordReader> readers = HoodieMergeOnReadTestUtils.getRecordReadersUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, false);
-    Schema rawSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    List<Row> rows = readRecords();
+    Assertions.assertEquals(1000, rows.size());
+
+    StructType schema = rows.get(0).schema();
+    Schema rawSchema = AvroConversionUtils.convertStructTypeToAvroSchema(schema,  "test_struct_name", "test_namespace");
     Schema.Field field = rawSchema.getField(sortColumn);
+    Schema.Field fileNameFiled = rawSchema.getField(FILENAME_METADATA_FIELD);
+
     Comparator comparator;
     if (field.schema().getType() == Schema.Type.DOUBLE) {
-      comparator = Comparator.comparingDouble(o -> ((DoubleWritable) o).get());
+      comparator = Comparator.comparingDouble(row -> (double) (((Row) row).get(field.pos())));
     } else if (field.schema().getType() == Schema.Type.STRING) {
-      comparator = Comparator.comparing(Object::toString, String::compareTo);
+      comparator = Comparator.comparing(row -> ((Row) row).get(field.pos()).toString());
     } else {
       throw new HoodieException("Cannot get comparator: unsupported data type, " + field.schema().getType());
     }
 
-    // Note: If row writer is used, it will throw: https://github.com/apache/hudi/issues/8838
-    // Use #readRecords() instead if row-writer is used in the future
-    for (RecordReader recordReader: readers) {
-      Object key = recordReader.createKey();
-      ArrayWritable writable = (ArrayWritable) recordReader.createValue();
-      // The target column in a single file group should be in sorted order
-      Object lastValue = null;
-      while (recordReader.next(key, writable)) {
-        Object rowKey = writable.get()[field.pos()];
-        Assertions.assertTrue(lastValue == null || comparator.compare(lastValue, rowKey) <= 0);
-        lastValue = rowKey;
+    // Compare the sort column are sorted just with the bucket file
+    Row lastRow = null;
+    String lastFileName = null;
+    for (Row row : rows) {
+      String currentFileName = row.get(fileNameFiled.pos()).toString();
+      if (!(lastFileName == null || !currentFileName.equals(lastFileName) || lastRow == null)) {
+        Assertions.assertTrue(lastRow == null || comparator.compare(lastRow, row) <= 0,
+            "The rows are not sorted based on the column: " + sortColumn);
       }
+      lastRow = row;
+      lastFileName = currentFileName;
     }
   }
 
@@ -369,6 +368,15 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         Arguments.of(false, false),
         Arguments.of(true, true),
         Arguments.of(false, true)
+    );
+  }
+
+  private static Stream<Arguments> configParamsForSorting() {
+    return Stream.of(
+        Arguments.of("begin_lat", true),
+        Arguments.of("begin_lat", false),
+        Arguments.of("_row_key", false),
+        Arguments.of("_row_key", true)
     );
   }
 }
