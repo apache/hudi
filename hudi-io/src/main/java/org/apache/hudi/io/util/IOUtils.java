@@ -19,8 +19,10 @@
 
 package org.apache.hudi.io.util;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 
 /**
  * Util methods on I/O.
@@ -248,5 +250,19 @@ public class IOUtils {
       totalBytesRead += bytesRead;
     }
     return totalBytesRead;
+  }
+
+  public static byte[] readAsByteArray(InputStream input, int outputSize) throws IOException {
+    ByteArrayOutputStream bos = new ByteArrayOutputStream(outputSize);
+    copy(input, bos);
+    return bos.toByteArray();
+  }
+
+  public static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
+    byte[] buffer = new byte[1024];
+    int len;
+    while ((len = inputStream.read(buffer)) != -1) {
+      outputStream.write(buffer, 0, len);
+    }
   }
 }
