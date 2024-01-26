@@ -24,14 +24,14 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -141,10 +141,9 @@ public class HoodiePartitionMetadata {
       BaseFileUtils.getInstance(format.get()).writeMetaFile(fs, filePath, props);
     } else {
       // Backwards compatible properties file format
-      FSDataOutputStream os = fs.create(filePath, true);
+      OutputStream os = fs.create(filePath, true);
       props.store(os, "partition metadata");
-      os.hsync();
-      os.hflush();
+      os.flush();
       os.close();
     }
   }
@@ -169,7 +168,7 @@ public class HoodiePartitionMetadata {
   private boolean readTextFormatMetaFile() {
     // Properties file format
     Path metafilePath = textFormatMetaFilePath(partitionPath);
-    try (FSDataInputStream is = fs.open(metafilePath)) {
+    try (InputStream is = fs.open(metafilePath)) {
       props.load(is);
       format = Option.empty();
       return true;

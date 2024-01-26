@@ -33,8 +33,6 @@ import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -43,6 +41,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -124,7 +124,7 @@ public class TableOptionProperties {
       boolean isOverwrite) throws IOException {
     Path propertiesFilePath = getPropertiesFilePath(basePath);
     FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
-    try (FSDataOutputStream outputStream = fs.create(propertiesFilePath, isOverwrite)) {
+    try (OutputStream outputStream = fs.create(propertiesFilePath, isOverwrite)) {
       Properties properties = new Properties();
       properties.putAll(options);
       properties.store(outputStream,
@@ -142,7 +142,7 @@ public class TableOptionProperties {
     Properties props = new Properties();
 
     FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
-    try (FSDataInputStream inputStream = fs.open(propertiesFilePath)) {
+    try (InputStream inputStream = fs.open(propertiesFilePath)) {
       props.load(inputStream);
       for (final String name : props.stringPropertyNames()) {
         options.put(name, props.getProperty(name));

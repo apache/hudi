@@ -32,13 +32,13 @@ import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -160,7 +160,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
         if (!validaSchemaFiles.isEmpty()) {
           Path latestFilePath = new Path(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));
           byte[] content;
-          try (FSDataInputStream is = fs.open(latestFilePath)) {
+          try (InputStream is = fs.open(latestFilePath)) {
             content = FileIOUtils.readAsByteArray(is);
             LOG.info(String.format("read history schema success from file : %s", latestFilePath));
             return fromUTF8Bytes(content);
