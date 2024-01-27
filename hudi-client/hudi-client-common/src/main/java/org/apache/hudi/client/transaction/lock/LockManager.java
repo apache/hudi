@@ -26,6 +26,7 @@ import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -107,7 +108,11 @@ public class LockManager implements Serializable, AutoCloseable {
    */
   public void unlock() {
     getLockProvider().unlock();
-    metrics.updateLockHeldTimerMetrics();
+    try {
+      metrics.updateLockHeldTimerMetrics();
+    } catch (HoodieException e) {
+      LOG.error(String.format("Exception encountered when updating lock metrics: %s", e));
+    }
     close();
   }
 
