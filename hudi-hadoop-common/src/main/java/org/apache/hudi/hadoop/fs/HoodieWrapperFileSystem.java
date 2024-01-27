@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.StorageSchemes;
+import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
@@ -61,7 +61,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
 
-import static org.apache.hudi.io.storage.StorageSchemes.HDFS;
+import static org.apache.hudi.storage.StorageSchemes.HDFS;
 
 /**
  * HoodieWrapperFileSystem wraps the default file system. It holds state about the open streams in the file system to

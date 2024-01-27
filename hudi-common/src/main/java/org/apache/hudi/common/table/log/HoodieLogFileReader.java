@@ -39,7 +39,7 @@ import org.apache.hudi.hadoop.fs.BoundedFsDataInputStream;
 import org.apache.hudi.hadoop.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.hadoop.fs.TimedFSDataInputStream;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.io.storage.StorageSchemes;
+import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
