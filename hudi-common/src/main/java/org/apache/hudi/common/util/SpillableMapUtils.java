@@ -34,6 +34,7 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.Map;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNullableValAsString;
 import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
@@ -174,9 +175,15 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> R generateEmptyPayload(String recKey, String partitionPath, Comparable orderingVal, String payloadClazz) {
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
-        HoodieRecordUtils.loadPayload(payloadClazz, new Object[] {null, orderingVal}, GenericRecord.class, Comparable.class));
+  public static <R> R generateHoodieDeleteRecord(
+      String recKey,
+      String partitionPath,
+      Map<String, Object> metadata) {
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(
+        new HoodieKey(recKey, partitionPath),
+        null,  // record type agnostic
+        HoodieOperation.DELETE,
+        Option.of(metadata));
     return (R) hoodieRecord;
   }
 }

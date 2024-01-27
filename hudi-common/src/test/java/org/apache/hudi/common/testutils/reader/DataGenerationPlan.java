@@ -43,7 +43,8 @@ public class DataGenerationPlan {
   public enum OperationType {
     INSERT,
     UPDATE,
-    DELETE
+    DELETE,
+    SKIP
   }
 
   public DataGenerationPlan(List<String> recordKeys,
