@@ -17,11 +17,7 @@
  * under the License.
  */
 
-<<<<<<<< HEAD:hudi-io/src/main/java/org/apache/hudi/storage/StorageSchemes.java
 package org.apache.hudi.storage;
-========
-package org.apache.hudi.io.storage;
->>>>>>>> ca3cb838f94 ([HUDI-7336] Introduce new HoodieStorage abstraction):hudi-io/src/main/java/org/apache/hudi/io/storage/StorageSchemes.java
 
 import java.util.Arrays;
 

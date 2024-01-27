@@ -19,10 +19,10 @@
 
 package org.apache.hudi.hadoop.storage;
 
-import org.apache.hudi.io.storage.HoodieFileStatus;
-import org.apache.hudi.io.storage.HoodieLocation;
-import org.apache.hudi.io.storage.HoodieLocationFilter;
-import org.apache.hudi.io.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieFileStatus;
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieLocationFilter;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;

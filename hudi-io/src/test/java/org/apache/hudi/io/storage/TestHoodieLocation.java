@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.storage.HoodieLocation;
+
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;

@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.storage;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;

@@ -21,6 +21,9 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.util.IOUtils;
+import org.apache.hudi.storage.HoodieFileStatus;
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

@@ -19,6 +19,9 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieLocationFilter;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

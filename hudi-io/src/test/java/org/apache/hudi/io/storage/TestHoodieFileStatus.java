@@ -19,6 +19,9 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.storage.HoodieFileStatus;
+import org.apache.hudi.storage.HoodieLocation;
+
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
