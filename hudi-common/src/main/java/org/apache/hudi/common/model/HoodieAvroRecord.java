@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
 import static org.apache.hudi.common.model.HoodieAvroIndexedRecord.updateMetadataValuesInternal;
 
 /**
@@ -68,6 +69,14 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     super(key, data, operation, currentLocation, newLocation);
   }
 
+  public HoodieAvroRecord(
+      HoodieKey key,
+      T data,
+      HoodieOperation operation,
+      Option<Map<String, Object>> metadata) {
+    super(key, data, operation, metadata);
+  }
+
   public HoodieAvroRecord() {
   }
 
@@ -96,7 +105,21 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
-    return this.getData().getOrderingValue();
+    // For non-delete record.
+    if (data != null) {
+      return getData().getOrderingValue();
+    }
+
+    // Natural order.
+    if (metaData == null || !metaData.isPresent()) {
+      return 0L;
+    }
+
+    // For delete record.
+    // We first check the metadata field.
+    // Then we use the natural order.
+    return (Comparable<?>) metaData.get()
+        .getOrDefault(INTERNAL_META_ORDERING_FIELD, 0L);
   }
 
   @Override
@@ -157,6 +180,12 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+    // For delete record.
+    if (data == null) {
+      return true;
+    }
+
+    // For backward compatibility.
     if (this.data instanceof BaseAvroPayload) {
       return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
     } else {
@@ -203,6 +232,12 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   public Option<Map<String, String>> getMetadata() {
+    // Delete records do not contain external metadata.
+    if (data == null) {
+      return Option.empty();
+    }
+
+    // For non-delete records.
     return getData().getMetadata();
   }
 

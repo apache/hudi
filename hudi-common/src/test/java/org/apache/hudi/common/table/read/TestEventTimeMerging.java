@@ -24,7 +24,6 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieAvroRecordTestMerger;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
-import org.apache.hudi.common.testutils.reader.HoodieRecordTestPayload;
 import org.apache.hudi.common.testutils.reader.HoodieTestReaderContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -52,9 +51,7 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     // Create dedicated merger to avoid current delete logic holes.
     // TODO: Unify delete logic (HUDI-7240).
     HoodieAvroRecordMerger merger = new HoodieAvroRecordTestMerger();
-    readerContext = new HoodieTestReaderContext(
-        Option.of(merger),
-        Option.of(HoodieRecordTestPayload.class.getName()));
+    readerContext = new HoodieTestReaderContext(Option.of(merger));
 
     // -------------------------------------------------------------
     // The test logic is as follows:

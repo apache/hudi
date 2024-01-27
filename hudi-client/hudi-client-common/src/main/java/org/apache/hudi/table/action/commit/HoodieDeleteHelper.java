@@ -121,7 +121,7 @@ public class HoodieDeleteHelper<T, R> extends
   public static HoodieData createDeleteRecords(HoodieWriteConfig config, HoodieData<HoodieKey> keys) {
     HoodieRecordType recordType = config.getRecordMerger().getRecordType();
     if (recordType == HoodieRecordType.AVRO) {
-      return keys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
+      return keys.map(key -> new HoodieAvroRecord(key, null));
     } else {
       return keys.map(key -> new HoodieEmptyRecord<>(key, recordType));
     }
@@ -130,7 +130,7 @@ public class HoodieDeleteHelper<T, R> extends
   public static <T> HoodieRecord<T> createDeleteRecord(HoodieWriteConfig config, HoodieKey key) {
     HoodieRecordType recordType = config.getRecordMerger().getRecordType();
     if (recordType == HoodieRecordType.AVRO) {
-      return new HoodieAvroRecord(key, new EmptyHoodieRecordPayload());
+      return new HoodieAvroRecord(key, null);
     } else {
       return new HoodieEmptyRecord<>(key, recordType);
     }

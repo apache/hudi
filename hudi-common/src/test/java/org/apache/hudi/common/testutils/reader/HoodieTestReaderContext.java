@@ -22,7 +22,6 @@ package org.apache.hudi.common.testutils.reader;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -57,10 +56,8 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   private Option<String> payloadClass;
 
   public HoodieTestReaderContext(
-      Option<HoodieRecordMerger> customMerger,
-      Option<String> payloadClass) {
+      Option<HoodieRecordMerger> customMerger) {
     this.customMerger = customMerger;
-    this.payloadClass = payloadClass;
   }
 
   @Override
@@ -136,18 +133,13 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public HoodieRecord constructHoodieRecord(
       Option<IndexedRecord> recordOpt,
-      Map<String, Object> metadataMap
+      Map<String, Object> metadata
   ) {
-    String appliedPayloadClass =
-        payloadClass.isPresent()
-            ? payloadClass.get()
-            : DefaultHoodieRecordPayload.class.getName();
     if (!recordOpt.isPresent()) {
-      return SpillableMapUtils.generateEmptyPayload(
-          (String) metadataMap.get(INTERNAL_META_RECORD_KEY),
-          (String) metadataMap.get(INTERNAL_META_PARTITION_PATH),
-          (Comparable<?>) metadataMap.get(INTERNAL_META_ORDERING_FIELD),
-          appliedPayloadClass);
+      return SpillableMapUtils.generateHoodieDeleteRecord(
+          (String) metadata.get(INTERNAL_META_RECORD_KEY),
+          (String) metadata.get(INTERNAL_META_PARTITION_PATH),
+          metadata);
     }
     return new HoodieAvroIndexedRecord(recordOpt.get());
   }

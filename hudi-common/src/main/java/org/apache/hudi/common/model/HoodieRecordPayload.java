@@ -137,6 +137,6 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   default Comparable<?> getOrderingValue() {
     // default natural order
-    return 0;
+    return 0L;
   }
 }
