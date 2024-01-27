@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.hadoop.storage;
+package org.apache.hudi.storage.hadoop;
 
 import org.apache.hudi.storage.HoodieFileStatus;
 import org.apache.hudi.storage.HoodieLocation;
