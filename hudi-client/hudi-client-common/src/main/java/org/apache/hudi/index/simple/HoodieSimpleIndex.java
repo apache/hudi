@@ -38,8 +38,6 @@ import org.apache.hudi.io.HoodieKeyLocationFetchHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.List;
-
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
 import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
@@ -143,19 +141,18 @@ public class HoodieSimpleIndex
   protected HoodiePairData<HoodieKey, HoodieRecordLocation> fetchRecordLocationsForAffectedPartitions(
       HoodieData<HoodieKey> hoodieKeys, HoodieEngineContext context, HoodieTable hoodieTable,
       int parallelism) {
-    List<String> affectedPartitionPathList =
-        hoodieKeys.map(HoodieKey::getPartitionPath).distinct().collectAsList();
-    List<Pair<String, HoodieBaseFile>> latestBaseFiles =
+    HoodieData<String> affectedPartitionPathList =
+        hoodieKeys.map(HoodieKey::getPartitionPath).distinct();
+    HoodieData<Pair<String, HoodieBaseFile>> latestBaseFiles =
         getLatestBaseFilesForAllPartitions(affectedPartitionPathList, context, hoodieTable);
     return fetchRecordLocations(context, hoodieTable, parallelism, latestBaseFiles);
   }
 
   protected HoodiePairData<HoodieKey, HoodieRecordLocation> fetchRecordLocations(
       HoodieEngineContext context, HoodieTable hoodieTable, int parallelism,
-      List<Pair<String, HoodieBaseFile>> baseFiles) {
-    int fetchParallelism = Math.max(1, Math.min(baseFiles.size(), parallelism));
-
-    return context.parallelize(baseFiles, fetchParallelism)
+      HoodieData<Pair<String, HoodieBaseFile>> baseFiles) {
+    // TODO respect parallelism
+    return baseFiles
         .flatMap(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile, keyGeneratorOpt)
             .locations().iterator())
         .mapToPair(e -> (Pair<HoodieKey, HoodieRecordLocation>) e);

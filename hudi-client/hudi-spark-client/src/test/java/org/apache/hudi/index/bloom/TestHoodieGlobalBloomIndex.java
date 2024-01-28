@@ -120,7 +120,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     List<String> partitions = Arrays.asList(p1, p2);
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
-    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
+    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(context.parallelize(partitions, 1), context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -159,7 +159,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     testTable.doWriteOperation(c2, WriteOperationType.UPSERT, Collections.singletonList(p3),
         partitionToFilesNameLengthMap, false, false);
 
-    filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
+    filesList = index.loadColumnRangesFromFiles(context.parallelize(partitions, 1), context, hoodieTable);
     assertEquals(4, filesList.size());
 
     Map<String, BloomIndexFileInfo> filesMap = toFileMap(filesList);

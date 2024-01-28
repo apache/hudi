@@ -68,7 +68,7 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
   protected <R> HoodieData<HoodieRecord<R>> tagLocationInternal(
       HoodieData<HoodieRecord<R>> inputRecords, HoodieEngineContext context,
       HoodieTable hoodieTable) {
-    List<Pair<String, HoodieBaseFile>> latestBaseFiles = getAllBaseFilesInTable(context, hoodieTable);
+    HoodieData<Pair<String, HoodieBaseFile>> latestBaseFiles = getAllBaseFilesInTable(context, hoodieTable, config.getGlobalSimpleIndexParallelism());
     HoodiePairData<String, HoodieRecordGlobalLocation> allKeysAndLocations =
         fetchRecordGlobalLocations(context, hoodieTable, config.getGlobalSimpleIndexParallelism(), latestBaseFiles);
     boolean mayContainDuplicateLookup = hoodieTable.getMetaClient().getTableType() == MERGE_ON_READ;
@@ -79,10 +79,9 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
 
   private HoodiePairData<String, HoodieRecordGlobalLocation> fetchRecordGlobalLocations(
       HoodieEngineContext context, HoodieTable hoodieTable, int parallelism,
-      List<Pair<String, HoodieBaseFile>> baseFiles) {
-    int fetchParallelism = Math.max(1, Math.min(baseFiles.size(), parallelism));
-
-    return context.parallelize(baseFiles, fetchParallelism)
+      HoodieData<Pair<String, HoodieBaseFile>> baseFiles) {
+    // TODO respect configured parallelism
+    return baseFiles
         .flatMap(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile, keyGeneratorOpt)
             .globalLocations().iterator())
         .mapToPair(e -> (Pair<String, HoodieRecordGlobalLocation>) e);
@@ -91,12 +90,12 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
   /**
    * Load all files for all partitions as <Partition, filename> pair data.
    */
-  private List<Pair<String, HoodieBaseFile>> getAllBaseFilesInTable(
-      final HoodieEngineContext context, final HoodieTable hoodieTable) {
+  private HoodieData<Pair<String, HoodieBaseFile>> getAllBaseFilesInTable(
+      final HoodieEngineContext context, final HoodieTable hoodieTable, int parallelism) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
     // Obtain the latest data files from all the partitions.
-    return getLatestBaseFilesForAllPartitions(allPartitionPaths, context, hoodieTable);
+    return getLatestBaseFilesForAllPartitions(context.parallelize(allPartitionPaths, parallelism), context, hoodieTable);
   }
 
   @Override

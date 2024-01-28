@@ -115,7 +115,7 @@ public class ParquetUtils extends BaseFileUtils {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
     Configuration conf = new Configuration(configuration);
-    conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
+    //conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
     Set<Pair<String, Long>> rowKeys = new HashSet<>();
