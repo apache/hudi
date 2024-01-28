@@ -1,0 +1,6 @@
+---[2024-01-27 16:05:12] [release-v1.1.8] Adding release tag for hudi-internal release-v1.1.8---
+36cfc6aef [ENG-5849] remove meta cols from incoming schema (#518)
+c7c5909b0 [ENG-5826] Pull patches from open source (#520)
+d50e0391f [ENG-5575] Write bad records to error table in more cases instead of failing (#519)
+17a4c0dd3 [ENG-5661] stream sync doesn't differentiate replace commits (#513)
+be13faf63 [ENG-5699] Release hudi-integ-test-bundle to mvn artifact (#512)

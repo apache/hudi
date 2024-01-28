@@ -6,7 +6,7 @@ on:
 
 env:
   MVN_ARGS: -ntp -B -V -Pci-log -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
-  MODULES: "packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,hudi-aws,packaging/hudi-spark-bundle,hudi-sync/hudi-datahub-sync,packaging/hudi-aws-bundle,packaging/hudi-gcp-bundle,packaging/hudi-datahub-sync-bundle,packaging/hudi-hive-sync-bundle,packaging/hudi-integ-test-bundle"
+  MODULES: "packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,hudi-aws,packaging/hudi-spark-bundle,hudi-sync/hudi-datahub-sync,packaging/hudi-aws-bundle,packaging/hudi-gcp-bundle,packaging/hudi-datahub-sync-bundle,packaging/hudi-hive-sync-bundle"
   AWS: "aws"
   SCALA_PROFILE: "scala-2.12"
   SPARK_PROFILE: "spark3.2"
