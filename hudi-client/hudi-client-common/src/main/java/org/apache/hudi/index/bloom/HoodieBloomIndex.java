@@ -164,6 +164,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   List<Pair<String, BloomIndexFileInfo>> loadColumnRangesFromFiles(
       HoodieData<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
     // Obtain the latest data files from all the partitions.
+    context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on): " + config.getTableName());
     return getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable)
         .map(pair ->  {
           String partitionPath = pair.getKey();
