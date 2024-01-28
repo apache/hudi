@@ -206,7 +206,7 @@
     <spark.bundle.hive.shade.prefix/>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix/>
-    <argLine>-agentpath:/Users/timbrown/code/async-profiler-2.9-macos/build/libasyncProfiler.so=start,event=cpu,file=profile.html</argLine>
+    <argLine>-Xmx2g -Xms128m</argLine>
     <jacoco.version>0.8.8</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>

@@ -145,14 +145,13 @@ public class HoodieSimpleIndex
         hoodieKeys.map(HoodieKey::getPartitionPath).distinct();
     HoodieData<Pair<String, HoodieBaseFile>> latestBaseFiles =
         getLatestBaseFilesForAllPartitions(affectedPartitionPathList, context, hoodieTable);
-    return fetchRecordLocations(context, hoodieTable, parallelism, latestBaseFiles);
+    return fetchRecordLocations(hoodieTable, parallelism, latestBaseFiles);
   }
 
   protected HoodiePairData<HoodieKey, HoodieRecordLocation> fetchRecordLocations(
-      HoodieEngineContext context, HoodieTable hoodieTable, int parallelism,
+      HoodieTable hoodieTable, int parallelism,
       HoodieData<Pair<String, HoodieBaseFile>> baseFiles) {
-    // TODO respect parallelism
-    return baseFiles
+    return baseFiles.repartition(Math.max(1, Math.min(baseFiles.getNumPartitions(), parallelism)))
         .flatMap(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile, keyGeneratorOpt)
             .locations().iterator())
         .mapToPair(e -> (Pair<HoodieKey, HoodieRecordLocation>) e);

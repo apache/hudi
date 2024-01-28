@@ -70,7 +70,7 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
       HoodieTable hoodieTable) {
     HoodieData<Pair<String, HoodieBaseFile>> latestBaseFiles = getAllBaseFilesInTable(context, hoodieTable, config.getGlobalSimpleIndexParallelism());
     HoodiePairData<String, HoodieRecordGlobalLocation> allKeysAndLocations =
-        fetchRecordGlobalLocations(context, hoodieTable, config.getGlobalSimpleIndexParallelism(), latestBaseFiles);
+        fetchRecordGlobalLocations(hoodieTable, config.getGlobalSimpleIndexParallelism(), latestBaseFiles);
     boolean mayContainDuplicateLookup = hoodieTable.getMetaClient().getTableType() == MERGE_ON_READ;
     boolean shouldUpdatePartitionPath = config.getGlobalSimpleIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
     return tagGlobalLocationBackToRecords(inputRecords, allKeysAndLocations,
@@ -78,10 +78,9 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
   }
 
   private HoodiePairData<String, HoodieRecordGlobalLocation> fetchRecordGlobalLocations(
-      HoodieEngineContext context, HoodieTable hoodieTable, int parallelism,
+      HoodieTable hoodieTable, int parallelism,
       HoodieData<Pair<String, HoodieBaseFile>> baseFiles) {
-    // TODO respect configured parallelism
-    return baseFiles
+    return baseFiles.repartition(Math.max(1, Math.min(baseFiles.getNumPartitions(), parallelism)))
         .flatMap(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile, keyGeneratorOpt)
             .globalLocations().iterator())
         .mapToPair(e -> (Pair<String, HoodieRecordGlobalLocation>) e);

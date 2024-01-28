@@ -118,7 +118,6 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   private HoodiePairData<HoodieKey, HoodieRecordLocation> lookupIndex(
       HoodiePairData<String, String> partitionRecordKeyPairs, final HoodieEngineContext context,
       final HoodieTable hoodieTable) {
-    // TOOD update comment
     // Step 1: Obtain records per partition, in the incoming records
     HoodiePairData<String, Long> recordsPerPartition = partitionRecordKeyPairs.mapToPair(pair -> Pair.of(pair.getLeft(), 1L)).reduceByKey(Long::sum, 1);
     HoodieData<String> affectedPartitionPaths = partitionRecordKeyPairs.keys().distinct();
@@ -164,7 +163,6 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
    */
   List<Pair<String, BloomIndexFileInfo>> loadColumnRangesFromFiles(
       HoodieData<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
-    // TODO why does this keep collectig on the driver instead of leveraging parallel execution?
     // Obtain the latest data files from all the partitions.
     return getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable)
         .map(pair ->  {
