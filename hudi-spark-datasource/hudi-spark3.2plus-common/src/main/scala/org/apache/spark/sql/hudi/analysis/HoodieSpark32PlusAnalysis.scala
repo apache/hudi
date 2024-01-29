@@ -20,8 +20,7 @@ package org.apache.spark.sql.hudi.analysis
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
-import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
-import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec}
+import org.apache.spark.sql.catalyst.analysis.{Analyzer, EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logcal.{HoodieFileSystemViewTableValuedFunction, HoodieFileSystemViewTableValuedFunctionOptionsParser, HoodieMetadataTableValuedFunction, HoodieQuery, HoodieTableChanges, HoodieTableChangesOptionsParser, HoodieTimelineTableValuedFunction, HoodieTimelineTableValuedFunctionOptionsParser}
@@ -30,14 +29,13 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
-import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 /**
  * NOTE: PLEASE READ CAREFULLY
@@ -169,15 +167,15 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
           val newMatchedActions = m.matchedActions.map {
             case DeleteAction(deleteCondition) =>
               val resolvedDeleteCondition = deleteCondition.map(
-                resolveExpressionByPlanChildren(_, m))
+                analyzer.resolveExpressionByPlanChildren(_, m))
               DeleteAction(resolvedDeleteCondition)
             case UpdateAction(updateCondition, assignments) =>
               val resolvedUpdateCondition = updateCondition.map(
-                resolveExpressionByPlanChildren(_, m))
+                analyzer.resolveExpressionByPlanChildren(_, m))
               UpdateAction(
                 resolvedUpdateCondition,
                 // The update value can access columns from both target and source tables.
-                resolveAssignments(assignments, m, resolveValuesWithSourceOnly = false))
+                resolveAssignments(analyzer, assignments, m, resolveValuesWithSourceOnly = false))
             case UpdateStarAction(updateCondition) =>
               // START: custom Hudi change: filter out meta fields
               val assignments = targetTable.output.filter(a => !isMetaField(a.name)).map { attr =>
@@ -185,9 +183,9 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
               }
               // END: custom Hudi change
               UpdateAction(
-                updateCondition.map(resolveExpressionByPlanChildren(_, m)),
+                updateCondition.map(analyzer.resolveExpressionByPlanChildren(_, m)),
                 // For UPDATE *, the value must from source table.
-                resolveAssignments(assignments, m, resolveValuesWithSourceOnly = true))
+                resolveAssignments(analyzer, assignments, m, resolveValuesWithSourceOnly = true))
             case o => o
           }
           val newNotMatchedActions = m.notMatchedActions.map {
@@ -195,15 +193,15 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
               // The insert action is used when not matched, so its condition and value can only
               // access columns from the source table.
               val resolvedInsertCondition = insertCondition.map(
-                resolveExpressionByPlanChildren(_, Project(Nil, m.sourceTable)))
+                analyzer.resolveExpressionByPlanChildren(_, Project(Nil, m.sourceTable)))
               InsertAction(
                 resolvedInsertCondition,
-                resolveAssignments(assignments, m, resolveValuesWithSourceOnly = true))
+                resolveAssignments(analyzer, assignments, m, resolveValuesWithSourceOnly = true))
             case InsertStarAction(insertCondition) =>
               // The insert action is used when not matched, so its condition and value can only
               // access columns from the source table.
               val resolvedInsertCondition = insertCondition.map(
-                resolveExpressionByPlanChildren(_, Project(Nil, m.sourceTable)))
+                analyzer.resolveExpressionByPlanChildren(_, Project(Nil, m.sourceTable)))
               // START: custom Hudi change: filter out meta fields
               val assignments = targetTable.output.filter(a => !isMetaField(a.name)).map { attr =>
                 Assignment(attr, UnresolvedAttribute(Seq(attr.name)))
@@ -211,10 +209,10 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
               // END: custom Hudi change
               InsertAction(
                 resolvedInsertCondition,
-                resolveAssignments(assignments, m, resolveValuesWithSourceOnly = true))
+                resolveAssignments(analyzer, assignments, m, resolveValuesWithSourceOnly = true))
             case o => o
           }
-          val resolvedMergeCondition = resolveExpressionByPlanChildren(m.mergeCondition, m)
+          val resolvedMergeCondition = analyzer.resolveExpressionByPlanChildren(m.mergeCondition, m)
           m.copy(mergeCondition = resolvedMergeCondition,
             matchedActions = newMatchedActions,
             notMatchedActions = newNotMatchedActions)
@@ -227,23 +225,23 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
       })
   }
 
-  def resolveAssignments(
+  def resolveAssignments( analyzer: Analyzer,
                           assignments: Seq[Assignment],
                           mergeInto: MergeIntoTable,
                           resolveValuesWithSourceOnly: Boolean): Seq[Assignment] = {
     assignments.map { assign =>
       val resolvedKey = assign.key match {
         case c if !c.resolved =>
-          resolveMergeExprOrFail(c, Project(Nil, mergeInto.targetTable))
+          resolveMergeExprOrFail(analyzer, c, Project(Nil, mergeInto.targetTable))
         case o => o
       }
       val resolvedValue = assign.value match {
         // The update values may contain target and/or source references.
         case c if !c.resolved =>
           if (resolveValuesWithSourceOnly) {
-            resolveMergeExprOrFail(c, Project(Nil, mergeInto.sourceTable))
+            resolveMergeExprOrFail(analyzer, c, Project(Nil, mergeInto.sourceTable))
           } else {
-            resolveMergeExprOrFail(c, mergeInto)
+            resolveMergeExprOrFail(analyzer, c, mergeInto)
           }
         case o => o
       }
@@ -251,9 +249,9 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
     }
   }
 
-  private def resolveMergeExprOrFail(e: Expression, p: LogicalPlan): Expression = {
+  private def resolveMergeExprOrFail(analyzer: Analyzer, e: Expression, p: LogicalPlan): Expression = {
     try {
-      val resolved = resolveExpressionByPlanChildren(e, p)
+      val resolved = analyzer.resolveExpressionByPlanChildren(e, p)
       resolved.references.filter(!_.resolved).foreach { a =>
         // Note: This will throw error only on unresolved attribute issues,
         // not other resolution errors like mismatched data types.

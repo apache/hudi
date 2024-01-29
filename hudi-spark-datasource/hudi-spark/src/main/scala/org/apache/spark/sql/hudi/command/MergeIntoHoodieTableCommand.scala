@@ -346,12 +346,28 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       Project(incomingDataCols, joinData)
     }
 
-    val projectedJoinOutput = projectedJoinPlan.output
+    // optimizer rule `FoldablePropagation` will replace attributes with aliases of the original foldable expressions if possible.
+    // we need optimizer it before we use primaryKey name replace it, because avro is case-sensitive.
+    // for example, primaryKey is id, and logical plan has resolved, when we use id replace ID#22 name, the logical plan will like:
+    //    Project [id#22, name#24, price#25, ts#26L]
+    //      +- Sort [ID#22 ASC NULLS FIRST], true
+    //         +- Project [1 AS ID#22, name#24, price#25, ts#26L]
+    //            +- SubqueryAlias spark_catalog.default.h1
+    //               +- Relation default.h1[ID#23,name#24,price#25,ts#26L] parquet
+    // this logical plan will be optimizer in FoldablePropagation:
+    //    Project [1 AS ID#22, name#24, price#25, ts#26L]
+    //      +- Sort [1 ASC NULLS FIRST], true
+    //         +- Project [1 AS ID#22, name#24, price#25, ts#26L]
+    //            +- Relation default.h1[ID#23,name#24,price#25,ts#26L] parquet
+    // in optimizer, `RuleExecutor` will use `isPlanIntegral` to check prePlan and curPlan schema are the same, ut will failed
+    val optimizer = sparkSession.sessionState.optimizer
+    val projectedJoinOptimizerPlan = optimizer.execute(projectedJoinPlan)
+    val projectedJoinOptimizerOutput = projectedJoinOptimizerPlan.output
 
     val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
 
     val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
-      case (keyAttr, _) => projectedJoinOutput.exists(attr => resolver(keyAttr.name, attr.name))
+      case (keyAttr, _) => projectedJoinOptimizerOutput.exists(attr => resolver(keyAttr.name, attr.name))
     }
 
     // This is to handle the situation where condition is something like "s0.s_id = t0.id" so In the source table
@@ -363,7 +379,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       them according to aforementioned heuristic) to meet Hudi's requirements
     val additionalColumns: Seq[NamedExpression] =
       missingAttributesMap.flatMap {
-        case (keyAttr, sourceExpression) if !projectedJoinOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
+        case (keyAttr, sourceExpression) if !projectedJoinOptimizerOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
           Seq(Alias(sourceExpression, keyAttr.name)())
 
         case _ => Seq()
@@ -373,7 +389,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // matches to that one of the target table. This is necessary b/c unlike Spark, Avro is case-sensitive
     // and therefore would fail downstream if case of corresponding columns don't match
     val existingAttributes = existingAttributesMap.map(_._1)
-    val adjustedSourceTableOutput = projectedJoinOutput.map { attr =>
+    val adjustedSourceTableOutput = projectedJoinOptimizerOutput.map { attr =>
       existingAttributes.find(keyAttr => resolver(keyAttr.name, attr.name)) match {
         // To align the casing we just rename the attribute to match that one of the
         // target table
@@ -382,7 +398,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       }
     }
 
-    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, projectedJoinPlan)
+    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, projectedJoinOptimizerPlan)
 
     Dataset.ofRows(sparkSession, amendedPlan)
   }

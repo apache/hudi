@@ -33,7 +33,8 @@ import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals}
+import org.junit.jupiter.api.function.Executable
 
 import java.io.File
 import java.util.concurrent.CountDownLatch
@@ -2432,6 +2433,49 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Test query with Foldable Propagation expression") {
+    withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
+      Seq("cow").foreach { tableType =>
+        val tableName = generateTableName
+        // Create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+
+        val tableNameA = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableNameA (
+             |  ID int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using parquet
+             | location '${tmp.getCanonicalPath}/$tableNameA'
+""".stripMargin)
+
+        assertDoesNotThrow(
+          new Executable {
+            override def execute(): Unit = {
+              spark.sql(s"insert into table $tableName select 1 as ID, name, price, ts from $tableNameA order by ID")
+                .queryExecution.optimizedPlan
+            }
+          }
+        )
+      }
+    })
+  }
 
   def ingestAndValidateDataDupPolicy(tableType: String, tableName: String, tmp: File,
                                      expectedOperationtype: WriteOperationType = WriteOperationType.INSERT,
