@@ -33,11 +33,14 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -216,4 +219,16 @@ public abstract class BaseFileUtils {
    * @return The subclass's {@link HoodieFileFormat}.
    */
   public abstract HoodieFileFormat getFormat();
+
+  /**
+   * Writes properties to the meta file.
+   *
+   * @param fs       {@link FileSystem} instance.
+   * @param filePath file path to write to.
+   * @param props    properties to write.
+   * @throws IOException upon write error.
+   */
+  public abstract void writeMetaFile(FileSystem fs,
+                                     Path filePath,
+                                     Properties props) throws IOException;
 }

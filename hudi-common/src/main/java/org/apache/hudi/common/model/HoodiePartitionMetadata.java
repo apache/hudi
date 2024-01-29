@@ -18,39 +18,25 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.orc.OrcFile;
-import org.apache.orc.Writer;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
-import org.apache.parquet.schema.Types;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * The metadata that goes into the meta file in each partition.
@@ -152,34 +138,7 @@ public class HoodiePartitionMetadata {
    */
   private void writeMetafile(Path filePath) throws IOException {
     if (format.isPresent()) {
-      Schema schema = HoodieAvroUtils.getRecordKeySchema();
-
-      switch (format.get()) {
-        case PARQUET:
-          // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
-          // parameters are not important.
-          MessageType type = Types.buildMessage().optional(PrimitiveTypeName.INT64).named("dummyint").named("dummy");
-          HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(type, schema, Option.empty(), new Properties());
-          try (ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.UNCOMPRESSED, 1024, 1024)) {
-            for (String key : props.stringPropertyNames()) {
-              writeSupport.addFooterMetadata(key, props.getProperty(key));
-            }
-          }
-          break;
-        case ORC:
-          // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
-          // parameters are not important.
-          OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(fs.getConf()).fileSystem(fs)
-              .setSchema(AvroOrcUtils.createOrcSchema(schema));
-          try (Writer writer = OrcFile.createWriter(filePath, writerOptions)) {
-            for (String key : props.stringPropertyNames()) {
-              writer.addUserMetadata(key, ByteBuffer.wrap(getUTF8Bytes(props.getProperty(key))));
-            }
-          }
-          break;
-        default:
-          throw new HoodieException("Unsupported format for partition metafiles: " + format.get());
-      }
+      BaseFileUtils.getInstance(format.get()).writeMetaFile(fs, filePath, props);
     } else {
       // Backwards compatible properties file format
       FSDataOutputStream os = fs.create(filePath, true);
