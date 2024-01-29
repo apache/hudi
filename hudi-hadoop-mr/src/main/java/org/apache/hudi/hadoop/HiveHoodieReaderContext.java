@@ -158,8 +158,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public ArrayWritable convertAvroRecord(IndexedRecord avroRecord) {
-    //should be support timestamp?
-    return (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, avroRecord.getSchema(), false);
+    return (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, avroRecord.getSchema(), true);
   }
 
   @Override
@@ -247,14 +246,14 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     if (firstRecordReader != null) {
       return firstRecordReader.getPos();
     }
-    return 0;
+    throw new IllegalStateException("getPos() should not be called before a record reader has been initialized");
   }
 
   public float getProgress() throws IOException {
     if (firstRecordReader != null) {
       return firstRecordReader.getProgress();
     }
-    return 0;
+    throw new IllegalStateException("getProgress() should not be called before a record reader has been initialized");
   }
 
 }
