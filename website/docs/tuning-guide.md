@@ -1,9 +1,9 @@
 ---
-title: Tuning Guide
+title: Spark Tuning Guide
 keywords: [hudi, tuning, performance]
 last_modified_at: 2021-09-29T15:59:57-04:00
 ---
-# Tuning Guide
+# Spark Tuning Guide
 
 :::note Profiling Tip
 To get a better understanding of where your Hudi jobs is spending its time, use a tool like [YourKit Java Profiler](https://www.yourkit.com/download/), to obtain heap dumps/flame graphs.
