@@ -1426,7 +1426,7 @@ possible configurations would overwhelm and obscure the important.
   </property>
   <property skipInDoc="true">
     <name>hbase.defaults.for.version</name>
-    <value>2.4.9</value>
+    <value>2.5.5-hadoop3</value>
     <description>This defaults file was compiled for version ${project.version}. This variable is used
       to make sure that a user doesn't have an old version of hbase-default.xml on the
       classpath.
