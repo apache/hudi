@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -58,6 +57,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
 
@@ -109,8 +109,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     HFileReader reader = getSharedHFileReader();
     try {
       return new String[] {
-          StringUtils.fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_MIN_RECORD)).get()),
-          StringUtils.fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_MAX_RECORD)).get())};
+          fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_MIN_RECORD)).get()),
+          fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_MAX_RECORD)).get())};
     } catch (IOException e) {
       throw new HoodieIOException("Cannot read min and max record keys from HFile.", e);
     }
@@ -122,7 +122,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       HFileReader reader = getSharedHFileReader();
       ByteBuffer byteBuffer = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).get();
       return BloomFilterFactory.fromByteBuffer(byteBuffer,
-          StringUtils.fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_BLOOM_FILTER_TYPE_CODE)).get()));
+          fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_BLOOM_FILTER_TYPE_CODE)).get()));
     } catch (IOException e) {
       throw new HoodieException("Could not read bloom filter from " + path, e);
     }
@@ -227,7 +227,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private static Schema fetchSchema(HFileReader reader) {
     try {
       return new Schema.Parser().parse(
-          StringUtils.fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(SCHEMA_KEY)).get()));
+          fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(SCHEMA_KEY)).get()));
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read schema from HFile", e);
     }
