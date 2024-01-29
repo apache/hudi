@@ -89,7 +89,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.recordMerger = recordMerger;
     this.payloadProps = payloadProps;
     this.records = new HashMap<>();
-    this.internalSchema = internalSchema == null || internalSchema.isEmptySchema() ? InternalSchema.getEmptyInternalSchema() : AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(readerSchema, internalSchema);
+    this.internalSchema = internalSchema == null || internalSchema.isEmptySchema()
+        ? InternalSchema.getEmptyInternalSchema() : AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(readerSchema, internalSchema);
     this.hoodieTableMetaClient = hoodieTableMetaClient;
   }
 
