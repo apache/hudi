@@ -19,12 +19,14 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
-import java.util.function.Supplier
 
-import org.apache.spark.sql.hudi.{DeDupeType, DedupeSparkJob}
+import java.util.function.Supplier
+import org.apache.spark.sql.hudi.{DedupeSparkJob, DeDupeType}
 
 import scala.util.{Failure, Success, Try}
 
@@ -61,7 +63,7 @@ class RepairDeduplicateProcedure extends BaseProcedure with ProcedureBuilder wit
 
     Try {
       val job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, spark.sqlContext,
-        FSUtils.getFs(basePath, jsc.hadoopConfiguration), DeDupeType.withName(dedupeType))
+        HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration), DeDupeType.withName(dedupeType))
       job.fixDuplicates(dryRun)
     } match {
       case Success(_) =>

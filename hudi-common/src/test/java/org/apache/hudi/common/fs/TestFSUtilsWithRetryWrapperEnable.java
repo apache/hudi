@@ -18,6 +18,11 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.HoodieRetryWrapperFileSystem;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -61,7 +66,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     maxRetryNumbers = fileSystemRetryConfig.getMaxRetryNumbers();
     initialRetryIntervalMs = fileSystemRetryConfig.getInitialRetryIntervalMs();
 
-    FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 2);
+    FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 2);
     FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, "");
 
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
@@ -71,7 +76,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
   // Test the scenario that fs keeps retrying until it fails.
   @Test
   public void testProcessFilesWithExceptions() throws Exception {
-    FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 100);
+    FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 100);
     FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, "");
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     metaClient.setFs(fs);
@@ -82,7 +87,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
 
   @Test
   public void testGetSchema() {
-    FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 100);
+    FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 100);
     FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, "");
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     assertDoesNotThrow(fs::getScheme, "Method #getSchema does not implement correctly");
@@ -90,7 +95,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
 
   @Test
   public void testGetDefaultReplication() {
-    FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 100);
+    FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 100);
     FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, "");
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     assertEquals(fs.getDefaultReplication(), 3);

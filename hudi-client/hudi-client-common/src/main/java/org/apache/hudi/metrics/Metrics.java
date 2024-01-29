@@ -18,11 +18,11 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import com.codahale.metrics.MetricRegistry;
 import org.apache.hadoop.conf.Configuration;
@@ -95,7 +95,7 @@ public class Metrics {
   private List<MetricsReporter> addAdditionalMetricsExporters(HoodieWriteConfig metricConfig) {
     List<MetricsReporter> reporterList = new ArrayList<>();
     List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
-    try (FileSystem fs = FSUtils.getFs(propPathList.get(0), new Configuration())) {
+    try (FileSystem fs = HadoopFSUtils.getFs(propPathList.get(0), new Configuration())) {
       for (String propPath : propPathList) {
         HoodieWriteConfig secondarySourceConfig = HoodieWriteConfig.newBuilder().fromInputStream(
             fs.open(new Path(propPath))).withPath(metricConfig.getBasePath()).build();

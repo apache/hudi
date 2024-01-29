@@ -18,10 +18,10 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -31,7 +31,7 @@ import org.apache.hadoop.fs.FileSystem;
  */
 public class CkpMetadataFactory {
   public static CkpMetadata getCkpMetadata(HoodieWriteConfig writeConfig, Configuration conf) {
-    FileSystem fs = FSUtils.getFs(conf.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(conf));
+    FileSystem fs = HadoopFSUtils.getFs(conf.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(conf));
     String basePath = conf.getString(FlinkOptions.PATH);
     String uniqueId = conf.getString(FlinkOptions.WRITE_CLIENT_ID);
     if (writeConfig.isEmbeddedTimelineServerEnabled() && writeConfig.isTimelineServerBasedInstantStateEnabled()) {

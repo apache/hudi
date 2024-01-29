@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.common.fs.FSUtils
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.{HeaderMetadataType, HoodieLogBlockType}

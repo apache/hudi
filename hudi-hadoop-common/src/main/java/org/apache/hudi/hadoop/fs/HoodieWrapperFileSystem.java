@@ -7,24 +7,24 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.common.fs;
+package org.apache.hudi.hadoop.fs;
 
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
@@ -61,7 +61,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
 
-import static org.apache.hudi.common.fs.StorageSchemes.HDFS;
+import static org.apache.hudi.storage.StorageSchemes.HDFS;
 
 /**
  * HoodieWrapperFileSystem wraps the default file system. It holds state about the open streams in the file system to
@@ -72,6 +72,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
   public static final String HOODIE_SCHEME_PREFIX = "hoodie-";
 
   private static final String TMP_PATH_POSTFIX = ".tmp";
+
+  private static final String METAFOLDER_NAME = ".hoodie";
 
   /**
    * Names for metrics.
@@ -105,7 +107,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   private static Registry getMetricRegistryForPath(Path p) {
-    return ((p != null) && (p.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)))
+    return ((p != null) && (p.toString().contains(METAFOLDER_NAME)))
         ? METRICS_REGISTRY_META : METRICS_REGISTRY_DATA;
   }
 
@@ -142,7 +144,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   public static Path convertToHoodiePath(Path file, Configuration conf) {
     try {
-      String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
+      String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
       return convertPathWithScheme(file, getHoodieScheme(scheme));
     } catch (HoodieIOException e) {
       throw e;
@@ -186,7 +188,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
     } else {
       this.uri = uri;
     }
-    this.fileSystem = FSUtils.getFs(path.toString(), conf);
+    this.fileSystem = HadoopFSUtils.getFs(path.toString(), conf);
     // Do not need to explicitly initialize the default filesystem, its done already in the above
     // FileSystem.get
     // fileSystem.initialize(FileSystem.getDefaultUri(conf), conf);

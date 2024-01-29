@@ -31,14 +31,16 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.PathUtils
+
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions.mapAsJavaMap
@@ -87,7 +89,7 @@ class DefaultSource extends RelationProvider
     val readPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
     val allPaths = path.map(p => Seq(p)).getOrElse(Seq()) ++ readPaths
 
-    val fs = FSUtils.getFs(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
+    val fs = HadoopFSUtils.getFs(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
 
     val globPaths = if (path.exists(_.contains("*")) || readPaths.nonEmpty) {
       PathUtils.checkAndGlobPathIfNecessary(allPaths, fs)

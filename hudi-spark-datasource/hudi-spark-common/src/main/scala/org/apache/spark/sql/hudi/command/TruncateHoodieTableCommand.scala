@@ -23,6 +23,8 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
@@ -67,7 +69,7 @@ case class TruncateHoodieTableCommand(
     if (partitionSpec.isEmpty) {
       val targetPath = new Path(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
-      val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
+      val fs = HadoopFSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
       FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
 
       // ReInit hoodie.properties

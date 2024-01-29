@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -185,7 +186,7 @@ public class HoodieCommitMetadata implements Serializable {
         String relativeFilePath = stat.getPath();
         Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
         if (fullPath != null) {
-          long blockSize = FSUtils.getFs(fullPath.toString(), hadoopConf).getDefaultBlockSize(fullPath);
+          long blockSize = HadoopFSUtils.getFs(fullPath.toString(), hadoopConf).getDefaultBlockSize(fullPath);
           FileStatus fileStatus = new FileStatus(stat.getFileSizeInBytes(), false, 0, blockSize,
               0, fullPath);
           fullPathToFileStatus.put(fullPath.getName(), fileStatus);

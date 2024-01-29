@@ -19,9 +19,9 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.TestSourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
 
@@ -124,7 +124,7 @@ public class TestSanitizationUtils {
 
   @Test
   private String getJson(String path) {
-    FileSystem fs = FSUtils.getFs(path, jsc.hadoopConfiguration(), true);
+    FileSystem fs = HadoopFSUtils.getFs(path, jsc.hadoopConfiguration(), true);
     String schemaStr;
     try (FSDataInputStream in = fs.open(new Path(path))) {
       schemaStr = FileIOUtils.readAsUTFString(in);
