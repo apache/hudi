@@ -565,6 +565,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Collect record keys from the files in parallel
     HoodieData<HoodieRecord> records = readRecordKeysFromBaseFiles(
         engineContext,
+        dataWriteConfig,
         partitionBaseFilePairs,
         false,
         dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
@@ -931,7 +932,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   public void updateFromWriteStatuses(HoodieCommitMetadata commitMetadata, HoodieData<WriteStatus> writeStatus, String instantTime) {
     processAndCommit(instantTime, () -> {
       Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordMap =
-          HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, commitMetadata, instantTime, getRecordsGenerationParams());
+          HoodieTableMetadataUtil.convertMetadataToRecords(
+              engineContext, dataWriteConfig, commitMetadata, instantTime, getRecordsGenerationParams());
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
@@ -948,7 +950,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   public void update(HoodieCommitMetadata commitMetadata, HoodieData<HoodieRecord> records, String instantTime) {
     processAndCommit(instantTime, () -> {
       Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordMap =
-          HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, commitMetadata, instantTime, getRecordsGenerationParams());
+          HoodieTableMetadataUtil.convertMetadataToRecords(
+              engineContext, dataWriteConfig, commitMetadata, instantTime, getRecordsGenerationParams());
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(records, commitMetadata);
       partitionToRecordMap.put(RECORD_INDEX, records.union(additionalUpdates));
       updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
@@ -1535,6 +1538,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     return readRecordKeysFromBaseFiles(
         engineContext,
+        dataWriteConfig,
         partitionBaseFilePairs,
         true,
         dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),

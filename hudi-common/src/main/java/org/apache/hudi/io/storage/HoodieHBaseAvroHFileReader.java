@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -29,7 +28,6 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -41,8 +39,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PositionedReadable;
-import org.apache.hadoop.fs.Seekable;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
@@ -64,7 +60,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
@@ -73,18 +68,8 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
  * <p>
  * {@link HoodieFileReader} implementation allowing to read from {@link HFile}.
  */
-public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements HoodieSeekingFileReader<IndexedRecord> {
-
-  // TODO HoodieHFileReader right now tightly coupled to MT, we should break that coupling
-  public static final String SCHEMA_KEY = "schema";
-  public static final String KEY_BLOOM_FILTER_META_BLOCK = "bloomFilter";
-  public static final String KEY_BLOOM_FILTER_TYPE_CODE = "bloomFilterTypeCode";
-
-  public static final String KEY_FIELD_NAME = "key";
-  public static final String KEY_MIN_RECORD = "minRecordKey";
-  public static final String KEY_MAX_RECORD = "maxRecordKey";
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileReader.class);
+public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieHBaseAvroHFileReader.class);
 
   private final Path path;
   private final FileSystem fs;
@@ -104,23 +89,31 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
   private final Object sharedLock = new Object();
 
-  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig) throws IOException {
+  public HoodieHBaseAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig)
+      throws IOException {
     this(path, HadoopFSUtils.getFs(path.toString(), hadoopConf), hadoopConf, cacheConfig, Option.empty());
   }
 
-  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig, FileSystem fs, Option<Schema> schemaOpt) throws IOException {
+  public HoodieHBaseAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig,
+                                    FileSystem fs, Option<Schema> schemaOpt) throws IOException {
     this(path, fs, hadoopConf, cacheConfig, schemaOpt);
   }
 
-  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig, FileSystem fs, byte[] content, Option<Schema> schemaOpt) throws IOException {
+  public HoodieHBaseAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig,
+                                    FileSystem fs, byte[] content, Option<Schema> schemaOpt)
+      throws IOException {
     this(path, fs, hadoopConf, cacheConfig, schemaOpt, Option.of(content));
   }
 
-  public HoodieAvroHFileReader(Path path, FileSystem fs, Configuration hadoopConf, CacheConfig config, Option<Schema> schemaOpt) throws IOException {
+  public HoodieHBaseAvroHFileReader(Path path, FileSystem fs, Configuration hadoopConf,
+                                    CacheConfig config, Option<Schema> schemaOpt)
+      throws IOException {
     this(path, fs, hadoopConf, config, schemaOpt, Option.empty());
   }
 
-  public HoodieAvroHFileReader(Path path, FileSystem fs, Configuration hadoopConf, CacheConfig config, Option<Schema> schemaOpt, Option<byte[]> content) throws IOException {
+  public HoodieHBaseAvroHFileReader(Path path, FileSystem fs, Configuration hadoopConf,
+                                    CacheConfig config, Option<Schema> schemaOpt,
+                                    Option<byte[]> content) throws IOException {
     this.path = path;
     this.fs = fs;
     this.hadoopConf = hadoopConf;
@@ -230,7 +223,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   }
 
   @VisibleForTesting
-  protected ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys, Schema readerSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys,
+                                                                    Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
@@ -240,7 +234,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   }
 
   @VisibleForTesting
-  protected ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
@@ -415,34 +409,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   private static GenericRecord getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema) throws IOException {
     final byte[] keyBytes = copyKeyFromCell(cell);
     final byte[] valueBytes = copyValueFromCell(cell);
-    return deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
-  }
-
-  private static GenericRecord deserializeUnchecked(final byte[] keyBytes,
-                                                    final byte[] valueBytes,
-                                                    Schema writerSchema,
-                                                    Schema readerSchema) {
-    try {
-      return deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to deserialize payload", e);
-    }
-  }
-
-  private static GenericRecord deserialize(final byte[] keyBytes,
-                                           final byte[] valueBytes,
-                                           Schema writerSchema,
-                                           Schema readerSchema) throws IOException {
-    GenericRecord record = HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema, readerSchema);
-
-    getKeySchema(readerSchema).ifPresent(keyFieldSchema -> {
-      final Object keyObject = record.get(keyFieldSchema.pos());
-      if (keyObject != null && keyObject.toString().isEmpty()) {
-        record.put(keyFieldSchema.pos(), new String(keyBytes));
-      }
-    });
-
-    return record;
+    return deserialize(
+        keyBytes, 0, keyBytes.length, valueBytes, 0, valueBytes.length, writerSchema, readerSchema);
   }
 
   private static Schema fetchSchema(HFile.Reader reader) {
@@ -456,40 +424,6 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
   private static byte[] copyValueFromCell(Cell c) {
     return Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
-  }
-
-  /**
-   * NOTE: THIS SHOULD ONLY BE USED FOR TESTING, RECORDS ARE MATERIALIZED EAGERLY
-   * <p>
-   * Reads all the records with given schema
-   */
-  public static List<IndexedRecord> readAllRecords(HoodieAvroHFileReader reader) throws IOException {
-    Schema schema = reader.getSchema();
-    return toStream(reader.getIndexedRecordIterator(schema))
-        .collect(Collectors.toList());
-  }
-
-  /**
-   * NOTE: THIS SHOULD ONLY BE USED FOR TESTING, RECORDS ARE MATERIALIZED EAGERLY
-   * <p>
-   * Reads all the records with given schema and filtering keys.
-   */
-  public static List<IndexedRecord> readRecords(HoodieAvroHFileReader reader,
-                                                              List<String> keys) throws IOException {
-    return readRecords(reader, keys, reader.getSchema());
-  }
-
-  /**
-   * NOTE: THIS SHOULD ONLY BE USED FOR TESTING, RECORDS ARE MATERIALIZED EAGERLY
-   * <p>
-   * Reads all the records with given schema and filtering keys.
-   */
-  public static List<IndexedRecord> readRecords(HoodieAvroHFileReader reader,
-                                                              List<String> keys,
-                                                              Schema schema) throws IOException {
-    Collections.sort(keys);
-    return toStream(reader.getIndexedRecordsByKeysIterator(keys, schema))
-        .collect(Collectors.toList());
   }
 
   private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) {
@@ -508,10 +442,6 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     } catch (IOException e) {
       throw new HoodieIOException("Failed to initialize HFile scanner for  " + reader.getPath(), e);
     }
-  }
-
-  private static Option<Schema.Field> getKeySchema(Schema schema) {
-    return Option.ofNullable(schema.getField(KEY_FIELD_NAME));
   }
 
   private static class RecordByKeyPrefixIterator implements ClosableIterator<IndexedRecord> {
@@ -680,7 +610,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     private IndexedRecord next = null;
     private boolean eof = false;
 
-    RecordIterator(HFile.Reader reader, HFileScanner scanner, Schema writerSchema, Schema readerSchema) {
+    RecordIterator(HFile.Reader reader, HFileScanner scanner, Schema writerSchema,
+                   Schema readerSchema) {
       this.reader = reader;
       this.scanner = scanner;
       this.writerSchema = writerSchema;
@@ -733,37 +664,6 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
       } catch (IOException e) {
         throw new HoodieIOException("Error closing the hfile reader and scanner", e);
       }
-    }
-  }
-
-  static class SeekableByteArrayInputStream extends ByteBufferBackedInputStream implements Seekable, PositionedReadable {
-    public SeekableByteArrayInputStream(byte[] buf) {
-      super(buf);
-    }
-
-    @Override
-    public long getPos() throws IOException {
-      return getPosition();
-    }
-
-    @Override
-    public boolean seekToNewSource(long targetPos) throws IOException {
-      return false;
-    }
-
-    @Override
-    public int read(long position, byte[] buffer, int offset, int length) throws IOException {
-      return copyFrom(position, buffer, offset, length);
-    }
-
-    @Override
-    public void readFully(long position, byte[] buffer) throws IOException {
-      read(position, buffer, 0, buffer.length);
-    }
-
-    @Override
-    public void readFully(long position, byte[] buffer, int offset, int length) throws IOException {
-      read(position, buffer, offset, length);
     }
   }
 }

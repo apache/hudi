@@ -19,28 +19,22 @@
 package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
-import org.apache.hudi.io.storage.HoodieHFileUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
-import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -50,30 +44,32 @@ import static org.apache.hudi.common.testutils.FileSystemTestUtils.FILE_SCHEME;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.getPhantomFile;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterInMemPath;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * Tests {@link InLineFileSystem} to inline HFile.
  */
-public class TestInLineFileSystemHFileInLining {
+public abstract class TestInLineFileSystemHFileInLiningBase {
 
-  private static final String LOCAL_FORMATTER = "%010d";
-  private static final String VALUE_PREFIX = "value";
+  protected static final String LOCAL_FORMATTER = "%010d";
+  protected static final String VALUE_PREFIX = "value";
   private static final int MIN_BLOCK_BYTES = 1024;
   private final Configuration inMemoryConf;
   private final Configuration inlineConf;
   private final int maxRows = 100 + RANDOM.nextInt(1000);
   private Path generatedPath;
 
-  public TestInLineFileSystemHFileInLining() {
+  public TestInLineFileSystemHFileInLiningBase() {
     inMemoryConf = new Configuration();
     inMemoryConf.set("fs." + InMemoryFileSystem.SCHEME + ".impl", InMemoryFileSystem.class.getName());
     inlineConf = new Configuration();
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
   }
+
+  protected abstract void validateHFileReading(InLineFileSystem inlineFileSystem,
+                                               Configuration conf,
+                                               Configuration inlineConf,
+                                               Path inlinePath,
+                                               int maxRows) throws IOException;
 
   @AfterEach
   public void teardown() throws IOException {
@@ -114,42 +110,13 @@ public class TestInLineFileSystemHFileInLining {
     InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(inlineConf);
     FSDataInputStream fin = inlineFileSystem.open(inlinePath);
 
-    HFile.Reader reader =
-        HoodieHFileUtils.createHFileReader(inlineFileSystem, inlinePath, cacheConf, inlineConf);
-    // Get a scanner that caches and that does not use pread.
-    HFileScanner scanner = reader.getScanner(true, false);
-    // Align scanner at start of the file.
-    scanner.seekTo();
-    readAllRecords(scanner);
+    validateHFileReading(inlineFileSystem, inMemoryConf, inlineConf, inlinePath, maxRows);
 
-    Set<Integer> rowIdsToSearch = getRandomValidRowIds(10);
-    for (int rowId : rowIdsToSearch) {
-      KeyValue keyValue = new KeyValue.KeyOnlyKeyValue(getSomeKey(rowId));
-      assertEquals(0, scanner.seekTo(keyValue),
-          "location lookup failed");
-      // read the key and see if it matches
-      Cell cell = scanner.getCell();
-      byte[] key = Arrays.copyOfRange(cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
-      byte[] expectedKey = Arrays.copyOfRange(keyValue.getRowArray(), keyValue.getRowOffset(), keyValue.getRowOffset() + keyValue.getRowLength());
-      assertArrayEquals(expectedKey, key, "seeked key does not match");
-      scanner.seekTo(keyValue);
-      ByteBuffer val1 = scanner.getValue();
-      scanner.seekTo(keyValue);
-      ByteBuffer val2 = scanner.getValue();
-      assertArrayEquals(Bytes.toBytes(val1), Bytes.toBytes(val2));
-    }
-
-    int[] invalidRowIds = {-4, maxRows, maxRows + 1, maxRows + 120, maxRows + 160, maxRows + 1000};
-    for (int rowId : invalidRowIds) {
-      assertNotEquals(0, scanner.seekTo(new KeyValue.KeyOnlyKeyValue(getSomeKey(rowId))),
-          "location lookup should have failed");
-    }
-    reader.close();
     fin.close();
     outerPath.getFileSystem(inMemoryConf).delete(outerPath, true);
   }
 
-  private Set<Integer> getRandomValidRowIds(int count) {
+  protected Set<Integer> getRandomValidRowIds(int count) {
     Set<Integer> rowIds = new HashSet<>();
     while (rowIds.size() < count) {
       int index = RANDOM.nextInt(maxRows);
@@ -158,12 +125,6 @@ public class TestInLineFileSystemHFileInLining {
       }
     }
     return rowIds;
-  }
-
-  private byte[] getSomeKey(int rowId) {
-    KeyValue kv = new KeyValue(getUTF8Bytes(String.format(LOCAL_FORMATTER, rowId)),
-        Bytes.toBytes("family"), Bytes.toBytes("qual"), HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put);
-    return kv.getKey();
   }
 
   private FSDataOutputStream createFSOutput(Path name, Configuration conf) throws IOException {
@@ -184,38 +145,6 @@ public class TestInLineFileSystemHFileInLining {
           Bytes.toBytes(VALUE_PREFIX + key));
       writer.append(kv);
     }
-  }
-
-  private void readAllRecords(HFileScanner scanner) throws IOException {
-    readAndCheckbytes(scanner, 0, maxRows);
-  }
-
-  // read the records and check
-  private void readAndCheckbytes(HFileScanner scanner, int start, int n)
-      throws IOException {
-    int i = start;
-    for (; i < (start + n); i++) {
-      Cell cell = scanner.getCell();
-      byte[] key = Arrays.copyOfRange(
-          cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
-      byte[] val = Arrays.copyOfRange(
-          cell.getValueArray(), cell.getValueOffset(), cell.getValueOffset() + cell.getValueLength());
-      String keyStr = String.format(LOCAL_FORMATTER, i);
-      String valStr = VALUE_PREFIX + keyStr;
-      KeyValue kv = new KeyValue(Bytes.toBytes(keyStr), Bytes.toBytes("family"),
-          Bytes.toBytes("qual"), Bytes.toBytes(valStr));
-      byte[] keyBytes = new KeyValue.KeyOnlyKeyValue(key, 0, key.length).getKey();
-      byte[] expectedKeyBytes = Arrays.copyOfRange(
-          kv.getRowArray(), kv.getRowOffset(), kv.getRowOffset() + kv.getRowLength());
-      assertArrayEquals(expectedKeyBytes, keyBytes,
-          "bytes for keys do not match " + keyStr + " " + Bytes.toString(key));
-      assertArrayEquals(Bytes.toBytes(valStr), val,
-          "bytes for vals do not match " + valStr + " " + Bytes.toString(val));
-      if (!scanner.next()) {
-        break;
-      }
-    }
-    assertEquals(i, start + n - 1);
   }
 
   private long generateOuterFile(Path outerPath, byte[] inlineBytes) throws IOException {

@@ -49,6 +49,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+
 /**
  * Represents the Archived Timeline for the Hoodie table.
  *
@@ -236,7 +238,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
           .parallel().forEach(fileName -> {
             // Read the archived file
             try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-                .getFileReader(metaClient.getHadoopConf(), new Path(metaClient.getArchivePath(), fileName))) {
+                .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, metaClient.getHadoopConf(), new Path(metaClient.getArchivePath(), fileName))) {
               try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
                 while (iterator.hasNext()) {
                   GenericRecord record = (GenericRecord) iterator.next();

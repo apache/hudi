@@ -109,6 +109,16 @@ public class StringUtils {
     return str.getBytes(StandardCharsets.UTF_8);
   }
 
+  public static String getStringFromUTF8Bytes(byte[] bytes) {
+    return getStringFromUTF8Bytes(bytes, 0, bytes.length);
+  }
+
+  public static String getStringFromUTF8Bytes(byte[] bytes,
+                                              int offset,
+                                              int length) {
+    return new String(bytes, offset, length, StandardCharsets.UTF_8);
+  }
+
   public static boolean isNullOrEmpty(String str) {
     return str == null || str.length() == 0;
   }
