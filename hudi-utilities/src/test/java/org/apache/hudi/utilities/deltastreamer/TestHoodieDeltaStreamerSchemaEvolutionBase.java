@@ -105,7 +105,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected Map<String, String> readOpts = new HashMap<String, String>() {
     {
-      put(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
+      put(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");
     }
   };
 

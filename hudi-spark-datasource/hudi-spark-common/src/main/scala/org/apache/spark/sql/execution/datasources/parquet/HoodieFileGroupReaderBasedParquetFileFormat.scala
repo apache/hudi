@@ -65,14 +65,16 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
+  private val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
+
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
    * while the other side can't
    */
+    /*
   private var supportBatchCalled = false
   private var supportBatchResult = false
 
-  private val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     if (!supportBatchCalled || supportBatchResult) {
       supportBatchCalled = true
@@ -80,6 +82,10 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     }
     supportBatchResult
   }
+   */
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = false
+
+  private val supportBatchResult = false
 
   private lazy val internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema] = if (tableSchema.internalSchema.isEmpty) {
     org.apache.hudi.common.util.Option.empty()
