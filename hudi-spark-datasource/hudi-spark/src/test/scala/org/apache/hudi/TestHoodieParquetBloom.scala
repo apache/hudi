@@ -17,17 +17,12 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql._
-import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.util.AccumulatorV2
-import org.apache.spark.SparkContext
-import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
-import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.spark.sql._
+import org.apache.spark.util.AccumulatorV2
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -65,11 +60,11 @@ class TestHoodieParquetBloomFilter extends HoodieSparkClientTestBase with ScalaA
     sparkSession.sparkContext.register(accu)
 
     // this one shall skip partition scanning thanks to bloom when spark >=3
-    sparkSession.read.format("hudi").load(basePath).filter("bloom_col = '3'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(0)))
+    sparkSession.read.format("hudi").load(basePath).filter("bloom_col = '3'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(1)))
     assertEquals(if (currentSparkSupportParquetBloom()) 0 else 1, accu.value)
 
     // this one will trigger one partition scan
-    sparkSession.read.format("hudi").load(basePath).filter("bloom_col = '2'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(0)))
+    sparkSession.read.format("hudi").load(basePath).filter("bloom_col = '2'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(1)))
     assertEquals(1, accu.value)
   }
 
