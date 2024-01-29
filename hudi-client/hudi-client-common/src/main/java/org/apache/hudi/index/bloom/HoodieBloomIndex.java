@@ -164,19 +164,18 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   List<Pair<String, BloomIndexFileInfo>> loadColumnRangesFromFiles(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
     // Obtain the latest data files from all the partitions.
-    List<Pair<String, Pair<String, HoodieBaseFile>>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
-        .map(pair -> Pair.of(pair.getKey(), Pair.of(pair.getValue().getFileId(), pair.getValue())))
+    List<Pair<String, HoodieBaseFile>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
         .collect(toList());
 
     context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on): " + config.getTableName());
     return context.map(partitionPathFileIDList, pf -> {
       try {
-        HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, Pair.of(pf.getKey(), pf.getValue().getKey()));
-        String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys(pf.getValue().getValue());
-        return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey(), minMaxKeys[0], minMaxKeys[1]));
+        HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, pf.getLeft(), pf.getRight());
+        String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys();
+        return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getFileId(), minMaxKeys[0], minMaxKeys[1]));
       } catch (MetadataNotFoundException me) {
         LOG.warn("Unable to find range metadata in file :" + pf);
-        return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey()));
+        return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getFileId()));
       }
     }, Math.max(partitionPathFileIDList.size(), 1));
   }
