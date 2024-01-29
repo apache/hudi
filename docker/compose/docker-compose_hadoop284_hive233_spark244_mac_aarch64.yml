@@ -129,11 +129,10 @@ services:
       - ./hadoop.env
     environment:
       SERVICE_PRECONDITION: "hivemetastore:9083"
-      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
     ports:
       - "10000:10000"
       # JVM debugging port (will be mapped to a random port on host)
-      - "64757:5005"
+      - "5005"
     depends_on:
       - "hivemetastore"
     links:
@@ -142,7 +141,6 @@ services:
       - "namenode"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
-      - /Users/jon/Desktop/hiveWorkload:/var/hiveWorkload
 
   sparkmaster:
     image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_2.4.4:linux-arm64-0.10.1
@@ -229,7 +227,6 @@ services:
       - "namenode"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
-      - /Users/jon/Desktop/hiveWorkload:/var/hiveWorkload
 
   adhoc-2:
     image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:linux-arm64-0.10.1
@@ -252,7 +249,6 @@ services:
       - "namenode"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
-      - /Users/jon/Desktop/hiveWorkload:/var/hiveWorkload
 
 volumes:
   namenode:
