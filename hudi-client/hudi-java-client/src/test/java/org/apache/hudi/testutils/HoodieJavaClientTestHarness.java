@@ -46,7 +46,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -140,7 +139,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   @BeforeEach
   protected void initResources() throws IOException {
     basePath = tempDir.resolve("java_client_tests" + System.currentTimeMillis()).toAbsolutePath().toUri().getPath();
-    hadoopConf = new Configuration();
+    hadoopConf = new Configuration(false);
     taskContextSupplier = new TestJavaTaskContextSupplier();
     context = new HoodieJavaEngineContext(hadoopConf, taskContextSupplier);
     initFileSystem(basePath, hadoopConf);
@@ -1038,8 +1037,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(false).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
-            .withRemoteServerPort(timelineServicePort)
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+            .withRemoteServerPort(timelineServicePort).build());
     if (StringUtils.nonEmpty(schemaStr)) {
       builder.withSchema(schemaStr);
     }
