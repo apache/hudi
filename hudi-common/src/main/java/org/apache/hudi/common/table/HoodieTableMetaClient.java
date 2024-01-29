@@ -69,7 +69,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -84,6 +83,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -212,8 +212,7 @@ public class HoodieTableMetaClient implements Serializable {
       functionalIndexMetadata = Option.of(new HoodieFunctionalIndexMetadata(Collections.singletonMap(indexName, functionalIndexDefinition)));
     }
     try {
-      //fs.mkdirs(new Path(indexMetaPath).getParent());
-      FileIOUtils.createFileInPath(fs, new Path(indexMetaPath), Option.of(functionalIndexMetadata.get().toJson().getBytes(StandardCharsets.UTF_8)));
+      FileIOUtils.createFileInPath(fs, new Path(indexMetaPath), Option.of(getUTF8Bytes(functionalIndexMetadata.get().toJson())));
     } catch (IOException e) {
       throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
     }
@@ -241,7 +240,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.functionalIndexMetadata = Option.of(newFunctionalIndexMetadata);
     try {
       // update the index metadata file as well
-      FileIOUtils.createFileInPath(fs, new Path(indexMetaPath), Option.of(functionalIndexMetadata.get().toJson().getBytes(StandardCharsets.UTF_8)));
+      FileIOUtils.createFileInPath(fs, new Path(indexMetaPath), Option.of(getUTF8Bytes(functionalIndexMetadata.get().toJson())));
     } catch (IOException e) {
       throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
     }

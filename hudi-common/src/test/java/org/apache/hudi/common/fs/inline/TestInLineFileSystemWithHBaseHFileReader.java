@@ -20,6 +20,7 @@
 package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.io.storage.HoodieHFileUtils;
+import org.apache.hudi.io.util.IOUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -29,13 +30,13 @@ import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
-import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Set;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,7 +74,7 @@ public class TestInLineFileSystemWithHBaseHFileReader extends TestInLineFileSyst
         ByteBuffer val1 = scanner.getValue();
         scanner.seekTo(keyValue);
         ByteBuffer val2 = scanner.getValue();
-        assertArrayEquals(Bytes.toBytes(val1), Bytes.toBytes(val2));
+        assertArrayEquals(IOUtils.toBytes(val1), IOUtils.toBytes(val2));
       }
 
       int[] invalidRowIds = {-4, maxRows, maxRows + 1, maxRows + 120, maxRows + 160, maxRows + 1000};
@@ -86,7 +87,7 @@ public class TestInLineFileSystemWithHBaseHFileReader extends TestInLineFileSyst
 
   private byte[] getSomeKey(int rowId) {
     KeyValue kv = new KeyValue(getUTF8Bytes(String.format(LOCAL_FORMATTER, rowId)),
-        Bytes.toBytes("family"), Bytes.toBytes("qual"), HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put);
+        getUTF8Bytes("family"), getUTF8Bytes("qual"), HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put);
     return kv.getKey();
   }
 
@@ -106,15 +107,15 @@ public class TestInLineFileSystemWithHBaseHFileReader extends TestInLineFileSyst
           cell.getValueArray(), cell.getValueOffset(), cell.getValueOffset() + cell.getValueLength());
       String keyStr = String.format(LOCAL_FORMATTER, i);
       String valStr = VALUE_PREFIX + keyStr;
-      KeyValue kv = new KeyValue(Bytes.toBytes(keyStr), Bytes.toBytes("family"),
-          Bytes.toBytes("qual"), Bytes.toBytes(valStr));
+      KeyValue kv = new KeyValue(getUTF8Bytes(keyStr), getUTF8Bytes("family"),
+          getUTF8Bytes("qual"), getUTF8Bytes(valStr));
       byte[] keyBytes = new KeyValue.KeyOnlyKeyValue(key, 0, key.length).getKey();
       byte[] expectedKeyBytes = Arrays.copyOfRange(
           kv.getRowArray(), kv.getRowOffset(), kv.getRowOffset() + kv.getRowLength());
       assertArrayEquals(expectedKeyBytes, keyBytes,
-          "bytes for keys do not match " + keyStr + " " + Bytes.toString(key));
-      assertArrayEquals(Bytes.toBytes(valStr), val,
-          "bytes for vals do not match " + valStr + " " + Bytes.toString(val));
+          "bytes for keys do not match " + keyStr + " " + fromUTF8Bytes(key));
+      assertArrayEquals(getUTF8Bytes(valStr), val,
+          "bytes for vals do not match " + valStr + " " + fromUTF8Bytes(val));
       if (!scanner.next()) {
         break;
       }

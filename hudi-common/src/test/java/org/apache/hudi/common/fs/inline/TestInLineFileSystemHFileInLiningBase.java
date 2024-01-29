@@ -29,7 +29,6 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -44,6 +43,7 @@ import static org.apache.hudi.common.testutils.FileSystemTestUtils.FILE_SCHEME;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.getPhantomFile;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Tests {@link InLineFileSystem} to inline HFile.
@@ -141,8 +141,8 @@ public abstract class TestInLineFileSystemHFileInLiningBase {
     KeyValue kv;
     for (int i = 0; i < (maxRows); i++) {
       String key = String.format(LOCAL_FORMATTER, i);
-      kv = new KeyValue(Bytes.toBytes(key), Bytes.toBytes("family"), Bytes.toBytes("qual"),
-          Bytes.toBytes(VALUE_PREFIX + key));
+      kv = new KeyValue(getUTF8Bytes(key), getUTF8Bytes("family"), getUTF8Bytes("qual"),
+          getUTF8Bytes(VALUE_PREFIX + key));
       writer.append(kv);
     }
   }

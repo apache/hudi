@@ -40,6 +40,7 @@ import org.apache.hudi.hadoop.fs.BoundedFsDataInputStream;
 import org.apache.hudi.hadoop.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.hadoop.fs.TimedFSDataInputStream;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.avro.Schema;
@@ -49,7 +50,6 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -332,7 +332,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       } catch (EOFException e) {
         eof = true;
       }
-      long pos = Bytes.indexOf(dataBuf, HoodieLogFormat.MAGIC);
+      long pos = IOUtils.indexOf(dataBuf, HoodieLogFormat.MAGIC);
       if (pos >= 0) {
         return currentPos + pos;
       }

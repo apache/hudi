@@ -26,7 +26,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.common.util.StringUtils.getStringFromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * Util methods for reading and writing HFile.
@@ -104,7 +104,7 @@ public class HFileUtils {
    * @return the String with UTF-8 decoding.
    */
   public static String getValue(KeyValue kv) {
-    return getStringFromUTF8Bytes(kv.getBytes(), kv.getValueOffset(), kv.getValueLength());
+    return fromUTF8Bytes(kv.getBytes(), kv.getValueOffset(), kv.getValueLength());
   }
 
   /**
