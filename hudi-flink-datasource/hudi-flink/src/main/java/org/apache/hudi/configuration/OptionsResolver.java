@@ -370,7 +370,7 @@ public class OptionsResolver {
    * Returns whether to commit even when current batch has no data, for flink defaults false
    */
   public static boolean allowCommitOnEmptyBatch(Configuration conf) {
-    return conf.getBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
+    return conf.getBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
   }
 
   /**

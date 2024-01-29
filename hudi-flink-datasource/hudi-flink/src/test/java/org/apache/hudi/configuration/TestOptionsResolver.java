@@ -46,6 +46,14 @@ public class TestOptionsResolver {
     conf.setString(FlinkOptions.INDEX_TYPE, "bloom");
     assertEquals(HoodieIndex.IndexType.BLOOM, OptionsResolver.getIndexType(conf));
   }
+
+  @Test
+  void testAllowCommitOnEmptyBatch() {
+    Configuration conf = getConf();
+    // set uppercase index
+    boolean b = OptionsResolver.allowCommitOnEmptyBatch(conf);
+    assertEquals(true, b);
+  }
   
   private Configuration getConf() {
     Configuration conf = new Configuration();
