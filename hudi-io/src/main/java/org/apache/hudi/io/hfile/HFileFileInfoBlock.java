@@ -27,7 +27,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.common.util.StringUtils.getStringFromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * Represents a {@link HFileBlockType#FILE_INFO} block.
@@ -48,7 +48,7 @@ public class HFileFileInfoBlock extends HFileBlock {
         byteBuff, startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength) != 0) {
       throw new IOException(
           "Unexpected Protobuf magic at the beginning of the HFileFileInfoBlock: "
-              + getStringFromUTF8Bytes(byteBuff, startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength));
+              + fromUTF8Bytes(byteBuff, startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength));
     }
     ByteArrayInputStream inputStream = new ByteArrayInputStream(
         byteBuff,
