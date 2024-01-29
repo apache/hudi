@@ -1,5 +1,5 @@
 ---
-title: Procedures
+title: SQL Procedures
 summary: "In this page, we introduce how to use procedures with Hudi."
 toc: true
 last_modified_at: 

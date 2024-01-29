@@ -1,5 +1,5 @@
 ---
-title: "Flink Guide"
+title: "Flink Quick Start"
 toc: true
 last_modified_at: 2023-08-16T12:53:57+08:00
 ---

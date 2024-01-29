@@ -7,31 +7,32 @@
 
 module.exports = {
     docs: [
-        'overview',
         {
             type: 'category',
-            label: 'Quick Start',
+            label: 'Getting Started',
             collapsed: false,
             items: [
+                'overview',
                 'quick-start-guide',
                 'flink-quick-start-guide',
-                'docker_demo'
+                'docker_demo',
+                'use_cases',
             ],
         },
         {
             type: 'category',
-            label: 'Concepts',
+            label: 'Design & Concepts',
             items: [
                 'timeline',
+                'file_layouts',
                 'table_types',
                 'indexing',
-                'file_layouts',
-                'metadata',
                 'write_operations',
-                'schema_evolution',
                 'key_generation',
+                'record_payload',
+                'schema_evolution',
+                'metadata',
                 'concurrency_control',
-                'record_payload'
             ],
         },
         {
@@ -45,11 +46,35 @@ module.exports = {
                         'sql_ddl',
                         'sql_dml',
                         'sql_queries',
-                        'procedures'
                     ],
                 },
                 'writing_data',
                 'hoodie_streaming_ingestion',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Table Services',
+            items: [
+                'procedures',
+                'migration_guide',
+                'compaction',
+                'clustering',
+                'metadata_indexing',
+                'hoodie_cleaner',
+                'transforms',
+                'rollbacks',
+                'markers',
+                'file_sizing',
+                'disaster_recovery',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Platform Services',
+            items: [
+                'snapshot_exporter',
+                'precommit_validator',
                 {
                     type: 'category',
                     label: 'Syncing to Catalogs',
@@ -65,42 +90,10 @@ module.exports = {
         },
         {
             type: 'category',
-            label: 'Services',
-            items: [
-                'migration_guide',
-                'compaction',
-                'clustering',
-                'metadata_indexing',
-                'hoodie_cleaner',
-                'transforms',
-                'rollbacks',
-                'markers',
-                'file_sizing',
-                'disaster_recovery',
-                'snapshot_exporter',
-                'precommit_validator',
-            ],
-        },
-        {
-            type: 'category',
             label: 'Configurations',
             items: [
                 'basic_configurations',
                 'configurations',
-            ],
-        },
-        {
-            type: 'category',
-            label: 'Guides',
-            items: [
-                'performance',
-                'deployment',
-                'cli',
-                'metrics',
-                'encryption',
-                'troubleshooting',
-                'tuning-guide',
-                'flink_tuning',
                 {
                     type: 'category',
                     label: 'Storage Configurations',
@@ -121,6 +114,20 @@ module.exports = {
         },
         {
             type: 'category',
+            label: 'Operations',
+            items: [
+                'performance',
+                'deployment',
+                'cli',
+                'metrics',
+                'encryption',
+                'troubleshooting',
+                'tuning-guide',
+                'flink_tuning',
+            ],
+        },
+        {
+            type: 'category',
             label: 'Frequently Asked Questions(FAQs)',
             items: [
                 'faq',
@@ -133,8 +140,6 @@ module.exports = {
                 'faq_integrations',
             ],
         },
-        'use_cases',
-        'faq',
         'privacy',
     ],
     quick_links: [

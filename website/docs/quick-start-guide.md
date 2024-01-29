@@ -1,5 +1,5 @@
 ---
-title: "Spark Guide"
+title: "Spark Quick Start"
 sidebar_position: 2
 toc: true
 last_modified_at: 2023-08-23T21:14:52+09:00
