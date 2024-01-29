@@ -20,8 +20,6 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -33,6 +31,8 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
@@ -121,7 +121,7 @@ public class TestStreamWriteOperatorCoordinator {
   public void testTableInitialized() throws IOException {
     final org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(new Configuration());
     String basePath = tempFile.getAbsolutePath();
-    try (FileSystem fs = FSUtils.getFs(basePath, hadoopConf)) {
+    try (FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf)) {
       assertTrue(fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME)));
     }
   }

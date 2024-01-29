@@ -258,6 +258,13 @@ public class LegacyArchivedMetaEntryReader {
               }
             }
           }
+          if (!reader.hasNext()) {
+            try {
+              reader.close();
+            } catch (IOException e) {
+              throw new HoodieIOException("Failed to close log reader " + fs.getPath());
+            }
+          }
         }
         return false;
       }

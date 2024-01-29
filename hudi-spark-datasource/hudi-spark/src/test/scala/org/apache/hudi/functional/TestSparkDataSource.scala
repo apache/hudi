@@ -20,7 +20,6 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -29,6 +28,9 @@ import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -75,7 +77,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     // order of cols in inputDf and hudiDf differs slightly. so had to choose columns specifically to compare df directly.
     val colsToSelect = "_row_key, begin_lat,  begin_lon, city_to_state.LA, current_date, current_ts, distance_in_meters, driver, end_lat, end_lon, fare.amount, fare.currency, partition, partition_path, rider, timestamp, weight, _hoodie_is_deleted"
     val dataGen = new HoodieTestDataGenerator(0xDEED)
-    val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
     // Insert Operation
     val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).toList
     val inputDf0 = spark.read.json(spark.sparkContext.parallelize(records0, parallelism)).cache
@@ -236,7 +238,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     // order of cols in inputDf and hudiDf differs slightly. so had to choose columns specifically to compare df directly.
     val colsToSelect = "_row_key, begin_lat,  begin_lon, city_to_state.LA, current_date, current_ts, distance_in_meters, driver, end_lat, end_lon, fare.amount, fare.currency, partition, partition_path, rider, timestamp, weight, _hoodie_is_deleted"
     val dataGen = new HoodieTestDataGenerator(0xDEED)
-    val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
     // Insert Operation
     val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).toList
     val inputDf0 = spark.read.json(spark.sparkContext.parallelize(records0, parallelism)).cache

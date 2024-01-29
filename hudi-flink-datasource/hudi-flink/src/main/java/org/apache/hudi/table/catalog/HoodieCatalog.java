@@ -20,7 +20,6 @@ package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
@@ -112,7 +112,7 @@ public class HoodieCatalog extends AbstractCatalog {
 
   @Override
   public void open() throws CatalogException {
-    fs = FSUtils.getFs(catalogPathStr, hadoopConf);
+    fs = HadoopFSUtils.getFs(catalogPathStr, hadoopConf);
     catalogPath = new Path(catalogPathStr);
     try {
       if (!fs.exists(catalogPath)) {

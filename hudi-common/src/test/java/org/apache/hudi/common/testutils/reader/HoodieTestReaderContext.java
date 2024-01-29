@@ -21,7 +21,6 @@ package org.apache.hudi.common.testutils.reader;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
@@ -32,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieAvroParquetReader;
 
 import org.apache.avro.Schema;
@@ -65,7 +65,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public FileSystem getFs(String path, Configuration conf) {
-    return FSUtils.getFs(path, conf);
+    return HadoopFSUtils.getFs(path, conf);
   }
 
   @Override

@@ -22,10 +22,10 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;

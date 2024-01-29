@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.FilebasedSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
@@ -61,7 +61,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     this.targetFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE, sourceFile);
     this.shouldSanitize = SanitizationUtils.shouldSanitize(props);
     this.invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
-    this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
+    this.fs = HadoopFSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
     this.sourceSchema = parseSchema(this.sourceFile);
     if (containsConfigProperty(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE)) {
       this.targetSchema = parseSchema(this.targetFile);

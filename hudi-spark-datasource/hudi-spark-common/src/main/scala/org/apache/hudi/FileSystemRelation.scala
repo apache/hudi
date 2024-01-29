@@ -18,8 +18,8 @@
 package org.apache.hudi
 
 
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.model.{FileSlice, HoodieFileGroup, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView

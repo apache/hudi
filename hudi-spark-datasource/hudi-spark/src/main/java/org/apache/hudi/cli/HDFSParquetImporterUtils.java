@@ -25,7 +25,6 @@ import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -38,6 +37,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.avro.Schema;
@@ -125,7 +125,7 @@ public class HDFSParquetImporterUtils implements Serializable {
   }
 
   public int dataImport(JavaSparkContext jsc) {
-    FileSystem fs = FSUtils.getFs(this.targetPath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(this.targetPath, jsc.hadoopConfiguration());
     this.props = this.propsFilePath == null || this.propsFilePath.isEmpty() ? buildProperties(this.configs)
         : readConfig(fs.getConf(), new Path(this.propsFilePath), this.configs).getProps(true);
     LOG.info("Starting data import with configs : " + props.toString());

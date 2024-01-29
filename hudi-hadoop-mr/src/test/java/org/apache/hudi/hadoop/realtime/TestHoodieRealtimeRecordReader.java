@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -46,6 +47,7 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
@@ -118,7 +120,7 @@ public class TestHoodieRealtimeRecordReader {
     baseJobConf = new JobConf(hadoopConf);
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     baseJobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
-    fs = FSUtils.getFs(basePath.toUri().toString(), baseJobConf);
+    fs = HadoopFSUtils.getFs(basePath.toUri().toString(), baseJobConf);
   }
 
   @AfterEach

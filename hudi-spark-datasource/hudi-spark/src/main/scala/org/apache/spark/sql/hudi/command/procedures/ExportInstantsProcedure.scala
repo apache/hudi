@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -39,6 +40,7 @@ import java.util
 import java.util.Collections
 import java.util.function.Supplier
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.break
@@ -91,7 +93,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
       .toList.asJava
 
     // Archived instants are in the commit archive files
-    val statuses: Array[FileStatus] = FSUtils.getFs(basePath, jsc.hadoopConfiguration()).globStatus(archivePath)
+    val statuses: Array[FileStatus] = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration()).globStatus(archivePath)
     val archivedStatuses = List(statuses: _*)
       .sortWith((f1, f2) => (f1.getModificationTime - f2.getModificationTime).toInt > 0).asJava
 
@@ -114,7 +116,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
   private def copyArchivedInstants(basePath: String, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
     import scala.collection.JavaConversions._
     var copyCount = 0
-    val fileSystem = FSUtils.getFs(basePath, jsc.hadoopConfiguration())
+    val fileSystem = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration())
     for (fs <- statuses) {
       // read the archived file
       val reader = HoodieLogFormat.newReader(fileSystem, new HoodieLogFile(fs.getPath), HoodieArchivedMetaEntry.getClassSchema)
@@ -178,7 +180,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
     var copyCount = 0
     if (instants.nonEmpty) {
       val timeline = metaClient.getActiveTimeline
-      val fileSystem = FSUtils.getFs(metaClient.getBasePath, jsc.hadoopConfiguration())
+      val fileSystem = HadoopFSUtils.getFs(metaClient.getBasePath, jsc.hadoopConfiguration())
       for (instant <- instants) {
         val localPath = localFolder + Path.SEPARATOR + instant.getFileName
         val data: Array[Byte] = instant.getAction match {

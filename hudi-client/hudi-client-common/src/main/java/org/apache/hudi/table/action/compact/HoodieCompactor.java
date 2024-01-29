@@ -207,6 +207,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
         .withRecordMerger(config.getRecordMerger())
         .withInstantRange(instantRange)
+        .withTableMetaClient(metaClient)
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =

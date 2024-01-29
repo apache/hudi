@@ -26,7 +26,6 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -38,6 +37,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -92,7 +92,7 @@ public class TestDiffCommand extends CLIFunctionalTestHarness {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     String fileId1 = UUID.randomUUID().toString();
     String fileId2 = UUID.randomUUID().toString();
-    FileSystem fs = FSUtils.getFs(basePath(), hadoopConf());
+    FileSystem fs = HadoopFSUtils.getFs(basePath(), hadoopConf());
     HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, tablePath);
 
     // Create four commits
