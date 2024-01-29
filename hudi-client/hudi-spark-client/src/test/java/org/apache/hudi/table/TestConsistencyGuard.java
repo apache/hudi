@@ -18,12 +18,12 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.hadoop.fs.ConsistencyGuard;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.hadoop.fs.Path;

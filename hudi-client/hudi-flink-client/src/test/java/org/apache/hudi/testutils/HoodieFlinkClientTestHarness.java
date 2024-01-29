@@ -23,13 +23,13 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -71,7 +71,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
 
   private void initFileSystemWithConfiguration(Configuration configuration) {
     checkState(basePath != null);
-    fs = FSUtils.getFs(basePath, configuration);
+    fs = HadoopFSUtils.getFs(basePath, configuration);
     if (fs instanceof LocalFileSystem) {
       LocalFileSystem lfs = (LocalFileSystem) fs;
       // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream

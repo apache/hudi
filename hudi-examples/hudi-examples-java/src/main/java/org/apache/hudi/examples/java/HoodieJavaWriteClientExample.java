@@ -20,7 +20,6 @@ package org.apache.hudi.examples.java;
 
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -31,6 +30,7 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.hadoop.conf.Configuration;
@@ -70,7 +70,7 @@ public class HoodieJavaWriteClientExample {
     Configuration hadoopConf = new Configuration();
     // initialize the table, if not done already
     Path path = new Path(tablePath);
-    FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(tablePath, hadoopConf);
     if (!fs.exists(path)) {
       HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(tableType)

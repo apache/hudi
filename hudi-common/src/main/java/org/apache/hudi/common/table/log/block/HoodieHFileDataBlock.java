@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 
@@ -176,7 +177,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
     Configuration hadoopConf = FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf());
-    FileSystem fs = FSUtils.getFs(pathForReader.toString(), hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(pathForReader.toString(), hadoopConf);
     // Read the content
     try (HoodieAvroHFileReader reader = new HoodieAvroHFileReader(hadoopConf, pathForReader, new CacheConfig(hadoopConf),
         fs, content, Option.of(getSchemaFromHeader()))) {
@@ -189,7 +190,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
     Configuration hadoopConf = FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf());
-    FileSystem fs = FSUtils.getFs(pathForReader.toString(), hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(pathForReader.toString(), hadoopConf);
     // Read the content
     try (HoodieAvroHFileReader reader = new HoodieAvroHFileReader(hadoopConf, pathForReader, new CacheConfig(hadoopConf),
         fs, content, Option.of(getSchemaFromHeader()))) {

@@ -17,21 +17,22 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.common.fs.{FSUtils, HoodieWrapperFileSystem}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{CompletionTimeQueryView, HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util
-import org.apache.hudi.common.util.StringUtils
+
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.{Function, Supplier}
 import java.util.stream.Collectors
+
 import scala.collection.JavaConversions
-import scala.collection.JavaConverters.{asJavaIterableConverter, asJavaIteratorConverter, asScalaIteratorConverter}
+import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS_ALL: Array[ProcedureParameter] = Array[ProcedureParameter](

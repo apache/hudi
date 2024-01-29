@@ -19,7 +19,6 @@
 package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FSDataOutputStream;

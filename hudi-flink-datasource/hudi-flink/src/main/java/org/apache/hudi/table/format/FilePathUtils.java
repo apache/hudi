@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -278,7 +278,7 @@ public class FilePathUtils {
   }
 
   public static FileStatus[] getFileStatusRecursively(Path path, int expectLevel, Configuration conf) {
-    return getFileStatusRecursively(path, expectLevel, FSUtils.getFs(path.toString(), conf));
+    return getFileStatusRecursively(path, expectLevel, HadoopFSUtils.getFs(path.toString(), conf));
   }
 
   public static FileStatus[] getFileStatusRecursively(Path path, int expectLevel, FileSystem fs) {
@@ -345,7 +345,7 @@ public class FilePathUtils {
     try {
       return FilePathUtils
           .searchPartKeyValueAndPaths(
-              FSUtils.getFs(path.toString(), hadoopConf),
+              HadoopFSUtils.getFs(path.toString(), hadoopConf),
               path,
               hivePartition,
               partitionKeys.toArray(new String[0]))

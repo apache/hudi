@@ -38,6 +38,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.testutils.Assertions;
 
@@ -105,7 +106,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   public void init() throws IOException {
     String tableName = tableName();
     tablePath = tablePath(tableName);
-    fs = FSUtils.getFs(tablePath, hadoopConf());
+    fs = HadoopFSUtils.getFs(tablePath, hadoopConf());
 
     // Create table and connect
     new TableCommand().createTable(

@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -113,7 +114,7 @@ public class DirectWriteMarkers extends WriteMarkers {
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
       dataFiles.addAll(context.flatMap(subDirectories, directory -> {
         Path path = new Path(directory);
-        FileSystem fileSystem = FSUtils.getFs(path, serializedConf.get());
+        FileSystem fileSystem = HadoopFSUtils.getFs(path, serializedConf.get());
         RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
         List<String> result = new ArrayList<>();
         while (itr.hasNext()) {

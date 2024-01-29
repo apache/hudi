@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
@@ -29,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Base64CodecUtil;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -80,7 +80,7 @@ public class LogReaderUtils {
       Map<String, HoodieLogFile> deltaFilePathToFileStatus = logFiles.stream().map(entry -> Pair.of(entry.getPath().toString(), entry))
           .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
       for (String logPath : deltaPaths) {
-        FileSystem fs = FSUtils.getFs(logPath, config);
+        FileSystem fs = HadoopFSUtils.getFs(logPath, config);
         Schema schemaFromLogFile = readSchemaFromLogFileInReverse(fs, metaClient.getActiveTimeline(), deltaFilePathToFileStatus.get(logPath));
         if (schemaFromLogFile != null) {
           return schemaFromLogFile;

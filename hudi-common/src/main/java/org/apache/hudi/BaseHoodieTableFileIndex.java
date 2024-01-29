@@ -39,7 +39,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.expression.Expression;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -65,7 +65,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADAT
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
 import static org.apache.hudi.common.util.CollectionUtils.combine;
-import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
+import static org.apache.hudi.hadoop.fs.CachingPath.createRelativePathUnsafe;
 
 /**
  * Common (engine-agnostic) File Index implementation enabling individual query engines to

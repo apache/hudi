@@ -24,12 +24,8 @@ import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
-import org.apache.hudi.common.fs.HoodieRetryWrapperFileSystem;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
 import org.apache.hudi.common.model.HoodieFunctionalIndexMetadata;
@@ -54,8 +50,12 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.hadoop.CachingPath;
-import org.apache.hudi.hadoop.SerializablePath;
+import org.apache.hudi.hadoop.fs.CachingPath;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.HoodieRetryWrapperFileSystem;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
+import org.apache.hudi.hadoop.fs.SerializablePath;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -392,7 +392,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public HoodieWrapperFileSystem getFs() {
     if (fs == null) {
-      FileSystem fileSystem = FSUtils.getFs(metaPath.get(), hadoopConf.newCopy());
+      FileSystem fileSystem = HadoopFSUtils.getFs(metaPath.get(), hadoopConf.newCopy());
 
       if (fileSystemRetryConfig.isFileSystemActionRetryEnable()) {
         fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
@@ -600,7 +600,7 @@ public class HoodieTableMetaClient implements Serializable {
                                           Properties props) throws IOException {
     LOG.info("Initializing " + basePath + " as hoodie table " + basePath);
     Path basePathDir = new Path(basePath);
-    final FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+    final FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
     if (!fs.exists(basePathDir)) {
       fs.mkdirs(basePathDir);
     }

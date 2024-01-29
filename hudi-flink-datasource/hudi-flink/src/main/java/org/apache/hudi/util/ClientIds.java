@@ -18,12 +18,12 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieHeartbeatException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -180,7 +180,7 @@ public class ClientIds implements AutoCloseable, Serializable {
 
   private String nextId(Configuration conf, String basePath) {
     Path heartbeatFolderPath = new Path(getHeartbeatFolderPath(basePath));
-    FileSystem fs = FSUtils.getFs(heartbeatFolderPath, HadoopConfigurations.getHadoopConf(conf));
+    FileSystem fs = HadoopFSUtils.getFs(heartbeatFolderPath, HadoopConfigurations.getHadoopConf(conf));
     try {
       if (!fs.exists(heartbeatFolderPath)) {
         return INIT_CLIENT_ID;
@@ -251,7 +251,7 @@ public class ClientIds implements AutoCloseable, Serializable {
 
     public Builder conf(Configuration conf) {
       this.basePath = conf.getString(FlinkOptions.PATH);
-      this.fs = FSUtils.getFs(this.basePath, HadoopConfigurations.getHadoopConf(conf));
+      this.fs = HadoopFSUtils.getFs(this.basePath, HadoopConfigurations.getHadoopConf(conf));
       this.clientId = conf.getString(FlinkOptions.WRITE_CLIENT_ID);
       return this;
     }

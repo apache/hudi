@@ -21,7 +21,6 @@ package org.apache.hudi.examples.spark;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,6 +33,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -84,7 +84,7 @@ public class HoodieWriteClientExample {
 
       // initialize the table, if not done already
       Path path = new Path(tablePath);
-      FileSystem fs = FSUtils.getFs(tablePath, jsc.hadoopConfiguration());
+      FileSystem fs = HadoopFSUtils.getFs(tablePath, jsc.hadoopConfiguration());
       if (!fs.exists(path)) {
         HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(tableType)

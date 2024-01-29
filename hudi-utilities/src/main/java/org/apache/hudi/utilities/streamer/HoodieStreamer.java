@@ -34,7 +34,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineProperty;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -56,6 +55,7 @@ import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
@@ -130,12 +130,12 @@ public class HoodieStreamer implements Serializable {
   public static final String STREAMSYNC_POOL_NAME = "hoodiedeltasync";
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
-    this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
+    this(cfg, jssc, HadoopFSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
         jssc.hadoopConfiguration(), Option.empty());
   }
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, Option<TypedProperties> props) throws IOException {
-    this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
+    this(cfg, jssc, HadoopFSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
         jssc.hadoopConfiguration(), props);
   }
 
