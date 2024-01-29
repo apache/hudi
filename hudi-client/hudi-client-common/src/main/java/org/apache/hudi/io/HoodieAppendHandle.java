@@ -684,7 +684,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(
             records, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()),
-            writeConfig.getBooleanOrDefault(HoodieReaderConfig.USE_BUILT_IN_HFILE_READER));
+            writeConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,

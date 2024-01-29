@@ -114,7 +114,7 @@ public class HoodieAvroHFileWriter
         .withFileContext(context)
         .create();
 
-    writer.appendFileInfo(getUTF8Bytes(BaseHoodieAvroHFileReader.SCHEMA_KEY),
+    writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.SCHEMA_KEY),
         getUTF8Bytes(schema.toString()));
     this.prevRecordKey = "";
   }
@@ -182,13 +182,13 @@ public class HoodieAvroHFileWriter
       if (maxRecordKey == null) {
         maxRecordKey = "";
       }
-      writer.appendFileInfo(getUTF8Bytes(BaseHoodieAvroHFileReader.KEY_MIN_RECORD),
+      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD),
           getUTF8Bytes(minRecordKey));
-      writer.appendFileInfo(getUTF8Bytes(BaseHoodieAvroHFileReader.KEY_MAX_RECORD),
+      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD),
           getUTF8Bytes(maxRecordKey));
-      writer.appendFileInfo(getUTF8Bytes(BaseHoodieAvroHFileReader.KEY_BLOOM_FILTER_TYPE_CODE),
+      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE),
           getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString()));
-      writer.appendMetaBlock(BaseHoodieAvroHFileReader.KEY_BLOOM_FILTER_META_BLOCK,
+      writer.appendMetaBlock(HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK,
           new Writable() {
             @Override
             public void write(DataOutput out) throws IOException {

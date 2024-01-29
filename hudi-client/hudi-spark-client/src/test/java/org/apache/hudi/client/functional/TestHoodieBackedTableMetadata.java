@@ -37,7 +37,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.storage.BaseHoodieAvroHFileReader;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataLogRecordReader;
@@ -407,10 +407,10 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     }
     final HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
 
-    BaseHoodieAvroHFileReader hoodieHFileReader = (BaseHoodieAvroHFileReader)
+    HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
             table.getConfig(), context.getHadoopConf().get(), new Path(baseFile.getPath()));
-    List<IndexedRecord> records = BaseHoodieAvroHFileReader.readAllRecords(hoodieHFileReader);
+    List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       assertNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
       final String keyInPayload = (String) ((GenericRecord) entry)

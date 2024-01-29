@@ -62,7 +62,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.USE_BUILT_IN_HFILE_READER;
+import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -212,7 +212,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         return new HoodieHFileDataBlock(
             () -> getFSDataInputStream(fs, this.logFile, bufferSize), content, readBlockLazily, logBlockContentLoc,
             Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath(),
-            ConfigUtils.getBooleanWithAltKeys(fs.getConf(), USE_BUILT_IN_HFILE_READER));
+            ConfigUtils.getBooleanWithAltKeys(fs.getConf(), USE_NATIVE_HFILE_READER));
 
       case PARQUET_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,

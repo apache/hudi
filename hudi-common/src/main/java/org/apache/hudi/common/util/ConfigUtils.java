@@ -45,6 +45,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 
 public class ConfigUtils {
@@ -65,6 +66,8 @@ public class ConfigUtils {
    * location to read.
    */
   public static final String TABLE_SERDE_PATH = "path";
+
+  public static final HoodieConfig DEFAULT_HUDI_CONFIG_FOR_READER = new HoodieConfig();
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigUtils.class);
 
@@ -612,5 +615,13 @@ public class ConfigUtils {
 
   public static void deleteProperties(Properties current, Properties deleted) {
     deleted.forEach((k, v) -> current.remove(k.toString()));
+  }
+
+  public static HoodieConfig getReaderConfigs(Configuration conf) {
+    HoodieConfig config = new HoodieConfig();
+    config.setAll(DEFAULT_HUDI_CONFIG_FOR_READER.getProps());
+    config.setValue(USE_NATIVE_HFILE_READER,
+        Boolean.toString(ConfigUtils.getBooleanWithAltKeys(conf, USE_NATIVE_HFILE_READER)));
+    return config;
   }
 }

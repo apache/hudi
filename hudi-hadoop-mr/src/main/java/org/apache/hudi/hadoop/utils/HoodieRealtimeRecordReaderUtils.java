@@ -66,7 +66,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.common.config.HoodieReaderConfig.USE_BUILT_IN_HFILE_READER;
+import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 
 public class HoodieRealtimeRecordReaderUtils {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReaderUtils.class);
@@ -308,9 +308,7 @@ public class HoodieRealtimeRecordReaderUtils {
   }
 
   public static HoodieFileReader getBaseFileReader(Path path, JobConf conf) throws IOException {
-    HoodieConfig hoodieConfig = new HoodieConfig();
-    hoodieConfig.setValue(USE_BUILT_IN_HFILE_READER,
-        Boolean.toString(ConfigUtils.getBooleanWithAltKeys(conf, USE_BUILT_IN_HFILE_READER)));
+    HoodieConfig hoodieConfig = getReaderConfigs(conf);
     return HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hoodieConfig, conf, path);
   }
 

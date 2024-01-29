@@ -29,12 +29,12 @@ import javax.annotation.concurrent.Immutable;
     groupName = ConfigGroups.Names.READER,
     description = "Configurations that control file group reading.")
 public class HoodieReaderConfig extends HoodieConfig {
-  public static final ConfigProperty<Boolean> USE_BUILT_IN_HFILE_READER = ConfigProperty
-      .key("hoodie.hfile.use.built.in.reader")
+  public static final ConfigProperty<Boolean> USE_NATIVE_HFILE_READER = ConfigProperty
+      .key("_hoodie.hfile.use.native.reader")
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")
-      .withDocumentation("When enabled, the built-in HFile reader is used to read HFiles.");
+      .withDocumentation("When enabled, the native HFile reader is used to read HFiles.  This is an internal config.");
 
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")

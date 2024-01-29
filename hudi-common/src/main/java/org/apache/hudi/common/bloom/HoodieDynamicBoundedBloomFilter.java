@@ -66,7 +66,11 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   public HoodieDynamicBoundedBloomFilter(String serString) {
     // ignoring the type code for now, since we have just one version
     byte[] bytes = Base64CodecUtil.decode(serString);
-    extractAndSetInternalBloomFilter(new DataInputStream(new ByteArrayInputStream(bytes)));
+    try (DataInputStream stream = new DataInputStream(new ByteArrayInputStream(bytes))) {
+      extractAndSetInternalBloomFilter(stream);
+    } catch (IOException e) {
+      throw new HoodieIndexException("Could not deserialize BloomFilter from string", e);
+    }
   }
 
   /**
@@ -76,7 +80,11 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
    */
   public HoodieDynamicBoundedBloomFilter(ByteBuffer byteBuffer) {
     // ignoring the type code for now, since we have just one version
-    extractAndSetInternalBloomFilter(getDataInputStream(Base64CodecUtil.decode(byteBuffer)));
+    try (DataInputStream stream = getDataInputStream(Base64CodecUtil.decode(byteBuffer))) {
+      extractAndSetInternalBloomFilter(stream);
+    } catch (IOException e) {
+      throw new HoodieIndexException("Could not deserialize BloomFilter from byte buffer", e);
+    }
   }
 
   @Override
@@ -113,14 +121,9 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
     return BloomFilterTypeCode.DYNAMIC_V0;
   }
 
-  private void extractAndSetInternalBloomFilter(DataInputStream dis) {
-    try {
-      internalDynamicBloomFilter = new InternalDynamicBloomFilter();
-      internalDynamicBloomFilter.readFields(dis);
-      dis.close();
-    } catch (IOException e) {
-      throw new HoodieIndexException("Could not deserialize BloomFilter instance", e);
-    }
+  private void extractAndSetInternalBloomFilter(DataInputStream dis) throws IOException {
+    internalDynamicBloomFilter = new InternalDynamicBloomFilter();
+    internalDynamicBloomFilter.readFields(dis);
   }
 }
 

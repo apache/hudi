@@ -86,9 +86,9 @@ public class HoodieFileReaderFactory {
       case PARQUET:
         return this.newParquetFileReader(conf, path);
       case HFILE:
-        boolean useBuiltInHFileReader =
-            hoodieConfig.getBooleanOrDefault(HoodieReaderConfig.USE_BUILT_IN_HFILE_READER);
-        return newHFileFileReader(useBuiltInHFileReader, conf, path, schemaOption);
+        boolean useNativeHFileReader =
+            hoodieConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER);
+        return newHFileFileReader(useNativeHFileReader, conf, path, schemaOption);
       case ORC:
         return newOrcFileReader(conf, path);
       default:
@@ -102,9 +102,9 @@ public class HoodieFileReaderFactory {
                                            Option<Schema> schemaOption) throws IOException {
     switch (format) {
       case HFILE:
-        boolean useBuiltInHFileReader =
-            config.getBooleanOrDefault(HoodieReaderConfig.USE_BUILT_IN_HFILE_READER);
-        return newHFileFileReader(useBuiltInHFileReader, conf, path, fs, content, schemaOption);
+        boolean useNativeHFileReader =
+            config.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER);
+        return newHFileFileReader(useNativeHFileReader, conf, path, fs, content, schemaOption);
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
@@ -114,13 +114,13 @@ public class HoodieFileReaderFactory {
     throw new UnsupportedOperationException();
   }
 
-  protected HoodieFileReader newHFileFileReader(boolean useBuiltInHFileReader,
+  protected HoodieFileReader newHFileFileReader(boolean useNativeHFileReader,
                                                 Configuration conf, Path path,
                                                 Option<Schema> schemaOption) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  protected HoodieFileReader newHFileFileReader(boolean useBuiltInHFileReader,
+  protected HoodieFileReader newHFileFileReader(boolean useNativeHFileReader,
                                                 Configuration conf, Path path,
                                                 FileSystem fs,
                                                 byte[] content, Option<Schema> schemaOption)

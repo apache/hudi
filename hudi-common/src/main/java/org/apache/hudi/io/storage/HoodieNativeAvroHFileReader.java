@@ -62,10 +62,10 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
 
 /**
- * An implementation of {@link BaseHoodieAvroHFileReader} using built-in {@link HFileReader}.
+ * An implementation of {@link HoodieAvroHFileReaderImplBase} using native {@link HFileReader}.
  */
-public class HoodieAvroHFileReader extends BaseHoodieAvroHFileReader {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileReader.class);
+public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieNativeAvroHFileReader.class);
 
   private final Configuration conf;
   private final Option<Path> path;
@@ -73,7 +73,7 @@ public class HoodieAvroHFileReader extends BaseHoodieAvroHFileReader {
   private Option<HFileReader> sharedHFileReader;
   private final Lazy<Schema> schema;
 
-  public HoodieAvroHFileReader(Configuration conf, Path path, Option<Schema> schemaOption) {
+  public HoodieNativeAvroHFileReader(Configuration conf, Path path, Option<Schema> schemaOption) {
     this.conf = conf;
     this.path = Option.of(path);
     this.bytesContent = Option.empty();
@@ -82,7 +82,7 @@ public class HoodieAvroHFileReader extends BaseHoodieAvroHFileReader {
         .orElseGet(() -> Lazy.lazily(() -> fetchSchema(getSharedHFileReader())));
   }
 
-  public HoodieAvroHFileReader(Configuration conf, byte[] content, Option<Schema> schemaOption) {
+  public HoodieNativeAvroHFileReader(Configuration conf, byte[] content, Option<Schema> schemaOption) {
     this.conf = conf;
     this.path = Option.empty();
     this.bytesContent = Option.of(content);

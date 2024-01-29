@@ -33,32 +33,32 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     return new HoodieAvroParquetReader(conf, path);
   }
 
-  protected HoodieFileReader newHFileFileReader(boolean useBuiltInHFileReader,
+  protected HoodieFileReader newHFileFileReader(boolean useNativeHFileReader,
                                                 Configuration conf,
                                                 Path path,
                                                 Option<Schema> schemaOption) throws IOException {
-    if (useBuiltInHFileReader) {
-      return new HoodieAvroHFileReader(conf, path, schemaOption);
+    if (useNativeHFileReader) {
+      return new HoodieNativeAvroHFileReader(conf, path, schemaOption);
     }
     CacheConfig cacheConfig = new CacheConfig(conf);
     if (schemaOption.isPresent()) {
-      return new HoodieAvroHBaseHFileReader(conf, path, cacheConfig, path.getFileSystem(conf), schemaOption);
+      return new HoodieHBaseAvroHFileReader(conf, path, cacheConfig, path.getFileSystem(conf), schemaOption);
     }
-    return new HoodieAvroHBaseHFileReader(conf, path, cacheConfig);
+    return new HoodieHBaseAvroHFileReader(conf, path, cacheConfig);
   }
 
-  protected HoodieFileReader newHFileFileReader(boolean useBuiltInHFileReader,
+  protected HoodieFileReader newHFileFileReader(boolean useNativeHFileReader,
                                                 Configuration conf,
                                                 Path path,
                                                 FileSystem fs,
                                                 byte[] content,
                                                 Option<Schema> schemaOption)
       throws IOException {
-    if (useBuiltInHFileReader) {
-      return new HoodieAvroHFileReader(conf, content, schemaOption);
+    if (useNativeHFileReader) {
+      return new HoodieNativeAvroHFileReader(conf, content, schemaOption);
     }
     CacheConfig cacheConfig = new CacheConfig(conf);
-    return new HoodieAvroHBaseHFileReader(conf, path, cacheConfig, fs, content, schemaOption);
+    return new HoodieHBaseAvroHFileReader(conf, path, cacheConfig, fs, content, schemaOption);
   }
 
   @Override

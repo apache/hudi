@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig, HoodieMetadataConfig, SerializableConfiguration}
-import org.apache.hudi.common.config.HoodieReaderConfig.USE_BUILT_IN_HFILE_READER
+import org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
@@ -851,8 +851,8 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       val hadoopConf = hadoopConfBroadcast.value.get()
       val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(partitionedFile)
       val hoodieConfig = new HoodieConfig()
-      hoodieConfig.setValue(USE_BUILT_IN_HFILE_READER,
-        options.getOrElse(USE_BUILT_IN_HFILE_READER.key(), USE_BUILT_IN_HFILE_READER.defaultValue().toString))
+      hoodieConfig.setValue(USE_NATIVE_HFILE_READER,
+        options.getOrElse(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue().toString))
       val reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, hadoopConf, filePath, HFILE)
 

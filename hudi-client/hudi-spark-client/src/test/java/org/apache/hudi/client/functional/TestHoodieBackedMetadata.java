@@ -91,7 +91,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.io.storage.BaseHoodieAvroHFileReader;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
@@ -811,10 +811,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     table.getHoodieView().sync();
     List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
-    BaseHoodieAvroHFileReader hoodieHFileReader = (BaseHoodieAvroHFileReader)
+    HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
             table.getConfig(), context.getHadoopConf().get(), new Path(baseFile.getPath()));
-    List<IndexedRecord> records = BaseHoodieAvroHFileReader.readAllRecords(hoodieHFileReader);
+    List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (populateMetaFields) {
         assertNotNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
@@ -1351,10 +1351,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     final HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
 
-    BaseHoodieAvroHFileReader hoodieHFileReader = (BaseHoodieAvroHFileReader)
+    HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
             table.getConfig(), context.getHadoopConf().get(), new Path(baseFile.getPath()));
-    List<IndexedRecord> records = BaseHoodieAvroHFileReader.readAllRecords(hoodieHFileReader);
+    List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (enableMetaFields) {
         assertNotNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));

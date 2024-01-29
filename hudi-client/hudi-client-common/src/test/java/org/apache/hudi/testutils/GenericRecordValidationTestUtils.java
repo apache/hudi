@@ -19,7 +19,6 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,7 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.io.storage.BaseHoodieAvroHFileReader;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 
 import org.apache.avro.Schema;
@@ -56,6 +55,7 @@ import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIE
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.HOODIE_CONSUME_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -143,10 +143,10 @@ public class GenericRecordValidationTestUtils {
   public static Stream<GenericRecord> readHFile(Configuration conf, String[] paths) {
     List<GenericRecord> valuesAsList = new LinkedList<>();
     for (String path : paths) {
-      try (BaseHoodieAvroHFileReader reader = (BaseHoodieAvroHFileReader)
+      try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
           HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-              .getFileReader(new HoodieConfig(), conf, new Path(path), HoodieFileFormat.HFILE)) {
-        valuesAsList.addAll(BaseHoodieAvroHFileReader.readAllRecords(reader)
+              .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, conf, new Path(path), HoodieFileFormat.HFILE)) {
+        valuesAsList.addAll(HoodieAvroHFileReaderImplBase.readAllRecords(reader)
             .stream().map(e -> (GenericRecord) e).collect(Collectors.toList()));
       } catch (IOException e) {
         throw new HoodieException("Error reading HFile " + path, e);

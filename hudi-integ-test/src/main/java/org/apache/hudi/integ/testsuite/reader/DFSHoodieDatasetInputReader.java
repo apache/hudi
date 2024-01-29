@@ -21,7 +21,6 @@ package org.apache.hudi.integ.testsuite.reader;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
@@ -73,6 +72,7 @@ import scala.Tuple2;
 
 import static java.util.Map.Entry.comparingByValue;
 import static java.util.stream.Collectors.toMap;
+import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * This class helps to generate updates from an already existing hoodie dataset. It supports generating updates in across partitions, files and records.
@@ -273,7 +273,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       // Read the base files using the latest writer schema.
       Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
       HoodieAvroFileReader reader = TypeUtils.unsafeCast(HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-          new HoodieConfig(), metaClient.getHadoopConf(), new Path(fileSlice.getBaseFile().get().getPath())));
+          DEFAULT_HUDI_CONFIG_FOR_READER, metaClient.getHadoopConf(), new Path(fileSlice.getBaseFile().get().getPath())));
       return new CloseableMappingIterator<>(reader.getRecordIterator(schema), HoodieRecord::getData);
     } else {
       // If there is no data file, fall back to reading log files

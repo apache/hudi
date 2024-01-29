@@ -42,13 +42,13 @@ public class TestHoodieHFileReaderWriter extends TestHoodieHFileReaderWriterBase
   @Override
   protected HoodieAvroFileReader createReader(
       Configuration conf) throws Exception {
-    return new HoodieAvroHFileReader(conf, getFilePath(), Option.empty());
+    return new HoodieNativeAvroHFileReader(conf, getFilePath(), Option.empty());
   }
 
   @Override
-  protected BaseHoodieAvroHFileReader createHFileReader(Configuration conf,
-                                                        byte[] content) throws IOException {
-    return new HoodieAvroHFileReader(conf, content, Option.empty());
+  protected HoodieAvroHFileReaderImplBase createHFileReader(Configuration conf,
+                                                            byte[] content) throws IOException {
+    return new HoodieNativeAvroHFileReader(conf, content, Option.empty());
   }
 
   @Override
@@ -57,7 +57,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieHFileReaderWriterBase
                                    boolean mayUseDefaultComparator,
                                    Class<?> expectedComparatorClazz,
                                    int count) throws IOException {
-    try (BaseHoodieAvroHFileReader hfileReader = createHFileReader(new Configuration(), content)) {
+    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(new Configuration(), content)) {
       assertEquals(count, hfileReader.getTotalRecords());
     }
   }
@@ -65,8 +65,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieHFileReaderWriterBase
   @Test
   public void testReaderGetRecordIteratorByKeysWithBackwardSeek() throws Exception {
     writeFileWithSimpleSchema();
-    try (BaseHoodieAvroHFileReader hfileReader =
-             (BaseHoodieAvroHFileReader) createReader(new Configuration())) {
+    try (HoodieAvroHFileReaderImplBase hfileReader =
+             (HoodieAvroHFileReaderImplBase) createReader(new Configuration())) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       // Filter for "key00001, key05, key24, key16, key31, key61".

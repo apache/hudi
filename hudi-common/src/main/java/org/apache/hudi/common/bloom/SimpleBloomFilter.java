@@ -67,7 +67,11 @@ public class SimpleBloomFilter implements BloomFilter {
   public SimpleBloomFilter(String serString) {
     this.filter = new InternalBloomFilter();
     byte[] bytes = Base64CodecUtil.decode(serString);
-    extractAndSetInternalBloomFilter(new DataInputStream(new ByteArrayInputStream(bytes)));
+    try (DataInputStream stream = new DataInputStream(new ByteArrayInputStream(bytes))) {
+      extractAndSetInternalBloomFilter(stream);
+    } catch (IOException e) {
+      throw new HoodieIndexException("Could not deserialize BloomFilter from string", e);
+    }
   }
 
   /**
@@ -77,7 +81,11 @@ public class SimpleBloomFilter implements BloomFilter {
    */
   public SimpleBloomFilter(ByteBuffer byteBuffer) {
     this.filter = new InternalBloomFilter();
-    extractAndSetInternalBloomFilter(getDataInputStream(Base64CodecUtil.decode(byteBuffer)));
+    try (DataInputStream stream = getDataInputStream(Base64CodecUtil.decode(byteBuffer))) {
+      extractAndSetInternalBloomFilter(stream);
+    } catch (IOException e) {
+      throw new HoodieIndexException("Could not deserialize BloomFilter from byte buffer", e);
+    }
   }
 
   @Override
@@ -144,12 +152,7 @@ public class SimpleBloomFilter implements BloomFilter {
     return BloomFilterTypeCode.SIMPLE;
   }
 
-  private void extractAndSetInternalBloomFilter(DataInputStream dis) {
-    try {
-      this.filter.readFields(dis);
-      dis.close();
-    } catch (IOException e) {
-      throw new HoodieIndexException("Could not deserialize BloomFilter instance", e);
-    }
+  private void extractAndSetInternalBloomFilter(DataInputStream dis) throws IOException {
+    this.filter.readFields(dis);
   }
 }

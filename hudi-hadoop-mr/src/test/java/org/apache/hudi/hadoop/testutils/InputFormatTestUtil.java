@@ -34,8 +34,8 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
@@ -400,7 +400,7 @@ public class InputFormatTestUtil {
     List<HoodieRecord> hoodieRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     if (logBlockType == HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK) {
       dataBlock = new HoodieHFileDataBlock(
-          hoodieRecords, header, Compression.Algorithm.GZ, writer.getLogFile().getPath(), HoodieReaderConfig.USE_BUILT_IN_HFILE_READER.defaultValue());
+          hoodieRecords, header, Compression.Algorithm.GZ, writer.getLogFile().getPath(), HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       dataBlock = new HoodieParquetDataBlock(hoodieRecords, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true);
     } else {

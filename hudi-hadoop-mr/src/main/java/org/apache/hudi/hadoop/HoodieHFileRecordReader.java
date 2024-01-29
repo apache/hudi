@@ -21,7 +21,6 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -42,7 +41,7 @@ import org.apache.hadoop.mapred.RecordReader;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.USE_BUILT_IN_HFILE_READER;
+import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 
 public class HoodieHFileRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
@@ -55,9 +54,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
   public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
     FileSplit fileSplit = (FileSplit) split;
     Path path = fileSplit.getPath();
-    HoodieConfig hoodieConfig = new HoodieConfig();
-    hoodieConfig.setValue(USE_BUILT_IN_HFILE_READER,
-        Boolean.toString(ConfigUtils.getBooleanWithAltKeys(conf, USE_BUILT_IN_HFILE_READER)));
+    HoodieConfig hoodieConfig = getReaderConfigs(conf);
     reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, conf, path, HoodieFileFormat.HFILE, Option.empty());
 

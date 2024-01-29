@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -74,6 +73,7 @@ import java.util.function.Supplier;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
+import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
@@ -345,7 +345,7 @@ public class TableSchemaResolver {
     FileSystem fs = metaClient.getRawFs();
     try (HoodieFileReader fileReader =
              HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-                 .getFileReader(new HoodieConfig(), fs.getConf(), hFilePath)) {
+                 .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, fs.getConf(), hFilePath)) {
       return convertAvroSchemaToParquet(fileReader.getSchema());
     }
   }

@@ -57,15 +57,15 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
   protected HoodieAvroFileReader createReader(
       Configuration conf) throws Exception {
     CacheConfig cacheConfig = new CacheConfig(conf);
-    return new HoodieAvroHBaseHFileReader(conf, getFilePath(), cacheConfig,
+    return new HoodieHBaseAvroHFileReader(conf, getFilePath(), cacheConfig,
         getFilePath().getFileSystem(conf), Option.empty());
   }
 
   @Override
-  protected BaseHoodieAvroHFileReader createHFileReader(Configuration conf,
-                                                        byte[] content) throws IOException {
+  protected HoodieAvroHFileReaderImplBase createHFileReader(Configuration conf,
+                                                            byte[] content) throws IOException {
     FileSystem fs = HadoopFSUtils.getFs(getFilePath().toString(), new Configuration());
-    return new HoodieAvroHBaseHFileReader(
+    return new HoodieHBaseAvroHFileReader(
         conf, new Path(DUMMY_BASE_PATH), new CacheConfig(conf), fs, content, Option.empty());
   }
 
@@ -94,8 +94,8 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
   @Test
   public void testReaderGetRecordIteratorByKeysWithBackwardSeek() throws Exception {
     writeFileWithSimpleSchema();
-    try (BaseHoodieAvroHFileReader hfileReader =
-             (BaseHoodieAvroHFileReader) createReader(new Configuration())) {
+    try (HoodieAvroHFileReaderImplBase hfileReader =
+             (HoodieAvroHFileReaderImplBase) createReader(new Configuration())) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       List<GenericRecord> allRecords = toStream(hfileReader.getRecordIterator())

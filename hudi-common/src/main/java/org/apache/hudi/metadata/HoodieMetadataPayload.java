@@ -38,7 +38,7 @@ import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.fs.CachingPath;
-import org.apache.hudi.io.storage.BaseHoodieAvroHFileReader;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -112,7 +112,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * HoodieMetadata schema field ids
    */
-  public static final String KEY_FIELD_NAME = BaseHoodieAvroHFileReader.KEY_FIELD_NAME;
+  public static final String KEY_FIELD_NAME = HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME;
   public static final String SCHEMA_FIELD_NAME_TYPE = "type";
   public static final String SCHEMA_FIELD_NAME_METADATA = "filesystemMetadata";
   public static final String SCHEMA_FIELD_ID_COLUMN_STATS = "ColumnStatsMetadata";

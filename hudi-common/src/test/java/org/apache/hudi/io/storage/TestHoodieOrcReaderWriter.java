@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -39,6 +38,7 @@ import java.io.IOException;
 import java.util.function.Supplier;
 
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
+import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.io.storage.HoodieOrcConfig.AVRO_SCHEMA_METADATA_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,7 +72,7 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
   protected HoodieAvroFileReader createReader(
       Configuration conf) throws Exception {
     return (HoodieAvroFileReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(new HoodieConfig(), conf, getFilePath());
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, conf, getFilePath());
   }
 
   @Override

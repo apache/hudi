@@ -68,7 +68,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -129,8 +128,8 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMOR
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
-import static org.apache.hudi.common.config.HoodieReaderConfig.USE_BUILT_IN_HFILE_READER;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
+import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -928,9 +927,7 @@ public class HoodieTableMetadataUtil {
   }
 
   private static ByteBuffer readBloomFilter(Configuration conf, Path filePath) throws IOException {
-    HoodieConfig hoodieConfig = new HoodieConfig();
-    hoodieConfig.setValue(USE_BUILT_IN_HFILE_READER,
-        Boolean.toString(ConfigUtils.getBooleanWithAltKeys(conf, USE_BUILT_IN_HFILE_READER)));
+    HoodieConfig hoodieConfig = getReaderConfigs(conf);
     try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, conf, filePath)) {
       final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
@@ -1878,9 +1875,7 @@ public class HoodieTableMetadataUtil {
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
-      HoodieConfig hoodieConfig = new HoodieConfig();
-      hoodieConfig.setValue(USE_BUILT_IN_HFILE_READER,
-          Boolean.toString(ConfigUtils.getBooleanWithAltKeys(configuration.get(), USE_BUILT_IN_HFILE_READER)));
+      HoodieConfig hoodieConfig = getReaderConfigs(configuration.get());
       HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
           .getFileReader(hoodieConfig, configuration.get(), dataFilePath);
       ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();

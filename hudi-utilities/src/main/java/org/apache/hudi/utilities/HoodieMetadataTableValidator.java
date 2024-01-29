@@ -98,7 +98,7 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.USE_BUILT_IN_HFILE_READER;
+import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
@@ -1384,8 +1384,8 @@ public class HoodieMetadataTableValidator implements Serializable {
       Path path = new Path(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath), filename);
       BloomFilter bloomFilter;
       HoodieConfig hoodieConfig = new HoodieConfig();
-      hoodieConfig.setValue(USE_BUILT_IN_HFILE_READER,
-          Boolean.toString(ConfigUtils.getBooleanWithAltKeys(props, USE_BUILT_IN_HFILE_READER)));
+      hoodieConfig.setValue(USE_NATIVE_HFILE_READER,
+          Boolean.toString(ConfigUtils.getBooleanWithAltKeys(props, USE_NATIVE_HFILE_READER)));
       try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(hoodieConfig, metaClient.getHadoopConf(), path)) {
         bloomFilter = fileReader.readBloomFilter();

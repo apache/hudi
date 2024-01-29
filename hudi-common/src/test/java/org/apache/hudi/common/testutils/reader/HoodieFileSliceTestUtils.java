@@ -198,7 +198,7 @@ public class HoodieFileSliceTestUtils {
             header,
             Compression.Algorithm.GZ,
             pathForReader,
-            HoodieReaderConfig.USE_BUILT_IN_HFILE_READER.defaultValue());
+            HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,
