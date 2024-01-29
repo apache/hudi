@@ -20,7 +20,6 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -31,6 +30,7 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -91,7 +91,7 @@ public class HoodieAvroHBaseHFileReader extends BaseHoodieAvroHFileReader {
 
   public HoodieAvroHBaseHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig)
       throws IOException {
-    this(path, FSUtils.getFs(path.toString(), hadoopConf), hadoopConf, cacheConfig, Option.empty());
+    this(path, HadoopFSUtils.getFs(path.toString(), hadoopConf), hadoopConf, cacheConfig, Option.empty());
   }
 
   public HoodieAvroHBaseHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig,

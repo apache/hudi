@@ -38,8 +38,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.avro.generic.GenericRecord;

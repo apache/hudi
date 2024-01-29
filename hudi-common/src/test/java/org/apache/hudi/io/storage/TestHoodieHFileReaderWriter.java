@@ -19,7 +19,6 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;

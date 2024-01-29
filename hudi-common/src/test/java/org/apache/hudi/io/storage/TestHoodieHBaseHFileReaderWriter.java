@@ -18,8 +18,8 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -64,7 +64,7 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
   @Override
   protected BaseHoodieAvroHFileReader createHFileReader(Configuration conf,
                                                         byte[] content) throws IOException {
-    FileSystem fs = FSUtils.getFs(getFilePath().toString(), new Configuration());
+    FileSystem fs = HadoopFSUtils.getFs(getFilePath().toString(), new Configuration());
     return new HoodieAvroHBaseHFileReader(
         conf, new Path(DUMMY_BASE_PATH), new CacheConfig(conf), fs, content, Option.empty());
   }
@@ -75,7 +75,7 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
                                    boolean mayUseDefaultComparator,
                                    Class<?> expectedComparatorClazz,
                                    int count) throws IOException {
-    FileSystem fs = FSUtils.getFs(getFilePath().toString(), new Configuration());
+    FileSystem fs = HadoopFSUtils.getFs(getFilePath().toString(), new Configuration());
     try (HFile.Reader reader =
              HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content)) {
       // HFile version is 3
