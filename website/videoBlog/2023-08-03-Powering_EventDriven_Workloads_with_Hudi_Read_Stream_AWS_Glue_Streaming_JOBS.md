@@ -14,6 +14,6 @@ tags:
 - streaming
 - near real-time analytics
 - event bus
-- amazon sqs
+- aws sqs
 - beginner
 ---

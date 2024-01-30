@@ -8,7 +8,7 @@ image: /assets/images/video_blogs/2023-07-09-Incremental_Data_Extraction_from_Po
 navigate: "https://www.youtube.com/watch?v=kuuHA_1Bh2A"
 tags:
 - guide
-- incremental-etl
+- incremental etl
 - postgres
 - pyspark
 - triggers

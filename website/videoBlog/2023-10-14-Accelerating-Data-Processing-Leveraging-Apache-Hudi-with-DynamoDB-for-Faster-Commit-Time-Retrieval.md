@@ -8,7 +8,7 @@ image: /assets/images/video_blogs/2023-10-14-Accelerating-Data-Processing-Levera
 navigate: "https://www.youtube.com/watch?v=YF8zq_nuSHE"
 tags:
 - guide
-- dyanmodb
+- aws dyanmodb
 - apache hudi
 - beginner
 - amazon
