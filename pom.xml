@@ -1124,12 +1124,6 @@
         <groupId>com.uber.m3</groupId>
         <artifactId>tally-m3</artifactId>
         <version>${tally.version}</version>
-        <exclusions>
-          <exclusion>
-            <groupId>org.apache.thrift</groupId>
-            <artifactId>libthrift</artifactId>
-          </exclusion>
-        </exclusions>
       </dependency>
       <dependency>
         <groupId>com.uber.m3</groupId>
