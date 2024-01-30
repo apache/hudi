@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -146,7 +147,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
     assertEquals("Metadata for table " + tableName + " loaded", result.toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    assertEquals(metaPath + Path.SEPARATOR + "archive", client.getArchivePath());
+    assertEquals(metaPath + HoodieLocation.SEPARATOR + "archive", client.getArchivePath());
     assertEquals(tablePath, client.getBasePath());
     assertEquals(metaPath, client.getMetaPath());
     assertEquals(HoodieTableType.MERGE_ON_READ, client.getTableType());
@@ -185,7 +186,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
   private void testRefreshCommand(String command) throws IOException {
     // clean table matedata
     FileSystem fs = FileSystem.get(hadoopConf());
-    fs.delete(new Path(tablePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME), true);
+    fs.delete(new Path(tablePath + HoodieLocation.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME), true);
 
     // Create table
     assertTrue(prepareTable());

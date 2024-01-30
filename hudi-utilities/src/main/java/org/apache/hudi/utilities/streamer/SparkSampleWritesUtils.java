@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -138,7 +139,7 @@ public class SparkSampleWritesUtils {
   }
 
   private static String getSampleWritesBasePath(JavaSparkContext jsc, HoodieWriteConfig writeConfig, String instantTime) throws IOException {
-    Path basePath = new CachingPath(writeConfig.getBasePath(), SAMPLE_WRITES_FOLDER_PATH + Path.SEPARATOR + instantTime);
+    Path basePath = new CachingPath(writeConfig.getBasePath(), SAMPLE_WRITES_FOLDER_PATH + HoodieLocation.SEPARATOR + instantTime);
     FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
     if (fs.exists(basePath)) {
       fs.delete(basePath, true);
