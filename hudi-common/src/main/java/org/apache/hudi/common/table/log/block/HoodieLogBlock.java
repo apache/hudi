@@ -289,7 +289,7 @@ public abstract class HoodieLogBlock {
       throws IOException {
     if (readLazily) {
       // Seek to the end of the content block
-      inputStream.seek(inputStream.getPosition() + contentLength);
+      inputStream.seek(inputStream.getPos() + contentLength);
       return Option.empty();
     }
 

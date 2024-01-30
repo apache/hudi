@@ -143,7 +143,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   // for max of Integer size
   private HoodieLogBlock readBlock() throws IOException {
     int blockSize;
-    long blockStartPos = inputStream.getPosition();
+    long blockStartPos = inputStream.getPos();
     try {
       // 1 Read the total size of the block
       blockSize = (int) inputStream.readLong();
@@ -179,7 +179,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION ? (int) inputStream.readLong() : blockSize;
 
     // 6. Read the content or skip content based on IO vs Memory trade-off by client
-    long contentPosition = inputStream.getPosition();
+    long contentPosition = inputStream.getPos();
     boolean shouldReadLazily = readBlockLazily && nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION;
     Option<byte[]> content = HoodieLogBlock.tryReadContent(inputStream, contentLength, shouldReadLazily);
 
@@ -194,7 +194,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     }
 
     // 9. Read the log block end position in the log file
-    long blockEndPos = inputStream.getPosition();
+    long blockEndPos = inputStream.getPos();
 
     HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc =
         new HoodieLogBlock.HoodieLogBlockContentLocation(hadoopConf, logFile, contentPosition, contentLength, blockEndPos);
@@ -268,7 +268,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     inputStream.seek(blockStartPos);
     LOG.info("Next available block in " + logFile + " starts at " + nextBlockOffset);
     int corruptedBlockSize = (int) (nextBlockOffset - blockStartPos);
-    long contentPosition = inputStream.getPosition();
+    long contentPosition = inputStream.getPos();
     Option<byte[]> corruptedBytes = HoodieLogBlock.tryReadContent(inputStream, corruptedBlockSize, readBlockLazily);
     HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc =
         new HoodieLogBlock.HoodieLogBlockContentLocation(hadoopConf, logFile, contentPosition, corruptedBlockSize, nextBlockOffset);
@@ -280,7 +280,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       // skip block corrupt check if writes are transactional. see https://issues.apache.org/jira/browse/HUDI-2118
       return false;
     }
-    long currentPos = inputStream.getPosition();
+    long currentPos = inputStream.getPos();
     long blockSizeFromFooter;
 
     try {
@@ -327,7 +327,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     byte[] dataBuf = new byte[BLOCK_SCAN_READ_BUFFER_SIZE];
     boolean eof = false;
     while (true) {
-      long currentPos = inputStream.getPosition();
+      long currentPos = inputStream.getPos();
       try {
         Arrays.fill(dataBuf, (byte) 0);
         inputStream.readFully(dataBuf, 0, dataBuf.length);
@@ -339,7 +339,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         return currentPos + pos;
       }
       if (eof) {
-        return inputStream.getPosition();
+        return inputStream.getPos();
       }
       inputStream.seek(currentPos + dataBuf.length - HoodieLogFormat.MAGIC.length);
     }
@@ -436,7 +436,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       throw new HoodieNotSupportedException("Reverse log reader has not been enabled");
     }
     long blockSize = inputStream.readLong();
-    long blockEndPos = inputStream.getPosition();
+    long blockEndPos = inputStream.getPos();
     // blocksize should read everything about a block including the length as well
     try {
       inputStream.seek(reverseLogFilePosition - blockSize);

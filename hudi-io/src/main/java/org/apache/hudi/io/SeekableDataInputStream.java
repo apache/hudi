@@ -41,7 +41,7 @@ public abstract class SeekableDataInputStream extends DataInputStream {
   /**
    * @return current position of the stream. The next read() will be from that location.
    */
-  public abstract long getPosition() throws IOException;
+  public abstract long getPos() throws IOException;
 
   /**
    * Seeks to a position within the stream.

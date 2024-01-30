@@ -37,7 +37,7 @@ public class HadoopSeekableDataInputStream extends SeekableDataInputStream {
   }
 
   @Override
-  public long getPosition() throws IOException {
+  public long getPos() throws IOException {
     return stream.getPos();
   }
 
