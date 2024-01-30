@@ -24,6 +24,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -148,7 +149,7 @@ public class ClientIds implements AutoCloseable, Serializable {
   //  Utilities
   // -------------------------------------------------------------------------
   private String getHeartbeatFolderPath(String basePath) {
-    return basePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME + Path.SEPARATOR + HEARTBEAT_FOLDER_NAME;
+    return basePath + HoodieLocation.SEPARATOR + AUXILIARYFOLDER_NAME + HoodieLocation.SEPARATOR + HEARTBEAT_FOLDER_NAME;
   }
 
   private Path getHeartbeatFilePath(String basePath, String uniqueId) {

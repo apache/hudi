@@ -20,6 +20,7 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -98,7 +99,7 @@ public class FilePathUtils {
     int i = 0;
     for (Map.Entry<String, String> e : partitionKVs.entrySet()) {
       if (i > 0) {
-        suffixBuf.append(Path.SEPARATOR);
+        suffixBuf.append(HoodieLocation.SEPARATOR);
       }
       if (hivePartition) {
         suffixBuf.append(escapePathName(e.getKey()));
@@ -108,7 +109,7 @@ public class FilePathUtils {
       i++;
     }
     if (sepSuffix) {
-      suffixBuf.append(Path.SEPARATOR);
+      suffixBuf.append(HoodieLocation.SEPARATOR);
     }
     return suffixBuf.toString();
   }
