@@ -197,6 +197,10 @@
                   <pattern>com.google.protobuf.</pattern>
                   <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>com.uber.m3.</pattern>
+                  <shadedPattern>org.apache.hudi.com.uber.m3.</shadedPattern>
+                </relocation>
               </relocations>
               <filters>
                 <filter>

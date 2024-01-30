@@ -183,6 +183,10 @@
                                     <pattern>com.fasterxml.jackson.</pattern>
                                     <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>com.uber.m3.</pattern>
+                                    <shadedPattern>org.apache.hudi.com.uber.m3.</shadedPattern>
+                                </relocation>
                             </relocations>
                             <filters>
                                 <filter>
