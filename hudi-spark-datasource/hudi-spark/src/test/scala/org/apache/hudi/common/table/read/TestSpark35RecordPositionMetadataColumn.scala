@@ -63,49 +63,48 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
 
   @Test
   def testRecordPositionColumn(): Unit = {
-    if (!HoodieSparkUtils.gteqSpark3_5) {
-      return
-    }
-    val _spark = spark
-    // Prepare the schema
-    val dataSchema = new StructType(
-      Array(
-        StructField("userid", IntegerType, nullable = false),
-        StructField("country", StringType, nullable = false),
-        StructField("ts", StringType, nullable = false)
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      val _spark = spark
+      // Prepare the schema
+      val dataSchema = new StructType(
+        Array(
+          StructField("userid", IntegerType, nullable = false),
+          StructField("country", StringType, nullable = false),
+          StructField("ts", StringType, nullable = false)
+        )
       )
-    )
-    val hadoopConf = new Configuration(spark().sparkContext.hadoopConfiguration)
-    val extraProps = sparkAdapter.getExtraProps(vectorized = false, _spark.sessionState.conf, Map.empty,hadoopConf)
-    val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema, shouldUseRecordPosition = true)
+      val hadoopConf = new Configuration(spark().sparkContext.hadoopConfiguration)
+      val extraProps = sparkAdapter.getExtraProps(vectorized = false, _spark.sessionState.conf, Map.empty, hadoopConf)
+      val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema, shouldUseRecordPosition = true)
 
-    // Confirm if the schema is as expected.
-    assertEquals(4, requiredSchema.fields.length)
-    assertEquals(
-      "StructField(_tmp_metadata_row_index,LongType,false)",
-      requiredSchema.fields(3).toString)
+      // Confirm if the schema is as expected.
+      assertEquals(4, requiredSchema.fields.length)
+      assertEquals(
+        "StructField(_tmp_metadata_row_index,LongType,false)",
+        requiredSchema.fields(3).toString)
 
-    // Prepare the file and Parquet file reader.
-    _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
-    val metaClient = getHoodieMetaClient(
-      _spark.sparkContext.hadoopConfiguration, basePath)
-    val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
-    assertTrue(allBaseFiles.nonEmpty)
-    val readerContext = new SparkFileFormatInternalRowReaderContext(extraProps, HoodieRecord.RECORD_KEY_METADATA_FIELD ,  Seq.empty, true)
-    //dataschema param is set to null because it is not used
-    val fileRecordIterator = readerContext.getFileRecordIterator(allBaseFiles.head.getPath, 0, allBaseFiles.head.getLen, null,
-      sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), hadoopConf, true)
+      // Prepare the file and Parquet file reader.
+      _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
+      val metaClient = getHoodieMetaClient(
+        _spark.sparkContext.hadoopConfiguration, basePath)
+      val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
+      assertTrue(allBaseFiles.nonEmpty)
+      val readerContext = new SparkFileFormatInternalRowReaderContext(extraProps, HoodieRecord.RECORD_KEY_METADATA_FIELD, Seq.empty, true)
+      //dataschema param is set to null because it is not used
+      val fileRecordIterator = readerContext.getFileRecordIterator(allBaseFiles.head.getPath, 0, allBaseFiles.head.getLen, null,
+        sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), hadoopConf, true)
 
-    // Make sure we can read all the positions out from base file.
-    // Here we don't add filters since enabling filter push-down
-    // for parquet file is tricky.
-    var rowIndices: Set[Long] = Set()
-    while (fileRecordIterator.hasNext) {
-      val row = fileRecordIterator.next()
-      rowIndices += row.getLong(3)
+      // Make sure we can read all the positions out from base file.
+      // Here we don't add filters since enabling filter push-down
+      // for parquet file is tricky.
+      var rowIndices: Set[Long] = Set()
+      while (fileRecordIterator.hasNext) {
+        val row = fileRecordIterator.next()
+        rowIndices += row.getLong(3)
+      }
+      fileRecordIterator.close()
+      val expectedRowIndices: Set[Long] = Set(0L, 1L, 2L, 3L)
+      assertEquals(expectedRowIndices, rowIndices)
     }
-    fileRecordIterator.close()
-    val expectedRowIndices: Set[Long] = Set(0L, 1L, 2L, 3L)
-    assertEquals(expectedRowIndices, rowIndices)
   }
 }
