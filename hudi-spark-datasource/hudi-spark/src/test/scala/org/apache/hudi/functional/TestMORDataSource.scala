@@ -26,9 +26,11 @@ import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieMetadataConfig, 
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{recordToString, recordsToStrings}
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.CollectionUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.index.HoodieIndex.IndexType
@@ -1157,7 +1159,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .setBasePath(basePath)
       .setConf(spark.sessionState.newHadoopConf)
       .build()
-    val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
+    val commit1Time = metaClient.getActiveTimeline
+      .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.DELTA_COMMIT_ACTION)).lastInstant().get().getTimestamp
 
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
     val records2 = recordsToStrings(dataGen2.generateInserts("002", 60)).asScala
@@ -1166,7 +1169,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    val commit2Time = metaClient.reloadActiveTimeline()
+      .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.DELTA_COMMIT_ACTION)).lastInstant().get().getTimestamp
 
     val records3 = recordsToStrings(dataGen2.generateUniqueUpdates("003", 20)).asScala
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
@@ -1174,7 +1178,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit3Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    val commit3Time = metaClient.reloadActiveTimeline
+      .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.DELTA_COMMIT_ACTION)).lastInstant().get().getTimestamp
 
     val pathForROQuery = getPathForROQuery(basePath, !enableFileIndex, 3)
     // snapshot query

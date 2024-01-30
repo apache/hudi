@@ -191,9 +191,18 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     LOG.info("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
         + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
         + ". New Instant to retain : " + newInstantToRetain);
+    String commitJustBeforeEarliestCommitToRetain = null;
+    HoodieInstant[] instantsBeforeEarliestCommitToRetain = hoodieTable.getCompletedCommitsTimeline().getInstantsAsStream()
+        .filter(commit -> HoodieTimeline.compareTimestamps(commit.getTimestamp(), HoodieTimeline.LESSER_THAN, cleanMetadata.getEarliestCommitToRetain())).toArray(HoodieInstant[]::new);
+    if (instantsBeforeEarliestCommitToRetain.length > 0) {
+      commitJustBeforeEarliestCommitToRetain = instantsBeforeEarliestCommitToRetain[instantsBeforeEarliestCommitToRetain.length - 1].getTimestamp();
+    } else {
+      HoodieInstant lastArchivedCompletedInstant = hoodieTable.getMetaClient().getArchivedTimeline().filterCompletedInstants().lastInstant().get();
+      commitJustBeforeEarliestCommitToRetain = lastArchivedCompletedInstant != null ? lastArchivedCompletedInstant.getTimestamp() : null;
+    }
+    final String lastCheckedCommit = commitJustBeforeEarliestCommitToRetain != null ? commitJustBeforeEarliestCommitToRetain : cleanMetadata.getEarliestCommitToRetain();
     return hoodieTable.getCompletedCommitsTimeline().getInstantsAsStream().filter(
-        instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
-            cleanMetadata.getEarliestCommitToRetain()) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
+        instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, lastCheckedCommit) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
             HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())).flatMap(instant -> {
               try {
                 if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {

@@ -184,6 +184,14 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
           + "base files are also physically deleted, to comply with data privacy enforcement processes.");
 
+  public static final ConfigProperty<Boolean> ALLOW_EMPTY_CLEAN_COMMITS = ConfigProperty
+      .key("hoodie.cleaner.allow.empty.commits")
+      .defaultValue(false)
+      .withDocumentation("By default, if there are no files to delete, the cleaner doesn't add a clean commit to the timeline."
+          + "When set to true, a clean commit will be created whether or not there is anything to clean up, which can be useful"
+          + " if the incremental cleaning mode is activated, where in this case, the cleaner will only check for partitions modified"
+          + " since the last clean operation, avoiding rechecking partitions already checked");
+
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -342,6 +350,11 @@ public class HoodieCleanConfig extends HoodieConfig {
 
     public HoodieCleanConfig.Builder withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy failedWritesPolicy) {
       cleanConfig.setValue(FAILED_WRITES_CLEANER_POLICY, failedWritesPolicy.name());
+      return this;
+    }
+
+    public HoodieCleanConfig.Builder withEmptyCleanCommits(Boolean allowEmptyCleanCommits) {
+      cleanConfig.setValue(ALLOW_EMPTY_CLEAN_COMMITS, String.valueOf(allowEmptyCleanCommits));
       return this;
     }
 

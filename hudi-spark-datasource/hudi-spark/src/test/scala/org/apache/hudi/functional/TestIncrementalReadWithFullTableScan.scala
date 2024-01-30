@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.util.CollectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
@@ -102,9 +103,12 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
      * +---------------------------------+-----------------------+
      */
 
-    val completedCommits = hoodieMetaClient.getCommitsTimeline.filterCompletedInstants() // C4 to C9
-    val archivedInstants = hoodieMetaClient.getArchivedTimeline.filterCompletedInstants()
-      .getInstantsAsStream.distinct().toArray // C0 to C3
+    val actionType = if (tableType == HoodieTableType.COPY_ON_WRITE) HoodieTimeline.COMMIT_ACTION else HoodieTimeline.DELTA_COMMIT_ACTION
+    val completedCommits = hoodieMetaClient.getActiveTimeline
+      .getTimelineOfActions(CollectionUtils.createSet(actionType)).filterCompletedInstants() // C4 to C9
+    val archivedInstants = hoodieMetaClient.getArchivedTimeline
+      .getTimelineOfActions(CollectionUtils.createSet(actionType)).filterCompletedInstants().getInstantsAsStream.distinct().toArray // C0 to C3
+
     val nCompletedCommits = completedCommits.getInstants.size
     val nArchivedInstants = archivedInstants.size
     assertTrue(nCompletedCommits >= 3)

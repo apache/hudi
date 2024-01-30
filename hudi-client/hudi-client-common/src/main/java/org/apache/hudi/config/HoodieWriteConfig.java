@@ -1606,6 +1606,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCleanConfig.AUTO_CLEAN);
   }
 
+  public boolean allowEmptyCleanCommits() {
+    return getBoolean(HoodieCleanConfig.ALLOW_EMPTY_CLEAN_COMMITS);
+  }
+
   public boolean shouldArchiveBeyondSavepoint() {
     return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT);
   }

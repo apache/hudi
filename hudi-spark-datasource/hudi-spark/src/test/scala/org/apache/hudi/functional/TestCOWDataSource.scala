@@ -28,10 +28,12 @@ import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver, HoodieTableConfig}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.CollectionUtils
+import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
@@ -719,8 +721,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
       .setLoadActiveTimelineOnLoad(true).build();
-    val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
-      .map(instant => (instant.asInstanceOf[HoodieInstant]).getAction)
+    val commits = metaClient.getActiveTimeline
+      .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
+      .filterCompletedInstants().getInstants.toArray.map(instant => (instant.asInstanceOf[HoodieInstant]).getAction)
     assertEquals(2, commits.size)
     assertEquals("commit", commits(0))
     assertEquals("replacecommit", commits(1))
@@ -798,8 +801,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
       .setLoadActiveTimelineOnLoad(true).build()
-    val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
-      .map(instant => (instant.asInstanceOf[HoodieInstant]).getAction)
+    val commits = metaClient.getActiveTimeline
+      .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
+      .filterCompletedInstants().getInstants.toArray.map(instant => (instant.asInstanceOf[HoodieInstant]).getAction)
     assertEquals(2, commits.size)
     assertEquals("commit", commits(0))
     assertEquals("replacecommit", commits(1))
@@ -857,8 +861,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
       .setLoadActiveTimelineOnLoad(true).build()
-    val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
-      .map(instant => instant.asInstanceOf[HoodieInstant].getAction)
+    val commits = metaClient.getActiveTimeline
+      .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
+      .filterCompletedInstants().getInstants.toArray.map(instant => instant.asInstanceOf[HoodieInstant].getAction)
     assertEquals(3, commits.size)
     assertEquals("commit", commits(0))
     assertEquals("commit", commits(1))
@@ -912,8 +917,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
       .setLoadActiveTimelineOnLoad(true).build()
-    val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
-      .map(instant => instant.asInstanceOf[HoodieInstant].getAction)
+    val commits = metaClient.getActiveTimeline
+      .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
+      .filterCompletedInstants().getInstants.toArray.map(instant => instant.asInstanceOf[HoodieInstant].getAction)
     assertEquals(2, commits.size)
     assertEquals("commit", commits(0))
     assertEquals("replacecommit", commits(1))
