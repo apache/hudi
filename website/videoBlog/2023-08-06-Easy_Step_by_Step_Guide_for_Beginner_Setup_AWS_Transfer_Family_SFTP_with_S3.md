@@ -11,7 +11,7 @@ tags:
 - third-party data
 - sftp
 - aws transfer family
-- aws s3
+- amazon s3
 - aws glue
 - apache hudi
 - beginner
