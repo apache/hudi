@@ -22,13 +22,17 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.util.FileIOUtils
+import org.apache.hudi.common.util.collection.ExternalSpillableMap
+import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -41,6 +45,7 @@ import org.apache.spark.sql.types.{LongType, Metadata, MetadataBuilder, StringTy
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
+import java.util.Locale
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
@@ -118,7 +123,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val broadcastedHadoopConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedHadoopConf))
     val broadcastedDataSchema =  spark.sparkContext.broadcast(dataAvroSchema)
     val broadcastedRequestedSchema =  spark.sparkContext.broadcast(requestedAvroSchema)
-    val props: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options)
+    val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options)
 
     (file: PartitionedFile) => {
       file.partitionValues match {
@@ -153,7 +158,11 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                   metaClient.getTableConfig,
                   file.start,
                   file.length,
-                  shouldUseRecordPosition)
+                  shouldUseRecordPosition,
+                  options.getOrElse(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue() + "").toLong,
+                  options.getOrElse(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath),
+                  DiskMapType.valueOf(options.getOrElse(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT)),
+                  options.getOrElse(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue().toString).toBoolean)
                 reader.initRecordIterators()
                 // Append partition values to rows and project to output schema
                 appendPartitionAndProject(
@@ -172,7 +181,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
           val fileSplits = hoodiePartitionCDCFileGroupSliceMapping.getFileSplits().toArray
           val fileGroupSplit: HoodieCDCFileGroupSplit = HoodieCDCFileGroupSplit(fileSplits)
           buildCDCRecordIterator(
-            fileGroupSplit, cdcFileReader, broadcastedHadoopConf.value.value, props, requiredSchema)
+            fileGroupSplit, cdcFileReader, broadcastedHadoopConf.value.value, fileIndexProps, requiredSchema)
         // TODO: Use FileGroupReader here: HUDI-6942.
         case _ => baseFileReader(file)
       }
