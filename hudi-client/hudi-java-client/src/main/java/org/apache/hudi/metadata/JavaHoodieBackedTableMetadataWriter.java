@@ -122,4 +122,9 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
                                                                int parallelism, Schema readerSchema, SerializableConfiguration hadoopConf) {
     throw new HoodieNotSupportedException("Functional index not supported for Java metadata table writer yet.");
   }
+
+  @Override
+  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieFunctionalIndexDefinition indexDefinition) {
+    throw new HoodieNotSupportedException("Secondary index not supported for Java metadata table writer yet.");
+  }
 }

@@ -32,7 +32,9 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -66,12 +68,25 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
-      logRecordScanner.scan();
-      return logRecordScanner.getRecords().values()
+      if (!logRecordScanner.getLogContainsNonUniqueKeys()) {
+        return logRecordScanner.getRecords().values()
+            .stream()
+            .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
+            .collect(Collectors.toList());
+      }
+
+      return logRecordScanner.getNonUniqueRecordsMap().values()
           .stream()
-          .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
+          .flatMap(records -> records.values().stream()
+              .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
+              .collect(Collectors.toList())
+              .stream())
           .collect(Collectors.toList());
     }
+  }
+
+  public void scan() {
+    logRecordScanner.scan();
   }
 
   @SuppressWarnings("unchecked")
@@ -85,7 +100,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     synchronized (this) {
       logRecordScanner.scanByKeyPrefixes(sortedKeyPrefixes);
       Predicate<String> p = createPrefixMatchingPredicate(sortedKeyPrefixes);
-      return logRecordScanner.getRecords().entrySet()
+      return ((HoodieMergedLogRecordScanner)logRecordScanner).getRecords().entrySet()
           .stream()
           .filter(r -> r != null && p.test(r.getKey()))
           .map(r -> (HoodieRecord<HoodieMetadataPayload>) r.getValue())
@@ -115,6 +130,10 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     }
   }
 
+  public Map<String, HashMap<String, HoodieRecord>> getNonUniqueRecordsMap() {
+    return logRecordScanner.getNonUniqueRecordsMap();
+  }
+
   public Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> sortedKeys) {
     if (sortedKeys.isEmpty()) {
       return Collections.emptyMap();
@@ -125,10 +144,17 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     synchronized (this) {
       logRecordScanner.scanByFullKeys(sortedKeys);
       Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
-      return sortedKeys.stream()
+
+      Map<String, List<HoodieRecord<HoodieMetadataPayload>>> result = new HashMap<>();
+      sortedKeys.stream()
           .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
           .filter(Objects::nonNull)
-          .collect(Collectors.groupingBy(HoodieRecord::getRecordKey));
+          .forEach(record -> {
+            List<HoodieRecord<HoodieMetadataPayload>> records = result.getOrDefault(record.getRecordKey(), new ArrayList<>());
+            records.add(record);
+            result.put(record.getRecordKey(), records);
+          });
+      return result;
     }
   }
 
@@ -235,6 +261,11 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
     public Builder withTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
       scannerBuilder.withTableMetaClient(hoodieTableMetaClient);
+      return this;
+    }
+
+    public Builder withLogContainsNonUniqueKeys(boolean logContainsNonUniqueKeys) {
+      scannerBuilder.withLogContainsNonUniqueKeys(logContainsNonUniqueKeys);
       return this;
     }
 

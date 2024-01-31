@@ -24,25 +24,22 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.CachingIterator;
 
 import java.util.Iterator;
-import java.util.Map;
 
 public class LogFileIterator<T> extends CachingIterator<HoodieRecord<T>> {
   HoodieMergedLogRecordScanner scanner;
-  Map<String, HoodieRecord> records;
   Iterator<HoodieRecord> iterator;
 
-  protected Option<HoodieRecord> removeLogRecord(String key) {
-    return Option.ofNullable(records.remove(key));
+  protected Option<HoodieRecord> removeLogRecord(HoodieRecord record) {
+    return scanner.remove(record);
   }
 
   public LogFileIterator(HoodieMergedLogRecordScanner scanner) {
     this.scanner = scanner;
-    this.records = scanner.getRecords();
   }
 
   private boolean hasNextInternal() {
     if (iterator == null) {
-      iterator = records.values().iterator();
+      iterator = scanner.iterator();
     }
     if (iterator.hasNext()) {
       nextRecord = iterator.next();

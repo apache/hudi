@@ -35,6 +35,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, not}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api._
+import org.slf4j.LoggerFactory
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
@@ -57,7 +58,29 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     PRECOMBINE_FIELD.key -> "timestamp",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
   ) ++ metadataOpts
+
+  val secondaryIndexOpts = Map(
+    HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key -> "true"
+  )
+
+  val commonOptsWithSecondaryIndex = commonOpts ++ secondaryIndexOpts ++ metadataOpts
+
+  val commonOptsNewTableSITest = Map(
+    "hoodie.insert.shuffle.parallelism" -> "4",
+    "hoodie.upsert.shuffle.parallelism" -> "4",
+    HoodieWriteConfig.TBL_NAME.key -> "trips_table",
+    RECORDKEY_FIELD.key -> "uuid",
+    SECONDARYKEY_FIELD.key -> "city",
+    PARTITIONPATH_FIELD.key -> "state",
+    PRECOMBINE_FIELD.key -> "ts",
+    HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+  ) ++ metadataOpts
+
+  val commonOptsWithSecondaryIndexSITest = commonOptsNewTableSITest ++ secondaryIndexOpts
+
+
   var mergedDfList: List[DataFrame] = List.empty
+  private val log = LoggerFactory.getLogger(classOf[RecordLevelIndexTestBase])
 
   @BeforeEach
   override def setUp() {
@@ -172,7 +195,9 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
       latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 5)).asScala
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 2))
+
     latestBatchDf.cache()
+    log.error("VINAY: latestBatchDf schema is " + latestBatchDf.schema.simpleString)
     latestBatchDf.write.format("org.apache.hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, operation)

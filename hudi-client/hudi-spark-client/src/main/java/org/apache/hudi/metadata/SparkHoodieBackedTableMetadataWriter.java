@@ -50,6 +50,7 @@ import org.apache.spark.sql.SQLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -215,5 +216,25 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, ?> initializeWriteClient() {
     return new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
+  }
+
+  @Override
+  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext,
+                                                                   Map<String, String> recordKeySecondaryKeyMap,
+                                                                   HoodieFunctionalIndexDefinition indexDefinition) {
+    HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
+
+    if (recordKeySecondaryKeyMap.isEmpty()) {
+      return sparkEngineContext.emptyHoodieData();
+    }
+
+    List<HoodieRecord> deletedRecords = new ArrayList<>();
+
+    recordKeySecondaryKeyMap.forEach((key, value) -> {
+      HoodieRecord<HoodieMetadataPayload> siRecord = HoodieMetadataPayload.createSecondaryIndex(key, value, indexDefinition.getIndexName(), true);
+      deletedRecords.add(siRecord);
+    });
+
+    return HoodieJavaRDD.of(deletedRecords, sparkEngineContext, 1);
   }
 }
