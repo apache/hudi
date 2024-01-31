@@ -988,8 +988,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     // Get expired instants, must store them into list before double-checking
     List<String> expiredInstants = inflightInstantsStream.filter(instant -> {
       try {
-        // An instant transformed from inflight to completed have no heartbeat file and will be detected as expired instant here
-        return heartbeatClient.isHeartbeatExpired(instant.getTimestamp());
+        if (heartbeatClient.isHeartbeatExpired(instant.getTimestamp())) {
+          return !metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().containsInstant(instant.getTimestamp());
+        }
+        return false;
       } catch (IOException io) {
         throw new HoodieException("Failed to check heartbeat for instant " + instant, io);
       }
