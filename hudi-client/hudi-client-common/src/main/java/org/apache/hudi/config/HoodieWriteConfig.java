@@ -2493,6 +2493,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
   }
 
+  public boolean isSecondaryIndexEnabled() {
+    return metadataConfig.enableSecondaryIndex();
+  }
+
   public boolean isRecordIndexEnabled() {
     return metadataConfig.enableRecordIndex();
   }

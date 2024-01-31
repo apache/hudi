@@ -235,6 +235,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("When there is a pending instant in data table, this config limits the allowed number of deltacommits in metadata table to "
           + "prevent the metadata table's timeline from growing unboundedly as compaction won't be triggered due to the pending data table instant.");
 
+  public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".secondary.index.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Create the HUDI Secondary (non-unique) Index within the Metadata Table");
+
   public static final ConfigProperty<Boolean> RECORD_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.enable")
       .defaultValue(false)
@@ -416,6 +423,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getMaxNumDeltacommitsWhenPending() {
     return getIntOrDefault(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING);
+  }
+
+  public boolean enableSecondaryIndex() {
+    // Secondary index is enabled only iff record index (primary key index) is also enabled
+    return enableRecordIndex() && getBoolean(SECONDARY_INDEX_ENABLE_PROP);
   }
 
   public boolean enableRecordIndex() {
