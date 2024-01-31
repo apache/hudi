@@ -36,13 +36,13 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -193,7 +193,7 @@ public class InternalSchemaCache {
     if (candidateCommitFile != null) {
       try {
         byte[] data;
-        try (FSDataInputStream is = fs.open(candidateCommitFile)) {
+        try (InputStream is = fs.open(candidateCommitFile)) {
           data = FileIOUtils.readAsByteArray(is);
         } catch (IOException e) {
           throw e;

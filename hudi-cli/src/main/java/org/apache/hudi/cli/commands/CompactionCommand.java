@@ -45,7 +45,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.compact.OperationResult;
 import org.apache.hudi.utilities.UtilHelpers;
 
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.launcher.SparkLauncher;
@@ -57,6 +56,7 @@ import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -434,15 +434,15 @@ public class CompactionCommand {
 
   private <T> T deSerializeOperationResult(String inputP, FileSystem fs) throws Exception {
     Path inputPath = new Path(inputP);
-    FSDataInputStream fsDataInputStream = fs.open(inputPath);
-    ObjectInputStream in = new ObjectInputStream(fsDataInputStream);
+    InputStream inputStream = fs.open(inputPath);
+    ObjectInputStream in = new ObjectInputStream(inputStream);
     try {
       T result = (T) in.readObject();
       LOG.info("Result : " + result);
       return result;
     } finally {
       in.close();
-      fsDataInputStream.close();
+      inputStream.close();
     }
   }
 

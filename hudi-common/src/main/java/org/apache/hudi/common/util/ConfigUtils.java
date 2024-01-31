@@ -28,14 +28,14 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -566,7 +566,7 @@ public class ConfigUtils {
     while (readRetryCount++ < maxReadRetries) {
       for (Path path : Arrays.asList(cfgPath, backupCfgPath)) {
         // Read the properties and validate that it is a valid file
-        try (FSDataInputStream is = fs.open(path)) {
+        try (InputStream is = fs.open(path)) {
           props.clear();
           props.load(is);
           found = true;
@@ -600,8 +600,8 @@ public class ConfigUtils {
   public static void recoverIfNeeded(FileSystem fs, Path cfgPath, Path backupCfgPath) throws IOException {
     if (!fs.exists(cfgPath)) {
       // copy over from backup
-      try (FSDataInputStream in = fs.open(backupCfgPath);
-           FSDataOutputStream out = fs.create(cfgPath, false)) {
+      try (InputStream in = fs.open(backupCfgPath);
+           OutputStream out = fs.create(cfgPath, false)) {
         FileIOUtils.copy(in, out);
       }
     }
