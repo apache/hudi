@@ -10,7 +10,7 @@ tags:
 - guide
 - duplicates
 - de-duplicate
-- upserts
+- upsert
 - aws glue
 - apache hudi
 ---

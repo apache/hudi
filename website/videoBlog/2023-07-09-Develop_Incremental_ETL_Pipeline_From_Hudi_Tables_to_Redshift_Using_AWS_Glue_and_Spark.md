@@ -8,7 +8,7 @@ image: /assets/images/video_blogs/2023-07-09-Develop_Incremental_ETL_Pipeline_Fr
 navigate: "https://www.youtube.com/watch?v=n-rE1WyoD-o"
 tags:
 - guide
-- incremental-etl
+- incremental etl
 - aws glue
 - amazon redshift
 - apache hudi

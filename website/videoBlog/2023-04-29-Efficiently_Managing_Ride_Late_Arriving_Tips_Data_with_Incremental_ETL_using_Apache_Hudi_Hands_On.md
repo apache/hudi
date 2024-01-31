@@ -10,6 +10,6 @@ tags:
 - guide
 - late arriving data
 - incremental-etl
-- upserts
+- upsert
 - apache hudi
 ---

@@ -11,6 +11,6 @@ tags:
 - incremental-etl
 - incremental-processing
 - medallion architecture
-- datalake
+- data lake
 - apache hudi
 ---

@@ -10,7 +10,7 @@ tags:
 - guide
 - indexing
 - consistent hashing index
-- upserts
+- upsert
 - dynamic buckets
 - apache hudi
 ---

@@ -9,7 +9,7 @@ image: /assets/images/video_blogs/2023-11-08-A-Glide-Skip-or-a-Jump-Efficiently-
 navigate: "https://www.youtube.com/watch?v=QhjkW-Js6L0"
 tags:
 - guide
-- upserts
+- upsert
 - point lookups 
 - cdc
 - record level index

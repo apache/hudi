@@ -9,8 +9,8 @@ navigate: "https://www.youtube.com/watch?v=LcPINV7CUNc"
 tags:
 - guide
 - lakehouse
-- data-lakehouse
-- spark-sql
+- data lakehouse
+- spark sql
 - apache hudi
 - aws glue
 - beginner

@@ -7,9 +7,9 @@ category: blog
 image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=qkddwqOeQbs"
 tags:
-- best-practices
-- inserts
-- upserts
+- best practices
+- insert
+- upsert
 - error tables
 - apache hudi
 - beginner
