@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[24122],{30940:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/datalake","name":"datalake","count":1,"permalink":"/cn/videos/tags/datalake"}')}}]);
