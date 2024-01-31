@@ -31,6 +31,14 @@ import TabItem from '@theme/TabItem';
 * Flink engine
 * Unit, functional, integration tests and CI
 
+## Known Regressions
+We discovered a regression in Hudi 0.14.1 release related to Complex Key gen when record key consists of one field. 
+It can silently ingest duplicates if table is upgraded from previous versions.
+
+:::tip
+Avoid upgrading any existing table to 0.14.1 if you are using ComplexKeyGenerator and number of fields in record key is 1.
+:::
+
 ## Raw Release Notes
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12353493)
