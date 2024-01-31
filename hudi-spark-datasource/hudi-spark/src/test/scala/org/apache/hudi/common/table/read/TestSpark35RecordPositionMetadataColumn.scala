@@ -75,6 +75,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
       )
       val hadoopConf = new Configuration(spark().sparkContext.hadoopConfiguration)
       val props = Map("spark.sql.parquet.enableVectorizedReader" -> "false")
+      _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
       val extraProps = sparkAdapter.getExtraProps(vectorized = false, _spark.sessionState.conf, props, hadoopConf)
       val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema, shouldUseRecordPosition = true)
 
@@ -85,7 +86,6 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
         requiredSchema.fields(3).toString)
 
       // Prepare the file and Parquet file reader.
-      _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
       val metaClient = getHoodieMetaClient(
         _spark.sparkContext.hadoopConfiguration, basePath)
       val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
