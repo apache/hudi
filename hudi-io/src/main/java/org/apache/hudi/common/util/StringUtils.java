@@ -33,8 +33,10 @@ import java.util.stream.Stream;
  */
 public class StringUtils {
 
-  public static final char[] HEX_CHAR = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+  public static final char[] HEX_CHAR = new char[] {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
   public static final String EMPTY_STRING = "";
+  // Represents a failed index search
+  public static final int INDEX_NOT_FOUND = -1;
 
   /**
    * <p>
@@ -66,7 +68,7 @@ public class StringUtils {
     if (array == null) {
       return null;
     }
-    return org.apache.hadoop.util.StringUtils.join(separator, array);
+    return String.join(separator, array);
   }
 
   /**
@@ -85,7 +87,7 @@ public class StringUtils {
     if (list == null || list.size() == 0) {
       return null;
     }
-    return org.apache.hadoop.util.StringUtils.join(separator, list.toArray(new String[0]));
+    return String.join(separator, list.toArray(new String[0]));
   }
 
   public static String toHexString(byte[] bytes) {
@@ -199,5 +201,105 @@ public class StringUtils {
     String tail = str.substring(str.length() - tailLength);
 
     return head + "..." + tail;
+  }
+
+  /**
+   * Compares two version name strings using maven's ComparableVersion class.
+   *
+   * @param version1 the first version to compare
+   * @param version2 the second version to compare
+   * @return a negative integer if version1 precedes version2, a positive
+   * integer if version2 precedes version1, and 0 if and only if the two
+   * versions are equal.
+   */
+  public static int compareVersions(String version1, String version2) {
+    ComparableVersion v1 = new ComparableVersion(version1);
+    ComparableVersion v2 = new ComparableVersion(version2);
+    return v1.compareTo(v2);
+  }
+
+  /**
+   * Replaces all occurrences of a String within another String.
+   *
+   * <p>A <code>null</code> reference passed to this method is a no-op.</p>
+   *
+   * <pre>
+   * StringUtils.replace(null, *, *)        = null
+   * StringUtils.replace("", *, *)          = ""
+   * StringUtils.replace("any", null, *)    = "any"
+   * StringUtils.replace("any", *, null)    = "any"
+   * StringUtils.replace("any", "", *)      = "any"
+   * StringUtils.replace("aba", "a", null)  = "aba"
+   * StringUtils.replace("aba", "a", "")    = "b"
+   * StringUtils.replace("aba", "a", "z")   = "zbz"
+   * </pre>
+   * <p>
+   * This method is copied from hadoop StringUtils.
+   *
+   * @param text         text to search and replace in, may be null
+   * @param searchString the String to search for, may be null
+   * @param replacement  the String to replace it with, may be null
+   * @return the text with any replacements processed,
+   * <code>null</code> if null String input
+   * @see #replace(String text, String searchString, String replacement, int max)
+   */
+  public static String replace(String text, String searchString, String replacement) {
+    return replace(text, searchString, replacement, -1);
+  }
+
+  /**
+   * Replaces a String with another String inside a larger String,
+   * for the first <code>max</code> values of the search String.
+   *
+   * <p>A <code>null</code> reference passed to this method is a no-op.</p>
+   *
+   * <pre>
+   * StringUtils.replace(null, *, *, *)         = null
+   * StringUtils.replace("", *, *, *)           = ""
+   * StringUtils.replace("any", null, *, *)     = "any"
+   * StringUtils.replace("any", *, null, *)     = "any"
+   * StringUtils.replace("any", "", *, *)       = "any"
+   * StringUtils.replace("any", *, *, 0)        = "any"
+   * StringUtils.replace("abaa", "a", null, -1) = "abaa"
+   * StringUtils.replace("abaa", "a", "", -1)   = "b"
+   * StringUtils.replace("abaa", "a", "z", 0)   = "abaa"
+   * StringUtils.replace("abaa", "a", "z", 1)   = "zbaa"
+   * StringUtils.replace("abaa", "a", "z", 2)   = "zbza"
+   * StringUtils.replace("abaa", "a", "z", -1)  = "zbzz"
+   * </pre>
+   * <p>
+   * This method is copied from hadoop StringUtils.
+   *
+   * @param text         text to search and replace in, may be null
+   * @param searchString the String to search for, may be null
+   * @param replacement  the String to replace it with, may be null
+   * @param max          maximum number of values to replace, or <code>-1</code> if no maximum
+   * @return the text with any replacements processed,
+   * <code>null</code> if null String input
+   */
+  public static String replace(String text, String searchString, String replacement, int max) {
+    if (isNullOrEmpty(text) || isNullOrEmpty(searchString) || replacement == null || max == 0) {
+      return text;
+    }
+    int start = 0;
+    int end = text.indexOf(searchString, start);
+    if (end == INDEX_NOT_FOUND) {
+      return text;
+    }
+    int replLength = searchString.length();
+    int increase = replacement.length() - replLength;
+    increase = (increase < 0 ? 0 : increase);
+    increase *= (max < 0 ? 16 : (max > 64 ? 64 : max));
+    StringBuilder buf = new StringBuilder(text.length() + increase);
+    while (end != INDEX_NOT_FOUND) {
+      buf.append(text.substring(start, end)).append(replacement);
+      start = end + replLength;
+      if (--max == 0) {
+        break;
+      }
+      end = text.indexOf(searchString, start);
+    }
+    buf.append(text.substring(start));
+    return buf.toString();
   }
 }
