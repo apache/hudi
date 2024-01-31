@@ -74,7 +74,8 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
         )
       )
       val hadoopConf = new Configuration(spark().sparkContext.hadoopConfiguration)
-      val extraProps = sparkAdapter.getExtraProps(vectorized = false, _spark.sessionState.conf, Map.empty, hadoopConf)
+      val props = Map("spark.sql.parquet.enableVectorizedReader" -> "false")
+      val extraProps = sparkAdapter.getExtraProps(vectorized = false, _spark.sessionState.conf, props, hadoopConf)
       val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema, shouldUseRecordPosition = true)
 
       // Confirm if the schema is as expected.
