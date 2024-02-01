@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -183,7 +184,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     return recordBuffer.getLogRecordIterator();
   }
 
-  public Map<Object, Pair<Option<T>, Map<String, Object>>> getRecords() {
+  public Map<Serializable, Pair<Option<T>, Map<String, Object>>> getRecords() {
     return recordBuffer.getLogRecords();
   }
 
