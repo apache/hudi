@@ -108,7 +108,8 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
           parentUri.getAuthority(),
           parentPathWithSeparator,
           null,
-          parentUri.getFragment()).resolve(normalizedChild);
+          parentUri.getFragment())
+          .resolve(new URI(null, null, normalizedChild, null, null));
       this.uri = new URI(
           parentUri.getScheme(),
           parentUri.getAuthority(),
