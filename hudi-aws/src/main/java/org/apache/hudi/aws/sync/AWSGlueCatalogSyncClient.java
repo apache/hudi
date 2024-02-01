@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.util.PartitionFilterGenerator;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -130,23 +131,39 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public List<Partition> getAllPartitions(String tableName) {
     try {
-      List<Partition> partitions = new ArrayList<>();
-      String nextToken = null;
-      do {
-        GetPartitionsResponse result = awsGlue.getPartitions(GetPartitionsRequest.builder()
-            .databaseName(databaseName)
-            .tableName(tableName)
-            .nextToken(nextToken)
-            .build()).get();
-        partitions.addAll(result.partitions().stream()
-            .map(p -> new Partition(p.values(), p.storageDescriptor().location()))
-            .collect(Collectors.toList()));
-        nextToken = result.nextToken();
-      } while (nextToken != null);
-      return partitions;
+      return getPartitions(GetPartitionsRequest.builder()
+              .databaseName(databaseName)
+              .tableName(tableName));
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
     }
+  }
+
+  @Override
+  public List<Partition> getPartitionsByFilter(String tableName, String filter) {
+    try {
+      return getPartitions(GetPartitionsRequest.builder()
+              .databaseName(databaseName)
+              .tableName(tableName)
+              .expression(filter));
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get partitions for table " + tableId(databaseName, tableName) + " from expression: " + filter, e);
+    }
+  }
+
+  private List<Partition> getPartitions(GetPartitionsRequest.Builder partitionRequestBuilder) throws InterruptedException, ExecutionException {
+    List<Partition> partitions = new ArrayList<>();
+    String nextToken = null;
+    do {
+      GetPartitionsResponse result = awsGlue.getPartitions(partitionRequestBuilder
+              .nextToken(nextToken)
+              .build()).get();
+      partitions.addAll(result.partitions().stream()
+              .map(p -> new Partition(p.values(), p.storageDescriptor().location()))
+              .collect(Collectors.toList()));
+      nextToken = result.nextToken();
+    } while (nextToken != null);
+    return partitions;
   }
 
   @Override
@@ -698,6 +715,11 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public void deleteLastReplicatedTimeStamp(String tableName) {
     throw new UnsupportedOperationException("Not supported: `deleteLastReplicatedTimeStamp`");
+  }
+
+  @Override
+  public String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields) {
+    return PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFields, (HiveSyncConfig) config, true);
   }
 
   private List<Column> getColumnsFromSchema(Map<String, String> mapSchema) {

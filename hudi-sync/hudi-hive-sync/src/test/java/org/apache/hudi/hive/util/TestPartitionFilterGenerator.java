@@ -45,12 +45,15 @@ public class TestPartitionFilterGenerator {
     writtenPartitions.add("2022-09-01/2022/9/1");
 
     assertEquals("(((date = 2022-09-01 AND year = \"2022\") AND month = 9) AND day = 1)",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
+
+    assertEquals("(((date = 2022-09-01 AND year = '2022') AND month = 9) AND day = 1)",
+            PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, true));
 
     writtenPartitions.add("2022-09-02/2022/9/2");
     assertEquals(
         "((((date = 2022-09-01 AND year = \"2022\") AND month = 9) AND day = 1) OR (((date = 2022-09-02 AND year = \"2022\") AND month = 9) AND day = 2))",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
 
     // If there are incompatible types to convert as filters inside partition
     partitionFieldSchemas.clear();
@@ -60,10 +63,10 @@ public class TestPartitionFilterGenerator {
 
     writtenPartitions.add("2022-09-01/true");
     assertEquals("date = 2022-09-01",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
     writtenPartitions.add("2022-09-02/true");
     assertEquals("(date = 2022-09-01 OR date = 2022-09-02)",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
 
     // If no compatible types matched to convert as filters
     partitionFieldSchemas.clear();
@@ -72,10 +75,10 @@ public class TestPartitionFilterGenerator {
 
     writtenPartitions.add("true");
     assertEquals("",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
     writtenPartitions.add("false");
     assertEquals("",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
   }
 
   @Test
@@ -93,14 +96,14 @@ public class TestPartitionFilterGenerator {
     writtenPartitions.add("2022-09-01/2022/9/1");
 
     assertEquals("(((date = 2022-09-01 AND year = \"2022\") AND month = 9) AND day = 1)",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
 
     writtenPartitions.add("2022-09-02/2022/9/2");
     writtenPartitions.add("2022-09-03/2022/9/2");
     writtenPartitions.add("2022-09-04/2022/9/2");
     assertEquals(
         "((((date >= 2022-09-01 AND date <= 2022-09-04) AND year = \"2022\") AND month = 9) AND (day >= 1 AND day <= 2))",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
 
     // If there are incompatible types to convert as filters inside partition
     partitionFieldSchemas.clear();
@@ -110,12 +113,12 @@ public class TestPartitionFilterGenerator {
 
     writtenPartitions.add("2022-09-01/true");
     assertEquals("date = 2022-09-01",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
     writtenPartitions.add("2022-09-02/true");
     writtenPartitions.add("2022-09-03/false");
     writtenPartitions.add("2022-09-04/false");
     assertEquals("(date >= 2022-09-01 AND date <= 2022-09-04)",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
 
     // If no compatible types matched to convert as filters
     partitionFieldSchemas.clear();
@@ -124,11 +127,11 @@ public class TestPartitionFilterGenerator {
 
     writtenPartitions.add("true");
     assertEquals("",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
     writtenPartitions.add("false");
     writtenPartitions.add("false");
     writtenPartitions.add("false");
     assertEquals("",
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config, false));
   }
 }

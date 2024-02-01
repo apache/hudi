@@ -198,7 +198,7 @@ public class PartitionFilterGenerator {
         });
   }
 
-  public static String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields, HiveSyncConfig config) {
+  public static String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields, HiveSyncConfig config, boolean useGlueSyntax) {
     PartitionValueExtractor partitionValueExtractor = ReflectionUtils
         .loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
 
@@ -222,13 +222,13 @@ public class PartitionFilterGenerator {
     }
 
     if (filter != null) {
-      return generateFilterString(filter);
+      return generateFilterString(filter, useGlueSyntax ? new GlueFilterGenVisitor() : new FilterGenVisitor());
     }
 
     return "";
   }
 
-  private static String generateFilterString(Expression filter) {
-    return filter.accept(new FilterGenVisitor());
+  private static String generateFilterString(Expression filter, FilterGenVisitor filterGenVisitor) {
+    return filter.accept(filterGenVisitor);
   }
 }
