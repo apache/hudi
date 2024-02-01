@@ -537,6 +537,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
+  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, Configuration configuration) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    createOnlyCompletedCommitFile(basePath, instantTime, configuration, commitMetadata);
+  }
+
+  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    createMetadataFile(HoodieTimeline.makeCommitFileName(instantTime), basePath, configuration, commitMetadata);
+  }
   public static void createDeltaCommitFile(String basePath, String instantTime, Configuration configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createDeltaCommitFile(basePath, instantTime, configuration, commitMetadata);

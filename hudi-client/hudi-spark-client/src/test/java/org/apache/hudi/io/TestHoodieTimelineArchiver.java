@@ -1582,6 +1582,39 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         "Since we have a pending clustering instant at 00000002, we should never archive any commit after 00000000");
   }
 
+  @Test
+  public void testRetryArchivalAfterPreviousFailedDeletion() throws Exception {
+    HoodieWriteConfig cfg = initTestTableAndGetWriteConfig(true, 2, 4, 2);
+    HoodieTestDataGenerator.createCommitFile(basePath, "100", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "101", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "102", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "103", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "104", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "105", wrapperFs.getConf());
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getWriteTimeline();
+    assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
+    assertTrue(archiver.archiveIfRequired(context) > 0);
+    // Simulate archival failing to delete by re-adding the .commit instant files
+    // (101.commit, 102.commit, and 103.commit instant files)
+    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "101", wrapperFs.getConf());
+    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "102", wrapperFs.getConf());
+    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "103", wrapperFs.getConf());
+    timeline = metaClient.getActiveTimeline().reload().getWriteTimeline();
+    assertEquals(5, timeline.countInstants(), "Due to simulating partial archival deletion, there should"
+        + "be 5 instants (as instant times 101-103 .commit files should remain in timeline)");
+    // Re-running archival again should archive and delete the 101.commit, 102.commit, and 103.commit instant files
+    table.getMetaClient().reloadActiveTimeline();
+    table = HoodieSparkTable.create(cfg, context, metaClient);
+    archiver = new HoodieTimelineArchiver(cfg, table);
+    assertTrue(archiver.archiveIfRequired(context) > 0);
+    timeline = metaClient.getActiveTimeline().reload().getWriteTimeline();
+    assertEquals(2, timeline.countInstants(), "The instants from prior archival should "
+        + "be deleted now");
+  }
+
   private Pair<List<HoodieInstant>, List<HoodieInstant>> archiveAndGetCommitsList(HoodieWriteConfig writeConfig) throws IOException {
     return archiveAndGetCommitsList(writeConfig, false);
   }
