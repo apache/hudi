@@ -129,11 +129,11 @@ stages:
           - task: CmdLine@2
             displayName: "build tests in container"
             inputs:
-              script: docker run -it --name "constainer-instance-$(Build.BuildId)" hudi-devops:$(Build.BuildId) mvn clean install -Dscala-2.12 -Dspark3.2 -Dflink1.18 -DskipTests -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5
+              script: docker run -i --name "constainer-instance-$(Build.BuildId)" hudi-devops:$(Build.BuildId) mvn clean install -Dscala-2.12 -Dspark3.2 -Dflink1.18 -DskipTests -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5
           - task: CmdLine@2
             displayName: "run tests in container"
             inputs:
-              script: docker exec -it "constainer-instance-$(Build.BuildId)" mvn test -Dscala-2.12 -Dspark3.2 -Dflink1.18 -fae -Pwarn-log -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Pfunctional-tests -pl hudi-client/hudi-spark-client,hudi-spark-datasource/hudi-spark
+              script: docker exec -i "constainer-instance-$(Build.BuildId)" mvn test -Dscala-2.12 -Dspark3.2 -Dflink1.18 -fae -Pwarn-log -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Pfunctional-tests -pl hudi-client/hudi-spark-client,hudi-spark-datasource/hudi-spark
           - task: Docker@2
             displayName: "stop container"
             inputs:
