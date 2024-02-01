@@ -248,18 +248,13 @@ object SparkFileFormatInternalRowReaderContext {
   def getAppliedRequiredSchema(requiredSchema: StructType,
                                shouldUseRecordPosition: Boolean): StructType = {
     if (shouldUseRecordPosition) {
-      StructType(requiredSchema.fields.map(f => {
-        if (f.name.equalsIgnoreCase(ROW_INDEX_TEMPORARY_COLUMN_NAME)) {
-          val metadata = new MetadataBuilder()
-            .putString(METADATA_COL_ATTR_KEY, ROW_INDEX_TEMPORARY_COLUMN_NAME)
-            .putBoolean(FILE_SOURCE_METADATA_COL_ATTR_KEY, value = true)
-            .putString(FILE_SOURCE_GENERATED_METADATA_COL_ATTR_KEY, ROW_INDEX_TEMPORARY_COLUMN_NAME)
-            .build()
-          StructField(ROW_INDEX_TEMPORARY_COLUMN_NAME, LongType, nullable = false, metadata)
-        } else {
-          f
-        }
-      }))
+      val metadata = new MetadataBuilder()
+        .putString(METADATA_COL_ATTR_KEY, ROW_INDEX_TEMPORARY_COLUMN_NAME)
+        .putBoolean(FILE_SOURCE_METADATA_COL_ATTR_KEY, value = true)
+        .putString(FILE_SOURCE_GENERATED_METADATA_COL_ATTR_KEY, ROW_INDEX_TEMPORARY_COLUMN_NAME)
+        .build()
+      val rowIndexField = StructField(ROW_INDEX_TEMPORARY_COLUMN_NAME, LongType, nullable = false, metadata)
+      StructType(requiredSchema.fields :+ rowIndexField)
     } else {
       requiredSchema
     }
