@@ -139,7 +139,7 @@ stages:
               containerRegistry: 'lin-docker-hub'
               repository: 'prettydocker/hudi-devops'
               command: 'exec'
-              arguments: "-i constainer-$(Build.BuildId) -v $(Build.SourcesDirectory):/app mvn test -Dscala-2.12 -Dspark3.2 -Dflink1.18 -fae -Pwarn-log -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Pfunctional-tests -pl hudi-client/hudi-spark-client,hudi-spark-datasource/hudi-spark"
+              arguments: "-i constainer-$(Build.BuildId) mvn test -Dscala-2.12 -Dspark3.2 -Dflink1.18 -fae -Pwarn-log -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Pfunctional-tests -pl hudi-client/hudi-spark-client,hudi-spark-datasource/hudi-spark"
           - task: Docker@2
             displayName: "stop container"
             inputs:
