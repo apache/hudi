@@ -132,7 +132,7 @@ stages:
               containerRegistry: 'lin-docker-hub'
               repository: 'prettydocker/hudi-devops'
               command: 'run'
-              arguments: "-i --name constainer-$(Build.BuildId) docker.io/prettydocker/hudi-devops:$(Build.BuildId) mvn clean install -Dscala-2.12 -Dspark3.2 -Dflink1.18 -DskipTests -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5"
+              arguments: "-i -d --name constainer-$(Build.BuildId) docker.io/prettydocker/hudi-devops:$(Build.BuildId) mvn clean install -Dscala-2.12 -Dspark3.2 -Dflink1.18 -DskipTests -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5"
           - task: Docker@2
             displayName: "run tests in container"
             inputs:
