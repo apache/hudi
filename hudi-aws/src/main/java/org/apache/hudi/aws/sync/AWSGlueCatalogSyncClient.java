@@ -156,6 +156,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     String nextToken = null;
     do {
       GetPartitionsResponse result = awsGlue.getPartitions(partitionRequestBuilder
+              .excludeColumnSchema(true)
               .nextToken(nextToken)
               .build()).get();
       partitions.addAll(result.partitions().stream()
