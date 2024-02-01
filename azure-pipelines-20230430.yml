@@ -201,42 +201,6 @@ stages:
         displayName: UT FT other modules
         timeoutInMinutes: '240'
         steps:
-          - task: Maven@4
-            displayName: maven install
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-          - task: Maven@4
-            displayName: UT other modules
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - task: Maven@4
-            displayName: FT other modules
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - script: |
-              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
-            displayName: Top 100 long-running testcases
-      - job: Build_Container_Image
-        displayName: Build_Container_Image
-        timeoutInMinutes: '240'
-        steps:
           - task: Docker@2
             displayName: "build docker image"
             inputs:
@@ -256,11 +220,11 @@ stages:
               containerRegistry: 'lin-docker-hub'
               repository: 'prettydocker/hudi-devops'
               command: 'run'
-              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) mvn clean install $(MVN_OPTS_INSTALL) && mvn test  $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)"
+              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) /bin/bash -c \"mvn clean install $(MVN_OPTS_INSTALL) && mvn test  $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)\""
           - task: Docker@2
             displayName: "FT other modules"
             inputs:
               containerRegistry: 'lin-docker-hub'
               repository: 'prettydocker/hudi-devops'
               command: 'run'
-              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) mvn clean install $(MVN_OPTS_INSTALL) && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)"
+              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) /bin/bash -c \"mvn clean install $(MVN_OPTS_INSTALL) && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)\""
