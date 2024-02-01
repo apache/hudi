@@ -241,6 +241,9 @@ public class HFileReaderImpl implements HFileReader {
   
   @Override
   public void close() throws IOException {
+    currentDataBlockEntry = Option.empty();
+    currentDataBlock = Option.empty();
+    cursor.setEof();
     stream.close();
   }
 

@@ -35,6 +35,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -106,7 +107,11 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         partitionNameOpt,
         partitionFields,
         useCustomMerger ? new CustomMerger() : new HoodieSparkRecordMerger(),
-        new TypedProperties());
+        new TypedProperties(),
+        1024 * 1024 * 1000,
+        metaClient.getTempFolderPath(),
+        ExternalSpillableMap.DiskMapType.ROCKS_DB,
+        false);
   }
 
   public Map<HoodieLogBlock.HeaderMetadataType, String> getHeader() {

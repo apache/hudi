@@ -44,6 +44,7 @@ import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_EOF;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
+import static org.apache.hudi.io.hfile.HFileUtils.getValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -569,10 +570,6 @@ public class TestHFileReader {
               "SeekTo result not allowed: " + keyLookUpInfo.expectedSeekToResult);
       }
     }
-  }
-
-  private static String getValue(KeyValue kv) {
-    return new String(kv.getBytes(), kv.getValueOffset(), kv.getValueLength());
   }
 
   static class KeyLookUpInfo {

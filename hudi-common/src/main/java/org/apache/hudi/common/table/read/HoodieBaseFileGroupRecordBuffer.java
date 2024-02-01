@@ -28,13 +28,17 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -45,8 +49,8 @@ import org.apache.avro.Schema;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +68,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected final Option<String[]> partitionPathFieldOpt;
   protected final HoodieRecordMerger recordMerger;
   protected final TypedProperties payloadProps;
-  protected final Map<Object, Pair<Option<T>, Map<String, Object>>> records;
+  protected final ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> records;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
   protected T nextRecord;
@@ -80,7 +84,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                          Option<String> partitionNameOverrideOpt,
                                          Option<String[]> partitionPathFieldOpt,
                                          HoodieRecordMerger recordMerger,
-                                         TypedProperties payloadProps) {
+                                         TypedProperties payloadProps,
+                                         long maxMemorySizeInBytes,
+                                         String spillableMapBasePath,
+                                         ExternalSpillableMap.DiskMapType diskMapType,
+                                         boolean isBitCaskDiskMapCompressionEnabled) {
     this.readerContext = readerContext;
     this.readerSchema = readerSchema;
     this.baseFileSchema = baseFileSchema;
@@ -88,10 +96,16 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMerger = recordMerger;
     this.payloadProps = payloadProps;
-    this.records = new HashMap<>();
     this.internalSchema = internalSchema == null || internalSchema.isEmptySchema()
         ? InternalSchema.getEmptyInternalSchema() : AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(readerSchema, internalSchema);
     this.hoodieTableMetaClient = hoodieTableMetaClient;
+    try {
+      // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
+      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
+          new HoodieRecordSizeEstimator<>(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
+    } catch (IOException e) {
+      throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
+    }
   }
 
   @Override
@@ -119,7 +133,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   }
 
   @Override
-  public Map<Object, Pair<Option<T>, Map<String, Object>>> getLogRecords() {
+  public Map<Serializable, Pair<Option<T>, Map<String, Object>>> getLogRecords() {
     return records;
   }
 
@@ -233,10 +247,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
    * @param dataBlock
    * @param keySpecOpt
    * @return
-   * @throws IOException
    */
-  protected Pair<ClosableIterator<T>, Schema> getRecordsIterator(
-      HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
+  protected Pair<ClosableIterator<T>, Schema> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
     ClosableIterator<T> blockRecordsIterator;
     if (keySpecOpt.isPresent()) {
       KeySpec keySpec = keySpecOpt.get();

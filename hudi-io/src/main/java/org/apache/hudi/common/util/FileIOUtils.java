@@ -7,21 +7,20 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,18 +114,18 @@ public class FileIOUtils {
   public static void copy(
       FileSystem fileSystem, org.apache.hadoop.fs.Path sourceFilePath,
       org.apache.hadoop.fs.Path destFilePath) {
-    FSDataInputStream fsDataInputStream = null;
-    FSDataOutputStream fsDataOutputStream = null;
+    InputStream inputStream = null;
+    OutputStream outputStream = null;
     try {
-      fsDataInputStream = fileSystem.open(sourceFilePath);
-      fsDataOutputStream = fileSystem.create(destFilePath, false);
-      copy(fsDataInputStream, fsDataOutputStream);
+      inputStream = fileSystem.open(sourceFilePath);
+      outputStream = fileSystem.create(destFilePath, false);
+      copy(inputStream, outputStream);
     } catch (IOException e) {
       throw new HoodieIOException(String.format("Cannot copy from %s to %s",
           sourceFilePath.toString(), destFilePath.toString()), e);
     } finally {
-      closeQuietly(fsDataInputStream);
-      closeQuietly(fsDataOutputStream);
+      closeQuietly(inputStream);
+      closeQuietly(outputStream);
     }
   }
 
@@ -175,9 +174,9 @@ public class FileIOUtils {
       }
 
       if (content.isPresent()) {
-        FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-        fsout.write(content.get());
-        fsout.close();
+        OutputStream out = fileSystem.create(fullPath, true);
+        out.write(content.get());
+        out.close();
       }
     } catch (IOException e) {
       LOG.warn("Failed to create file " + fullPath, e);
@@ -192,7 +191,7 @@ public class FileIOUtils {
   }
 
   public static Option<byte[]> readDataFromPath(FileSystem fileSystem, org.apache.hadoop.fs.Path detailPath, boolean ignoreIOE) {
-    try (FSDataInputStream is = fileSystem.open(detailPath)) {
+    try (InputStream is = fileSystem.open(detailPath)) {
       return Option.of(FileIOUtils.readAsByteArray(is));
     } catch (IOException e) {
       LOG.warn("Could not read commit details from " + detailPath, e);

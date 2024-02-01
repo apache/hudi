@@ -26,8 +26,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.secondary.SecondaryIndexType;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
@@ -36,6 +34,8 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.Instant;
 import java.util.Properties;
 import java.util.Set;
@@ -99,7 +99,7 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
     }
     HoodieConfig hoodieConfig = new HoodieConfig(properties);
     Path propertyPath = new Path(metadataFolder, INDEX_DEFINITION_FILE);
-    try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+    try (OutputStream outputStream = fs.create(propertyPath)) {
       if (!hoodieConfig.contains(INDEX_NAME)) {
         throw new IllegalArgumentException(INDEX_NAME.key() + " property needs to be specified");
       }
@@ -135,7 +135,7 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
       TypedProperties props = fetchConfigs(fs, metadataFolder.toString(), INDEX_DEFINITION_FILE, INDEX_DEFINITION_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
 
       // 2. backup the existing properties.
-      try (FSDataOutputStream out = fs.create(backupCfgPath, false)) {
+      try (OutputStream out = fs.create(backupCfgPath, false)) {
         storeProperties(props, out);
       }
 
@@ -144,13 +144,13 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
 
       // 4. Upsert and save back.
       String checksum;
-      try (FSDataOutputStream out = fs.create(cfgPath, true)) {
+      try (OutputStream out = fs.create(cfgPath, true)) {
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
       }
 
       // 4. verify and remove backup.
-      try (FSDataInputStream in = fs.open(cfgPath)) {
+      try (InputStream in = fs.open(cfgPath)) {
         props.clear();
         props.load(in);
         if (!props.containsKey(INDEX_DEFINITION_CHECKSUM.key()) || !props.getProperty(INDEX_DEFINITION_CHECKSUM.key()).equals(checksum)) {
@@ -181,7 +181,7 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
    * @param outputStream - output stream to which properties will be written
    * @return return the table checksum
    */
-  private static String storeProperties(Properties props, FSDataOutputStream outputStream) throws IOException {
+  private static String storeProperties(Properties props, OutputStream outputStream) throws IOException {
     final String checksum;
     if (isValidChecksum(props)) {
       checksum = props.getProperty(INDEX_DEFINITION_CHECKSUM.key());

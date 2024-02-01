@@ -54,6 +54,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -546,7 +547,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   private static void createMetadataFile(String f, String basePath, Configuration configuration, byte[] content) {
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
-    FSDataOutputStream os = null;
+    OutputStream os = null;
     try {
       FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
       os = fs.create(commitFile, true);
@@ -599,7 +600,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   private static void createEmptyFile(String basePath, Path filePath, Configuration configuration) throws IOException {
     FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
-    FSDataOutputStream os = fs.create(filePath, true);
+    OutputStream os = fs.create(filePath, true);
     os.close();
   }
 
@@ -615,7 +616,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
     FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
-    try (FSDataOutputStream os = fs.create(commitFile, true)) {
+    try (OutputStream os = fs.create(commitFile, true)) {
       HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
       // Write empty commit metadata
       os.write(TimelineMetadataUtils.serializeCompactionPlan(workload).get());

@@ -17,7 +17,6 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
@@ -46,7 +45,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -65,7 +63,6 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
-import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -76,17 +73,12 @@ import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.utils.HoodieWriterClientTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -98,7 +90,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -109,9 +100,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
@@ -142,7 +132,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   @BeforeEach
   protected void initResources() throws IOException {
     basePath = tempDir.resolve("java_client_tests" + System.currentTimeMillis()).toAbsolutePath().toUri().getPath();
-    hadoopConf = new Configuration();
+    hadoopConf = new Configuration(false);
     taskContextSupplier = new TestJavaTaskContextSupplier();
     context = new HoodieJavaEngineContext(hadoopConf, taskContextSupplier);
     initFileSystem(basePath, hadoopConf);
@@ -978,7 +968,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
               }
             }).count();
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
-        Stream<GenericRecord> genericRecordStream = readHFile(paths);
+        Stream<GenericRecord> genericRecordStream = readHFile(context.getHadoopConf().get(), paths);
         if (lastCommitTimeOpt.isPresent()) {
           return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
                   gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
@@ -991,38 +981,6 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     } catch (IOException e) {
       throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTimeOpt.get(), e);
     }
-  }
-
-  public Stream<GenericRecord> readHFile(String[] paths) {
-    // TODO: this should be ported to use HoodieStorageReader
-    List<GenericRecord> valuesAsList = new LinkedList<>();
-
-    FileSystem fs = HadoopFSUtils.getFs(paths[0], context.getHadoopConf().get());
-    CacheConfig cacheConfig = new CacheConfig(fs.getConf());
-    Schema schema = null;
-    for (String path : paths) {
-      try {
-        HFile.Reader reader =
-            HoodieHFileUtils.createHFileReader(fs, new Path(path), cacheConfig, fs.getConf());
-        if (schema == null) {
-          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(getUTF8Bytes(SCHEMA_KEY))));
-        }
-        HFileScanner scanner = reader.getScanner(false, false);
-        if (!scanner.seekTo()) {
-          // EOF reached
-          continue;
-        }
-
-        do {
-          Cell c = scanner.getCell();
-          byte[] value = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
-          valuesAsList.add(HoodieAvroUtils.bytesToAvro(value, schema));
-        } while (scanner.next());
-      } catch (IOException e) {
-        throw new HoodieException("Error reading hfile " + path + " as a dataframe", e);
-      }
-    }
-    return valuesAsList.stream();
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
@@ -1040,8 +998,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(false).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
-            .withRemoteServerPort(timelineServicePort)
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+            .withRemoteServerPort(timelineServicePort).build());
     if (StringUtils.nonEmpty(schemaStr)) {
       builder.withSchema(schemaStr);
     }

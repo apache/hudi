@@ -30,12 +30,14 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -65,9 +67,13 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
                                                   Option<String> partitionNameOverrideOpt,
                                                   Option<String[]> partitionPathFieldOpt,
                                                   HoodieRecordMerger recordMerger,
-                                                  TypedProperties payloadProps) {
-    super(readerContext, readerSchema, baseFileSchema, internalSchema, hoodieTableMetaClient,
-        partitionNameOverrideOpt, partitionPathFieldOpt, recordMerger, payloadProps);
+                                                  TypedProperties payloadProps,
+                                                  long maxMemorySizeInBytes,
+                                                  String spillableMapBasePath,
+                                                  ExternalSpillableMap.DiskMapType diskMapType,
+                                                  boolean isBitCaskDiskMapCompressionEnabled) {
+    super(readerContext, readerSchema, baseFileSchema, internalSchema, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt,
+        recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
   @Override
@@ -134,7 +140,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
   }
 
   @Override
-  public void processNextDataRecord(T record, Map<String, Object> metadata, Object recordPosition) throws IOException {
+  public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable recordPosition) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
     Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
         doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
@@ -166,7 +172,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
   }
 
   @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Object recordPosition) {
+  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {

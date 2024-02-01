@@ -26,12 +26,12 @@ import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
@@ -88,7 +88,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   private static Schema readAvroSchemaFromFile(String schemaPath, FileSystem fs, boolean sanitizeSchema, String invalidCharMask) {
     String schemaStr;
-    try (FSDataInputStream in = fs.open(new Path(schemaPath))) {
+    try (InputStream in = fs.open(new Path(schemaPath))) {
       schemaStr = FileIOUtils.readAsUTFString(in);
     } catch (IOException ioe) {
       throw new HoodieSchemaProviderException(String.format("Error reading schema from file %s", schemaPath), ioe);

@@ -61,7 +61,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -70,6 +69,8 @@ import java.util.List;
 import java.util.Properties;
 
 import scala.Tuple2;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * Loads data from Parquet Sources.
@@ -306,7 +307,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     try (FSDataInputStream inputStream = fs.open(p)) {
       inputStream.readFully(0, buf.array(), 0, buf.array().length);
     }
-    return new String(buf.array(), StandardCharsets.UTF_8);
+    return fromUTF8Bytes(buf.array());
   }
 
   public static int handleErrors(JavaSparkContext jsc, String instantTime, JavaRDD<WriteStatus> writeResponse) {

@@ -23,8 +23,10 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -123,7 +125,11 @@ public class HoodieFileGroupReaderTestUtils {
           tableConfig,
           start,
           length,
-          shouldUseRecordPosition);
+          shouldUseRecordPosition,
+          1024 * 1024 * 1000,
+          basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME,
+          ExternalSpillableMap.DiskMapType.ROCKS_DB,
+          false);
     }
   }
 }
