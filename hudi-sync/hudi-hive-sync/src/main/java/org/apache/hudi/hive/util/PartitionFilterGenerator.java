@@ -59,7 +59,7 @@ public class PartitionFilterGenerator {
   private static final String UNSUPPORTED_TYPE_ERROR = "The value type: %s doesn't support to "
       + "be pushed down to HMS, acceptable types: " + String.join(",", SUPPORT_TYPES);
 
-  private static Literal buildLiteralExpression(String fieldValue, String fieldType) {
+  private Literal buildLiteralExpression(String fieldValue, String fieldType) {
     switch (fieldType.toLowerCase(Locale.ROOT)) {
       case HiveSchemaUtil.INT_TYPE_NAME:
         return new Literal<>(Integer.parseInt(fieldValue), Types.IntType.get());
@@ -85,7 +85,7 @@ public class PartitionFilterGenerator {
    *     Or(And(Equal(Attribute(date), Literal(2022-09-01)), Equal(Attribute(hour), Literal(12))),
    *     And(Equal(Attribute(date), Literal(2022-09-02)), Equal(Attribute(hour), Literal(13))))
    */
-  private static Expression buildPartitionExpression(List<Partition> partitions, List<FieldSchema> partitionFields) {
+  private Expression buildPartitionExpression(List<Partition> partitions, List<FieldSchema> partitionFields) {
     return partitions.stream().map(partition -> {
       List<String> partitionValues = partition.getValues();
       Expression root = null;
@@ -114,7 +114,7 @@ public class PartitionFilterGenerator {
    * Extract partition values from the {@param partitions}, and binding to
    * corresponding partition fieldSchemas.
    */
-  private static List<Pair<FieldSchema, String[]>> extractFieldValues(List<Partition> partitions, List<FieldSchema> partitionFields) {
+  private List<Pair<FieldSchema, String[]>> extractFieldValues(List<Partition> partitions, List<FieldSchema> partitionFields) {
     return IntStream.range(0, partitionFields.size())
         .mapToObj(i -> {
           Set<String> values = new HashSet<String>();
@@ -126,7 +126,7 @@ public class PartitionFilterGenerator {
         .collect(Collectors.toList());
   }
 
-  private static class ValueComparator implements Comparator<String> {
+  private class ValueComparator implements Comparator<String> {
 
     private final String valueType;
     public ValueComparator(String type) {
@@ -163,7 +163,7 @@ public class PartitionFilterGenerator {
    *
    * This method can reduce the Expression tree level a lot if each field has too many values.
    */
-  private static Expression buildMinMaxPartitionExpression(List<Partition> partitions, List<FieldSchema> partitionFields) {
+  private Expression buildMinMaxPartitionExpression(List<Partition> partitions, List<FieldSchema> partitionFields) {
     return extractFieldValues(partitions, partitionFields).stream().map(fieldWithValues -> {
       FieldSchema fieldSchema = fieldWithValues.getKey();
 
@@ -198,7 +198,7 @@ public class PartitionFilterGenerator {
         });
   }
 
-  public static String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields, HiveSyncConfig config, boolean useGlueSyntax) {
+  public  String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields, HiveSyncConfig config) {
     PartitionValueExtractor partitionValueExtractor = ReflectionUtils
         .loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
 
@@ -222,13 +222,13 @@ public class PartitionFilterGenerator {
     }
 
     if (filter != null) {
-      return generateFilterString(filter, useGlueSyntax ? new GlueFilterGenVisitor() : new FilterGenVisitor());
+      return generateFilterString(filter);
     }
 
     return "";
   }
 
-  private static String generateFilterString(Expression filter, FilterGenVisitor filterGenVisitor) {
-    return filter.accept(filterGenVisitor);
+  protected String generateFilterString(Expression filter) {
+    return filter.accept(new FilterGenVisitor());
   }
 }

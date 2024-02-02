@@ -231,7 +231,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   @Override
   public String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields) {
-    return PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFields, config, false);
+    return new PartitionFilterGenerator().generatePushDownFilter(writtenPartitions, partitionFields, config);
   }
 
   @Override

@@ -16,7 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.util;
+package org.apache.hudi.aws.sync.util;
+
+import org.apache.hudi.hive.util.FilterGenVisitor;
 
 public class GlueFilterGenVisitor extends FilterGenVisitor {
 
