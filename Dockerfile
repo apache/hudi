@@ -42,7 +42,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Clone the Thrift repository from GitHub
-RUN git clone --branch 0.14.2 --depth 1 https://github.com/apache/thrift.git .
+RUN git clone --branch 0.13.0 --depth 1 https://github.com/apache/thrift.git .
 
 RUN export PKG_PROG_PKG_CONFIG=`which pkg-config`
 

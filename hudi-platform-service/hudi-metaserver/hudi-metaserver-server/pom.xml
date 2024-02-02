@@ -109,24 +109,26 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>1.6.0</version>
+                <groupId>org.apache.thrift.tools</groupId>
+                <artifactId>maven-thrift-plugin</artifactId>
+                <version>0.1.11</version>
                 <executions>
                     <execution>
-                        <id>thrift-install-and-generate-source</id>
+                        <id>thrift-sources</id>
                         <phase>generate-sources</phase>
                         <goals>
-                            <goal>exec</goal>
+                            <goal>compile</goal>
                         </goals>
                     </execution>
                 </executions>
                 <configuration>
-                    <executable>${project.parent.basedir}/src/main/thrift/bin/thrift_binary.sh</executable>
-                    <arguments>
-                        <argument>${thrift.install.env}</argument>
-                    </arguments>
-                    <skip>false</skip>
+                    <thriftExecutable>${thrift.executable}</thriftExecutable>
+                    <outputDirectory>${project.parent.basedir}/target/generated-sources/gen-java</outputDirectory>
+                    <thriftSourceRoot>${project.parent.basedir}/src/main/thrift</thriftSourceRoot>
+                    <generator>java</generator>
+                    <includes>
+                        <include>**/*.thrift</include>
+                    </includes>
                 </configuration>
             </plugin>
             <plugin>
