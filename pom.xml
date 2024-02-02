@@ -203,7 +203,7 @@
     <spark.bundle.hive.shade.prefix/>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix/>
-    <argLine>-Xmx2g</argLine>
+    <argLine>-Xmx2g -Xms128m</argLine>
     <jacoco.version>0.8.8</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
@@ -2002,6 +2002,7 @@
                 <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
               </systemPropertyVariables>
               <useSystemClassLoader>false</useSystemClassLoader>
+              <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
             </configuration>
             <executions>
               <execution>

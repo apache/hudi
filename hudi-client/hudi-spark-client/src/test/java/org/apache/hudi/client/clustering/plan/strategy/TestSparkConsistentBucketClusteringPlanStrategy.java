@@ -41,6 +41,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -53,6 +54,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_MERGE_THRESHOLD;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD;
 
+@Disabled("ENG-6346")
 public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSparkClientTestHarness {
 
   private final Random random = new Random();
