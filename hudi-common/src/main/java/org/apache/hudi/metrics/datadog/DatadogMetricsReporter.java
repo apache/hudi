@@ -21,7 +21,7 @@ package org.apache.hudi.metrics.datadog;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 
@@ -43,7 +43,7 @@ public class DatadogMetricsReporter extends MetricsReporter {
   private final DatadogReporter reporter;
   private final int reportPeriodSeconds;
 
-  public DatadogMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
+  public DatadogMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
     reportPeriodSeconds = config.getDatadogReportPeriodSeconds();
     ApiSite apiSite = config.getDatadogApiSite();
     String apiKey = config.getDatadogApiKey();

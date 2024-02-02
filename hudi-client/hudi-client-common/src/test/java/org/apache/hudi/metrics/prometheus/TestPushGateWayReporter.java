@@ -124,28 +124,28 @@ public class TestPushGateWayReporter {
     Map<String, String> labels;
 
     when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus");
-    reporter = new PushGatewayMetricsReporter(config, null);
+    reporter = new PushGatewayMetricsReporter(config.getMetricsConfig(), null);
     labels = reporter.getLabels();
     assertEquals(1, labels.size());
     assertTrue(labels.containsKey("hudi"));
     assertTrue(labels.containsValue("prometheus"));
 
     when(config.getPushGatewayLabels()).thenReturn("hudi:prome:theus");
-    reporter = new PushGatewayMetricsReporter(config, null);
+    reporter = new PushGatewayMetricsReporter(config.getMetricsConfig(), null);
     labels = reporter.getLabels();
     assertEquals(1, labels.size());
     assertTrue(labels.containsKey("hudi"));
     assertTrue(labels.containsValue("prome:theus"));
 
     when(config.getPushGatewayLabels()).thenReturn("hudiprometheus");
-    reporter = new PushGatewayMetricsReporter(config, null);
+    reporter = new PushGatewayMetricsReporter(config.getMetricsConfig(), null);
     labels = reporter.getLabels();
     assertEquals(1, labels.size());
     assertTrue(labels.containsKey("hudiprometheus"));
     assertTrue(labels.containsValue(""));
 
     when(config.getPushGatewayLabels()).thenReturn("hudi1:prometheus,hudi2:prometheus");
-    reporter = new PushGatewayMetricsReporter(config, null);
+    reporter = new PushGatewayMetricsReporter(config.getMetricsConfig(), null);
     labels = reporter.getLabels();
     assertEquals(2, labels.size());
     assertTrue(labels.containsKey("hudi1"));
@@ -154,7 +154,7 @@ public class TestPushGateWayReporter {
 
     try {
       when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus,hudi:prom");
-      reporter = new PushGatewayMetricsReporter(config, null);
+      reporter = new PushGatewayMetricsReporter(config.getMetricsConfig(), null);
       fail("Should fail");
     } catch (IllegalStateException e) {
       assertTrue(e.getMessage().contains("Multiple values {prometheus, prom} for same key"));

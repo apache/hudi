@@ -19,7 +19,7 @@
 package org.apache.hudi.metrics.prometheus;
 
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricUtils;
 import org.apache.hudi.metrics.MetricsReporter;
 
@@ -40,7 +40,7 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
   private final Map<String, String> configuredLabels;
   private final boolean randomSuffix;
 
-  public PushGatewayMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
+  public PushGatewayMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
 
     String serverHost = config.getPushGatewayHost();
     int serverPort = config.getPushGatewayPort();

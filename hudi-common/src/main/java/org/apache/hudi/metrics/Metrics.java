@@ -21,7 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import com.codahale.metrics.MetricRegistry;
@@ -52,7 +52,7 @@ public class Metrics {
   private boolean initialized = false;
   private transient Thread shutdownThread = null;
 
-  public Metrics(HoodieWriteConfig metricConfig) {
+  public Metrics(HoodieMetricsConfig metricConfig) {
     registry = new MetricRegistry();
     commonMetricPrefix = metricConfig.getMetricReporterMetricsNamePrefix();
     reporters = new ArrayList<>();
@@ -75,7 +75,7 @@ public class Metrics {
     registerGauges(Registry.getAllMetrics(true, true), Option.of(commonMetricPrefix));
   }
 
-  public static synchronized Metrics getInstance(HoodieWriteConfig metricConfig) {
+  public static synchronized Metrics getInstance(HoodieMetricsConfig metricConfig) {
     String basePath = metricConfig.getBasePath();
     if (METRICS_INSTANCE_PER_BASEPATH.containsKey(basePath)) {
       return METRICS_INSTANCE_PER_BASEPATH.get(basePath);
@@ -92,12 +92,12 @@ public class Metrics {
     METRICS_INSTANCE_PER_BASEPATH.clear();
   }
 
-  private List<MetricsReporter> addAdditionalMetricsExporters(HoodieWriteConfig metricConfig) {
+  private List<MetricsReporter> addAdditionalMetricsExporters(HoodieMetricsConfig metricConfig) {
     List<MetricsReporter> reporterList = new ArrayList<>();
     List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
     try (FileSystem fs = HadoopFSUtils.getFs(propPathList.get(0), new Configuration())) {
       for (String propPath : propPathList) {
-        HoodieWriteConfig secondarySourceConfig = HoodieWriteConfig.newBuilder().fromInputStream(
+        HoodieMetricsConfig secondarySourceConfig = HoodieMetricsConfig.newBuilder().fromInputStream(
             fs.open(new Path(propPath))).withPath(metricConfig.getBasePath()).build();
         Option<MetricsReporter> reporter = MetricsReporterFactory.createReporter(secondarySourceConfig, registry);
         if (reporter.isPresent()) {

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics.cloudwatch;
 
+import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporter;
 
