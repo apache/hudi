@@ -109,7 +109,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
                                                                    final Reporter reporter) throws IOException {
-
+    HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
     if (HoodieFileGroupReaderRecordReader.useFilegroupReader(job)) {
       try {
         if (!(split instanceof FileSplit) || !checkIfHudiTable(split, job)) {
@@ -153,7 +153,6 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
     }
 
-    HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
     return getRecordReaderInternal(split, job, reporter);
   }
 
