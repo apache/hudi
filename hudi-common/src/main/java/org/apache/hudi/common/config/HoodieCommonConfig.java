@@ -81,17 +81,13 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " operation will fail schema compatibility check. Set this option to true will make the newly added "
           + " column nullable to successfully complete the write operation.");
 
-  public static final ConfigProperty<String> HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS = ConfigProperty
-      .key("hoodie.write.handle.missing.cols.with.lossless.type.promotion")
+  public static final ConfigProperty<String> SET_NULL_FOR_MISSING_COLUMNS = ConfigProperty
+      .key("hoodie.write.set.null.for.missing.columns")
       .defaultValue("false")
       .markAdvanced()
-      .withAlternatives("hoodie.write.set.null.for.missing.columns")
       .withDocumentation("When a nullable column is missing from incoming batch during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the missing "
-          + " column be filled with null values to successfully complete the write operation. Similarly lossless promotion"
-          + " are type promotions that are not back compatible like long to int, double to float etc can be handled "
-          + " by setting this config to true, in which case incoming data will be promoted to the table schema type"
-          + " and written to the table.");
+          + " column be filled with null values to successfully complete the write operation.");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
