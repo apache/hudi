@@ -220,11 +220,11 @@ stages:
               containerRegistry: 'lin-docker-hub'
               repository: 'prettydocker/hudi-devops'
               command: 'run'
-              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) /bin/bash -c \"mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service && mvn test  $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)\""
+              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) /bin/bash -c \"mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source && mvn test  $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)\""
           - task: Docker@2
             displayName: "FT other modules"
             inputs:
               containerRegistry: 'lin-docker-hub'
               repository: 'prettydocker/hudi-devops'
               command: 'run'
-              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) /bin/bash -c \"mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)\""
+              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) /bin/bash -c \"mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)\""

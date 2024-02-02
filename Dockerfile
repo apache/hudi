@@ -27,6 +27,44 @@ RUN apt-get update && \
     apt-get install -y openjdk-8-jdk maven && \
     apt-get clean
 
+RUN apt-get update && \
+    apt-get install -y \
+    build-essential \
+    automake \
+    bison \
+    flex \
+    libboost-all-dev \
+    libevent-dev \
+    libssl-dev \
+    git \
+    pkg-config
+
+WORKDIR /app
+
+# Clone the Thrift repository from GitHub
+RUN git clone --branch 0.13.0 --depth 1 https://github.com/apache/thrift.git .
+
+RUN export PKG_PROG_PKG_CONFIG=`which pkg-config`
+
+# Build and install Thrift
+RUN ./bootstrap.sh && \
+    ./configure && \
+    make && \
+    make install
+
+# Cleanup unnecessary build dependencies
+RUN apt-get remove -y \
+    build-essential \
+    automake \
+    bison \
+    flex \
+    libboost-all-dev \
+    libevent-dev \
+    libssl-dev && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
 # Set Java 8 as the default version
 RUN update-alternatives --install /usr/bin/java java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java 1
 RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
