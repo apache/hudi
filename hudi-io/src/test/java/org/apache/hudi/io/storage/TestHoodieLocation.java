@@ -171,6 +171,21 @@ public class TestHoodieLocation {
   }
 
   @Test
+  public void testMakeQualified() throws URISyntaxException {
+    URI defaultUri = new URI("hdfs://host1/dir1");
+    assertEquals(new HoodieLocation("hdfs://host1/a/b/c"),
+        new HoodieLocation("/a/b/c").makeQualified(defaultUri));
+    assertEquals(new HoodieLocation("hdfs://host2/a/b/c"),
+        new HoodieLocation("hdfs://host2/a/b/c").makeQualified(defaultUri));
+    assertEquals(new HoodieLocation("hdfs://host1/a/b/c"),
+        new HoodieLocation("hdfs:/a/b/c").makeQualified(defaultUri));
+    assertEquals(new HoodieLocation("s3://a/b/c"),
+        new HoodieLocation("s3://a/b/c/").makeQualified(defaultUri));
+    assertThrows(IllegalStateException.class,
+        () -> new HoodieLocation("a").makeQualified(defaultUri));
+  }
+
+  @Test
   public void testEquals() {
     assertEquals(new HoodieLocation("/foo"), new HoodieLocation("/foo"));
     assertEquals(new HoodieLocation("/foo"), new HoodieLocation("/foo/"));

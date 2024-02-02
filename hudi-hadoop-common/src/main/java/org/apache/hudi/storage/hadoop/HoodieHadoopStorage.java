@@ -33,6 +33,7 @@ import org.apache.hadoop.fs.RemoteIterator;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -51,6 +52,11 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public String getScheme() {
     return fs.getScheme();
+  }
+
+  @Override
+  public URI getUri() {
+    return fs.getUri();
   }
 
   @Override

@@ -33,6 +33,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -97,6 +99,11 @@ public abstract class TestHoodieStorageBase {
   @Test
   public void testGetScheme() {
     assertEquals("file", getHoodieStorage().getScheme());
+  }
+
+  @Test
+  public void testGetUri() throws URISyntaxException {
+    assertEquals(new URI("file:///"), getHoodieStorage().getUri());
   }
 
   @Test

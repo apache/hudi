@@ -186,6 +186,52 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
     return uri;
   }
 
+  /**
+   * Returns a qualified location object.
+   *
+   * @param defaultUri if this location is missing the scheme or authority
+   *                   components, borrow them from this URI.
+   * @return this location if it contains a scheme and authority, or
+   * a new path that includes a path and authority and is fully qualified.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public HoodieLocation makeQualified(URI defaultUri) {
+    if (!isAbsolute()) {
+      throw new IllegalStateException("Only an absolute path can be made qualified");
+    }
+    HoodieLocation location = this;
+    URI locationUri = location.toUri();
+
+    String scheme = locationUri.getScheme();
+    String authority = locationUri.getAuthority();
+    String fragment = locationUri.getFragment();
+
+    if (scheme != null &&
+        (authority != null || defaultUri.getAuthority() == null)) {
+      return location;
+    }
+
+    if (scheme == null) {
+      scheme = defaultUri.getScheme();
+    }
+
+    if (authority == null) {
+      authority = defaultUri.getAuthority();
+      if (authority == null) {
+        authority = "";
+      }
+    }
+
+    URI newUri;
+    try {
+      newUri = new URI(scheme, authority,
+          normalize(locationUri.getPath(), true), null, fragment);
+    } catch (URISyntaxException e) {
+      throw new IllegalArgumentException(e);
+    }
+    return new HoodieLocation(newUri);
+  }
+
   @Override
   public String toString() {
     // This value could be overwritten concurrently and that's okay, since
