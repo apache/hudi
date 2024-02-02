@@ -16,8 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.aws.sync.util;
+package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,7 @@ import java.util.Properties;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestGluePartitionFilterGenerator {
+public class TestGluePartitionPushdown {
 
   GluePartitionFilterGenerator partitionFilterGenerator = new GluePartitionFilterGenerator();
   @Test
