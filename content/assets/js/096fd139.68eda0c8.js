@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[58908],{42900:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/modern-data-architecture","name":"modern data architecture","count":1,"permalink":"/blog/tags/modern-data-architecture"}')}}]);

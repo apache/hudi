@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[83256],{52590:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/event-bridge","name":"event bridge","count":1,"permalink":"/cn/videos/tags/event-bridge"}')}}]);

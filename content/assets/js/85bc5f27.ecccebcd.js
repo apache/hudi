@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[88017],{23938:e=>{e.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/command-line-interface","name":"command line interface","count":1,"permalink":"/videos/tags/command-line-interface"}')}}]);

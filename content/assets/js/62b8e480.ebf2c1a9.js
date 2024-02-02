@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[41636],{34462:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/postgres","name":"postgres","count":1,"permalink":"/blog/tags/postgres"}')}}]);

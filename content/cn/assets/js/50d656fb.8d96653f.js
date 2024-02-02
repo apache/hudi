@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[90104],{89076:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/mongodb-atlas","name":"mongodb atlas","count":1,"permalink":"/cn/videos/tags/mongodb-atlas"}')}}]);

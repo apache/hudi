@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[35404],{32856:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/pre-commit-validator","name":"pre commit validator","count":1,"permalink":"/videos/tags/pre-commit-validator"}')}}]);

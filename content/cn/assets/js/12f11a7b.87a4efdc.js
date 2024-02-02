@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[29419],{25956:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/trino","name":"trino","count":1,"permalink":"/cn/blog/tags/trino"}')}}]);

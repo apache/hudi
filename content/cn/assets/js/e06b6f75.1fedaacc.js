@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[60580],{37928:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/data-integration","name":"data integration","count":1,"permalink":"/cn/videos/tags/data-integration"}')}}]);

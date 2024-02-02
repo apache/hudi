@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[9330],{25672:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/serverless","name":"serverless","count":1,"permalink":"/cn/videos/tags/serverless"}')}}]);

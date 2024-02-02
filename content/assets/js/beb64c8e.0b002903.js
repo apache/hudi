@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[75356],{83472:e=>{e.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/soft-delete","name":"soft delete","count":2,"permalink":"/videos/tags/soft-delete"}')}}]);

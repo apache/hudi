@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[80572],{33584:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/schema-evolution","name":"schema evolution","count":1,"permalink":"/blog/tags/schema-evolution"}')}}]);

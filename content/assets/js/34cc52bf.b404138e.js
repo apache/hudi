@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[5648],{86852:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/prestodb","name":"prestodb","count":1,"permalink":"/blog/tags/prestodb"}')}}]);

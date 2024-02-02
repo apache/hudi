@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[10688],{11298:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/vector-search","name":"vector search","count":2,"permalink":"/blog/tags/vector-search"}')}}]);

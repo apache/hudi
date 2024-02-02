@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[88683],{17757:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/table-types","name":"table types","count":1,"permalink":"/cn/videos/tags/table-types"}')}}]);

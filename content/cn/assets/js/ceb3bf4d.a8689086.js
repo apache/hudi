@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[27574],{69445:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/data-warehouse","name":"data warehouse","count":2,"permalink":"/cn/blog/tags/data-warehouse"}')}}]);

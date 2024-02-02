@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[1952],{43216:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/event-notification","name":"event notification","count":1,"permalink":"/cn/videos/tags/event-notification"}')}}]);

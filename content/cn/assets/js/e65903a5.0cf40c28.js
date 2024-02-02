@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[96016],{93956:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/delete-partition","name":"delete partition","count":1,"permalink":"/cn/videos/tags/delete-partition"}')}}]);

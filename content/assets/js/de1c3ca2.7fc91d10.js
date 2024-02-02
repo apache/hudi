@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[38214],{73330:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/amazon-emr-cli","name":"amazon emr cli","count":1,"permalink":"/videos/tags/amazon-emr-cli"}')}}]);

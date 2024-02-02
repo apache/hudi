@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[28859],{29065:e=>{e.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/resource-usage","name":"resource usage","count":1,"permalink":"/videos/tags/resource-usage"}')}}]);

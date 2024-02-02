@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[69188],{24064:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/case-study","name":"case study","count":1,"permalink":"/blog/tags/case-study"}')}}]);

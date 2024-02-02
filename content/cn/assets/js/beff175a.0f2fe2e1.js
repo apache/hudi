@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[6649],{29885:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/amazon-redshift","name":"amazon redshift","count":1,"permalink":"/cn/videos/tags/amazon-redshift"}')}}]);

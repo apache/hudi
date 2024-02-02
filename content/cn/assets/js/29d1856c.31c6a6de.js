@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[93296],{58280:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/delta-lake","name":"delta lake","count":1,"permalink":"/cn/videos/tags/delta-lake"}')}}]);

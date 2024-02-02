@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[76671],{28344:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/file-sizing","name":"file sizing","count":1,"permalink":"/blog/tags/file-sizing"}')}}]);

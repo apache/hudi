@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[47968],{4616:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/apache-iceberg","name":"apache iceberg","count":3,"permalink":"/blog/tags/apache-iceberg"}')}}]);
