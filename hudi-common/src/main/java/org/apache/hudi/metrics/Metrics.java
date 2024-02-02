@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -49,6 +50,7 @@ public class Metrics {
   private final MetricRegistry registry;
   private final List<MetricsReporter> reporters;
   private final String commonMetricPrefix;
+  private final String basePath;
   private boolean initialized = false;
   private transient Thread shutdownThread = null;
 
@@ -65,6 +67,7 @@ public class Metrics {
       throw new RuntimeException("Cannot initialize Reporters.");
     }
     reporters.forEach(MetricsReporter::start);
+    basePath = getBasePath(metricConfig);
 
     shutdownThread = new Thread(() -> shutdown(true));
     Runtime.getRuntime().addShutdownHook(shutdownThread);
@@ -76,7 +79,7 @@ public class Metrics {
   }
 
   public static synchronized Metrics getInstance(HoodieMetricsConfig metricConfig) {
-    String basePath = metricConfig.getBasePath();
+    String basePath = getBasePath(metricConfig);
     if (METRICS_INSTANCE_PER_BASEPATH.containsKey(basePath)) {
       return METRICS_INSTANCE_PER_BASEPATH.get(basePath);
     }
@@ -175,5 +178,17 @@ public class Metrics {
       return METRICS_INSTANCE_PER_BASEPATH.get(basePath).initialized;
     }
     return false;
+  }
+
+  /**
+   * Use the same base path as the hudi table so that Metrics instance is shared.
+   */
+  private static String getBasePath(HoodieMetricsConfig metricsConfig) {
+    String basePath = metricsConfig.getBasePath();
+    if (basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH)) {
+      String toRemoveSuffix = Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
+      basePath = basePath.substring(0, basePath.length() - toRemoveSuffix.length());
+    }
+    return basePath;
   }
 }
