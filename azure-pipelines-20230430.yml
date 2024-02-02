@@ -98,7 +98,7 @@ parameters:
 variables:
   BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.18'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
-  MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
+  MVN_OPTS_INSTALL: '-DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
   JOB2_MODULES: ${{ join(',',parameters.job2Modules) }}
@@ -220,11 +220,11 @@ stages:
               containerRegistry: 'lin-docker-hub'
               repository: 'prettydocker/hudi-devops'
               command: 'run'
-              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) /bin/bash -c \"mvn clean install $(MVN_OPTS_INSTALL) && mvn test  $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)\""
+              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) /bin/bash -c \"mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service && mvn test  $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)\""
           - task: Docker@2
             displayName: "FT other modules"
             inputs:
               containerRegistry: 'lin-docker-hub'
               repository: 'prettydocker/hudi-devops'
               command: 'run'
-              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) /bin/bash -c \"mvn clean install $(MVN_OPTS_INSTALL) && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)\""
+              arguments: "-i docker.io/prettydocker/hudi-devops:$(Build.BuildId) /bin/bash -c \"mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)\""
