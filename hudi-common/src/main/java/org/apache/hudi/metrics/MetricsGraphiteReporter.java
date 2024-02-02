@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
@@ -38,12 +38,12 @@ public class MetricsGraphiteReporter extends MetricsReporter {
   private static final Logger LOG = LoggerFactory.getLogger(MetricsGraphiteReporter.class);
   private final MetricRegistry registry;
   private final GraphiteReporter graphiteReporter;
-  private final HoodieWriteConfig config;
+  private final HoodieMetricsConfig config;
   private String serverHost;
   private int serverPort;
   private final int periodSeconds;
 
-  public MetricsGraphiteReporter(HoodieWriteConfig config, MetricRegistry registry) {
+  public MetricsGraphiteReporter(HoodieMetricsConfig config, MetricRegistry registry) {
     this.registry = registry;
     this.config = config;
 

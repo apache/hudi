@@ -21,10 +21,8 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 import org.apache.hudi.metrics.m3.M3MetricsReporter;
@@ -44,7 +42,7 @@ public class MetricsReporterFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(MetricsReporterFactory.class);
 
-  public static Option<MetricsReporter> createReporter(HoodieWriteConfig config, MetricRegistry registry) {
+  public static Option<MetricsReporter> createReporter(HoodieMetricsConfig config, MetricRegistry registry) {
     String reporterClassName = config.getMetricReporterClassName();
 
     if (!StringUtils.isNullOrEmpty(reporterClassName)) {
@@ -88,7 +86,8 @@ public class MetricsReporterFactory {
         reporter = new ConsoleMetricsReporter(registry);
         break;
       case CLOUDWATCH:
-        reporter = new CloudWatchMetricsReporter(config, registry);
+        reporter = (MetricsReporter) ReflectionUtils.loadClass("org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter",
+            new Class[]{HoodieMetricsConfig.class, MetricRegistry.class}, config, registry);
         break;
       case M3:
         reporter = new M3MetricsReporter(config, registry);
