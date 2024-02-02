@@ -296,7 +296,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
             .withAutoClean(false).retainCommits(1).retainFileVersions(1)
             .build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).build())
-        .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
+        .withEmbeddedTimelineServerEnabled(false).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())

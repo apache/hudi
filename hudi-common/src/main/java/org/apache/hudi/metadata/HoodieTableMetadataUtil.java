@@ -999,7 +999,7 @@ public class HoodieTableMetadataUtil {
                                                         Option<HoodieTableFileSystemView> fileSystemView,
                                                         String partition,
                                                         boolean mergeFileSlices) {
-    HoodieTableFileSystemView fsView = fileSystemView.orElse(getFileSystemView(metaClient));
+    HoodieTableFileSystemView fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
     Stream<FileSlice> fileSliceStream;
     if (mergeFileSlices) {
       if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
@@ -1025,7 +1025,7 @@ public class HoodieTableMetadataUtil {
   public static List<FileSlice> getPartitionLatestFileSlicesIncludingInflight(HoodieTableMetaClient metaClient,
                                                                               Option<HoodieTableFileSystemView> fileSystemView,
                                                                               String partition) {
-    HoodieTableFileSystemView fsView = fileSystemView.orElse(getFileSystemView(metaClient));
+    HoodieTableFileSystemView fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
     Stream<FileSlice> fileSliceStream = fsView.fetchLatestFileSlicesIncludingInflight(partition);
     return fileSliceStream
         .sorted(Comparator.comparing(FileSlice::getFileId))

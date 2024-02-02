@@ -516,6 +516,7 @@ public class TestHoodieHFileInputFormat {
         }
         totalCount++;
       }
+      recordReader.close();
     }
     assertEquals(expectedNumberOfRecordsInCommit, actualCount, msg);
     assertEquals(totalExpected, totalCount, msg);

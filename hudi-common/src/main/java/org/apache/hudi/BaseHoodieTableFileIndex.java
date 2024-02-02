@@ -144,7 +144,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                                   Option<String> beginInstantTime,
                                   Option<String> endInstantTime) {
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
-        .orElse(new String[0]);
+        .orElseGet(() -> new String[0]);
 
     this.metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(configProperties)
@@ -284,7 +284,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                 queryInstant.map(instant ->
                         fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
                     )
-                    .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
+                    .orElseGet(() -> fileSystemView.getLatestFileSlices(partitionPath.path))
                     .collect(Collectors.toList())
         ));
   }

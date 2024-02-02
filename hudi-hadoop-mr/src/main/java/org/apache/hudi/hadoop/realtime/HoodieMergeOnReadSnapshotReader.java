@@ -212,5 +212,8 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
     if (logRecordScanner != null) {
       logRecordScanner.close();
     }
+    if (mergedRecordsByKey != null) {
+      mergedRecordsByKey.close();
+    }
   }
 }

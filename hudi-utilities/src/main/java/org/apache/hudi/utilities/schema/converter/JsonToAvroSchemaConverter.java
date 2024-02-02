@@ -123,10 +123,11 @@ public class JsonToAvroSchemaConverter implements SchemaRegistryProvider.SchemaC
                   tryConvertNestedProperty(name, jsonProperties.get(name), schemaCounter, seenNames)
                       .or(() -> tryConvertArrayProperty(name, jsonProperties.get(name), schemaCounter, seenNames))
                       .or(() -> tryConvertEnumProperty(name, jsonProperties.get(name), schemaCounter, seenNames))
-                      .orElse(
+                      .orElseGet(() ->
                           convertProperty(
                               name, jsonProperties.get(name), required.contains(name), schemaCounter, seenNames, false)));
             });
+
     return MAPPER.createArrayNode().addAll(avroFields);
   }
 

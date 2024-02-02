@@ -51,6 +51,7 @@ public class Metrics {
   private final String commonMetricPrefix;
   private final String basePath;
   private boolean initialized = false;
+  private transient Thread shutdownThread = null;
 
   public Metrics(HoodieWriteConfig metricConfig) {
     registry = new MetricRegistry();
@@ -67,7 +68,8 @@ public class Metrics {
     reporters.forEach(MetricsReporter::start);
     basePath = metricConfig.getBasePath();
 
-    Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
+    shutdownThread = new Thread(() -> shutdown(true));
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
     this.initialized = true;
   }
 
@@ -114,17 +116,28 @@ public class Metrics {
     return reporterList;
   }
 
-  public synchronized void shutdown() {
-    try {
-      registerHoodieCommonMetrics();
-      reporters.forEach(MetricsReporter::report);
-      LOG.info("Stopping the metrics reporter...");
-      reporters.forEach(MetricsReporter::stop);
-    } catch (Exception e) {
-      LOG.warn("Error while closing reporter", e);
-    } finally {
-      initialized = false;
-      METRICS_INSTANCE_PER_BASEPATH.remove(basePath);
+  public void shutdown() {
+    shutdown(false);
+  }
+
+  private synchronized void shutdown(boolean fromShutdownHook) {
+    if (!fromShutdownHook) {
+      Runtime.getRuntime().removeShutdownHook(shutdownThread);
+    } else {
+      LOG.warn("Shutting down the metrics reporter from shutdown hook.");
+    }
+    if (initialized) {
+      try {
+        registerHoodieCommonMetrics();
+        reporters.forEach(MetricsReporter::report);
+        LOG.info("Stopping the metrics reporter...");
+        reporters.forEach(MetricsReporter::stop);
+      } catch (Exception e) {
+        LOG.warn("Error while closing reporter", e);
+      } finally {
+        initialized = false;
+        METRICS_INSTANCE_PER_BASEPATH.remove(basePath);
+      }
     }
   }
 

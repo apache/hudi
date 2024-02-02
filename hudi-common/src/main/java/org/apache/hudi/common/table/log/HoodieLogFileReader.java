@@ -88,6 +88,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final boolean reverseReader;
   private final boolean enableRecordLookups;
   private boolean closed = false;
+  private transient Thread shutdownThread = null;
   private FSDataInputStream inputStream;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
@@ -128,11 +129,28 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = this.logFile.getFileSize();
     }
+    addShutDownHook();
   }
 
   @Override
   public HoodieLogFile getLogFile() {
     return logFile;
+  }
+
+  /**
+   * Close the inputstream if not closed when the JVM exits.
+   */
+  private void addShutDownHook() {
+    shutdownThread = new Thread(() -> {
+      try {
+        LOG.warn("Failed to properly close HoodieLogFileReader in application.");
+        close();
+      } catch (Exception e) {
+        LOG.warn("unable to close input stream for log file " + logFile, e);
+        // fail silently for any sort of exception
+      }
+    });
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 
   // TODO : convert content and block length to long by using ByteBuffer, raw byte [] allows

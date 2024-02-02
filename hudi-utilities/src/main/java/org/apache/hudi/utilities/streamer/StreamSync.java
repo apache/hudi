@@ -606,7 +606,7 @@ public class StreamSync implements Serializable, Closeable {
             AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), getAvroRecordQualifiedName(cfg.targetTableName)));
 
         schemaProvider = incomingSchemaOpt.map(incomingSchema -> getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient))
-            .orElse(dataAndCheckpoint.getSchemaProvider());
+            .orElseGet(dataAndCheckpoint::getSchemaProvider);
 
         if (useRowWriter) {
           inputBatchForWriter = new InputBatch(transformed, checkpointStr, schemaProvider);
@@ -908,12 +908,12 @@ public class StreamSync implements Serializable, Closeable {
     instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
 
     if (useRowWriter) {
-      Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElse(hoodieSparkContext.getSqlContext().emptyDataFrame());
+      Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.getSqlContext().emptyDataFrame());
       HoodieWriteConfig hoodieWriteConfig = prepareHoodieConfigForRowWriter(inputBatch.getSchemaProvider().getTargetSchema());
       BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient, instantTime);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
-      JavaRDD<HoodieRecord> records = (JavaRDD<HoodieRecord>) inputBatch.getBatch().orElse(hoodieSparkContext.emptyRDD());
+      JavaRDD<HoodieRecord> records = (JavaRDD<HoodieRecord>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.emptyRDD());
       // filter dupes if needed
       if (cfg.filterDupes) {
         records = DataSourceUtils.dropDuplicates(hoodieSparkContext.jsc(), records, writeClient.getConfig());

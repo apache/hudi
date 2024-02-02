@@ -968,7 +968,7 @@ public abstract class AbstractHoodieLogRecordReader {
             .orElse(Function.identity());
 
     Schema schema = schemaEvolutionTransformerOpt.map(Pair::getRight)
-        .orElse(dataBlock.getSchema());
+        .orElseGet(dataBlock::getSchema);
 
     return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, transformer), schema);
   }

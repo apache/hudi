@@ -57,6 +57,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
@@ -419,8 +420,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       markClosed();
       writeIncomingRecords();
 
-      if (keyToNewRecords instanceof ExternalSpillableMap) {
-        ((ExternalSpillableMap) keyToNewRecords).close();
+      if (keyToNewRecords instanceof Closeable) {
+        ((Closeable) keyToNewRecords).close();
       }
 
       keyToNewRecords = null;

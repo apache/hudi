@@ -236,7 +236,7 @@ public class HoodieCDCLogger implements Closeable {
       throw new HoodieIOException("Failed to close HoodieCDCLogger", e);
     } finally {
       // in case that crash when call `flushIfNeeded`, do the cleanup again.
-      cdcData.clear();
+      cdcData.close();
     }
   }
 
