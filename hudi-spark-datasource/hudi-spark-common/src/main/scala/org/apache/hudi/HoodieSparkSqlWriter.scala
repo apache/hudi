@@ -21,6 +21,8 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.hive.conf.HiveConf
+import org.apache.hadoop.hive.shims.ShimLoader
 import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
@@ -884,7 +886,19 @@ class HoodieSparkSqlWriterInternal {
       properties.put(HiveSyncConfigHolder.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD).toString)
       properties.put(HoodieSyncConfig.META_SYNC_SPARK_VERSION.key, SPARK_VERSION)
       properties.put(HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA.key, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
-
+      if ((fs.getConf.get(HiveConf.ConfVars.METASTOREPWD.varname) == null || fs.getConf.get(HiveConf.ConfVars.METASTOREPWD.varname).isEmpty) &&
+        (properties.get(HiveSyncConfigHolder.HIVE_PASS.key()) == null || properties.get(HiveSyncConfigHolder.HIVE_PASS.key()).toString.isEmpty)){
+        try {
+          val passwd = ShimLoader.getHadoopShims.getPassword(spark.sparkContext.hadoopConfiguration, HiveConf.ConfVars.METASTOREPWD.varname)
+          if (passwd != null && !passwd.isEmpty) {
+            fs.getConf.set(HiveConf.ConfVars.METASTOREPWD.varname, passwd)
+            properties.put(HiveSyncConfigHolder.HIVE_PASS.key(), passwd)
+          }
+        } catch {
+          case e: Exception =>
+            log.info("Exception while trying to get Meta Sync password from hadoop credential store", e)
+        }
+      }
       // Collect exceptions in list because we want all sync to run. Then we can throw
       val failedMetaSyncs = new mutable.HashMap[String,HoodieException]()
       syncClientToolClassSet.foreach(impl => {
