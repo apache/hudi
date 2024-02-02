@@ -86,7 +86,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private static final String ACTION_STATE = "actionState";
   private static final String STATE_TRANSITION_TIME = "stateTransitionTime";
   private HoodieTableMetaClient metaClient;
-  private final Map<String, byte[]> readCommits = new HashMap<>();
+  private final Map<String, Map<HoodieInstant.State, byte[]>> readCommits = new HashMap<>();
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieArchivedTimeline.class);
 
@@ -104,16 +104,71 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Loads completed instants from startTs(inclusive).
-   * Note that there is no lazy loading, so this may not work if really early startTs is specified.
+   * Loads completed instants satisfying the given time range filter.
    */
-  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient, String startTs) {
+  private HoodieArchivedTimeline(HoodieTableMetaClient metaClient, TimeRangeFilter timeRangeFilter) {
+    this(metaClient, timeRangeFilter, null, Option.of(HoodieInstant.State.COMPLETED));
+  }
+
+  /**
+   * Loads instants satisfying the given time range filter and state. If state is Option.EMPTY, instants of all states are loaded
+   */
+  private HoodieArchivedTimeline(HoodieTableMetaClient metaClient, TimeRangeFilter timeRangeFilter, Option<HoodieInstant.State> state) {
+    this(metaClient, timeRangeFilter, null, state);
+  }
+
+  /**
+   * Loads instants satisfying the given state, time range filter, and log file filter.
+   * If state is Option.EMPTY, instants of all states are loaded.
+   * Note that there is no lazy loading, so a wide time range may not work.
+   */
+  private HoodieArchivedTimeline(HoodieTableMetaClient metaClient, TimeRangeFilter timeRangeFilter, LogFileFilter logFileFilter, Option<HoodieInstant.State> state) {
     this.metaClient = metaClient;
-    setInstants(loadInstants(new StartTsFilter(startTs), true,
-        record -> HoodieInstant.State.COMPLETED.toString().equals(record.get(ACTION_STATE).toString())));
+    Function<GenericRecord, Boolean> commitsFilter;
+    if (state.isPresent()) {
+      commitsFilter = record -> state.get().toString().equals(record.get(ACTION_STATE).toString());
+    } else {
+      commitsFilter = record -> true;
+    }
+    setInstants(loadInstants(timeRangeFilter, logFileFilter, true, commitsFilter));
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
+  }
+
+  /**
+   * Loads completed instants from startTs(inclusive).
+   */
+  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient, String startTs) {
+    this(metaClient, new StartTsFilter(startTs));
+  }
+
+  /**
+   * Loads completed instants from startTs(inclusive) to endTs(inclusive).
+   */
+  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient, String startTs, String endTs) {
+    this(metaClient, new InclusiveStartAndEndTsFilter(startTs, endTs));
+  }
+
+  /**
+   * Loads instants of input state from startTs(inclusive) to endTs(inclusive).
+   */
+  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient, String startTs, String endTs, Option<HoodieInstant.State> state) {
+    this(metaClient, new InclusiveStartAndEndTsFilter(startTs, endTs), state);
+  }
+
+  /**
+   * Load completed instants in archived log files
+   */
+  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient, Set<String> logFiles) {
+    this(metaClient, null, new LogFileFilter(logFiles), Option.of(HoodieInstant.State.COMPLETED));
+  }
+
+  /**
+   * Load instants of input state in archived log files. If state is Option.EMPTY, instants of all states are loaded.
+   */
+  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient, Set<String> logFiles, Option<HoodieInstant.State> state) {
+    this(metaClient, null, new LogFileFilter(logFiles), state);
   }
 
   /**
@@ -142,7 +197,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   public void loadCompletedInstantDetailsInMemory() {
-    loadInstants(null, true,
+    loadInstants(null, null, true,
         record -> {
           // Very old archived instants don't have action state set.
           Object action = record.get(ACTION_STATE);
@@ -156,7 +211,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   public void loadCompactionDetailsInMemory(String startTs, String endTs) {
     // load compactionPlan
-    loadInstants(new TimeRangeFilter(startTs, endTs), true,
+    loadInstants(new InclusiveStartAndEndTsFilter(startTs, endTs), null, true,
         record -> {
           // Older files don't have action state set.
           Object action = record.get(ACTION_STATE);
@@ -177,37 +232,42 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
-    return Option.ofNullable(readCommits.get(instant.getTimestamp()));
+    return Option.ofNullable(readCommits.getOrDefault(instant.getTimestamp(), new HashMap<>()).get(instant.getState()));
   }
 
   public HoodieArchivedTimeline reload() {
     return new HoodieArchivedTimeline(metaClient);
   }
 
-  private HoodieInstant readCommit(GenericRecord record, boolean loadDetails) {
+  private Option<HoodieInstant> readCommit(GenericRecord record, boolean loadDetails, TimeRangeFilter timeRangeFilter) {
     final String instantTime = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
     final String stateTransitionTime = (String) record.get(STATE_TRANSITION_TIME);
+    final HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
+        instantTime, stateTransitionTime);
+    if (timeRangeFilter != null && !timeRangeFilter.isInRange(hoodieInstant)) {
+      return Option.empty();
+    }
     if (loadDetails) {
-      getMetadataKey(action).map(key -> {
+      getMetadataKey(hoodieInstant).map(key -> {
         Object actionData = record.get(key);
         if (actionData != null) {
+          this.readCommits.computeIfAbsent(instantTime, k -> new HashMap<>());
           if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
-            this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData));
+            readCommits.get(instantTime).put(hoodieInstant.getState(), HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData));
           } else {
-            this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8));
+            readCommits.get(instantTime).put(hoodieInstant.getState(), actionData.toString().getBytes(StandardCharsets.UTF_8));
           }
         }
         return null;
       });
     }
-    return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
-        instantTime, stateTransitionTime);
+    return Option.of(hoodieInstant);
   }
 
   @Nonnull
-  private Option<String> getMetadataKey(String action) {
-    switch (action) {
+  private Option<String> getMetadataKey(HoodieInstant instant) {
+    switch (instant.getAction()) {
       case HoodieTimeline.CLEAN_ACTION:
         return Option.of("hoodieCleanMetadata");
       case HoodieTimeline.COMMIT_ACTION:
@@ -221,11 +281,14 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       case HoodieTimeline.LOG_COMPACTION_ACTION:
         return Option.of("hoodieCompactionPlan");
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
+        if (instant.isRequested()) {
+          return Option.of("hoodieRequestedReplaceMetadata");
+        }
         return Option.of("hoodieReplaceCommitMetadata");
       case HoodieTimeline.INDEXING_ACTION:
         return Option.of("hoodieIndexCommitMetadata");
       default:
-        LOG.error(String.format("Unknown action in metadata (%s)", action));
+        LOG.error(String.format("Unknown action in metadata (%s)", instant.getAction()));
         return Option.empty();
     }
   }
@@ -239,7 +302,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   private List<HoodieInstant> loadInstants(TimeRangeFilter filter, boolean loadInstantDetails) {
-    return loadInstants(filter, loadInstantDetails, record -> true);
+    return loadInstants(filter, null, loadInstantDetails, record -> true);
   }
 
   /**
@@ -248,7 +311,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
    * If filter is specified, only the filtered instants are loaded
    * If commitsFilter is specified, only the filtered records are loaded
    */
-  private List<HoodieInstant> loadInstants(TimeRangeFilter filter, boolean loadInstantDetails,
+  private List<HoodieInstant> loadInstants(TimeRangeFilter filter, LogFileFilter logFileFilter, boolean loadInstantDetails,
        Function<GenericRecord, Boolean> commitsFilter) {
     try {
       // List all files
@@ -260,6 +323,10 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
       Set<HoodieInstant> instantsInRange = new HashSet<>();
       for (FileStatus fs : fsStatuses) {
+        if (logFileFilter != null && !logFileFilter.shouldLoadFile(fs)) {
+          continue;
+        }
+
         // Read the archived file
         try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
             new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
@@ -276,8 +343,9 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
                     // Filter blocks in desired time window
                     .map(r -> (GenericRecord) r.getData())
                     .filter(commitsFilter::apply)
-                    .map(r -> readCommit(r, loadInstantDetails))
-                    .filter(c -> filter == null || filter.isInRange(c))
+                    .map(r -> readCommit(r, loadInstantDetails, filter))
+                    .filter(Option::isPresent)
+                    .map(Option::get)
                     .forEach(instantsInRange::add);
               }
             }
@@ -347,6 +415,33 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
     public boolean isInRange(HoodieInstant instant) {
       return HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN_OR_EQUALS, startTs);
+    }
+  }
+
+  private static class InclusiveStartAndEndTsFilter extends TimeRangeFilter {
+    private final String startTs;
+    private final String endTs;
+
+    public InclusiveStartAndEndTsFilter(String startTs, String endTs) {
+      super(startTs, endTs);
+      this.startTs = startTs;
+      this.endTs = endTs;
+    }
+
+    public boolean isInRange(HoodieInstant instant) {
+      return HoodieTimeline.isInClosedRange(instant.getTimestamp(), this.startTs, this.endTs);
+    }
+  }
+
+  private static class LogFileFilter {
+    private final Set<String> logFiles;
+
+    public LogFileFilter(Set<String> logFiles) {
+      this.logFiles = logFiles;
+    }
+
+    public boolean shouldLoadFile(FileStatus fileStatus) {
+      return logFiles.contains(fileStatus.getPath().toString());
     }
   }
 
