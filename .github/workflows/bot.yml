@@ -335,7 +335,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
-          mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+          mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Phudi-platform-service -Pthrift-gen-source-with-script
           # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
           sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
           mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0 -Phudi-platform-service -Pthrift-gen-source-with-script
