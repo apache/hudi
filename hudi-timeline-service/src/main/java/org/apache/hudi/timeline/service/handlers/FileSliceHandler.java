@@ -31,8 +31,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -97,7 +97,7 @@ public class FileSliceHandler extends Handler {
 
   public List<FileSliceDTO> getLatestFileSlice(String basePath, String partitionPath, String fileId) {
     return viewManager.getFileSystemView(basePath).getLatestFileSlice(partitionPath, fileId)
-        .map(FileSliceDTO::fromFileSlice).map(Arrays::asList).orElse(new ArrayList<>());
+        .map(FileSliceDTO::fromFileSlice).map(Arrays::asList).orElse(Collections.emptyList());
   }
 
   public List<CompactionOpDTO> getPendingCompactionOperations(String basePath) {

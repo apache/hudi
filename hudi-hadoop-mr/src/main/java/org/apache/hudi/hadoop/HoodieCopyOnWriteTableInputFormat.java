@@ -48,8 +48,11 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.Job;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
@@ -60,8 +63,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 
@@ -290,7 +291,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
 
             List<FileSlice> fileSlices = queryInstant.map(
                 instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, instant))
-                .orElse(fsView.getLatestFileSlices(relativePartitionPath))
+                .orElseGet(() -> fsView.getLatestFileSlices(relativePartitionPath))
                 .collect(Collectors.toList());
 
             filteredFileSlices.addAll(fileSlices);

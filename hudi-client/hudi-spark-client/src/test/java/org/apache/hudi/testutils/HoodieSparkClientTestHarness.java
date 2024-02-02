@@ -50,6 +50,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -69,6 +70,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -191,11 +194,12 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     }
 
     // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName));
+    SparkConf sc = HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName);
+    SparkContext sparkContext = new SparkContext(sc);
+    HoodieClientTestUtils.overrideSparkHadoopConfiguration(sparkContext);
+    jsc = new JavaSparkContext(sparkContext);
     jsc.setLogLevel("ERROR");
-
     hadoopConf = jsc.hadoopConfiguration();
-
     sparkSession = SparkSession.builder()
         .withExtensions(JFunction.toScala(sparkSessionExtensions -> {
           sparkSessionExtensionsInjector.ifPresent(injector -> injector.accept(sparkSessionExtensions));
@@ -374,7 +378,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       throw new IllegalStateException("The base path has not been initialized.");
     }
 
-    fs = FSUtils.getFs(basePath, configuration);
+    fs = HadoopFSUtils.getFs(basePath, configuration);
     if (fs instanceof LocalFileSystem) {
       LocalFileSystem lfs = (LocalFileSystem) fs;
       // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream

@@ -88,19 +88,11 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
           extraOptions: Map[String, String] = Map.empty): Boolean = {
     val catalogTable = new HoodieCatalogTable(sparkSession, table)
 
-    var mode = SaveMode.Append
-    var isOverWriteTable = false
-    var isOverWritePartition = false
-
-    if (overwrite) {
-      if (deduceIsOverwriteTable(sparkSession, catalogTable, partitionSpec, extraOptions)) {
-        isOverWriteTable = true
-        mode = SaveMode.Overwrite
-      } else {
-        isOverWritePartition = true
-      }
+    val (mode, isOverWriteTable, isOverWritePartition, staticOverwritePartitionPathOpt) = if (overwrite) {
+      deduceOverwriteConfig(sparkSession, catalogTable, partitionSpec, extraOptions)
+    } else {
+      (SaveMode.Append, false, false, Option.empty)
     }
-    val staticOverwritePartitionPathOpt = getStaticOverwritePartitionPath(catalogTable, partitionSpec, isOverWritePartition)
     val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions, staticOverwritePartitionPathOpt)
 
     val alignedQuery = alignQueryOutput(query, catalogTable, partitionSpec, sparkSession.sessionState.conf)
@@ -116,22 +108,6 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
 
     success
-  }
-
-  private def getStaticOverwritePartitionPath(hoodieCatalogTable: HoodieCatalogTable,
-                                              partitionsSpec: Map[String, Option[String]],
-                                              isOverWritePartition: Boolean): Option[String] = {
-    if (isOverWritePartition) {
-      val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
-      val isStaticOverwritePartition = staticPartitionValues.keys.size == hoodieCatalogTable.partitionFields.length
-      if (isStaticOverwritePartition) {
-        Option.apply(makePartitionPath(hoodieCatalogTable, staticPartitionValues))
-      } else {
-        Option.empty
-      }
-    } else {
-      Option.empty
-    }
   }
 
   /**

@@ -109,6 +109,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -206,13 +207,13 @@ public class UtilHelpers {
     return null;
   }
 
-  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Option<Schema> sourceSchema,
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Supplier<Option<Schema>> sourceSchemaSupplier,
                                                       boolean isErrorTableWriterEnabled) throws IOException {
 
     try {
       Function<List<String>, Transformer> chainedTransformerFunction = classNames ->
-          isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames, sourceSchema)
-              : new ChainedTransformer(classNames, sourceSchema);
+          isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames, sourceSchemaSupplier)
+              : new ChainedTransformer(classNames, sourceSchemaSupplier);
       return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : chainedTransformerFunction.apply(classNames));
     } catch (Throwable e) {
       throw new IOException("Could not load transformer class(es) " + classNamesOpt.get(), e);

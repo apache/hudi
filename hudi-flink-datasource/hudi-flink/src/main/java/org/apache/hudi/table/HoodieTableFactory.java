@@ -22,6 +22,7 @@ import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -176,11 +177,22 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
     checkTableType(conf);
+    checkIndexType(conf);
 
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
     }
     StreamerUtil.checkPreCombineKey(conf, schema.getColumnNames());
+  }
+
+  /**
+   * Validate the index type.
+   */
+  private void checkIndexType(Configuration conf) {
+    String indexType = conf.get(FlinkOptions.INDEX_TYPE);
+    if (!StringUtils.isNullOrEmpty(indexType)) {
+      HoodieIndexConfig.INDEX_TYPE.checkValues(indexType);
+    }
   }
 
   /**

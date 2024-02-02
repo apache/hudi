@@ -25,7 +25,6 @@ import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteC
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
@@ -46,6 +45,7 @@ import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -658,7 +658,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val countDownLatch = new CountDownLatch(2)
     for (x <- 1 to 2) {
       val thread = new Thread(new UpdateThread(dataGen, spark, commonOpts, basePath, x + "00", countDownLatch, numRetries))
-      thread.setName((x + "00_THREAD").toString())
+      thread.setName(x + "00_THREAD")
       thread.start()
     }
     countDownLatch.await(1, TimeUnit.MINUTES)
@@ -682,15 +682,18 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       val insertRecs = recordsToStrings(dataGen.generateInserts(instantTime, 1000)).toList
       val updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecs, 2))
       val insertDf = spark.read.json(spark.sparkContext.parallelize(insertRecs, 2))
-      updateDf.union(insertDf).write.format("org.apache.hudi")
-        .options(commonOpts)
-        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
-        .option("hoodie.cleaner.policy.failed.writes", "LAZY")
-        .option("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider")
-        .option(HoodieWriteConfig.NUM_RETRIES_ON_CONFLICT_FAILURES.key(), numRetries.toString)
-        .mode(SaveMode.Append)
-        .save(basePath)
-      countDownLatch.countDown()
+      try {
+        updateDf.union(insertDf).write.format("org.apache.hudi")
+          .options(commonOpts)
+          .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
+          .option("hoodie.cleaner.policy.failed.writes", "LAZY")
+          .option("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+          .option(HoodieWriteConfig.NUM_RETRIES_ON_CONFLICT_FAILURES.key(), numRetries.toString)
+          .mode(SaveMode.Append)
+          .save(basePath)
+      } finally {
+        countDownLatch.countDown()
+      }
     }
   }
 

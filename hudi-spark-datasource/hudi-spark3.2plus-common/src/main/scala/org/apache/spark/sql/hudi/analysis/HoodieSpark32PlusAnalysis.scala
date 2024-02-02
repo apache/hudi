@@ -17,27 +17,27 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
+import org.apache.hudi.storage.HoodieLocation
+
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
-import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec}
+import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges, HoodieTableChangesOptionsParser}
+import org.apache.spark.sql.catalyst.plans.logcal.{HoodieFileSystemViewTableValuedFunction, HoodieFileSystemViewTableValuedFunctionOptionsParser, HoodieMetadataTableValuedFunction, HoodieQuery, HoodieTableChanges, HoodieTableChangesOptionsParser, HoodieTimelineTableValuedFunction, HoodieTimelineTableValuedFunctionOptionsParser}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.Origin
-import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
-import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
 
 /**
  * NOTE: PLEASE READ CAREFULLY
@@ -92,7 +92,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
     case HoodieTableChanges(args) =>
       val (tablePath, opts) = HoodieTableChangesOptionsParser.parseOptions(args, HoodieTableChanges.FUNC_NAME)
       val hoodieDataSource = new DefaultSource
-      if (tablePath.contains(Path.SEPARATOR)) {
+      if (tablePath.contains(HoodieLocation.SEPARATOR)) {
         // the first param is table path
         val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> tablePath))
         LogicalRelation(relation)
@@ -102,6 +102,51 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
         val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
         val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" ->
           catalogTable.location.toString))
+        LogicalRelation(relation, catalogTable)
+      }
+    case HoodieTimelineTableValuedFunction(args) =>
+      val (tablePath, opts) = HoodieTimelineTableValuedFunctionOptionsParser.parseOptions(args, HoodieTimelineTableValuedFunction.FUNC_NAME)
+      val hoodieDataSource = new DefaultSource
+      if (tablePath.contains(HoodieLocation.SEPARATOR)) {
+        // the first param is table path
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> tablePath))
+        LogicalRelation(relation)
+      } else {
+        // the first param is table identifier
+        val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tablePath)
+        val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" ->
+          catalogTable.location.toString))
+        LogicalRelation(relation, catalogTable)
+      }
+    case HoodieFileSystemViewTableValuedFunction(args) =>
+      val (tablePath, opts) = HoodieFileSystemViewTableValuedFunctionOptionsParser.parseOptions(args, HoodieFileSystemViewTableValuedFunction.FUNC_NAME)
+      val hoodieDataSource = new DefaultSource
+      if (tablePath.contains(HoodieLocation.SEPARATOR)) {
+        // the first param is table path
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> tablePath))
+        LogicalRelation(relation)
+      } else {
+        // the first param is table identifier
+        val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tablePath)
+        val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" ->
+          catalogTable.location.toString))
+        LogicalRelation(relation, catalogTable)
+      }
+    case HoodieMetadataTableValuedFunction(args) =>
+      val (tablePath, opts) = HoodieMetadataTableValuedFunction.parseOptions(args, HoodieMetadataTableValuedFunction.FUNC_NAME)
+      val hoodieDataSource = new DefaultSource
+      if (tablePath.contains(HoodieLocation.SEPARATOR)) {
+        // the first param is table path
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> (tablePath + "/.hoodie/metadata")))
+        LogicalRelation(relation)
+      } else {
+        // the first param is table identifier
+        val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tablePath)
+        val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" ->
+          (catalogTable.location.toString + "/.hoodie/metadata")))
         LogicalRelation(relation, catalogTable)
       }
     case mO@MatchMergeIntoTable(targetTableO, sourceTableO, _)

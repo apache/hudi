@@ -85,6 +85,7 @@ public class HoodieCommonConfig extends HoodieConfig {
       .key("hoodie.write.handle.missing.cols.with.lossless.type.promotion")
       .defaultValue("false")
       .markAdvanced()
+      .withAlternatives("hoodie.write.set.null.for.missing.columns")
       .withDocumentation("When a nullable column is missing from incoming batch during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the missing "
           + " column be filled with null values to successfully complete the write operation. Similarly lossless promotion"

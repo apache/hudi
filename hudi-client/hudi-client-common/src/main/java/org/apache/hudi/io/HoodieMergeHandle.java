@@ -57,6 +57,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
@@ -426,8 +427,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       markClosed();
       writeIncomingRecords();
 
-      if (keyToNewRecords instanceof ExternalSpillableMap) {
-        ((ExternalSpillableMap) keyToNewRecords).close();
+      if (keyToNewRecords instanceof Closeable) {
+        ((Closeable) keyToNewRecords).close();
       }
 
       keyToNewRecords = null;
@@ -467,7 +468,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
 
     long oldNumWrites = 0;
-    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.recordMerger.getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath)) {
+    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.recordMerger.getRecordType())
+        .getFileReader(config, hoodieTable.getHadoopConf(), oldFilePath)) {
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);

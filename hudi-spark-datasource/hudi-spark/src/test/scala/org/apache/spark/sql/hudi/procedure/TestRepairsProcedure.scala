@@ -27,14 +27,19 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, SchemaTestUtil}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.IOException
 import java.net.URL
 import java.nio.file.{Files, Paths}
+import java.util.Properties
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
+import scala.jdk.CollectionConverters.asScalaSetConverter
 
 class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
@@ -106,6 +111,22 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  preCombineField = 'ts'
            | )
        """.stripMargin)
+
+      val filePath = s"""$tablePath/.hoodie/hoodie.properties"""
+      val fs = HadoopFSUtils.getFs(filePath, new Configuration())
+      val fis = fs.open(new Path(filePath))
+      val prevProps = new Properties
+      prevProps.load(fis)
+      fis.close()
+
+      // write props to a file
+      val curPropPath = s"""${tmp.getCanonicalPath}/tmp/hoodie.properties"""
+      val path = new Path(curPropPath)
+      val out = fs.create(path)
+      prevProps.store(out, "hudi properties")
+      out.close()
+      fs.close()
+
       // create commit instant
       val newProps: URL = this.getClass.getClassLoader.getResource("table-config.properties")
 
@@ -140,6 +161,15 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
         .mkString("\n")
 
       assertEquals(expectedOutput, actual)
+
+      spark.sql(s"""call repair_overwrite_hoodie_props(table => '$tableName', new_props_file_path => '${curPropPath}')""")
+      val config = HoodieTableMetaClient.builder().setBasePath(tablePath).setConf(new Configuration()).build().getTableConfig
+      val props = config.getProps
+      assertEquals(prevProps.size(), props.size())
+      props.entrySet().asScala.foreach((entry) => {
+        val key = entry.getKey.toString
+        assertEquals(entry.getValue, prevProps.getProperty(key))
+      })
     }
   }
 
@@ -527,7 +557,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
   @throws[IOException]
   def createEmptyCleanRequestedFile(basePath: String, instantTime: String, configuration: Configuration): Unit = {
     val commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeRequestedCleanerFileName(instantTime))
-    val fs = FSUtils.getFs(basePath, configuration)
+    val fs = HadoopFSUtils.getFs(basePath, configuration)
     val os = fs.create(commitFilePath, true)
     os.close()
   }

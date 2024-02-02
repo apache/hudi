@@ -19,7 +19,6 @@
 package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,9 +29,9 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -40,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -184,10 +184,10 @@ public class ConsistentBucketIndexUtils {
     HoodieWrapperFileSystem fs = table.getMetaClient().getFs();
     Path dir = FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     Path fullPath = new Path(dir, metadata.getFilename());
-    try (FSDataOutputStream fsOut = fs.create(fullPath, overwrite)) {
+    try (OutputStream out = fs.create(fullPath, overwrite)) {
       byte[] bytes = metadata.toBytes();
-      fsOut.write(bytes);
-      fsOut.close();
+      out.write(bytes);
+      out.close();
       return true;
     } catch (IOException e) {
       LOG.warn("Failed to update bucket metadata: " + metadata, e);

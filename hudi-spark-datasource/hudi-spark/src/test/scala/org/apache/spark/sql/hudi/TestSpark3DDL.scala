@@ -544,12 +544,12 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
   test("Test alter column with complex schema") {
     withRecordType()(withTempDir { tmp =>
-      Seq("mor").foreach { tableType =>
+      withSQLConf(s"$SPARK_SQL_INSERT_INTO_OPERATION" -> "upsert",
+        "hoodie.schema.on.read.enable" -> "true",
+        "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
-          spark.sql("set hoodie.schema.on.read.enable=true")
-          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           spark.sql(
             s"""
                |create table $tableName (
@@ -561,7 +561,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
                |) using hudi
                | location '$tablePath'
                | options (
-               |  type = '$tableType',
+               |  type = 'mor',
                |  primaryKey = 'id',
                |  preCombineField = 'ts'
                | )
@@ -628,7 +628,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
         }
       }
-      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 

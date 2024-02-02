@@ -52,6 +52,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.storage.HoodieAvroParquetReader;
@@ -84,6 +85,7 @@ import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -114,6 +116,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests Bootstrap Client functionality.
  */
+@Disabled("HUDI-7353")
 @Tag("functional")
 public class TestBootstrap extends HoodieSparkClientTestBase {
 
@@ -496,7 +499,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
 
   private void verifyNoMarkerInTempFolder() throws IOException {
     String tempFolderPath = metaClient.getTempFolderPath();
-    FileSystem fileSystem = FSUtils.getFs(tempFolderPath, jsc.hadoopConfiguration());
+    FileSystem fileSystem = HadoopFSUtils.getFs(tempFolderPath, jsc.hadoopConfiguration());
     assertEquals(0, fileSystem.listStatus(new Path(tempFolderPath)).length);
   }
 

@@ -44,8 +44,8 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -61,7 +61,6 @@ import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -78,6 +77,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.time.Instant;
@@ -610,9 +610,9 @@ public class HiveTestUtil {
   private static void createMetaFile(String basePath, String fileName, byte[] bytes)
       throws IOException {
     Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
-    FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-    fsout.write(bytes);
-    fsout.close();
+    OutputStream out = fileSystem.create(fullPath, true);
+    out.write(bytes);
+    out.close();
   }
 
   public static Set<String> getCreatedTablesSet() {

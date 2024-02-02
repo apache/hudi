@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.bucket;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -26,7 +25,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
@@ -86,7 +87,7 @@ public class ITTestBucketStreamWrite {
     if (isCow) {
       TestData.checkWrittenData(tempFile, EXPECTED, 4);
     } else  {
-      FileSystem fs = FSUtils.getFs(tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
+      FileSystem fs = HadoopFSUtils.getFs(tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
       TestData.checkWrittenDataMOR(fs, tempFile, EXPECTED, 4);
     }
   }
@@ -109,7 +110,7 @@ public class ITTestBucketStreamWrite {
 
     // delete successful commit to simulate an unsuccessful write
     FileSystem fs = metaClient.getFs();
-    Path path = new Path(metaClient.getMetaPath() + Path.SEPARATOR + filename);
+    Path path = new Path(metaClient.getMetaPath() + HoodieLocation.SEPARATOR + filename);
     fs.delete(path);
 
     commitMetadata.getFileIdAndRelativePaths().forEach((fileId, relativePath) -> {

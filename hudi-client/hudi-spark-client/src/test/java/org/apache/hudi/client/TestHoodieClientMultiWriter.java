@@ -47,6 +47,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.marker.SimpleDirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedDetectionStrategy;
@@ -255,7 +256,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieWriteConfig config4 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).withHeartbeatIntervalInMs(heartBeatIntervalForCommit4).build();
     final SparkRDDWriteClient client4 = getHoodieWriteClient(config4);
 
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + nextCommitTime3);
+    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + HoodieLocation.SEPARATOR + nextCommitTime3);
     fs.create(heartbeatFilePath, true);
 
     // Wait for heart beat expired for failed commitTime3 "003"

@@ -20,7 +20,6 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,9 +30,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
+import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
@@ -452,7 +453,7 @@ public class TestWriteBase {
     }
 
     private void checkWrittenDataMor(File baseFile, Map<String, String> expected, int partitions) throws Exception {
-      FileSystem fs = FSUtils.getFs(basePath, new org.apache.hadoop.conf.Configuration());
+      FileSystem fs = HadoopFSUtils.getFs(basePath, new org.apache.hadoop.conf.Configuration());
       TestData.checkWrittenDataMOR(fs, baseFile, expected, partitions);
     }
 
@@ -497,7 +498,8 @@ public class TestWriteBase {
       HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), lastCompletedInstant.get());
       // refresh the heartbeat in case it is timed out.
       OutputStream outputStream =
-          metaClient.getFs().create(new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + this.lastComplete), true);
+          metaClient.getFs().create(new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath)
+              + HoodieLocation.SEPARATOR + this.lastComplete), true);
       outputStream.close();
       this.lastPending = this.lastComplete;
       this.lastComplete = lastCompleteInstant();

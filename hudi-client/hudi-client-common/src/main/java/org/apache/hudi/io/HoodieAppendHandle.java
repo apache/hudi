@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -682,7 +683,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         return new HoodieAvroDataBlock(records, shouldWriteRecordPositions, header, keyField);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(
-            records, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()));
+            records, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()),
+            writeConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,

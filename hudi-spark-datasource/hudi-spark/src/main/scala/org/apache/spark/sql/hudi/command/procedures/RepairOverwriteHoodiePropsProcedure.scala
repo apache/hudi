@@ -17,9 +17,14 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.common.fs.FSUtils
+
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -28,6 +33,7 @@ import java.io.FileInputStream
 import java.util
 import java.util.Properties
 import java.util.function.Supplier
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
@@ -47,6 +53,14 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
 
   def outputType: StructType = OUTPUT_TYPE
 
+  def loadNewProps(filePath: String, props: Properties):Unit = {
+    val fs = HadoopFSUtils.getFs(filePath, new Configuration())
+    val fis = fs.open(new Path(filePath))
+    props.load(fis)
+
+    fis.close()
+  }
+
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
@@ -57,7 +71,7 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(tablePath).build
 
     var newProps = new Properties
-    newProps.load(new FileInputStream(overwriteFilePath))
+    loadNewProps(overwriteFilePath, newProps)
     val oldProps = metaClient.getTableConfig.propsMap
     val metaPathDir = new Path(tablePath, METAFOLDER_NAME)
     HoodieTableConfig.create(metaClient.getFs, metaPathDir, newProps)

@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
@@ -38,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.text.ParseException;
 import java.util.Arrays;
@@ -695,8 +695,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         }
       } else {
         // Ensures old state exists in timeline
-        LOG.info("Checking for file exists ?" + getInstantFileNamePath(fromInstantFileName));
-        ValidationUtils.checkArgument(metaClient.getFs().exists(getInstantFileNamePath(fromInstantFileName)));
+        ValidationUtils.checkArgument(metaClient.getFs().exists(getInstantFileNamePath(fromInstantFileName)),
+            "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
         // Use Write Once to create Target File
         if (allowRedundantTransitions) {
           FileIOUtils.createFileInPath(metaClient.getFs(), getInstantFileNamePath(toInstantFileName), data);
@@ -899,7 +899,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   protected Option<byte[]> readDataFromPath(Path detailPath) {
-    try (FSDataInputStream is = metaClient.getFs().open(detailPath)) {
+    try (InputStream is = metaClient.getFs().open(detailPath)) {
       return Option.of(FileIOUtils.readAsByteArray(is));
     } catch (IOException e) {
       throw new HoodieIOException("Could not read commit details from " + detailPath, e);

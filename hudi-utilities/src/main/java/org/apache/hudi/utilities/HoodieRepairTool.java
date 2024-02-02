@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.repair.RepairUtils;
@@ -151,7 +152,7 @@ public class HoodieRepairTool {
 
   public HoodieRepairTool(JavaSparkContext jsc, Config cfg) {
     if (cfg.propsFilePath != null) {
-      cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
+      cfg.propsFilePath = HadoopFSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
     }
     this.context = new HoodieSparkEngineContext(jsc);
     this.cfg = cfg;
@@ -248,7 +249,7 @@ public class HoodieRepairTool {
     List<Boolean> allResults = context.parallelize(relativeFilePaths)
         .mapPartitions(iterator -> {
           List<Boolean> results = new ArrayList<>();
-          FileSystem fs = FSUtils.getFs(destBasePath, conf.get());
+          FileSystem fs = HadoopFSUtils.getFs(destBasePath, conf.get());
           iterator.forEachRemaining(filePath -> {
             boolean success = false;
             Path sourcePath = new Path(sourceBasePath, filePath);
@@ -284,7 +285,7 @@ public class HoodieRepairTool {
    */
   static List<String> listFilesFromBasePath(
       HoodieEngineContext context, String basePathStr, int expectedLevel, int parallelism) {
-    FileSystem fs = FSUtils.getFs(basePathStr, context.getHadoopConf().get());
+    FileSystem fs = HadoopFSUtils.getFs(basePathStr, context.getHadoopConf().get());
     Path basePath = new Path(basePathStr);
     return FSUtils.getFileStatusAtLevel(
             context, fs, basePath, expectedLevel, parallelism).stream()
@@ -310,7 +311,7 @@ public class HoodieRepairTool {
     SerializableConfiguration conf = context.getHadoopConf();
     return context.parallelize(relativeFilePaths)
         .mapPartitions(iterator -> {
-          FileSystem fs = FSUtils.getFs(basePath, conf.get());
+          FileSystem fs = HadoopFSUtils.getFs(basePath, conf.get());
           List<Boolean> results = new ArrayList<>();
           iterator.forEachRemaining(relativeFilePath -> {
             boolean success = false;

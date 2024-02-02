@@ -78,12 +78,12 @@ public class JsonToAvroSchemaConverter implements SchemaRegistryProvider.SchemaC
   }
 
   private static ArrayNode convertProperties(JsonNode jsonProperties, Set<String> required) {
-    List<JsonNode> avroFields = new ArrayList<>();
+    List<JsonNode> avroFields = new ArrayList<>(jsonProperties.size());
     jsonProperties.fieldNames().forEachRemaining(name ->
         avroFields.add(tryConvertNestedProperty(name, jsonProperties.get(name))
-            .or(tryConvertArrayProperty(name, jsonProperties.get(name)))
-            .or(tryConvertEnumProperty(name, jsonProperties.get(name)))
-            .orElse(convertProperty(name, jsonProperties.get(name), required.contains(name)))));
+            .or(() -> tryConvertArrayProperty(name, jsonProperties.get(name)))
+            .or(() -> tryConvertEnumProperty(name, jsonProperties.get(name)))
+            .orElseGet(() -> convertProperty(name, jsonProperties.get(name), required.contains(name)))));
     return MAPPER.createArrayNode().addAll(avroFields);
   }
 

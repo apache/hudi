@@ -49,7 +49,7 @@ public class ClusteringUtil {
   private static final Logger LOG = LoggerFactory.getLogger(ClusteringUtil.class);
 
   public static void validateClusteringScheduling(Configuration conf) {
-    if (OptionsResolver.isBucketIndexType(conf)) {
+    if (!OptionsResolver.isAppendMode(conf) && OptionsResolver.isBucketIndexType(conf)) {
       HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
       switch (bucketIndexEngineType) {
         case SIMPLE:

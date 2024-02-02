@@ -19,6 +19,7 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.hadoop.fs.ConsistencyGuard;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -141,9 +142,9 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   /**
    * Retries the predicate for configurable number of times till we the predicate returns success.
    *
-   * @param dir directory of interest in which list of files are checked for visibility
+   * @param dir   directory of interest in which list of files are checked for visibility
    * @param files List of files to check for visibility
-   * @param event {@link org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility} event of interest.
+   * @param event {@link ConsistencyGuard.FileVisibility} event of interest.
    * @throws TimeoutException when retries are exhausted
    */
   private void retryTillSuccess(Path dir, List<String> files, FileVisibility event) throws TimeoutException {
@@ -164,12 +165,12 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Helper to check for file visibility based on {@link org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility} event.
+   * Helper to check for file visibility based on {@link ConsistencyGuard.FileVisibility} event.
    *
    * @param retryNum retry attempt count.
-   * @param dir directory of interest in which list of files are checked for visibility
-   * @param files List of files to check for visibility
-   * @param event {@link org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility} event of interest.
+   * @param dir      directory of interest in which list of files are checked for visibility
+   * @param files    List of files to check for visibility
+   * @param event    {@link ConsistencyGuard.FileVisibility} event of interest.
    * @return {@code true} if condition succeeded. else {@code false}.
    */
   protected boolean checkFilesVisibility(int retryNum, Path dir, List<String> files, FileVisibility event) {

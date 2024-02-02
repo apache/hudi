@@ -18,28 +18,27 @@
 
 package org.apache.hudi.internal.schema.io;
 
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -48,6 +47,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SCHEMA_COMMIT_ACTION;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -150,7 +150,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public String getHistorySchemaStrByGivenValidCommits(List<String> validCommits) {
     List<String> commitList = validCommits == null || validCommits.isEmpty() ? getValidInstants() : validCommits;
     try {
-      FileSystem fs = FSUtils.getFs(baseSchemaPath.toString(), conf);
+      FileSystem fs = HadoopFSUtils.getFs(baseSchemaPath.toString(), conf);
       if (fs.exists(baseSchemaPath)) {
         List<String> validaSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath))
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
@@ -160,10 +160,10 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
         if (!validaSchemaFiles.isEmpty()) {
           Path latestFilePath = new Path(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));
           byte[] content;
-          try (FSDataInputStream is = fs.open(latestFilePath)) {
+          try (InputStream is = fs.open(latestFilePath)) {
             content = FileIOUtils.readAsByteArray(is);
             LOG.info(String.format("read history schema success from file : %s", latestFilePath));
-            return new String(content, StandardCharsets.UTF_8);
+            return fromUTF8Bytes(content);
           } catch (IOException e) {
             throw new HoodieIOException("Could not read history schema from " + latestFilePath, e);
           }

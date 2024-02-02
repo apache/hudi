@@ -247,7 +247,8 @@ public abstract class TestHoodieReaderWriterBase {
     Set<Pair<String, Long>> expectedKeys = IntStream.range(40, NUM_RECORDS)
         .mapToObj(i -> {
           // record position is not written for HFile format
-          long position = hoodieReader instanceof HoodieAvroHFileReader ? HoodieRecordLocation.INVALID_POSITION : (long) i;
+          long position = hoodieReader instanceof HoodieAvroHFileReaderImplBase
+              ? HoodieRecordLocation.INVALID_POSITION : (long) i;
           String key = "key" + String.format("%02d", i);
           return Pair.of(key, position);
         }).collect(Collectors.toSet());

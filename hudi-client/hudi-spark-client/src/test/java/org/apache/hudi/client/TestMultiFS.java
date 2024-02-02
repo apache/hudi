@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -132,7 +132,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       hdfsWriteClient.upsert(writeRecords, readCommitTime);
 
       // Read from hdfs
-      FileSystem fs = FSUtils.getFs(dfsBasePath, HoodieTestUtils.getDefaultHadoopConf());
+      FileSystem fs = HadoopFSUtils.getFs(dfsBasePath, HoodieTestUtils.getDefaultHadoopConf());
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(dfsBasePath).build();
       HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       Dataset<Row> readRecords = HoodieClientTestUtils.readCommit(dfsBasePath, sqlContext, timeline, readCommitTime);
@@ -153,7 +153,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       localWriteClient.upsert(localWriteRecords, writeCommitTime);
 
       LOG.info("Reading from path: " + tablePath);
-      fs = FSUtils.getFs(tablePath, HoodieTestUtils.getDefaultHadoopConf());
+      fs = HadoopFSUtils.getFs(tablePath, HoodieTestUtils.getDefaultHadoopConf());
       metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       Dataset<Row> localReadRecords =

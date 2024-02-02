@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -28,11 +27,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
@@ -42,6 +43,7 @@ import org.apache.orc.Reader;
 import org.apache.orc.Reader.Options;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
+import org.apache.orc.Writer;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -51,10 +53,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Utility functions for ORC files.
@@ -72,7 +76,7 @@ public class OrcUtils extends BaseFileUtils {
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath) {
     try {
       Configuration conf = new Configuration(configuration);
-      conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
+      conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
       Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
 
       Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
@@ -270,6 +274,20 @@ public class OrcUtils extends BaseFileUtils {
       return reader.getNumberOfRows();
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get row count for ORC file:" + orcFilePath, io);
+    }
+  }
+
+  @Override
+  public void writeMetaFile(FileSystem fs, Path filePath, Properties props) throws IOException {
+    // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
+    // parameters are not important.
+    Schema schema = HoodieAvroUtils.getRecordKeySchema();
+    OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(fs.getConf()).fileSystem(fs)
+        .setSchema(AvroOrcUtils.createOrcSchema(schema));
+    try (Writer writer = OrcFile.createWriter(filePath, writerOptions)) {
+      for (String key : props.stringPropertyNames()) {
+        writer.addUserMetadata(key, ByteBuffer.wrap(getUTF8Bytes(props.getProperty(key))));
+      }
     }
   }
 }

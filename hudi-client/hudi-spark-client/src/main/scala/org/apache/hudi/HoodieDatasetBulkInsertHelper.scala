@@ -76,6 +76,9 @@ object HoodieDatasetBulkInsertHelper
 
     val updatedSchema = StructType(metaFields ++ schema.fields)
 
+    val targetParallelism =
+      deduceShuffleParallelism(df, config.getBulkInsertShuffleParallelism)
+
     val updatedDF = if (populateMetaFields) {
       val keyGeneratorClassName = config.getStringOrThrow(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME,
         "Key-generator class name is required")
@@ -110,7 +113,7 @@ object HoodieDatasetBulkInsertHelper
         }
 
       val dedupedRdd = if (config.shouldCombineBeforeInsert) {
-        dedupeRows(prependedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config))
+        dedupeRows(prependedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config), targetParallelism)
       } else {
         prependedRdd
       }
@@ -126,9 +129,6 @@ object HoodieDatasetBulkInsertHelper
 
       HoodieUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)
     }
-
-    val targetParallelism =
-      deduceShuffleParallelism(updatedDF, config.getBulkInsertShuffleParallelism)
 
     partitioner.repartitionRecords(updatedDF, targetParallelism)
   }
@@ -193,7 +193,7 @@ object HoodieDatasetBulkInsertHelper
     table.getContext.parallelize(writeStatuses.toList.asJava)
   }
 
-  private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean): RDD[InternalRow] = {
+  private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean, targetParallelism: Int): RDD[InternalRow] = {
     val recordKeyMetaFieldOrd = schema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
     val partitionPathMetaFieldOrd = schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
     // NOTE: Pre-combine field could be a nested field
@@ -212,16 +212,15 @@ object HoodieDatasetBulkInsertHelper
         //       since Spark might be providing us with a mutable copy (updated during the iteration)
         (rowKey, row.copy())
       }
-      .reduceByKey {
-        (oneRow, otherRow) =>
-          val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-          val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-          if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
-            oneRow
-          } else {
-            otherRow
-          }
-      }
+      .reduceByKey ((oneRow, otherRow) => {
+        val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+        val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+        if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+          oneRow
+        } else {
+          otherRow
+        }
+      }, targetParallelism)
       .values
   }
 

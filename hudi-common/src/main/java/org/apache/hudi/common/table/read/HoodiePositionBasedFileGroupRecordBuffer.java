@@ -29,11 +29,13 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -50,6 +52,7 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STR
  * {@link #hasNext} method is called.
  */
 public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
+  private static final String ROW_INDEX_COLUMN_NAME = "row_index";
   private long nextRecordPosition = 0L;
 
   public HoodiePositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
@@ -58,9 +61,13 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
                                                   Option<String> partitionNameOverrideOpt,
                                                   Option<String[]> partitionPathFieldOpt,
                                                   HoodieRecordMerger recordMerger,
-                                                  TypedProperties payloadProps) {
+                                                  TypedProperties payloadProps,
+                                                  long maxMemorySizeInBytes,
+                                                  String spillableMapBasePath,
+                                                  ExternalSpillableMap.DiskMapType diskMapType,
+                                                  boolean isBitCaskDiskMapCompressionEnabled) {
     super(readerContext, readerSchema, baseFileSchema, partitionNameOverrideOpt, partitionPathFieldOpt,
-        recordMerger, payloadProps);
+        recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
   @Override
@@ -113,7 +120,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
   }
 
   @Override
-  public void processNextDataRecord(T record, Map<String, Object> metadata, Object recordPosition) throws IOException {
+  public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable recordPosition) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
     Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
         doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
@@ -145,7 +152,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
   }
 
   @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Object recordPosition) {
+  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {
@@ -169,6 +176,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
     // Handle merging.
     while (baseFileIterator.hasNext()) {
       T baseRecord = baseFileIterator.next();
+      nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema, ROW_INDEX_COLUMN_NAME, nextRecordPosition);
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
 
       Map<String, Object> metadata = readerContext.generateMetadataForRecord(

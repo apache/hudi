@@ -28,14 +28,14 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -44,6 +44,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 
 public class ConfigUtils {
   public static final String STREAMER_CONFIG_PREFIX = "hoodie.streamer.";
@@ -63,6 +66,8 @@ public class ConfigUtils {
    * location to read.
    */
   public static final String TABLE_SERDE_PATH = "path";
+
+  public static final HoodieConfig DEFAULT_HUDI_CONFIG_FOR_READER = new HoodieConfig();
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigUtils.class);
 
@@ -561,11 +566,13 @@ public class ConfigUtils {
     while (readRetryCount++ < maxReadRetries) {
       for (Path path : Arrays.asList(cfgPath, backupCfgPath)) {
         // Read the properties and validate that it is a valid file
-        try (FSDataInputStream is = fs.open(path)) {
+        try (InputStream is = fs.open(path)) {
           props.clear();
           props.load(is);
           found = true;
-          ValidationUtils.checkArgument(HoodieTableConfig.validateChecksum(props));
+          if (props.containsKey(TABLE_CHECKSUM.key())) {
+            ValidationUtils.checkArgument(HoodieTableConfig.validateChecksum(props));
+          }
           return props;
         } catch (IOException e) {
           LOG.warn(String.format("Could not read properties from %s: %s", path, e));
@@ -593,8 +600,8 @@ public class ConfigUtils {
   public static void recoverIfNeeded(FileSystem fs, Path cfgPath, Path backupCfgPath) throws IOException {
     if (!fs.exists(cfgPath)) {
       // copy over from backup
-      try (FSDataInputStream in = fs.open(backupCfgPath);
-           FSDataOutputStream out = fs.create(cfgPath, false)) {
+      try (InputStream in = fs.open(backupCfgPath);
+           OutputStream out = fs.create(cfgPath, false)) {
         FileIOUtils.copy(in, out);
       }
     }
@@ -608,5 +615,13 @@ public class ConfigUtils {
 
   public static void deleteProperties(Properties current, Properties deleted) {
     deleted.forEach((k, v) -> current.remove(k.toString()));
+  }
+
+  public static HoodieConfig getReaderConfigs(Configuration conf) {
+    HoodieConfig config = new HoodieConfig();
+    config.setAll(DEFAULT_HUDI_CONFIG_FOR_READER.getProps());
+    config.setValue(USE_NATIVE_HFILE_READER,
+        Boolean.toString(ConfigUtils.getBooleanWithAltKeys(conf, USE_NATIVE_HFILE_READER)));
+    return config;
   }
 }
