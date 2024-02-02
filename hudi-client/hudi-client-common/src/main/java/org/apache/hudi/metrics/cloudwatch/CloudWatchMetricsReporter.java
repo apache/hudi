@@ -18,8 +18,7 @@
 
 package org.apache.hudi.metrics.cloudwatch;
 
-import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
@@ -37,16 +36,16 @@ public class CloudWatchMetricsReporter extends MetricsReporter {
   private static final Logger LOG = LoggerFactory.getLogger(CloudWatchMetricsReporter.class);
 
   private final MetricRegistry registry;
-  private final HoodieWriteConfig config;
+  private final HoodieMetricsConfig config;
   private final CloudWatchReporter reporter;
 
-  public CloudWatchMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
+  public CloudWatchMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
     this.config = config;
     this.registry = registry;
     this.reporter = createCloudWatchReporter();
   }
 
-  CloudWatchMetricsReporter(HoodieWriteConfig config, MetricRegistry registry, CloudWatchReporter reporter) {
+  CloudWatchMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry, CloudWatchReporter reporter) {
     this.config = config;
     this.registry = registry;
     this.reporter = reporter;
