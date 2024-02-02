@@ -4,3 +4,8 @@ c7c5909b0 [ENG-5826] Pull patches from open source (#520)
 d50e0391f [ENG-5575] Write bad records to error table in more cases instead of failing (#519)
 17a4c0dd3 [ENG-5661] stream sync doesn't differentiate replace commits (#513)
 be13faf63 [ENG-5699] Release hudi-integ-test-bundle to mvn artifact (#512)
+---[2024-02-02 09:25:13] [release-v1.1.9] Adding release tag for hudi-internal release-v1.1.9---
+34a0d3f0dc6 [ENG-6338] Cherry pick fixes to close resources  (#526)
+8f48a7a40eb [ENG-5861] Cherry pick changes for archived timeline used for community edition (#517)
+91ab8b7e3f3 [ENG-6338] Cherry pick fixes to stabilize CI and UT failures (#525)
+53eda0e5437 [AUDIT-639] Hudi internal release v1.1.8 (#521)
