@@ -365,6 +365,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       this.inputStream.close();
       this.inputStream = null;
       closed = true;
+      if (null != shutdownThread) {
+        Runtime.getRuntime().removeShutdownHook(shutdownThread);
+      }
     }
   }
 
