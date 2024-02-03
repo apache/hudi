@@ -104,20 +104,20 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     validateClusteringInstant(fileIds1, partitionPath1, clusterTime1, fileGroupToInstantMap);
     validateClusteringInstant(fileIds2, partitionPath1, clusterTime, fileGroupToInstantMap);
     validateClusteringInstant(fileIds3, partitionPath1, clusterTime, fileGroupToInstantMap);
-    Option<HoodieInstant> lastPendingClustering = metaClient.getActiveTimeline().getLastPendingClusterCommit();
+    Option<HoodieInstant> lastPendingClustering = metaClient.getActiveTimeline().getLastPendingClusterInstant();
     assertTrue(lastPendingClustering.isPresent());
     assertEquals("2", lastPendingClustering.get().getTimestamp());
 
     //check that it still gets picked if it is inflight
     HoodieInstant inflight = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(lastPendingClustering.get(), Option.empty());
     assertEquals(HoodieInstant.State.INFLIGHT, inflight.getState());
-    lastPendingClustering = metaClient.reloadActiveTimeline().getLastPendingClusterCommit();
+    lastPendingClustering = metaClient.reloadActiveTimeline().getLastPendingClusterInstant();
     assertEquals("2", lastPendingClustering.get().getTimestamp());
 
     //now that it is complete, the first instant should be picked
     HoodieInstant complete = metaClient.getActiveTimeline().transitionReplaceInflightToComplete(false, inflight, Option.empty());
     assertEquals(HoodieInstant.State.COMPLETED, complete.getState());
-    lastPendingClustering = metaClient.reloadActiveTimeline().getLastPendingClusterCommit();
+    lastPendingClustering = metaClient.reloadActiveTimeline().getLastPendingClusterInstant();
     assertEquals("1", lastPendingClustering.get().getTimestamp());
   }
 

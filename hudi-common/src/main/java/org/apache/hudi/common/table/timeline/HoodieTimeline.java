@@ -405,7 +405,7 @@ public interface HoodieTimeline extends Serializable {
    * get the most recent pending cluster commit if present
    *
    */
-  public Option<HoodieInstant> getLastPendingClusterCommit();
+  public Option<HoodieInstant> getLastPendingClusterInstant();
 
   /**
    * Read the completed instant details.
