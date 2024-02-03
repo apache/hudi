@@ -146,7 +146,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       Table table = getTable(awsGlue, databaseName, tableName);
       StorageDescriptor sd = table.storageDescriptor();
       List<PartitionInput> partitionInputs = partitionsToAdd.stream().map(partition -> {
-        String fullPartitionPath = FSUtils.getPartitionPath(getBasePath(), partition).toString();
+        String fullPartitionPath = FSUtils.getPartitionPath(getBasePathForTable(), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(fullPartitionPath));
         return PartitionInput.builder().values(partitionValues).storageDescriptor(partitionSD).build();
@@ -189,7 +189,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       Table table = getTable(awsGlue, databaseName, tableName);
       StorageDescriptor sd = table.storageDescriptor();
       List<BatchUpdatePartitionRequestEntry> updatePartitionEntries = changedPartitions.stream().map(partition -> {
-        String fullPartitionPath = FSUtils.getPartitionPath(getBasePath(), partition).toString();
+        String fullPartitionPath = FSUtils.getPartitionPath(getBasePathForTable(), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(fullPartitionPath));
         PartitionInput partitionInput = PartitionInput.builder().values(partitionValues).storageDescriptor(partitionSD).build();
@@ -398,7 +398,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       serdeProperties.put("serialization.format", "1");
       StorageDescriptor storageDescriptor = StorageDescriptor.builder()
           .serdeInfo(SerDeInfo.builder().serializationLibrary(serdeClass).parameters(serdeProperties).build())
-          .location(s3aToS3(getBasePath()))
+          .location(getBasePathForTable())
           .inputFormat(inputFormatClass)
           .outputFormat(outputFormatClass)
           .columns(schemaWithoutPartitionKeys)
@@ -624,5 +624,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update params for table " + tableId(databaseName, tableName) + ": " + updatingParams, e);
     }
+  }
+
+  private String getBasePathForTable() {
+    return s3aToS3(getBasePath());
   }
 }
