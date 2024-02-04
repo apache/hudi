@@ -85,7 +85,7 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     this.avroSchema = StreamerUtil.getSourceSchema(this.config);
-    this.converter = RowDataToAvroConverters.createConverter(this.rowType, parameters.getBoolean(FlinkOptions.WRITE_UTC_TIMEZONE));
+    this.converter = RowDataToAvroConverters.createConverter(this.rowType, this.config.getBoolean(FlinkOptions.WRITE_UTC_TIMEZONE));
     this.keyGenerator =
         HoodieAvroKeyGeneratorFactory
             .createKeyGenerator(flinkConf2TypedProperties(this.config));

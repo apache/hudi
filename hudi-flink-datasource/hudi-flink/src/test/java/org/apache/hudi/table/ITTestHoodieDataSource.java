@@ -1829,7 +1829,6 @@ public class ITTestHoodieDataSource {
   @EnumSource(value = HoodieTableType.class)
   void testWriteReadWithTimestampWithoutTZ(HoodieTableType tableType) {
     TableEnvironment tableEnv = batchTableEnv;
-    tableEnv.getConfig().set("write.utc-timezone", "false");
     tableEnv.getConfig().setLocalTimeZone(ZoneId.of("Asia/Shanghai"));
     String createTable = sql("t1")
         .field("f0 int")
@@ -1839,6 +1838,9 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
         .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.WRITE_UTC_TIMEZONE, false)
+        //FlinkOptions.READ_UTC_TIMEZONE doesn't affect in MergeOnReadInputFormat since the option isn't supported in AvroToRowDataConverters
+        //.option(FlinkOptions.READ_UTC_TIMEZONE, false)
         .pkField("f0")
         .noPartition()
         .end();
@@ -1852,8 +1854,8 @@ public class ITTestHoodieDataSource {
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     final String expected = "["
-        + "+I[1, abc, 1970-01-01T08:00:01, 1970-01-01T08:00:02], "
-        + "+I[2, def, 1970-01-01T08:00:03, 1970-01-01T08:00:04]]";
+        + "+I[1, abc, 1970-01-01T00:00:01, 1970-01-01T00:00:02], "
+        + "+I[2, def, 1970-01-01T00:00:03, 1970-01-01T00:00:04]]";
     assertRowsEquals(result, expected);
   }
 
