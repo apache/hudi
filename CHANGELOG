@@ -9,3 +9,9 @@ be13faf63 [ENG-5699] Release hudi-integ-test-bundle to mvn artifact (#512)
 8f48a7a40eb [ENG-5861] Cherry pick changes for archived timeline used for community edition (#517)
 91ab8b7e3f3 [ENG-6338] Cherry pick fixes to stabilize CI and UT failures (#525)
 53eda0e5437 [AUDIT-639] Hudi internal release v1.1.8 (#521)
+
+---[2024-02-03 10:51:32] [release-v1.2.0] ---
+71c1a6466cd [ENG-6356] Fixing glue sync tool for partition location to use s3 instead of s3a (#530)
+ce72655e8fd [ENG-6338] Cherry pick OSS PRs to reduce CI test times (#531)
+ca7d6a87911 [ENG-6372] remove shutdown hook when close is called (#529)
+a427a1fe467 [AUDIT-646] Upgrade to version release-v1.1.9 (#527)
