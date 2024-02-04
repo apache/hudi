@@ -18,6 +18,7 @@
 
 package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -28,7 +29,9 @@ import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
+import software.amazon.awssdk.services.glue.GlueAsyncClientBuilder;
 import software.amazon.awssdk.services.glue.model.AlreadyExistsException;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionRequest;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionResponse;
@@ -66,6 +69,8 @@ import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -84,6 +89,8 @@ import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_METADATA_FILE_LISTING;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.META_SYNC_PARTITION_INDEX_FIELDS;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.META_SYNC_PARTITION_INDEX_FIELDS_ENABLE;
+import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_ENDPOINT;
+import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_REGION;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
@@ -103,7 +110,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private static final Logger LOG = LoggerFactory.getLogger(AWSGlueCatalogSyncClient.class);
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
   private static final int MAX_DELETE_PARTITIONS_PER_REQUEST = 25;
-  private final GlueAsyncClient awsGlue;
+  protected final GlueAsyncClient awsGlue;
   private static final String GLUE_PARTITION_INDEX_ENABLE = "partition_filtering.enabled";
   private static final int PARTITION_INDEX_MAX_NUMBER = 3;
   /**
@@ -118,7 +125,16 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
-    this.awsGlue = GlueAsyncClient.builder().build();
+    try {
+      GlueAsyncClientBuilder awsGlueBuilder = GlueAsyncClient.builder();
+      awsGlueBuilder = config.getString(AWS_GLUE_ENDPOINT) == null ? awsGlueBuilder :
+              awsGlueBuilder.endpointOverride(new URI(config.getString(AWS_GLUE_ENDPOINT)));
+      awsGlueBuilder = config.getString(AWS_GLUE_REGION) == null ? awsGlueBuilder :
+              awsGlueBuilder.region(Region.of(config.getString(AWS_GLUE_REGION)));
+      this.awsGlue = awsGlueBuilder.build();
+    } catch (URISyntaxException e) {
+      throw new RuntimeException(e);
+    }
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
@@ -127,23 +143,40 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public List<Partition> getAllPartitions(String tableName) {
     try {
-      List<Partition> partitions = new ArrayList<>();
-      String nextToken = null;
-      do {
-        GetPartitionsResponse result = awsGlue.getPartitions(GetPartitionsRequest.builder()
-            .databaseName(databaseName)
-            .tableName(tableName)
-            .nextToken(nextToken)
-            .build()).get();
-        partitions.addAll(result.partitions().stream()
-            .map(p -> new Partition(p.values(), p.storageDescriptor().location()))
-            .collect(Collectors.toList()));
-        nextToken = result.nextToken();
-      } while (nextToken != null);
-      return partitions;
+      return getPartitions(GetPartitionsRequest.builder()
+              .databaseName(databaseName)
+              .tableName(tableName));
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
     }
+  }
+
+  @Override
+  public List<Partition> getPartitionsByFilter(String tableName, String filter) {
+    try {
+      return getPartitions(GetPartitionsRequest.builder()
+              .databaseName(databaseName)
+              .tableName(tableName)
+              .expression(filter));
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get partitions for table " + tableId(databaseName, tableName) + " from expression: " + filter, e);
+    }
+  }
+
+  private List<Partition> getPartitions(GetPartitionsRequest.Builder partitionRequestBuilder) throws InterruptedException, ExecutionException {
+    List<Partition> partitions = new ArrayList<>();
+    String nextToken = null;
+    do {
+      GetPartitionsResponse result = awsGlue.getPartitions(partitionRequestBuilder
+              .excludeColumnSchema(true)
+              .nextToken(nextToken)
+              .build()).get();
+      partitions.addAll(result.partitions().stream()
+              .map(p -> new Partition(p.values(), p.storageDescriptor().location()))
+              .collect(Collectors.toList()));
+      nextToken = result.nextToken();
+    } while (nextToken != null);
+    return partitions;
   }
 
   @Override
@@ -695,6 +728,11 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public void deleteLastReplicatedTimeStamp(String tableName) {
     throw new UnsupportedOperationException("Not supported: `deleteLastReplicatedTimeStamp`");
+  }
+
+  @Override
+  public String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields) {
+    return new GluePartitionFilterGenerator().generatePushDownFilter(writtenPartitions, partitionFields, (HiveSyncConfig) config);
   }
 
   private List<Column> getColumnsFromSchema(Map<String, String> mapSchema) {

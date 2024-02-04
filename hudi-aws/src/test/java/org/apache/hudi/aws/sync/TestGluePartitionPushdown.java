@@ -16,8 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.util;
+package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.junit.jupiter.api.Test;
@@ -29,9 +30,9 @@ import java.util.Properties;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestPartitionFilterGenerator {
+public class TestGluePartitionPushdown {
 
-  PartitionFilterGenerator partitionFilterGenerator = new PartitionFilterGenerator();
+  GluePartitionFilterGenerator partitionFilterGenerator = new GluePartitionFilterGenerator();
   @Test
   public void testPushDownFilters() {
     Properties props = new Properties();
@@ -44,12 +45,12 @@ public class TestPartitionFilterGenerator {
 
     List<String> writtenPartitions = new ArrayList<>();
     writtenPartitions.add("2022-09-01/2022/9/1");
-    assertEquals("(((date = 2022-09-01 AND year = \"2022\") AND month = 9) AND day = 1)",
+    assertEquals("(((date = 2022-09-01 AND year = '2022') AND month = 9) AND day = 1)",
         partitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
 
     writtenPartitions.add("2022-09-02/2022/9/2");
     assertEquals(
-        "((((date = 2022-09-01 AND year = \"2022\") AND month = 9) AND day = 1) OR (((date = 2022-09-02 AND year = \"2022\") AND month = 9) AND day = 2))",
+        "((((date = 2022-09-01 AND year = '2022') AND month = 9) AND day = 1) OR (((date = 2022-09-02 AND year = '2022') AND month = 9) AND day = 2))",
         partitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
 
     // If there are incompatible types to convert as filters inside partition
@@ -76,6 +77,14 @@ public class TestPartitionFilterGenerator {
     writtenPartitions.add("false");
     assertEquals("",
         partitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
+
+    // If no compatible types matched to convert as filters
+    partitionFieldSchemas.clear();
+    writtenPartitions.clear();
+    partitionFieldSchemas.add(new FieldSchema("status", "string"));
+    writtenPartitions.add("to_be_'escaped");
+    assertEquals("status = 'to_be_''escaped'",
+            partitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
   }
 
   @Test
@@ -92,14 +101,14 @@ public class TestPartitionFilterGenerator {
     List<String> writtenPartitions = new ArrayList<>();
     writtenPartitions.add("2022-09-01/2022/9/1");
 
-    assertEquals("(((date = 2022-09-01 AND year = \"2022\") AND month = 9) AND day = 1)",
+    assertEquals("(((date = 2022-09-01 AND year = '2022') AND month = 9) AND day = 1)",
         partitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
 
     writtenPartitions.add("2022-09-02/2022/9/2");
     writtenPartitions.add("2022-09-03/2022/9/2");
     writtenPartitions.add("2022-09-04/2022/9/2");
     assertEquals(
-        "((((date >= 2022-09-01 AND date <= 2022-09-04) AND year = \"2022\") AND month = 9) AND (day >= 1 AND day <= 2))",
+        "((((date >= 2022-09-01 AND date <= 2022-09-04) AND year = '2022') AND month = 9) AND (day >= 1 AND day <= 2))",
         partitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFieldSchemas, config));
 
     // If there are incompatible types to convert as filters inside partition

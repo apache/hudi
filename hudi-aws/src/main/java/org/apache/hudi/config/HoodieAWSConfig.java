@@ -69,6 +69,20 @@ public class HoodieAWSConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("AWS session token");
 
+  public static final ConfigProperty<String> AWS_GLUE_ENDPOINT = ConfigProperty
+          .key("hoodie.aws.glue.endpoint")
+          .noDefaultValue()
+          .markAdvanced()
+          .sinceVersion("0.14.2")
+          .withDocumentation("Aws glue endpoint");
+
+  public static final ConfigProperty<String> AWS_GLUE_REGION = ConfigProperty
+          .key("hoodie.aws.glue.region")
+          .noDefaultValue()
+          .markAdvanced()
+          .sinceVersion("0.14.2")
+          .withDocumentation("Aws glue endpoint");
+
   private HoodieAWSConfig() {
     super();
   }
