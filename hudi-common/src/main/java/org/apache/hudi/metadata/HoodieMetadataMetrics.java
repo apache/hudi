@@ -18,13 +18,16 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metrics.HoodieGauge;
+import org.apache.hudi.metrics.Metrics;
 
+import com.codahale.metrics.MetricRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,10 +76,12 @@ public class HoodieMetadataMetrics implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataMetrics.class);
 
-  private final Registry metricsRegistry;
+  private final transient MetricRegistry metricsRegistry;
+  private final transient Metrics metrics;
 
-  public HoodieMetadataMetrics(Registry metricsRegistry) {
-    this.metricsRegistry = metricsRegistry;
+  public HoodieMetadataMetrics(HoodieMetricsConfig metricsConfig) {
+    this.metrics = Metrics.getInstance(metricsConfig);
+    this.metricsRegistry = metrics.getRegistry();
   }
 
   public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
@@ -148,14 +153,15 @@ public class HoodieMetadataMetrics implements Serializable {
 
   protected void incrementMetric(String action, long value) {
     LOG.info(String.format("Updating metadata metrics (%s=%d) in %s", action, value, metricsRegistry));
-    metricsRegistry.add(action, value);
+    HoodieGauge<Long> gauge = metrics.registerGauge(action);
+    gauge.setValue(gauge.getValue() + value);
   }
 
   protected void setMetric(String action, long value) {
-    metricsRegistry.set(action, value);
+    metrics.registerGauge(action, value);
   }
 
-  public Registry registry() {
+  public MetricRegistry registry() {
     return metricsRegistry;
   }
 }
