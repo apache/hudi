@@ -287,7 +287,12 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
+  public Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> keys, String partitionName) {
+    throw new HoodieMetadataException("Unsupported operation: getAllRecordsByKeys!");
+  }
+
+  @Override
+  public Map<String, List<HoodieRecordGlobalLocation>> readRecordIndex(List<String> recordKeys) {
     throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
   }
 

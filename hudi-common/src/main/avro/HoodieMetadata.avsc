@@ -422,13 +422,12 @@
                             "default": null,
                             "doc": "Epoch time in millisecond representing the commit time at which record was added"
                         },
-
-                       {
-                           "name": "fileIdEncoding",
+                        {
+                            "name": "fileIdEncoding",
                             "type": "int",
-                            "default" : 0,
-                            "doc": "Represents fileId encoding. Possible values are 0 and 1. O represents UUID based fileID, and 1 represents raw string format of the fileId. \nWhen the encoding is 0, reader can deduce fileID from fileIdLowBits, fileIdLowBits and fileIndex."
-                       }
+                            "default": 0,
+                            "doc": "Represents fileId encoding. Possible values are 0 and 1. O represents UUID based fileID, and 1 represents raw string format of the fileId. \nWhen the encoding is 0, reader can deduce fileID from fileIdLowBits, fileIdHighBits and fileIndex."
+                        }
                     ]
                 }
             ],
