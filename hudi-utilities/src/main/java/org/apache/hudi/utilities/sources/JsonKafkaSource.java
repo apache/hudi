@@ -109,7 +109,9 @@ public class JsonKafkaSource extends KafkaSource<String> {
           jsonNode.put(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
           jsonNode.put(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
           jsonNode.put(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
-          jsonNode.put(KAFKA_SOURCE_KEY_COLUMN, recordKey);
+          if (recordKey != null) {
+            jsonNode.put(KAFKA_SOURCE_KEY_COLUMN, recordKey);
+          }
           stringList.add(OBJECT_MAPPER.writeValueAsString(jsonNode));
         } catch (Throwable e) {
           stringList.add(record);
