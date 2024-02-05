@@ -20,6 +20,7 @@
 package org.apache.hudi.common.heartbeat;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -44,7 +45,8 @@ public class HoodieHeartbeatUtils {
    * @throws IOException
    */
   public static Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
+    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath)
+        + HoodieLocation.SEPARATOR + instantTime);
     if (fs.exists(heartbeatFilePath)) {
       return fs.getFileStatus(heartbeatFilePath).getModificationTime();
     } else {

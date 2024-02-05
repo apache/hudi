@@ -45,14 +45,14 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -324,7 +324,7 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       if (needStore) {
         // FIXME(vc): wonder if this can be removed. Need to look into history.
-        try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+        try (OutputStream outputStream = fs.create(propertyPath)) {
           storeProperties(props, outputStream);
         }
       }
@@ -347,7 +347,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * @return return the table checksum
    * @throws IOException
    */
-  private static String storeProperties(Properties props, FSDataOutputStream outputStream) throws IOException {
+  private static String storeProperties(Properties props, OutputStream outputStream) throws IOException {
     final String checksum;
     if (isValidChecksum(props)) {
       checksum = props.getProperty(TABLE_CHECKSUM.key());
@@ -389,7 +389,7 @@ public class HoodieTableConfig extends HoodieConfig {
       TypedProperties props = fetchConfigs(fs, metadataFolder.toString(), HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
 
       // 2. backup the existing properties.
-      try (FSDataOutputStream out = fs.create(backupCfgPath, false)) {
+      try (OutputStream out = fs.create(backupCfgPath, false)) {
         storeProperties(props, out);
       }
 
@@ -398,13 +398,13 @@ public class HoodieTableConfig extends HoodieConfig {
 
       // 4. Upsert and save back.
       String checksum;
-      try (FSDataOutputStream out = fs.create(cfgPath, true)) {
+      try (OutputStream out = fs.create(cfgPath, true)) {
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
       }
 
       // 4. verify and remove backup.
-      try (FSDataInputStream in = fs.open(cfgPath)) {
+      try (InputStream in = fs.open(cfgPath)) {
         props.clear();
         props.load(in);
         if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
@@ -446,7 +446,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     HoodieConfig hoodieConfig = new HoodieConfig(properties);
     Path propertyPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
-    try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+    try (OutputStream outputStream = fs.create(propertyPath)) {
       if (!hoodieConfig.contains(NAME)) {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
       }

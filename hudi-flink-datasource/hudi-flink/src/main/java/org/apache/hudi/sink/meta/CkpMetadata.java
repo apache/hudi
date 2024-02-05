@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -219,7 +220,8 @@ public class CkpMetadata implements Serializable, AutoCloseable {
 
   protected static String ckpMetaPath(String basePath, String uniqueId) {
     // .hoodie/.aux/ckp_meta
-    String metaPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
+    String metaPath = basePath + HoodieLocation.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME
+        + HoodieLocation.SEPARATOR + CKP_META;
     return StringUtils.isNullOrEmpty(uniqueId) ? metaPath : metaPath + "_" + uniqueId;
   }
 

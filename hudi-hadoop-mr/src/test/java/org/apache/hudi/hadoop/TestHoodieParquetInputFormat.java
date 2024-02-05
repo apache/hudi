@@ -48,6 +48,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.IOConstants;
+import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -68,12 +69,14 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
@@ -819,7 +822,11 @@ public class TestHoodieParquetInputFormat {
                 Instant.ofEpochMilli(testTimestampLong), ZoneOffset.UTC);
             assertEquals(Timestamp.valueOf(localDateTime).toString(), String.valueOf(writable.get()[0]));
           } else {
-            assertEquals(new Timestamp(testTimestampLong).toString(), String.valueOf(writable.get()[0]));
+            Date date = new Date();
+            date.setTime(testTimestampLong);
+            Timestamp actualTime = ((TimestampWritable) writable.get()[0]).getTimestamp();
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+            assertEquals(dateFormat.format(date), dateFormat.format(actualTime));
           }
           // test long
           assertEquals(testTimestampLong * 1000, ((LongWritable) writable.get()[1]).get());
@@ -829,8 +836,7 @@ public class TestHoodieParquetInputFormat {
         recordReader.close();
       }
     } finally {
-      jobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");
+      jobConf.unset(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key());
     }
-
   }
 }

@@ -227,6 +227,8 @@
     <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
+    <moto.port>5000</moto.port>
+    <moto.endpoint>http://localhost:${moto.port}</moto.endpoint>
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.8.3</snappy.version>
@@ -477,6 +479,8 @@
               <include>org.apache.htrace:htrace-core4</include>
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>
+              <!-- native HFile reader uses protobuf -->
+              <include>com.google.protobuf:protobuf-java</include>
             </includes>
           </artifactSet>
           <relocations>
@@ -576,6 +580,10 @@
               <pattern>com.fasterxml.jackson.module</pattern>
               <shadedPattern>org.apache.hudi.com.fasterxml.jackson.module
               </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>com.google.protobuf.</pattern>
+              <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
             </relocation>
           </relocations>
         </configuration>

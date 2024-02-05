@@ -20,21 +20,45 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.util.Option;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 
 import java.io.IOException;
 
 public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
-
   protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
     return new HoodieAvroParquetReader(conf, path);
   }
 
-  protected HoodieFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
+  protected HoodieFileReader newHFileFileReader(boolean useNativeHFileReader,
+                                                Configuration conf,
+                                                Path path,
+                                                Option<Schema> schemaOption) throws IOException {
+    if (useNativeHFileReader) {
+      return new HoodieNativeAvroHFileReader(conf, path, schemaOption);
+    }
     CacheConfig cacheConfig = new CacheConfig(conf);
-    return new HoodieAvroHFileReader(conf, path, cacheConfig);
+    if (schemaOption.isPresent()) {
+      return new HoodieHBaseAvroHFileReader(conf, path, cacheConfig, path.getFileSystem(conf), schemaOption);
+    }
+    return new HoodieHBaseAvroHFileReader(conf, path, cacheConfig);
+  }
+
+  protected HoodieFileReader newHFileFileReader(boolean useNativeHFileReader,
+                                                Configuration conf,
+                                                Path path,
+                                                FileSystem fs,
+                                                byte[] content,
+                                                Option<Schema> schemaOption)
+      throws IOException {
+    if (useNativeHFileReader) {
+      return new HoodieNativeAvroHFileReader(conf, content, schemaOption);
+    }
+    CacheConfig cacheConfig = new CacheConfig(conf);
+    return new HoodieHBaseAvroHFileReader(conf, path, cacheConfig, fs, content, schemaOption);
   }
 
   @Override

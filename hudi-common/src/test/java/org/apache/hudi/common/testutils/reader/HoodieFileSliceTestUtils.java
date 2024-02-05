@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -196,7 +197,8 @@ public class HoodieFileSliceTestUtils {
             records,
             header,
             Compression.Algorithm.GZ,
-            pathForReader);
+            pathForReader,
+            HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,

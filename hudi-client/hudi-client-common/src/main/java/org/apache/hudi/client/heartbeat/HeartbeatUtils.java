@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -51,7 +52,7 @@ public class HeartbeatUtils {
     boolean deleted = false;
     try {
       String heartbeatFolderPath = HoodieTableMetaClient.getHeartbeatFolderPath(basePath);
-      deleted = fs.delete(new Path(heartbeatFolderPath + Path.SEPARATOR + instantTime), false);
+      deleted = fs.delete(new Path(heartbeatFolderPath + HoodieLocation.SEPARATOR + instantTime), false);
       if (!deleted) {
         LOG.error("Failed to delete heartbeat for instant " + instantTime);
       } else {

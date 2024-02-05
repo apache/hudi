@@ -34,7 +34,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -43,6 +42,7 @@ import org.junit.jupiter.api.BeforeEach;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -110,10 +110,10 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     // Verifies the marker type file
     Path markerTypeFilePath = new Path(markerFolderPath, MarkerUtils.MARKER_TYPE_FILENAME);
     assertTrue(MarkerUtils.doesMarkerTypeFileExist(fs, markerFolderPath.toString()));
-    FSDataInputStream fsDataInputStream = fs.open(markerTypeFilePath);
+    InputStream inputStream = fs.open(markerTypeFilePath);
     assertEquals(MarkerType.TIMELINE_SERVER_BASED.toString(),
-        FileIOUtils.readAsUTFString(fsDataInputStream));
-    closeQuietly(fsDataInputStream);
+        FileIOUtils.readAsUTFString(inputStream));
+    closeQuietly(inputStream);
   }
 
   /**
