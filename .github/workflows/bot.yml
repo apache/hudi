@@ -11,15 +11,25 @@ on:
       - 'release-*'
 env:
   MVN_ARGS: -ntp -B -V -Pci-log -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
-  ALL_MODULES: "hudi-sync/hudi-datahub-sync,hudi-sync/hudi-hive-sync,hudi-sync/hudi-sync-common,hudi-utilities,hudi-aws,hudi-gcp,hudi-examples/hudi-examples-spark"
-  PR_MODULES: "hudi-utilities,hudi-examples/hudi-examples-spark"
+  UTILITIES_MODULE: "hudi-utilities,hudi-examples/hudi-examples-spark"
+  UTILITIES_BUNDLE_MODULE: "packaging/hudi-utilities-bundle"
+  SPARK_COMMON_MODULE: "hudi-spark-datasource/hudi-spark-common"
+  SPARK3_COMMON_MODULE: "hudi-spark-datasource/hudi-spark3-common"
+  SPARK3PLUS_COMMON_MODULE: "hudi-spark-datasource/hudi-spark3.2plus-common"
+  SPARK_MODULE: "hudi-spark-datasource/hudi-spark"
+  SPARK3_MODULE: "hudi-spark-datasource/hudi-spark3.2.x"
+  HUDI_COMMON_MODULE: "hudi-common"
+  CLIENT_COMMON_MODULE: "hudi-client/hudi-client-common"
+  SPARK_CLIENT_MODULE: "hudi-client/hudi-spark-client"
+  JAVA_CLIENT_MODULE: "hudi-client/hudi-java-client"
+  DATAHUB_SYNC_MODULE: "hudi-sync/hudi-datahub-sync"
 
 concurrency:
   group: ${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'master' }}
 
 jobs:
-  pr-tests:
+  utilities:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -39,20 +49,74 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn -am -pl $PR_MODULES clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS
+          mvn -am -pl $UTILITIES_MODULE clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
-      - name: Unit Test
+      - name: Hudi Utilties Unit Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn test -Punit-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl $PR_MODULES $MVN_ARGS
-  unit-tests:
+          mvn test -Punit-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl $UTILITIES_MODULE $MVN_ARGS
+  utilities_bundle_misc:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.2"
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+      - name: Build
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE" clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS
+      - name: Hudi Utilties Bundle Unit Test
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn test -Punit-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE,!$UTILITIES_MODULE,!$SPARK_COMMON_MODULE,!$SPARK3_COMMON_MODULE,!$SPARK3PLUS_COMMON_MODULE,!$SPARK_MODULE,!$SPARK3_MODULE,!$HUDI_COMMON_MODULE,!$CLIENT_COMMON_MODULE,!$SPARK_CLIENT_MODULE,!$JAVA_CLIENT_MODULE" $MVN_ARGS
+  hudi-client-and-common:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.2"
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+      - name: Build
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn clean install -T 2 -DskipTests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$CLIENT_COMMON_MODULE,$SPARK_CLIENT_MODULE,$JAVA_CLIENT_MODULE,$HUDI_COMMON_MODULE" $MVN_ARGS
+      - name: Hudi Client Unit Tests
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$CLIENT_COMMON_MODULE,$SPARK_CLIENT_MODULE,$JAVA_CLIENT_MODULE,$HUDI_COMMON_MODULE" $MVN_ARGS
+  spark-tests:
     if: ${{ contains(github.head_ref, 'release') || contains(github.head_ref, 'cherry') }}
     runs-on: ubuntu-latest
     strategy:
@@ -73,44 +137,12 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn -am -pl $ALL_MODULES clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS
-      - name: Quickstart Test
+          mvn clean install -T 2 -DskipTests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
+      - name: Spark Datasource Unit Tests
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
-      - name: Unit Test
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-        run:
-          mvn test -Punit-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$ALL_MODULES,!hudi-spark-datasource/hudi-spark3.2.x" $MVN_ARGS
-  spark-client-unit-tests:
-    if: ${{ contains(github.head_ref, 'release') || contains(github.head_ref, 'cherry') }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.2"
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up JDK 8
-        uses: actions/setup-java@v2
-        with:
-          java-version: '8'
-          distribution: 'adopt'
-          architecture: x64
-      - name: Build
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-        run:
-          mvn clean install -T 2 -DskipTests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl hudi-client/hudi-spark-client $MVN_ARGS
-      - name: Hudi Spark Client Unit Tests
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-        run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-client/hudi-spark-client $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
+
+
