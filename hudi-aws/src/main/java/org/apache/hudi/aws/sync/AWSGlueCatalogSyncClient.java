@@ -158,7 +158,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   public List<Partition> getPartitionsByFilter(String tableName, String filter) {
     try {
       if (filter.length() <= GLUE_EXPRESSION_MAX_CHARS) {
-        LOG.error("Pushdown filters: {}", filter);
+        LOG.info("Pushdown filters: {}", filter);
         return getPartitions(GetPartitionsRequest.builder()
               .databaseName(databaseName)
               .tableName(tableName)
