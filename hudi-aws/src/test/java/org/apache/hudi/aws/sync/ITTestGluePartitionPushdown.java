@@ -115,7 +115,7 @@ public class ITTestGluePartitionPushdown {
     fileSystem.delete(new Path(tablePath), true);
   }
 
-  private void createPartitions(String[] partitions) throws ExecutionException, InterruptedException {
+  private void createPartitions(String...partitions) throws ExecutionException, InterruptedException {
     glueSync.awsGlue.createPartition(CreatePartitionRequest.builder().databaseName(DB_NAME).tableName(TABLE_NAME)
             .partitionInput(PartitionInput.builder()
                     .storageDescriptor(StorageDescriptor.builder().columns(partitionsColumn).build())
@@ -130,14 +130,14 @@ public class ITTestGluePartitionPushdown {
 
   @Test
   public void testPresentPartitionShouldReturnIt() throws ExecutionException, InterruptedException {
-    createPartitions(new String[]{"1", "b'ar"});
+    createPartitions("1", "b'ar");
     Assertions.assertEquals(1, glueSync.getPartitionsByFilter(TABLE_NAME,
             glueSync.generatePushDownFilter(Arrays.asList("1/b'ar", "2/foo", "1/b''ar"), partitionsFieldSchema)).size());
   }
 
   @Test
   public void testPresentPartitionShouldReturnAllWhenExpressionFilterLengthTooLong() throws ExecutionException, InterruptedException {
-    createPartitions(new String[]{"1", "b'ar"});
+    createPartitions("1", "b'ar");
 
     // this will generate an expression larger than GLUE_EXPRESSION_MAX_CHARS
     List<String> tooLargePartitionPredicate = new ArrayList<>();
