@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
@@ -26,6 +25,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -66,8 +67,8 @@ public class HoodieInternalRowFileWriterFactory {
                                                                              Option<BloomFilter> bloomFilterOpt
   )
       throws IOException {
-    HoodieRowParquetWriteSupport writeSupport =
-            new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, bloomFilterOpt, writeConfig.getStorageConfig());
+    HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport
+        .getHoodieRowParquetWriteSupport(table.getHadoopConf(), structType, bloomFilterOpt, writeConfig);
 
     return new HoodieInternalRowParquetWriter(
         path,
