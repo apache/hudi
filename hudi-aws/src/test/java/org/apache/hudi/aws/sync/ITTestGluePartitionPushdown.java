@@ -52,6 +52,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 
@@ -144,8 +145,15 @@ public class ITTestGluePartitionPushdown {
     for (int i = 0; i < 500; i++) {
       tooLargePartitionPredicate.add(i + "/foo");
     }
-    // fallback to listing all the partitions
     Assertions.assertEquals(1, glueSync.getPartitionsByFilter(TABLE_NAME,
-            glueSync.generatePushDownFilter(tooLargePartitionPredicate, partitionsFieldSchema)).size());
+            glueSync.generatePushDownFilter(tooLargePartitionPredicate, partitionsFieldSchema)).size(),
+            "Should fallback to listing all existing partitions");
+
+    // now set the pushdown max size to a low value to transform the expression in lower/upper bound
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE.key(), "10");
+    glueSync = new AWSGlueCatalogSyncClient(new HiveSyncConfig(hiveSyncProps));
+    Assertions.assertEquals(0, glueSync.getPartitionsByFilter(TABLE_NAME,
+            glueSync.generatePushDownFilter(tooLargePartitionPredicate, partitionsFieldSchema)).size(),
+            "No partitions should match");
   }
 }
