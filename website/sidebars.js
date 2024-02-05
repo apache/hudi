@@ -23,6 +23,7 @@ module.exports = {
             type: 'category',
             label: 'Design & Concepts',
             items: [
+                'hudi_stack',
                 'timeline',
                 'file_layouts',
                 'table_types',
