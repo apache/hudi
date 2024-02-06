@@ -16,47 +16,47 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.metrics.cloudwatch;
-
-import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
-import org.apache.hudi.config.HoodieWriteConfig;
-
-import com.codahale.metrics.MetricRegistry;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.concurrent.TimeUnit;
-
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-@ExtendWith(MockitoExtension.class)
-public class TestCloudWatchMetricsReporter {
-
-  @Mock
-  private HoodieWriteConfig config;
-
-  @Mock
-  private MetricRegistry registry;
-
-  @Mock
-  private CloudWatchReporter reporter;
-
-  @Test
-  public void testReporter() {
-    when(config.getCloudWatchReportPeriodSeconds()).thenReturn(30);
-    CloudWatchMetricsReporter metricsReporter = new CloudWatchMetricsReporter(config, registry, reporter);
-
-    metricsReporter.start();
-    verify(reporter, times(1)).start(30, TimeUnit.SECONDS);
-
-    metricsReporter.report();
-    verify(reporter, times(1)).report();
-
-    metricsReporter.stop();
-    verify(reporter, times(1)).stop();
-  }
-}
+//package org.apache.hudi.metrics.cloudwatch;
+//
+//import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
+//import org.apache.hudi.config.HoodieWriteConfig;
+//
+//import com.codahale.metrics.MetricRegistry;
+//import org.junit.jupiter.api.Test;
+//import org.junit.jupiter.api.extension.ExtendWith;
+//import org.mockito.Mock;
+//import org.mockito.junit.jupiter.MockitoExtension;
+//
+//import java.util.concurrent.TimeUnit;
+//
+//import static org.mockito.Mockito.times;
+//import static org.mockito.Mockito.verify;
+//import static org.mockito.Mockito.when;
+//
+//@ExtendWith(MockitoExtension.class)
+//public class TestCloudWatchMetricsReporter {
+//
+//  @Mock
+//  private HoodieWriteConfig config;
+//
+//  @Mock
+//  private MetricRegistry registry;
+//
+//  @Mock
+//  private CloudWatchReporter reporter;
+//
+//  @Test
+//  public void testReporter() {
+//    when(config.getCloudWatchReportPeriodSeconds()).thenReturn(30);
+//    CloudWatchMetricsReporter metricsReporter = new CloudWatchMetricsReporter(config, registry, reporter);
+//
+//    metricsReporter.start();
+//    verify(reporter, times(1)).start(30, TimeUnit.SECONDS);
+//
+//    metricsReporter.report();
+//    verify(reporter, times(1)).report();
+//
+//    metricsReporter.stop();
+//    verify(reporter, times(1)).stop();
+//  }
+//}

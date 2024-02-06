@@ -16,64 +16,64 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.metrics.cloudwatch;
-
-import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metrics.MetricsReporter;
-
-import com.codahale.metrics.MetricRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.concurrent.TimeUnit;
-
-/**
- * Hudi Amazon CloudWatch metrics reporter. Responsible for reading Hoodie metrics configurations and hooking up with
- * {@link org.apache.hudi.metrics.Metrics}. Internally delegates reporting tasks to {@link CloudWatchReporter}.
- */
-public class CloudWatchMetricsReporter extends MetricsReporter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CloudWatchMetricsReporter.class);
-
-  private final MetricRegistry registry;
-  private final HoodieWriteConfig config;
-  private final CloudWatchReporter reporter;
-
-  public CloudWatchMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    this.config = config;
-    this.registry = registry;
-    this.reporter = createCloudWatchReporter();
-  }
-
-  CloudWatchMetricsReporter(HoodieWriteConfig config, MetricRegistry registry, CloudWatchReporter reporter) {
-    this.config = config;
-    this.registry = registry;
-    this.reporter = reporter;
-  }
-
-  private CloudWatchReporter createCloudWatchReporter() {
-    return CloudWatchReporter.forRegistry(registry)
-        .prefixedWith(config.getCloudWatchMetricPrefix())
-        .namespace(config.getCloudWatchMetricNamespace())
-        .maxDatumsPerRequest(config.getCloudWatchMaxDatumsPerRequest())
-        .build(config.getProps());
-  }
-
-  @Override
-  public void start() {
-    LOG.info("Starting CloudWatch Metrics Reporter.");
-    reporter.start(config.getCloudWatchReportPeriodSeconds(), TimeUnit.SECONDS);
-  }
-
-  @Override
-  public void report() {
-    reporter.report();
-  }
-
-  @Override
-  public void stop() {
-    LOG.info("Stopping CloudWatch Metrics Reporter.");
-    reporter.stop();
-  }
-}
+//package org.apache.hudi.metrics.cloudwatch;
+//
+//import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
+//import org.apache.hudi.config.HoodieWriteConfig;
+//import org.apache.hudi.metrics.MetricsReporter;
+//
+//import com.codahale.metrics.MetricRegistry;
+//import org.slf4j.Logger;
+//import org.slf4j.LoggerFactory;
+//
+//import java.util.concurrent.TimeUnit;
+//
+///**
+// * Hudi Amazon CloudWatch metrics reporter. Responsible for reading Hoodie metrics configurations and hooking up with
+// * {@link org.apache.hudi.metrics.Metrics}. Internally delegates reporting tasks to {@link CloudWatchReporter}.
+// */
+//public class CloudWatchMetricsReporter extends MetricsReporter {
+//
+//  private static final Logger LOG = LoggerFactory.getLogger(CloudWatchMetricsReporter.class);
+//
+//  private final MetricRegistry registry;
+//  private final HoodieWriteConfig config;
+//  private final CloudWatchReporter reporter;
+//
+//  public CloudWatchMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
+//    this.config = config;
+//    this.registry = registry;
+//    this.reporter = createCloudWatchReporter();
+//  }
+//
+//  CloudWatchMetricsReporter(HoodieWriteConfig config, MetricRegistry registry, CloudWatchReporter reporter) {
+//    this.config = config;
+//    this.registry = registry;
+//    this.reporter = reporter;
+//  }
+//
+//  private CloudWatchReporter createCloudWatchReporter() {
+//    return CloudWatchReporter.forRegistry(registry)
+//        .prefixedWith(config.getCloudWatchMetricPrefix())
+//        .namespace(config.getCloudWatchMetricNamespace())
+//        .maxDatumsPerRequest(config.getCloudWatchMaxDatumsPerRequest())
+//        .build(config.getProps());
+//  }
+//
+//  @Override
+//  public void start() {
+//    LOG.info("Starting CloudWatch Metrics Reporter.");
+//    reporter.start(config.getCloudWatchReportPeriodSeconds(), TimeUnit.SECONDS);
+//  }
+//
+//  @Override
+//  public void report() {
+//    reporter.report();
+//  }
+//
+//  @Override
+//  public void stop() {
+//    LOG.info("Stopping CloudWatch Metrics Reporter.");
+//    reporter.stop();
+//  }
+//}
