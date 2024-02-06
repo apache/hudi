@@ -317,8 +317,7 @@
       <version>${disruptor.version}</version>
     </dependency>
 
-
-      <!-- Dropwizard Metrics -->
+    <!-- Dropwizard Metrics -->
     <dependency>
           <groupId>io.dropwizard.metrics</groupId>
           <artifactId>metrics-graphite</artifactId>

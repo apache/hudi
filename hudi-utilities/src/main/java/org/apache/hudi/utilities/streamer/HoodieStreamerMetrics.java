@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -35,6 +36,10 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   private transient Timer overallTimer;
   private transient Timer hiveSyncTimer;
   private transient Timer metaSyncTimer;
+
+  public HoodieStreamerMetrics(HoodieWriteConfig writeConfig) {
+    this(writeConfig.getMetricsConfig());
+  }
 
   public HoodieStreamerMetrics(HoodieMetricsConfig writeConfig) {
     super(writeConfig);

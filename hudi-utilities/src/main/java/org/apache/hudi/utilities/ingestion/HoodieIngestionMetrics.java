@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.ingestion;
 
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 
 import com.codahale.metrics.Timer;
@@ -30,6 +31,10 @@ import java.io.Serializable;
 public abstract class HoodieIngestionMetrics implements Serializable {
 
   protected final HoodieMetricsConfig writeConfig;
+
+  public HoodieIngestionMetrics(HoodieWriteConfig writeConfig) {
+    this(writeConfig.getMetricsConfig());
+  }
 
   public HoodieIngestionMetrics(HoodieMetricsConfig writeConfig) {
     this.writeConfig = writeConfig;
