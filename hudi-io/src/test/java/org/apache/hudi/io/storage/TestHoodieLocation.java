@@ -116,6 +116,18 @@ public class TestHoodieLocation {
   }
 
   @Test
+  public void testEncoded() {
+    // encoded character like `%2F` should be kept as is
+    assertEquals(new HoodieLocation("s3://foo/bar/1%2F2%2F3"), new HoodieLocation("s3://foo/bar", "1%2F2%2F3"));
+    assertEquals("s3://foo/bar/1%2F2%2F3", new HoodieLocation("s3://foo/bar", "1%2F2%2F3").toString());
+    assertEquals(new HoodieLocation("s3://foo/bar/1%2F2%2F3"),
+        new HoodieLocation(new HoodieLocation("s3://foo/bar"), "1%2F2%2F3"));
+    assertEquals("s3://foo/bar/1%2F2%2F3",
+        new HoodieLocation(new HoodieLocation("s3://foo/bar"), "1%2F2%2F3").toString());
+    assertEquals("s3://foo/bar/1%2F2%2F3", new HoodieLocation("s3://foo/bar/1%2F2%2F3").toString());
+  }
+
+  @Test
   public void testPathToUriConversion() throws URISyntaxException {
     assertEquals(new URI(null, null, "/foo?bar", null, null),
         new HoodieLocation("/foo?bar").toUri());
