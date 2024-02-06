@@ -15,3 +15,9 @@ be13faf63 [ENG-5699] Release hudi-integ-test-bundle to mvn artifact (#512)
 ce72655e8fd [ENG-6338] Cherry pick OSS PRs to reduce CI test times (#531)
 ca7d6a87911 [ENG-6372] remove shutdown hook when close is called (#529)
 a427a1fe467 [AUDIT-646] Upgrade to version release-v1.1.9 (#527)
+
+---[2024-02-05 18:09:48] [release-v1.2.1] Adding release tag for hudi-internal release-v1.2.1---
+1987a043c [ENG-4534] allow onetable row writer support (#523)
+a6b1f8cbf [ENG-6237] handle case where source schema is providing the kafka offset columns (#522)
+682e85a2e [ENG-6374] Parallelize the builds (#532)
+198e69f16 [AUDIT-647] Upgrade to version release-v1.2.0 (#534)
