@@ -39,7 +39,7 @@ import static org.mockito.Mockito.when;
 public class TestPrometheusReporter {
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
   HoodieMetrics hoodieMetrics;
@@ -54,14 +54,14 @@ public class TestPrometheusReporter {
 
   @Test
   public void testRegisterGauge() {
-    when(config.getMetricsConfig()).thenReturn(metricsConfig);
-    when(metricsConfig.isMetricsOn()).thenReturn(true);
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
     when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS);
     when(metricsConfig.getPrometheusPort()).thenReturn(9090);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     assertDoesNotThrow(() -> {
-      new HoodieMetrics(config);
-      hoodieMetrics = new HoodieMetrics(config);
+      new HoodieMetrics(writeConfig);
+      hoodieMetrics = new HoodieMetrics(writeConfig);
       metrics = hoodieMetrics.getMetrics();
     });
   }
