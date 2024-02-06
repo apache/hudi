@@ -219,4 +219,11 @@ public abstract class HoodieReaderContext<T> {
   public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
     return providedPositionIfNeeded;
   }
+
+  /**
+   * Constructs engine specific delete record.
+   */
+  public T constructRawDeleteRecord(Map<String, Object> metadata) {
+    return null;
+  }
 }
