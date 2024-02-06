@@ -226,6 +226,17 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "and it is loaded at runtime. This is only required when trying to "
           + "override the existing write context.");
 
+  public static final ConfigProperty<String> HOODIE_PARQUET_SPARK_ROW_WRITE_SUPPORT_CLASS = ConfigProperty
+      .key("hoodie.parquet.spark.row.write.support.class")
+      .defaultValue("org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport")
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Provided write support class should extend HoodieRowParquetWriteSupport class "
+          + "and it is loaded at runtime. This is only required when trying to "
+          + "override the existing write context when `hoodie.datasource.write.row.writer.enable=true`.");
+
+
+
   /**
    * @deprecated Use {@link #PARQUET_MAX_FILE_SIZE} and its methods instead
    */
