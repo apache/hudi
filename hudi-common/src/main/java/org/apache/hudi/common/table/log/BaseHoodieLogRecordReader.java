@@ -84,7 +84,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected final Schema readerSchema;
   // Latest valid instant time
   // Log-Blocks belonging to inflight delta-instants are filtered-out using this high-watermark.
-  private final String latestInstantTime;
+  protected final String latestInstantTime;
   protected final HoodieReaderContext<T> readerContext;
   protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
@@ -422,7 +422,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
    * @param blockSequenceMapPerCommit map containing block sequence numbers for every commit.
    * @return a Pair of boolean and list of deduped valid block blocks, where boolean of true means, there have been dups detected.
    */
-  private Pair<Boolean, List<HoodieLogBlock>> reconcileSpuriousBlocksAndGetValidOnes(List<HoodieLogBlock> allValidLogBlocks,
+  protected Pair<Boolean, List<HoodieLogBlock>> reconcileSpuriousBlocksAndGetValidOnes(List<HoodieLogBlock> allValidLogBlocks,
                                                                                      Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit) {
 
     boolean dupsFound = blockSequenceMapPerCommit.values().stream().anyMatch(perCommitBlockList -> perCommitBlockList.size() > 1);
@@ -484,7 +484,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
    * @param blockSeqNo                block sequence number.
    * @param blockSequenceMapPerCommit map tracking per commit block sequences.
    */
-  private void updateBlockSequenceTracker(HoodieLogBlock logBlock, String instantTime, int blockSeqNo, long attemptNo,
+  protected void updateBlockSequenceTracker(HoodieLogBlock logBlock, String instantTime, int blockSeqNo, long attemptNo,
                                           Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit) {
     if (blockSeqNo != -1 && attemptNo != -1) { // update the block sequence tracker for log blocks containing the same.
       blockSequenceMapPerCommit.computeIfAbsent(instantTime, entry -> new HashMap<>());
@@ -764,7 +764,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     progress = (numLogFilesSeen - 1) / logFilePaths.size();
   }
 
-  private boolean shouldLookupRecords() {
+  protected boolean shouldLookupRecords() {
     // NOTE: Point-wise record lookups are only enabled when scanner is not in
     //       a full-scan mode
     return !forceFullScan;
