@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics.cloudwatch;
 
 import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporter;
 
@@ -37,33 +38,41 @@ public class CloudWatchMetricsReporter extends MetricsReporter {
   private static final Logger LOG = LoggerFactory.getLogger(CloudWatchMetricsReporter.class);
 
   private final MetricRegistry registry;
-  private final HoodieMetricsConfig config;
+  private final HoodieMetricsConfig metricsConfig;
   private final CloudWatchReporter reporter;
 
-  public CloudWatchMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
-    this.config = config;
+  public CloudWatchMetricsReporter(HoodieWriteConfig writeConfig, MetricRegistry registry) {
+    this(writeConfig.getMetricsConfig(), registry);
+  }
+
+  CloudWatchMetricsReporter(HoodieWriteConfig writeConfig, MetricRegistry registry, CloudWatchReporter reporter) {
+    this(writeConfig.getMetricsConfig(), registry, reporter);
+  }
+
+  public CloudWatchMetricsReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
+    this.metricsConfig = metricsConfig;
     this.registry = registry;
     this.reporter = createCloudWatchReporter();
   }
 
-  CloudWatchMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry, CloudWatchReporter reporter) {
-    this.config = config;
+  CloudWatchMetricsReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry, CloudWatchReporter reporter) {
+    this.metricsConfig = metricsConfig;
     this.registry = registry;
     this.reporter = reporter;
   }
 
   private CloudWatchReporter createCloudWatchReporter() {
     return CloudWatchReporter.forRegistry(registry)
-        .prefixedWith(config.getCloudWatchMetricPrefix())
-        .namespace(config.getCloudWatchMetricNamespace())
-        .maxDatumsPerRequest(config.getCloudWatchMaxDatumsPerRequest())
-        .build(config.getProps());
+        .prefixedWith(metricsConfig.getCloudWatchMetricPrefix())
+        .namespace(metricsConfig.getCloudWatchMetricNamespace())
+        .maxDatumsPerRequest(metricsConfig.getCloudWatchMaxDatumsPerRequest())
+        .build(metricsConfig.getProps());
   }
 
   @Override
   public void start() {
     LOG.info("Starting CloudWatch Metrics Reporter.");
-    reporter.start(config.getCloudWatchReportPeriodSeconds(), TimeUnit.SECONDS);
+    reporter.start(metricsConfig.getCloudWatchReportPeriodSeconds(), TimeUnit.SECONDS);
   }
 
   @Override

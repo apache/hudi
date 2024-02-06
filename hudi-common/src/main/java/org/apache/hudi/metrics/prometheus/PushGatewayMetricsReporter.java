@@ -40,15 +40,15 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
   private final Map<String, String> configuredLabels;
   private final boolean randomSuffix;
 
-  public PushGatewayMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
+  public PushGatewayMetricsReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
 
-    String serverHost = config.getPushGatewayHost();
-    int serverPort = config.getPushGatewayPort();
-    periodSeconds = config.getPushGatewayReportPeriodSeconds();
-    deleteShutdown = config.getPushGatewayDeleteOnShutdown();
-    configuredJobName = config.getPushGatewayJobName();
-    configuredLabels = Collections.unmodifiableMap(parseLabels(config.getPushGatewayLabels()));
-    randomSuffix = config.getPushGatewayRandomJobNameSuffix();
+    String serverHost = metricsConfig.getPushGatewayHost();
+    int serverPort = metricsConfig.getPushGatewayPort();
+    periodSeconds = metricsConfig.getPushGatewayReportPeriodSeconds();
+    deleteShutdown = metricsConfig.getPushGatewayDeleteOnShutdown();
+    configuredJobName = metricsConfig.getPushGatewayJobName();
+    configuredLabels = Collections.unmodifiableMap(parseLabels(metricsConfig.getPushGatewayLabels()));
+    randomSuffix = metricsConfig.getPushGatewayRandomJobNameSuffix();
 
     pushGatewayReporter = new PushGatewayReporter(
         registry,

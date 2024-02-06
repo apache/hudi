@@ -38,25 +38,25 @@ public class MetricsGraphiteReporter extends MetricsReporter {
   private static final Logger LOG = LoggerFactory.getLogger(MetricsGraphiteReporter.class);
   private final MetricRegistry registry;
   private final GraphiteReporter graphiteReporter;
-  private final HoodieMetricsConfig config;
+  private final HoodieMetricsConfig metricsConfig;
   private String serverHost;
   private int serverPort;
   private final int periodSeconds;
 
-  public MetricsGraphiteReporter(HoodieMetricsConfig config, MetricRegistry registry) {
+  public MetricsGraphiteReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
     this.registry = registry;
-    this.config = config;
+    this.metricsConfig = metricsConfig;
 
     // Check the serverHost and serverPort here
-    this.serverHost = config.getGraphiteServerHost();
-    this.serverPort = config.getGraphiteServerPort();
+    this.serverHost = metricsConfig.getGraphiteServerHost();
+    this.serverPort = metricsConfig.getGraphiteServerPort();
     if (serverHost == null || serverPort == 0) {
       throw new RuntimeException(String.format("Graphite cannot be initialized with serverHost[%s] and serverPort[%s].",
           serverHost, serverPort));
     }
 
     this.graphiteReporter = createGraphiteReport();
-    this.periodSeconds = config.getGraphiteReportPeriodSeconds();
+    this.periodSeconds = metricsConfig.getGraphiteReportPeriodSeconds();
   }
 
   @Override
@@ -79,7 +79,7 @@ public class MetricsGraphiteReporter extends MetricsReporter {
 
   private GraphiteReporter createGraphiteReport() {
     Graphite graphite = new Graphite(new InetSocketAddress(serverHost, serverPort));
-    String reporterPrefix = config.getGraphiteMetricPrefix();
+    String reporterPrefix = metricsConfig.getGraphiteMetricPrefix();
     return GraphiteReporter.forRegistry(registry).prefixedWith(reporterPrefix).convertRatesTo(TimeUnit.SECONDS)
         .convertDurationsTo(TimeUnit.MILLISECONDS).filter(MetricFilter.ALL).build(graphite);
   }
