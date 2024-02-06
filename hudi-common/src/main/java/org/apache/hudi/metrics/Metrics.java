@@ -137,6 +137,7 @@ public class Metrics {
         LOG.warn("Error while closing reporter", e);
       } finally {
         initialized = false;
+        METRICS_INSTANCE_PER_BASEPATH.remove(basePath);
       }
     }
   }
