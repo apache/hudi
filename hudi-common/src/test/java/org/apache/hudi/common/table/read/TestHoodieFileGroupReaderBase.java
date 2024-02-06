@@ -168,23 +168,25 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
     }
     assertEquals(containsBaseFile, fileSlice.getBaseFile().isPresent());
-    HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        getHoodieReaderContext(tablePath, avroSchema),
-        hadoopConf,
-        tablePath,
-        metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
-        fileSlice,
-        avroSchema,
-        avroSchema,
-        props,
-        metaClient.getTableConfig(),
-        0,
-        fileSlice.getTotalFileSize(),
-        false,
-        1024 * 1024 * 1000,
-        metaClient.getTempFolderPath(),
-        ExternalSpillableMap.DiskMapType.ROCKS_DB,
-        false);
+    HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.builder()
+        .withReaderContext(getHoodieReaderContext(tablePath, avroSchema))
+        .withHadoopConf(hadoopConf)
+        .withTablePath(tablePath)
+        .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().get().getTimestamp())
+        .withFileSlice(fileSlice)
+        .withDataSchema(avroSchema)
+        .withRequestedSchema(avroSchema)
+        .withTypedProperties(props)
+        .withTableConfig(metaClient.getTableConfig())
+        .withStart(0)
+        .withLength(fileSlice.getTotalFileSize())
+        .withUseRecordPosition(false)
+        .withMaxMemorySizeInBytes(1024 * 1024 * 1000)
+        .withSpillableMapBasePath(metaClient.getTempFolderPath())
+        .withDiskMapType(ExternalSpillableMap.DiskMapType.ROCKS_DB)
+        .withBitCaskDiskMapCompressionEnabled(false)
+        .build();
+
     fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {
       actualRecordList.add(fileGroupReader.next());
