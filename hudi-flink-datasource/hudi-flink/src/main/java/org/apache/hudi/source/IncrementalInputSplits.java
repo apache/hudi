@@ -132,7 +132,7 @@ public class IncrementalInputSplits implements Serializable {
         .metaClient(metaClient)
         .startTime(this.conf.getString(FlinkOptions.READ_START_COMMIT))
         .endTime(this.conf.getString(FlinkOptions.READ_END_COMMIT))
-        .rangeType(InstantRange.RangeType.CLOSE_CLOSE)
+        .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
         .build();
@@ -143,8 +143,8 @@ public class IncrementalInputSplits implements Serializable {
       LOG.info("No new instant found for the table under path " + path + ", skip reading");
       return Result.EMPTY;
     }
-    final HoodieTimeline commitTimeline = analyzingResult.getReadTimeline();
-    final boolean startFromEarliest = analyzingResult.isStartFromEarliest();
+    final HoodieTimeline commitTimeline = analyzingResult.getActiveTimeline();
+    final boolean startFromEarliest = analyzingResult.isConsumingFromEarliest();
     final boolean hasArchivedInstants = !analyzingResult.getArchivedInstants().isEmpty();
     // We better add another premise: whether the endCommit is cleaned.
     boolean fullTableScan = startFromEarliest || hasArchivedInstants;
@@ -238,7 +238,7 @@ public class IncrementalInputSplits implements Serializable {
         .metaClient(metaClient)
         .startTime(issuedOffset != null ? issuedOffset : this.conf.getString(FlinkOptions.READ_START_COMMIT))
         .endTime(this.conf.getString(FlinkOptions.READ_END_COMMIT))
-        .rangeType(issuedOffset != null ? InstantRange.RangeType.OPEN_CLOSE : InstantRange.RangeType.CLOSE_CLOSE)
+        .rangeType(issuedOffset != null ? InstantRange.RangeType.OPEN_CLOSED : InstantRange.RangeType.CLOSED_CLOSED)
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
         .limit(OptionsResolver.getReadCommitsLimit(conf))
@@ -251,7 +251,7 @@ public class IncrementalInputSplits implements Serializable {
       return Result.EMPTY;
     }
 
-    HoodieTimeline commitTimeline = queryContext.getReadTimeline();
+    HoodieTimeline commitTimeline = queryContext.getActiveTimeline();
     // get the latest instant that satisfies condition
     final String endInstant = queryContext.getLastInstant();
     final Option<InstantRange> instantRange = queryContext.getInstantRange();
@@ -307,7 +307,7 @@ public class IncrementalInputSplits implements Serializable {
     List<HoodieCommitMetadata> activeMetadataList = queryContext.getActiveInstants().stream()
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
     List<HoodieCommitMetadata> archivedMetadataList = queryContext.getArchivedInstants().stream()
-        .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, queryContext.getArchivedReadTimeline())).collect(Collectors.toList());
+        .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, queryContext.getArchivedTimeline())).collect(Collectors.toList());
     if (archivedMetadataList.size() > 0) {
       LOG.warn("\n"
           + "--------------------------------------------------------------------------------\n"

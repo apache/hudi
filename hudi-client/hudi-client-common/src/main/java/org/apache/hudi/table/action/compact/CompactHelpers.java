@@ -117,7 +117,7 @@ public class CompactHelpers<T, I, K, O> {
         .build();
     Set<String> validInstants = HoodieTableMetadataUtil.getValidInstantTimestamps(dataMetaClient, metadataMetaClient);
     return InstantRange.builder()
-        .rangeType(InstantRange.RangeType.EXPLICIT_MATCH)
+        .rangeType(InstantRange.RangeType.EXACT_MATCH)
         .explicitInstants(validInstants).build();
   }
 }

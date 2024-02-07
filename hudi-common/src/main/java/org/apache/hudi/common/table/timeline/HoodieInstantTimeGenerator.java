@@ -108,6 +108,7 @@ public class HoodieInstantTimeGenerator {
   public static String instantTimeMinusMillis(String timestamp, long milliseconds) {
     try {
       String timestampInMillis = fixInstantTimeCompatibility(timestamp);
+      // To work with tests, that generate arbitrary timestamps, we need to pad the timestamp with 0s.
       if (timestampInMillis.length() < MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
         return String.format("%0" + timestampInMillis.length() + "d", 0);
       }

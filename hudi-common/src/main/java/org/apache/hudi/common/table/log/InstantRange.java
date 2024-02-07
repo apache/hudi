@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.Serializable;
@@ -30,17 +31,17 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * A instant commits range used for incremental reader filtering.
+ * An instant range used for incremental reader filtering.
  */
 public abstract class InstantRange implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  protected final String startInstant;
-  protected final String endInstant;
+  protected final Option<String> startInstant;
+  protected final Option<String> endInstant;
 
   public InstantRange(String startInstant, String endInstant) {
-    this.startInstant = startInstant;
-    this.endInstant = endInstant;
+    this.startInstant = Option.ofNullable(startInstant);
+    this.endInstant = Option.ofNullable(endInstant);
   }
 
   /**
@@ -50,11 +51,11 @@ public abstract class InstantRange implements Serializable {
     return new Builder();
   }
 
-  public String getStartInstant() {
+  public Option<String> getStartInstant() {
     return startInstant;
   }
 
-  public String getEndInstant() {
+  public Option<String> getEndInstant() {
     return endInstant;
   }
 
@@ -63,8 +64,8 @@ public abstract class InstantRange implements Serializable {
   @Override
   public String toString() {
     return "InstantRange{"
-        + "startInstant='" + (startInstant == null ? "null" : startInstant) + '\''
-        + ", endInstant='" + (endInstant == null ? "null" : endInstant) + '\''
+        + "startInstant='" + (startInstant.isEmpty() ? "-INF" : startInstant.get()) + '\''
+        + ", endInstant='" + (endInstant.isEmpty() ? "+INF" : endInstant.get()) + '\''
         + ", rangeType='" + this.getClass().getSimpleName() + '\''
         + '}';
   }
@@ -77,88 +78,97 @@ public abstract class InstantRange implements Serializable {
    * Represents a range type.
    */
   public enum RangeType {
-    OPEN_CLOSE, CLOSE_CLOSE, EXPLICIT_MATCH, COMPOSITION
+    /** Start instant is not included (>) and end instant is included (<=). */
+    OPEN_CLOSED,
+    /** Both start and end instants are included (>=, <=). */
+    CLOSED_CLOSED,
+    /** Exact match of instants. */
+    EXACT_MATCH,
+    /** Composition of multiple ranges. */
+    COMPOSITION
   }
 
-  private static class OpenCloseRange extends InstantRange {
+  private static class OpenClosedRange extends InstantRange {
 
-    public OpenCloseRange(String startInstant, String endInstant) {
+    public OpenClosedRange(String startInstant, String endInstant) {
       super(Objects.requireNonNull(startInstant), endInstant);
     }
 
     @Override
     public boolean isInRange(String instant) {
-      // No need to do comparison:
-      // HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, endInstant)
-      // because the logic is ensured by the log scanner
-      return HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN, startInstant);
+      boolean validAgainstStart = HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN, startInstant.get());
+      // if there is an end instant, check against it, otherwise assume +INF and its always valid.
+      boolean validAgainstEnd = endInstant
+              .map(e -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, e))
+              .orElse(true);
+      return validAgainstStart && validAgainstEnd;
     }
   }
 
-  private static class OpenCloseRangeNullableBoundary extends InstantRange {
+  private static class OpenClosedRangeNullableBoundary extends InstantRange {
 
-    public OpenCloseRangeNullableBoundary(String startInstant, String endInstant) {
+    public OpenClosedRangeNullableBoundary(String startInstant, String endInstant) {
       super(startInstant, endInstant);
-      ValidationUtils.checkArgument(startInstant != null || endInstant != null,
-          "Start and end instants can not both be null");
+      ValidationUtils.checkArgument(!startInstant.isEmpty() || !endInstant.isEmpty(),
+          "At least one of start and end instants should be specified.");
     }
 
     @Override
     public boolean isInRange(String instant) {
-      if (startInstant == null) {
-        return HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, endInstant);
-      } else if (endInstant == null) {
-        return HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN, startInstant);
-      } else {
-        return HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN, startInstant)
-            && HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, endInstant);
-      }
+      boolean validAgainstStart = startInstant
+              .map(s -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN, s))
+              .orElse(true);
+      boolean validAgainstEnd = endInstant
+              .map(e -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, e))
+              .orElse(true);
+
+      return validAgainstStart && validAgainstEnd;
     }
   }
 
-  private static class CloseCloseRange extends InstantRange {
+  private static class ClosedClosedRange extends InstantRange {
 
-    public CloseCloseRange(String startInstant, String endInstant) {
+    public ClosedClosedRange(String startInstant, String endInstant) {
       super(Objects.requireNonNull(startInstant), endInstant);
     }
 
     @Override
     public boolean isInRange(String instant) {
-      // No need to do comparison:
-      // HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, endInstant)
-      // because the logic is ensured by the log scanner
-      return HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, startInstant);
+      boolean validAgainstStart = HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, startInstant.get());
+      boolean validAgainstEnd = endInstant
+              .map(e -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, e))
+              .orElse(true);
+      return validAgainstStart && validAgainstEnd;
     }
   }
 
-  private static class CloseCloseRangeNullableBoundary extends InstantRange {
+  private static class ClosedClosedRangeNullableBoundary extends InstantRange {
 
-    public CloseCloseRangeNullableBoundary(String startInstant, String endInstant) {
+    public ClosedClosedRangeNullableBoundary(String startInstant, String endInstant) {
       super(startInstant, endInstant);
-      ValidationUtils.checkArgument(startInstant != null || endInstant != null,
-          "Start and end instants can not both be null");
+      ValidationUtils.checkArgument(!startInstant.isEmpty() || !endInstant.isEmpty(),
+          "At least one of start and end instants should be specified.");
     }
 
     @Override
     public boolean isInRange(String instant) {
-      if (startInstant == null) {
-        return HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, endInstant);
-      } else if (endInstant == null) {
-        return HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, startInstant);
-      } else {
-        return HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, startInstant)
-            && HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, endInstant);
-      }
+      boolean validAgainstStart = startInstant
+              .map(s -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, s))
+              .orElse(true);
+      boolean validAgainstEnd = endInstant
+              .map(e -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, e))
+              .orElse(true);
+      return validAgainstStart && validAgainstEnd;
     }
   }
 
   /**
    * Class to assist in checking if an instant is part of a set of instants.
    */
-  private static class ExplicitMatchRange extends InstantRange {
+  private static class ExactMatchRange extends InstantRange {
     Set<String> instants;
 
-    public ExplicitMatchRange(Set<String> instants) {
+    public ExactMatchRange(Set<String> instants) {
       super(Collections.min(instants), Collections.max(instants));
       this.instants = instants;
     }
@@ -242,16 +252,16 @@ public abstract class InstantRange implements Serializable {
     public InstantRange build() {
       ValidationUtils.checkState(this.rangeType != null, "Range type is required");
       switch (rangeType) {
-        case OPEN_CLOSE:
+        case OPEN_CLOSED:
           return nullableBoundary
-              ? new OpenCloseRangeNullableBoundary(startInstant, endInstant)
-              : new OpenCloseRange(startInstant, endInstant);
-        case CLOSE_CLOSE:
+              ? new OpenClosedRangeNullableBoundary(startInstant, endInstant)
+              : new OpenClosedRange(startInstant, endInstant);
+        case CLOSED_CLOSED:
           return nullableBoundary
-              ? new CloseCloseRangeNullableBoundary(startInstant, endInstant)
-              : new CloseCloseRange(startInstant, endInstant);
-        case EXPLICIT_MATCH:
-          return new ExplicitMatchRange(this.explicitInstants);
+              ? new ClosedClosedRangeNullableBoundary(startInstant, endInstant)
+              : new ClosedClosedRange(startInstant, endInstant);
+        case EXACT_MATCH:
+          return new ExactMatchRange(this.explicitInstants);
         case COMPOSITION:
           return new CompositionRange(this.instantRanges);
         default:

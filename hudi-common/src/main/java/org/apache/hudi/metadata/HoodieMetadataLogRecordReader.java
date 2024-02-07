@@ -217,7 +217,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
     public Builder withLogBlockTimestamps(Set<String> validLogBlockTimestamps) {
       InstantRange instantRange = InstantRange.builder()
-          .rangeType(InstantRange.RangeType.EXPLICIT_MATCH)
+          .rangeType(InstantRange.RangeType.EXACT_MATCH)
           .explicitInstants(validLogBlockTimestamps).build();
       scannerBuilder.withInstantRange(Option.of(instantRange));
       return this;

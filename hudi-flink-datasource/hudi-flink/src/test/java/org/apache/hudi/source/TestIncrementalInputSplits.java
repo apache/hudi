@@ -101,7 +101,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
 
     IncrementalQueryAnalyzer analyzer1 = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .rangeType(InstantRange.RangeType.OPEN_CLOSE)
+        .rangeType(InstantRange.RangeType.OPEN_CLOSED)
         .startTime(completionTimeMap.get("1"))
         .skipClustering(true)
         .build();
@@ -113,7 +113,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     // simulate first iteration cycle with read from the LATEST commit
     IncrementalQueryAnalyzer analyzer2 = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .rangeType(InstantRange.RangeType.CLOSE_CLOSE)
+        .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
         .skipClustering(true)
         .build();
     List<HoodieInstant> activeInstants2 = analyzer2.analyze().getActiveInstants();
@@ -123,7 +123,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     // specifying a start and end commit
     IncrementalQueryAnalyzer analyzer3 = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .rangeType(InstantRange.RangeType.CLOSE_CLOSE)
+        .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
         .startTime(completionTimeMap.get("1"))
         .endTime(completionTimeMap.get("3"))
         .skipClustering(true)
@@ -247,11 +247,11 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     IncrementalInputSplits.Result result = iis.inputSplits(metaClient, firstInstant.getCompletionTime(), false);
 
     String minStartCommit = result.getInputSplits().stream()
-            .map(split -> split.getInstantRange().get().getStartInstant())
+            .map(split -> split.getInstantRange().get().getStartInstant().get())
             .min((commit1,commit2) -> HoodieTimeline.compareTimestamps(commit1, LESSER_THAN, commit2) ? 1 : 0)
             .orElse(null);
     String maxEndCommit = result.getInputSplits().stream()
-            .map(split -> split.getInstantRange().get().getEndInstant())
+            .map(split -> split.getInstantRange().get().getEndInstant().get())
             .max((commit1,commit2) -> HoodieTimeline.compareTimestamps(commit1, GREATER_THAN, commit2) ? 1 : 0)
             .orElse(null);
     assertEquals(0, intervalBetween2Instants(commitsTimeline, minStartCommit, maxEndCommit), "Should read 1 instant");

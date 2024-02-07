@@ -43,15 +43,15 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
- * Analyzer for incremental queries.
+ * Analyzer for incremental queries on the timeline, to filter instants based on specified ranges.
  *
- * <p>The analyzer can supply info about the incremental queries including:
+ * <p>The analyzer is supplied the following information:
  * <ul>
- *   <li>The archived instant candidates;</li>
- *   <li>The active instant candidates;</li>
- *   <li>The instant filtering predicate, e.g the instant range;</li>
- *   <li>Whether the query starts from the earliest;</li>
- *   <li>Whether the query ends to the latest;</li>
+ *   <li>The archived instants;</li>
+ *   <li>The active instants;</li>
+ *   <li>The instant filtering predicate, e.g the instant range with a "startTime" and "endTime"</li>
+ *   <li>Whether the query starts from the "earliest" available instant;</li>
+ *   <li>Whether the query ends to the "latest" available instant;</li>
  *   <li>The max completion time used for fs view file slice version filtering.</li>
  * </ul>
  *
@@ -60,32 +60,32 @@ import java.util.stream.Stream;
  * <table>
  *   <tr>
  *     <th>Query Range</th>
- *     <th>File Handles Decoding</th>
- *     <th>Instant Filtering Predicate</th>
+ *     <th>File selection criteria</th>
+ *     <th>Instant filtering predicate applied to selected files</th>
  *   </tr>
  *   <tr>
- *     <td>[earliest, _]</td>
+ *     <td>[earliest, +INF]</td>
  *     <td>The latest snapshot files from table metadata</td>
  *     <td>_</td>
  *   </tr>
  *   <tr>
  *     <td>[earliest, endTime]</td>
  *     <td>The latest snapshot files from table metadata</td>
- *     <td>'_hoodie_commit_time' in setA, setA is a collection of all the instants completed before or on 'endTime'</td>
+ *     <td>'_hoodie_commit_time' in setA, setA contains the begin instant times for actions completed before or on 'endTime'</td>
  *   </tr>
  *   <tr>
- *     <td>[_, _]</td>
+ *     <td>[-INF, +INF]</td>
  *     <td>The latest completed instant metadata</td>
  *     <td>'_hoodie_commit_time' = i_n, i_n is the latest completed instant</td>
  *   </tr>
  *   <tr>
- *     <td>[_, endTime]</td>
- *     <td>i).find the last completed instant i_n before or on 'endTime;
- *     ii). read the latest snapshot from table metadata if i_n is archived or the commit metadata if it is still active</td>
+ *     <td>[-INF, endTime]</td>
+ *     <td>I) find the last completed instant i_n before or on 'endTime;
+ *         II) read the latest snapshot from table metadata if i_n is archived or the commit metadata if it is still active</td>
  *     <td>'_hoodie_commit_time' = i_n</td>
  *   </tr>
  *   <tr>
- *     <td>[startTime, _]</td>
+ *     <td>[startTime, +INF]</td>
  *     <td>i).find the instant set setA, setA is a collection of all the instants completed after or on 'startTime';
  *     ii). read the latest snapshot from table metadata if setA has archived instants or the commit metadata if all the instants are still active</td>
  *     <td>'_hoodie_commit_time' in setA</td>
@@ -98,9 +98,9 @@ import java.util.stream.Stream;
  *   </tr>
  * </table>
  *
- * <p> A range type is required for analyzing the query so that the query range boundary inclusiveness have clear semantics.
+ * <p> A {@code RangeType} is required for analyzing the query so that the query range boundary inclusiveness have clear semantics.
  *
- * <p>IMPORTANT: the reader may optionally choose to fall back to reading the latest snapshot if there are files missing from decoding the commit metadata.
+ * <p>IMPORTANT: the reader may optionally choose to fall back to reading the latest snapshot if there are files decoding the commit metadata are already cleaned.
  */
 public class IncrementalQueryAnalyzer {
   public static final String START_COMMIT_EARLIEST = "earliest";
@@ -157,8 +157,8 @@ public class IncrementalQueryAnalyzer {
       // get hoodie instants
       Pair<List<String>, List<String>> splitInstantTime = splitInstantByActiveness(instantTimeList, completionTimeQueryView);
       Set<String> instantTimeSet = new HashSet<>(instantTimeList);
-      List<String> archivedInstantTime = splitInstantTime.getKey();
-      List<String> activeInstantTime = splitInstantTime.getValue();
+      List<String> archivedInstantTime = splitInstantTime.getLeft();
+      List<String> activeInstantTime = splitInstantTime.getRight();
       List<HoodieInstant> archivedInstants = new ArrayList<>();
       List<HoodieInstant> activeInstants = new ArrayList<>();
       HoodieTimeline archivedReadTimeline = null;
@@ -321,11 +321,11 @@ public class IncrementalQueryAnalyzer {
     /**
      * The active timeline to read filtered by given configurations.
      */
-    private final HoodieTimeline readTimeline;
+    private final HoodieTimeline activeTimeline;
     /**
      * The archived timeline to read filtered by given configurations.
      */
-    private final HoodieTimeline archivedReadTimeline;
+    private final HoodieTimeline archivedTimeline;
     private final List<String> instants;
 
     private QueryContext(
@@ -334,14 +334,14 @@ public class IncrementalQueryAnalyzer {
         List<String> instants,
         List<HoodieInstant> archivedInstants,
         List<HoodieInstant> activeInstants,
-        HoodieTimeline readTimeline,
-        @Nullable HoodieTimeline archivedReadTimeline) {
+        HoodieTimeline activeTimeline,
+        @Nullable HoodieTimeline archivedTimeline) {
       this.startInstant = Option.ofNullable(startInstant);
       this.endInstant = Option.ofNullable(endInstant);
       this.archivedInstants = archivedInstants;
       this.activeInstants = activeInstants;
-      this.readTimeline = readTimeline;
-      this.archivedReadTimeline = archivedReadTimeline;
+      this.activeTimeline = activeTimeline;
+      this.archivedTimeline = archivedTimeline;
       this.instants = instants;
     }
 
@@ -351,9 +351,9 @@ public class IncrementalQueryAnalyzer {
         List<String> instants,
         List<HoodieInstant> archivedInstants,
         List<HoodieInstant> activeInstants,
-        HoodieTimeline readTimeline,
-        @Nullable HoodieTimeline archivedReadTimeline) {
-      return new QueryContext(startInstant, endInstant, instants, archivedInstants, activeInstants, readTimeline, archivedReadTimeline);
+        HoodieTimeline activeTimeline,
+        @Nullable HoodieTimeline archivedTimeline) {
+      return new QueryContext(startInstant, endInstant, instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline);
     }
 
     public boolean isEmpty() {
@@ -383,7 +383,7 @@ public class IncrementalQueryAnalyzer {
       return activeInstants;
     }
 
-    public boolean isStartFromEarliest() {
+    public boolean isConsumingFromEarliest() {
       return startInstant.isEmpty();
     }
 
@@ -398,31 +398,37 @@ public class IncrementalQueryAnalyzer {
         // all the query instants are archived, use the latest active instant completion time as
         // the file slice version upper threshold, because very probably these files already got cleaned,
         // use the max completion time of the archived instants could yield empty file slices.
-        return this.readTimeline.getInstantsAsStream().map(HoodieInstant::getCompletionTime).filter(Objects::nonNull).max(String::compareTo).get();
+        return this.activeTimeline.getInstantsAsStream().map(HoodieInstant::getCompletionTime).filter(Objects::nonNull).max(String::compareTo).get();
       }
     }
 
     public Option<InstantRange> getInstantRange() {
-      if (isStartFromEarliest()) {
+      if (isConsumingFromEarliest()) {
         if (isConsumingToLatest()) {
           // A null instant range indicates no filtering.
           // short-cut for snapshot read
           return Option.empty();
         }
-        return Option.of(InstantRange.builder().startInstant(startInstant.orElse(null)).endInstant(endInstant.orElse(null))
-            .rangeType(InstantRange.RangeType.CLOSE_CLOSE).nullableBoundary(true).build());
+        return Option.of(InstantRange.builder()
+                .startInstant(startInstant.orElse(null))
+                .endInstant(endInstant.orElse(null))
+                .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
+                .nullableBoundary(true)
+                .build());
       } else {
-        return Option.of(InstantRange.builder().rangeType(InstantRange.RangeType.EXPLICIT_MATCH)
-            .explicitInstants(new HashSet<>(instants)).build());
+        return Option.of(InstantRange.builder()
+                .rangeType(InstantRange.RangeType.EXACT_MATCH)
+                .explicitInstants(new HashSet<>(instants))
+                .build());
       }
     }
 
-    public HoodieTimeline getReadTimeline() {
-      return this.readTimeline;
+    public HoodieTimeline getActiveTimeline() {
+      return this.activeTimeline;
     }
 
-    public @Nullable HoodieTimeline getArchivedReadTimeline() {
-      return archivedReadTimeline;
+    public @Nullable HoodieTimeline getArchivedTimeline() {
+      return archivedTimeline;
     }
   }
 }
