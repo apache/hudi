@@ -75,9 +75,7 @@ public class TestPushGateWayReporter {
   public void testRegisterGauge() {
     when(writeConfig.isMetricsOn()).thenReturn(true);
     when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
-    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
-    when(metricsConfig.getPushGatewayReportPeriodSeconds()).thenReturn(30);
+    configureDefaultReporter();
 
     assertDoesNotThrow(() -> {
       hoodieMetrics = new HoodieMetrics(writeConfig);
@@ -97,11 +95,10 @@ public class TestPushGateWayReporter {
 
     String propPrometheusPath = Objects.requireNonNull(PROP_FILE_PROMETHEUS_URL).toURI().getPath();
     String propDatadogPath = Objects.requireNonNull(PROP_FILE_DATADOG_URL).toURI().getPath();
-    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     if (addDefaultReporter) {
-      when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
-      when(metricsConfig.getPushGatewayReportPeriodSeconds()).thenReturn(30);
+      configureDefaultReporter();
     } else {
+      when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
       when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn(TestPushGateWayReporter.class.getSimpleName());
       when(metricsConfig.getMetricReporterFileBasedConfigs()).thenReturn(propPrometheusPath + "," + propDatadogPath);
     }
@@ -166,5 +163,11 @@ public class TestPushGateWayReporter {
     } catch (IllegalStateException e) {
       assertTrue(e.getMessage().contains("Multiple values {prometheus, prom} for same key"));
     }
+  }
+
+  private void configureDefaultReporter() {
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
+    when(metricsConfig.getPushGatewayReportPeriodSeconds()).thenReturn(30);
   }
 }
