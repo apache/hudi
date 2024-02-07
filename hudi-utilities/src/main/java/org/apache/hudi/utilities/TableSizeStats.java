@@ -95,6 +95,7 @@ import java.util.stream.Collectors;
  */
 public class TableSizeStats implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(TableSizeStats.class);
 
   // Date formatter for parsing partition dates (example: 2023/5/5/ or 2023-5-5).
