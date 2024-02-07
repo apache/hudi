@@ -33,6 +33,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,6 +51,14 @@ public abstract class HoodieStorage implements Closeable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract String getScheme();
+
+  /**
+   * Returns a URI which identifies this HoodieStorage.
+   *
+   * @return the URI of this storage instance.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract URI getUri();
 
   /**
    * Creates an OutputStream at the indicated location.
