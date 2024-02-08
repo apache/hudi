@@ -77,8 +77,8 @@ public class HoodieCommonConfig extends HoodieConfig {
       .key("hoodie.write.set.null.for.missing.columns")
       .defaultValue("false")
       .markAdvanced()
-      .withAlternatives("hoodie.write.set.null.for.missing.columns")
-      .withDocumentation("When a non-nullable column is missing from incoming batch during a write operation, the write "
+      .sinceVersion("0.14.1")
+      .withDocumentation("When a nullable column is missing from incoming batch during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the missing "
           + " column be filled with null values to successfully complete the write operation.");
 
