@@ -306,6 +306,49 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   /**
+   * Reads record keys from record-level index.
+   * <p>
+   * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
+   *
+   * @param secondaryKeys The list of secondary keys to read
+   */
+  @Override
+  public Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys) {
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
+        "Record index is not initialized in MDT");
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.SECONDARY_INDEX),
+        "Secondary index is not initialized in MDT");
+
+    HoodieTimer timer = HoodieTimer.start();
+    Map<String, List<HoodieRecord<HoodieMetadataPayload>>> secondaryKeyRecords = getRecordsBySecondaryKeys(secondaryKeys, MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+
+    List<String> recordKeys = new ArrayList<>();
+    secondaryKeyRecords.forEach((key, records) -> {
+      records.forEach(record -> {
+        if (!record.getData().isDeleted()) {
+          recordKeys.add(record.getData().getRecordKeyFromSecondaryIndex());
+        }
+      });
+    });
+
+    return readRecordIndex(recordKeys);
+  }
+
+  // Returns a map of (record-key -> secondary-key) for the provided record-keys
+  public Map<String, String> readSecondaryKeyByRecordKey(List<String> recordKeys) {
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
+        "Record index is not initialized in MDT");
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.SECONDARY_INDEX),
+        "Secondary index is not initialized in MDT");
+
+    HoodieTimer timer = HoodieTimer.start();
+    Map<String, String> recordKeyToSecondaryKeyMap = getSecondaryKeysUsingRecordKeys(recordKeys, MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+
+
+    return recordKeyToSecondaryKeyMap;
+  }
+
+  /**
    * Returns a list of all partitions.
    */
   protected List<String> fetchAllPartitionPaths() {
@@ -414,6 +457,11 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
   protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
+
+  // returns a map of (secondary-key, list-of-secondary-index-records)
+  protected abstract Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getRecordsBySecondaryKeys(List<String> keys, String partitionName);
+
+  protected abstract Map<String, String> getSecondaryKeysUsingRecordKeys(List<String> recordKeys, String partitionName);
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;

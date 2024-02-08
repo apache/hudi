@@ -479,6 +479,34 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return getInsertValue(schema, new Properties());
   }
 
+  public static Option<HoodieRecord<HoodieMetadataPayload>> combineSecondaryIndexRecord(
+      HoodieRecord<HoodieMetadataPayload> oldRecord,
+      HoodieRecord<HoodieMetadataPayload> newRecord) {
+    String oldSecondaryKey = oldRecord.getRecordKey();
+    String newSecondaryKey = newRecord.getRecordKey();
+
+    if (newRecord.getData().secondaryIndexMetadata.getIsDeleted()) {
+      return Option.empty();
+    } else if (oldRecord.getData().secondaryIndexMetadata.getIsDeleted()) {
+      return Option.of(newRecord);
+    }
+
+    return Option.of(newRecord);
+  }
+
+  public static Option<HoodieMetadataPayload> combineSecondaryIndexPayload(
+      HoodieMetadataPayload oldPayload,
+      HoodieMetadataPayload newPayload) {
+
+    if (newPayload.secondaryIndexMetadata.getIsDeleted()) {
+      return Option.empty();
+    } else if (oldPayload.secondaryIndexMetadata.getIsDeleted()) {
+      return Option.of(newPayload);
+    }
+
+    return Option.of(newPayload);
+  }
+
   /**
    * Returns the list of filenames added as part of this record.
    */
@@ -802,6 +830,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public HoodieRecordGlobalLocation getRecordGlobalLocation() {
     return HoodieTableMetadataUtil.getLocationFromRecordIndexInfo(recordIndexMetadata);
+  }
+
+  public String getRecordKeyFromSecondaryIndex() {
+    // TODO (vinay): Handle deletes and any other necessary checks etc. Check getRecordGlobalLocation()
+    return secondaryIndexMetadata.getRecordKey();
   }
 
   public boolean isDeleted() {

@@ -297,6 +297,11 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
+  public Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys) {
+    throw new HoodieMetadataException("Unsupported operation: readSecondaryIndex!");
+  }
+
+  @Override
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
     throw new HoodieMetadataException("Unsupported operation: getNumFileGroupsForPartition");
   }

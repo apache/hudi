@@ -95,7 +95,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
   /**
    * NOTE: [[ColumnStatsIndexSupport]] is a transient state, since it's only relevant while logical plan
-   *       is handled by the Spark's driver
+   * is handled by the Spark's driver
    */
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
@@ -171,7 +171,7 @@ case class HoodieFileIndex(spark: SparkSession,
             }
           }).filter(slice => slice != null)
           val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
-            || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
+              || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
@@ -205,7 +205,7 @@ case class HoodieFileIndex(spark: SparkSession,
     } else if (shouldEmbedFileSlices) {
       assert(partitionSchema.isEmpty)
       prunedPartitionsAndFilteredFileSlices
-    }else {
+    } else {
       Seq(PartitionDirectory(InternalRow.empty, prunedPartitionsAndFilteredFileSlices.flatMap(_.files)))
     }
   }
@@ -214,7 +214,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * The functions prunes the partition paths based on the input partition filters. For every partition path, the file
    * slices are further filtered after querying metadata table based on the data filters.
    *
-   * @param dataFilters data columns filters
+   * @param dataFilters      data columns filters
    * @param partitionFilters partition column filters
    * @return A sequence of pruned partitions and corresponding filtered file slices
    */
@@ -235,16 +235,16 @@ case class HoodieFileIndex(spark: SparkSession,
       //    - List of predicates (filters) is present
       val shouldPushDownFilesFilter = !partitionFilters.isEmpty
       val candidateFilesNamesOpt: Option[Set[String]] =
-      lookupCandidateFilesInMetadataTable(dataFilters, prunedPartitionsAndFileSlices, shouldPushDownFilesFilter) match {
-        case Success(opt) => opt
-        case Failure(e) =>
-          logError("Failed to lookup candidate files in File Index", e)
+        lookupCandidateFilesInMetadataTable(dataFilters, prunedPartitionsAndFileSlices, shouldPushDownFilesFilter) match {
+          case Success(opt) => opt
+          case Failure(e) =>
+            logError("Failed to lookup candidate files in File Index", e)
 
-          spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
-            case DataSkippingFailureMode.Fallback.value => Option.empty
-            case DataSkippingFailureMode.Strict.value => throw new HoodieException(e);
-          }
-      }
+            spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
+              case DataSkippingFailureMode.Fallback.value => Option.empty
+              case DataSkippingFailureMode.Strict.value => throw new HoodieException(e);
+            }
+        }
 
       logDebug(s"Overlapping candidate files from Column Stats or Record Level Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
@@ -286,7 +286,7 @@ case class HoodieFileIndex(spark: SparkSession,
     }
   }
 
-  def getFileSlicesForPrunedPartitions(partitionFilters: Seq[Expression]) : Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
+  def getFileSlicesForPrunedPartitions(partitionFilters: Seq[Expression]): Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
     // Prune the partition path by the partition filters
     // NOTE: Non-partitioned tables are assumed to consist from a single partition
     //       encompassing the whole table
@@ -344,11 +344,15 @@ case class HoodieFileIndex(spark: SparkSession,
 
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
     lazy val (_, recordKeys) = recordLevelIndex.filterQueriesWithRecordKey(queryFilters)
+    lazy val (_, secondaryKeys) = recordLevelIndex.filterQueriesWithSecondaryKey(queryFilters)
     if (!isMetadataTableEnabled || !isDataSkippingEnabled) {
       validateConfig()
       Option.empty
     } else if (recordKeys.nonEmpty) {
       Option.apply(recordLevelIndex.getCandidateFiles(getAllFiles(), recordKeys))
+    } else if (secondaryKeys.nonEmpty) {
+      // If available, secondary keys are used to prune candidate files (before other indexes below)
+      Option.apply(recordLevelIndex.getCandidateFilesFromSecondaryIndex(getAllFiles(), secondaryKeys))
     } else if (functionalIndex.isIndexAvailable && !queryFilters.isEmpty) {
       val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
       val shouldReadInMemory = functionalIndex.shouldReadInMemory(this, queryReferencedColumns)

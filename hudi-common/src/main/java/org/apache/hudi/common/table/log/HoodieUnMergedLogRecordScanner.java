@@ -33,6 +33,7 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -45,10 +46,10 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, Option<InstantRange> instantRange, InternalSchema internalSchema,
-                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                         Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
                                          Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange,
-        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger,
+        false, true, keyFieldOverride, internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger,
          hoodieTableMetaClientOption);
     this.callback = callback;
   }
@@ -113,6 +114,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private boolean enableOptimizedLogBlocksScan;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
     private HoodieTableMetaClient hoodieTableMetaClient;
+    private String keyFieldOverride;
 
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -191,13 +193,18 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
       return this;
     }
 
+    public HoodieUnMergedLogRecordScanner.Builder withKeyFieldOverride(String keyFieldOverride) {
+      this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
+      return this;
+    }
+
     @Override
     public HoodieUnMergedLogRecordScanner build() {
       ValidationUtils.checkArgument(recordMerger != null);
 
       return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange,
-          internalSchema, enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient));
+          internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient));
     }
   }
 }

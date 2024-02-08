@@ -210,4 +210,9 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                int parallelism, Schema readerSchema, SerializableConfiguration hadoopConf) {
     throw new HoodieNotSupportedException("Flink metadata table does not support functional index yet.");
   }
+
+  @Override
+  public HoodieData<HoodieRecord> createDeletedSecondaryIndexRecords(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap) {
+    throw new HoodieNotSupportedException("Flink metadata table does not support secondary index yet.");
+  }
 }

@@ -20,7 +20,9 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.AbstractHoodieLogRecordReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -32,7 +34,9 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,9 +52,9 @@ import java.util.stream.Collectors;
 @ThreadSafe
 public class HoodieMetadataLogRecordReader implements Closeable {
 
-  private final HoodieMergedLogRecordScanner logRecordScanner;
+  private final AbstractHoodieLogRecordReader logRecordScanner;
 
-  private HoodieMetadataLogRecordReader(HoodieMergedLogRecordScanner logRecordScanner) {
+  private HoodieMetadataLogRecordReader(AbstractHoodieLogRecordReader logRecordScanner) {
     this.logRecordScanner = logRecordScanner;
   }
 
@@ -66,12 +70,17 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
-      logRecordScanner.scan();
-      return logRecordScanner.getRecords().values()
+      assert logRecordScanner instanceof HoodieMergedLogRecordScanner;
+      return ((HoodieMergedLogRecordScanner)logRecordScanner).getRecords().values()
           .stream()
           .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
           .collect(Collectors.toList());
     }
+  }
+
+  public void scan() {
+    assert logRecordScanner instanceof HoodieUnMergedLogRecordScanner;
+    ((HoodieUnMergedLogRecordScanner) logRecordScanner).scan();
   }
 
   @SuppressWarnings("unchecked")
@@ -83,9 +92,10 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
-      logRecordScanner.scanByKeyPrefixes(sortedKeyPrefixes);
+      assert logRecordScanner instanceof HoodieMergedLogRecordScanner;
+      ((HoodieMergedLogRecordScanner)logRecordScanner).scanByKeyPrefixes(sortedKeyPrefixes);
       Predicate<String> p = createPrefixMatchingPredicate(sortedKeyPrefixes);
-      return logRecordScanner.getRecords().entrySet()
+      return ((HoodieMergedLogRecordScanner)logRecordScanner).getRecords().entrySet()
           .stream()
           .filter(r -> r != null && p.test(r.getKey()))
           .map(r -> (HoodieRecord<HoodieMetadataPayload>) r.getValue())
@@ -106,8 +116,9 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
-      logRecordScanner.scanByFullKeys(sortedKeys);
-      Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
+      assert logRecordScanner instanceof HoodieMergedLogRecordScanner;
+      ((HoodieMergedLogRecordScanner)logRecordScanner).scanByFullKeys(sortedKeys);
+      Map<String, HoodieRecord> allRecords = ((HoodieMergedLogRecordScanner)logRecordScanner).getRecords();
       return sortedKeys.stream()
           .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
           .filter(Objects::nonNull)
@@ -123,18 +134,35 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
-      logRecordScanner.scanByFullKeys(sortedKeys);
-      Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
-      return sortedKeys.stream()
-          .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
-          .filter(Objects::nonNull)
-          .collect(Collectors.groupingBy(HoodieRecord::getRecordKey));
+      if (logRecordScanner instanceof HoodieMergedLogRecordScanner) {
+        ((HoodieMergedLogRecordScanner)logRecordScanner).scanByFullKeys(sortedKeys);
+        Map<String, HoodieRecord> allRecords = ((HoodieMergedLogRecordScanner)logRecordScanner).getRecords();
+
+        Map<String, List<HoodieRecord<HoodieMetadataPayload>>> result = new HashMap<>();
+        sortedKeys.stream()
+            .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
+            .filter(Objects::nonNull)
+            .forEach(record -> {
+              List<HoodieRecord<HoodieMetadataPayload>> records = result.getOrDefault(record.getRecordKey(), new ArrayList<>());
+              records.add(record);
+              result.put(record.getRecordKey(), records);
+            });
+        return result;
+      }
+
+      assert logRecordScanner instanceof HoodieUnMergedLogRecordScanner;
+      ((HoodieUnMergedLogRecordScanner)logRecordScanner).scan(false);
+
+      // TODO: fix this return of dummy hashmap.
+      return new HashMap<>();
     }
   }
 
   @Override
   public void close() throws IOException {
-    logRecordScanner.close();
+    if (logRecordScanner instanceof HoodieMergedLogRecordScanner) {
+      ((HoodieMergedLogRecordScanner)logRecordScanner).close();
+    }
   }
 
   private static Predicate<String> createPrefixMatchingPredicate(List<String> keyPrefixes) {
@@ -160,33 +188,45 @@ public class HoodieMetadataLogRecordReader implements Closeable {
             .withReverseReader(false)
             .withOperationField(false);
 
+    private  HoodieUnMergedLogRecordScanner.Builder unmergedScannerBuilder =
+        new HoodieUnMergedLogRecordScanner.Builder()
+            .withKeyFieldOverride(HoodieMetadataPayload.KEY_FIELD_NAME)
+            .withReadBlocksLazily(true)
+            .withReverseReader(false);
+
     public Builder withFileSystem(FileSystem fs) {
       scannerBuilder.withFileSystem(fs);
+      unmergedScannerBuilder.withFileSystem(fs);
       return this;
     }
 
     public Builder withBasePath(String basePath) {
       scannerBuilder.withBasePath(basePath);
+      unmergedScannerBuilder.withBasePath(basePath);
       return this;
     }
 
     public Builder withLogFilePaths(List<String> logFilePaths) {
       scannerBuilder.withLogFilePaths(logFilePaths);
+      unmergedScannerBuilder.withLogFilePaths(logFilePaths);
       return this;
     }
 
     public Builder withReaderSchema(Schema schema) {
       scannerBuilder.withReaderSchema(schema);
+      unmergedScannerBuilder.withReaderSchema(schema);
       return this;
     }
 
     public Builder withLatestInstantTime(String latestInstantTime) {
       scannerBuilder.withLatestInstantTime(latestInstantTime);
+      unmergedScannerBuilder.withLatestInstantTime(latestInstantTime);
       return this;
     }
 
     public Builder withBufferSize(int bufferSize) {
       scannerBuilder.withBufferSize(bufferSize);
+      unmergedScannerBuilder.withBufferSize(bufferSize);
       return this;
     }
 
@@ -230,16 +270,23 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
     public Builder withEnableOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       scannerBuilder.withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan);
+      unmergedScannerBuilder.withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan);
       return this;
     }
 
     public Builder withTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
       scannerBuilder.withTableMetaClient(hoodieTableMetaClient);
+      unmergedScannerBuilder.withTableMetaClient(hoodieTableMetaClient);
       return this;
     }
 
     public HoodieMetadataLogRecordReader build() {
       return new HoodieMetadataLogRecordReader(scannerBuilder.build());
+    }
+
+    public HoodieMetadataLogRecordReader buildWithUnmergedLogRecordScanner(HoodieUnMergedLogRecordScanner.LogRecordScannerCallback callback) {
+      unmergedScannerBuilder.withLogRecordScannerCallback(callback);
+      return new HoodieMetadataLogRecordReader(unmergedScannerBuilder.build());
     }
   }
 }

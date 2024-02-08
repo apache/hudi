@@ -111,6 +111,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -445,7 +446,7 @@ public class HoodieTableMetadataUtil {
               return HoodieMetadataPayload.createPartitionFilesRecord(partitionStatName, updatedFilesToSizesMapping,
                   Collections.emptyList());
             })
-            .collect(Collectors.toList());
+            .collect(toList());
 
     records.addAll(updatedPartitionFilesRecords);
 
@@ -459,7 +460,7 @@ public class HoodieTableMetadataUtil {
     return commitMetadata.getPartitionToWriteStats().keySet().stream()
         // We need to make sure we properly handle case of non-partitioned tables
         .map(HoodieTableMetadataUtil::getPartitionIdentifierForFilesPartition)
-        .collect(Collectors.toList());
+        .collect(toList());
   }
 
   /**
@@ -475,7 +476,7 @@ public class HoodieTableMetadataUtil {
       HoodieEngineContext context, HoodieConfig hoodieConfig, HoodieCommitMetadata commitMetadata,
       String instantTime, MetadataRecordsGenerationParams recordsGenerationParams) {
     final List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
-        .flatMap(entry -> entry.stream()).collect(Collectors.toList());
+        .flatMap(entry -> entry.stream()).collect(toList());
     if (allWriteStats.isEmpty()) {
       return context.emptyHoodieData();
     }
@@ -1059,7 +1060,7 @@ public class HoodieTableMetadataUtil {
     } else {
       fileSliceStream = fsView.getLatestFileSlices(partition);
     }
-    return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
+    return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(toList());
   }
 
   /**
@@ -1077,14 +1078,14 @@ public class HoodieTableMetadataUtil {
     Stream<FileSlice> fileSliceStream = fsView.fetchLatestFileSlicesIncludingInflight(partition);
     return fileSliceStream
         .sorted(Comparator.comparing(FileSlice::getFileId))
-        .collect(Collectors.toList());
+        .collect(toList());
   }
 
   public static HoodieData<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCommitMetadata commitMetadata,
                                                                              HoodieEngineContext engineContext,
                                                                              MetadataRecordsGenerationParams recordsGenerationParams) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
-        .flatMap(Collection::stream).collect(Collectors.toList());
+        .flatMap(Collection::stream).collect(toList());
 
     if (allWriteStats.isEmpty()) {
       return engineContext.emptyHoodieData();
@@ -1139,7 +1140,7 @@ public class HoodieTableMetadataUtil {
         .map(writerSchema ->
             writerSchema.getFields().stream()
                 .map(Schema.Field::name)
-                .collect(Collectors.toList()))
+                .collect(toList()))
         .orElse(Collections.emptyList());
   }
 
@@ -1167,7 +1168,7 @@ public class HoodieTableMetadataUtil {
       // TODO we should delete records instead of stubbing them
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnsToIndex.stream()
           .map(entry -> HoodieColumnRangeMetadata.stub(fileName, entry))
-          .collect(Collectors.toList());
+          .collect(toList());
 
       return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadataList, true);
     }
@@ -1202,7 +1203,7 @@ public class HoodieTableMetadataUtil {
 
   /**
    * Does an upcast for {@link BigDecimal} instance to align it with scale/precision expected by
-   * the {@link org.apache.avro.LogicalTypes.Decimal} Avro logical type
+   * the {@link LogicalTypes.Decimal} Avro logical type
    */
   public static BigDecimal tryUpcastDecimal(BigDecimal value, final LogicalTypes.Decimal decimal) {
     final int scale = decimal.getScale();
@@ -1342,7 +1343,7 @@ public class HoodieTableMetadataUtil {
             .filter(instant -> instant.isCompleted() && isValidInstant(instant))
             .getInstantsAsStream()
             .map(HoodieInstant::getTimestamp)
-            .collect(Collectors.toList()));
+            .collect(toList()));
 
     // For any rollbacks and restores, we cannot neglect the instants that they are rolling back.
     // The rollback instant should be more recent than the start of the timeline for it to have rolled back any
@@ -1757,7 +1758,7 @@ public class HoodieTableMetadataUtil {
       fileId = originalFileId;
     }
 
-    final java.util.Date instantDate = new java.util.Date(instantTime);
+    final Date instantDate = new Date(instantTime);
     return new HoodieRecordGlobalLocation(partition, HoodieActiveTimeline.formatDate(instantDate), fileId);
   }
 
@@ -1788,7 +1789,7 @@ public class HoodieTableMetadataUtil {
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
-      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(config, configuration.get(), dataFilePath);
       ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
 
@@ -1884,7 +1885,7 @@ public class HoodieTableMetadataUtil {
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
       HoodieConfig hoodieConfig = getReaderConfigs(configuration.get());
-      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(hoodieConfig, configuration.get(), dataFilePath);
       ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
 
@@ -1937,7 +1938,7 @@ public class HoodieTableMetadataUtil {
   }
 
   private static ClosableIterator<HoodieRecord> createSecondaryIndexGenerator(boolean forDelete,
-                                                                       HoodieTableMetaClient metaClient,
+                                                                              HoodieTableMetaClient metaClient,
                                                                        EngineType engineType,
                                                                        List<String> logFilePaths,
                                                                        Schema tableSchema,

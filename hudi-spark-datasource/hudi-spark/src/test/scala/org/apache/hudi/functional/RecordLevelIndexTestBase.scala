@@ -54,7 +54,6 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     RECORDKEY_FIELD.key -> "_row_key",
-    SECONDARYKEY_FIELD.key -> "partition",
     PARTITIONPATH_FIELD.key -> "partition",
     PRECOMBINE_FIELD.key -> "timestamp",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"

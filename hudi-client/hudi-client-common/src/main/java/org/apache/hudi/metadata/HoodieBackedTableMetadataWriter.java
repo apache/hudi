@@ -532,6 +532,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                                                         int parallelism, Schema readerSchema,
                                                                         SerializableConfiguration hadoopConf);
 
+  public abstract HoodieData<HoodieRecord> createDeletedSecondaryIndexRecords(HoodieEngineContext engineContext,
+                                                                              Map<String, String> recordKeySecondaryKeyMap);
+
   private Pair<Integer, HoodieData<HoodieRecord>> initializeFunctionalIndexPartition() throws Exception {
     HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(dataMetaClient, dataMetaClient.getActiveTimeline(), metadata);
     String indexName = dataWriteConfig.getFunctionalIndexConfig().getIndexName();
@@ -988,7 +991,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(updatesFromWriteStatuses, commitMetadata);
       partitionToRecordMap.put(RECORD_INDEX, updatesFromWriteStatuses.union(additionalUpdates));
       updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
-      updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap);
+      updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, writeStatus);
 
       return partitionToRecordMap;
     });
@@ -1054,14 +1057,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return getFunctionalIndexRecords(partitionFileSlicePairs, indexDefinition, dataMetaClient, parallelism, readerSchema, hadoopConf);
   }
 
-  private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordMap) {
+  private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordMap, HoodieData<WriteStatus> writeStatus) {
     dataMetaClient.getTableConfig().getMetadataPartitions()
         .stream()
         .filter(partition -> partition.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
         .forEach(partition -> {
           HoodieData<HoodieRecord> secondaryIndexRecords;
           try {
-            secondaryIndexRecords = getSecondaryIndexUpdates(commitMetadata);
+            secondaryIndexRecords = getSecondaryIndexUpdates(commitMetadata, writeStatus);
           } catch (Exception e) {
             throw new HoodieMetadataException("Failed to get secondary index updates for partition " + partition, e);
           }
@@ -1069,7 +1072,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         });
   }
 
-  private HoodieData<HoodieRecord> getSecondaryIndexUpdates(HoodieCommitMetadata commitMetadata) throws Exception {
+  private HoodieData<HoodieRecord> getSecondaryIndexUpdates(HoodieCommitMetadata commitMetadata, HoodieData<WriteStatus> writeStatus) throws Exception {
     /* Build a list of basefiles+delta-log-files for every partition that this commit touches */
     // {
     //   {
@@ -1096,17 +1099,29 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       });
     });
 
+    List<String> keysToRemove = new ArrayList<>();
+    writeStatus.collectAsList().forEach(status -> {
+      status.getWrittenRecordDelegates().forEach(recordDelegate -> {
+        if (!recordDelegate.getNewLocation().isPresent() || (recordDelegate.getCurrentLocation().isPresent() && recordDelegate.getNewLocation().isPresent())) {
+          keysToRemove.add(recordDelegate.getRecordKey());
+        }
+      });
+    });
+
+    Map<String, String> recordLocations1 = metadata.readSecondaryKeyByRecordKey(keysToRemove);
+    HoodieData<HoodieRecord> deletedRecords = createDeletedSecondaryIndexRecords(engineContext, recordLocations1);
+
     // Reuse record index parallelism config to build secondary index
     int parallelism = Math.min(partitionFilePairs.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
 
-    return readSecondaryKeysFromFiles(
+    return deletedRecords.union(readSecondaryKeysFromFiles(
         engineContext,
         partitionFilePairs,
         false,
         parallelism,
         this.getClass().getSimpleName(),
         dataMetaClient,
-        EngineType.SPARK);
+        EngineType.SPARK));
   }
 
   /**
