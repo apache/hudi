@@ -164,6 +164,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBaseP
  */
 public class HoodieMetadataTableValidator implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataTableValidator.class);
 
   // Spark context

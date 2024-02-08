@@ -43,6 +43,7 @@ import java.util.stream.IntStream;
 
 public class HoodieWithTimelineServer implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private final Config cfg;
 
   public HoodieWithTimelineServer(Config cfg) {

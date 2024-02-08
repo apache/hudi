@@ -62,6 +62,7 @@ import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
  */
 public class HoodieSnapshotCopier implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSnapshotCopier.class);
 
   static class Config implements Serializable {

@@ -103,6 +103,7 @@ import scala.Tuple2;
  */
 public class HoodieDropPartitionsTool implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieDropPartitionsTool.class);
   // Spark context
   private final transient JavaSparkContext jsc;
