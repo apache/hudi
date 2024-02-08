@@ -48,6 +48,7 @@ import java.util.Properties;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 
 /**
@@ -161,6 +162,10 @@ public class HoodieMetadataWriteUtils {
     final Properties properties = new Properties();
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), RECORD_KEY_FIELD_NAME);
     properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD_NAME);
+    if (nonEmpty(writeConfig.getMetricReporterMetricsNamePrefix())) {
+      properties.put(HoodieMetricsConfig.METRICS_REPORTER_PREFIX.key(),
+          writeConfig.getMetricReporterMetricsNamePrefix() + METADATA_TABLE_NAME_SUFFIX);
+    }
     builder.withProperties(properties);
 
     if (writeConfig.isMetricsOn()) {

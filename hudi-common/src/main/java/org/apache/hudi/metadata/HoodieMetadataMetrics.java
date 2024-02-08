@@ -47,16 +47,19 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String LOOKUP_FILES_STR = "lookup_files";
   public static final String LOOKUP_BLOOM_FILTERS_METADATA_STR = "lookup_meta_index_bloom_filters";
   public static final String LOOKUP_COLUMN_STATS_METADATA_STR = "lookup_meta_index_column_ranges";
+  public static final String LOOKUP_BLOOM_FILTERS_FILE_COUNT_STR = "lookup_meta_index_bloom_filters_file_count";
+  public static final String LOOKUP_COLUMN_STATS_FILE_COUNT_STR = "lookup_meta_index_column_ranges_file_count";
+
   // Time for lookup from record index
   public static final String LOOKUP_RECORD_INDEX_TIME_STR = "lookup_record_index_time";
   // Number of keys looked up in a call
   public static final String LOOKUP_RECORD_INDEX_KEYS_COUNT_STR = "lookup_record_index_key_count";
   // Number of keys found in record index
-  public static final String LOOKUP_RECORD_INDEX_KEYS_HITS_COUNT_STR = "lookup_record_index_key_count";
+  public static final String LOOKUP_RECORD_INDEX_KEYS_HITS_COUNT_STR = "lookup_record_index_key_hit_count";
   public static final String SCAN_STR = "scan";
   public static final String BASEFILE_READ_STR = "basefile_read";
   public static final String INITIALIZE_STR = "initialize";
-  public static final String REBOOTSTRAP_STR = "rebootstrap";
+  public static final String REBOOTSTRAP_STR = "rebootstrap_count";
   public static final String BOOTSTRAP_ERR_STR = "bootstrap_error";
 
   // Stats names
@@ -136,7 +139,7 @@ public class HoodieMetadataMetrics implements Serializable {
     String countKey = action + ".count";
     String durationKey = action + ".totalDuration";
     incrementMetric(countKey, 1);
-    incrementMetric(durationKey, durationInMs);
+    setMetric(durationKey, durationInMs);
   }
 
   public void updateSizeMetrics(HoodieTableMetaClient metaClient, HoodieBackedTableMetadata metadata, Set<String> metadataPartitions) {
