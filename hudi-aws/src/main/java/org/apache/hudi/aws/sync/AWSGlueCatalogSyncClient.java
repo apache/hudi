@@ -114,6 +114,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   protected final GlueAsyncClient awsGlue;
   private static final String GLUE_PARTITION_INDEX_ENABLE = "partition_filtering.enabled";
   private static final int PARTITION_INDEX_MAX_NUMBER = 3;
+  private static final int GLUE_EXPRESSION_MAX_CHARS = 2048;
   /**
    * athena v2/v3 table property
    * see https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html
@@ -156,10 +157,16 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public List<Partition> getPartitionsByFilter(String tableName, String filter) {
     try {
-      return getPartitions(GetPartitionsRequest.builder()
+      if (filter.length() <= GLUE_EXPRESSION_MAX_CHARS) {
+        LOG.info("Pushdown filters: {}", filter);
+        return getPartitions(GetPartitionsRequest.builder()
               .databaseName(databaseName)
               .tableName(tableName)
               .expression(filter));
+      } else {
+        LOG.warn("Falling back to listing all partition since expression filter length > {}", GLUE_EXPRESSION_MAX_CHARS);
+        return getAllPartitions(tableName);
+      }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get partitions for table " + tableId(databaseName, tableName) + " from expression: " + filter, e);
     }
