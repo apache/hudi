@@ -31,7 +31,7 @@
 
     <properties>
         <dynamodb-local.version>1.15.0</dynamodb-local.version>
-        <moto.version>latest</moto.version>
+        <moto.version>5.0.1</moto.version>
     </properties>
 
     <dependencies>
