@@ -76,6 +76,13 @@
             <artifactId>rocksdbjni</artifactId>
         </dependency>
 
+        <!-- Override the provided scope defined in hudi-common -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
         <!-- Hadoop -->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
@@ -192,6 +199,7 @@
                       <include>commons-io:commons-io</include>
                       <include>log4j:log4j</include>
                       <include>org.openjdk.jol:jol-core</include>
+                      <include>org.apache.avro:avro</include>
                   </includes>
                 </artifactSet>
                 <relocations combine.children="append">
@@ -206,6 +214,10 @@
                     <relocation>
                         <pattern>com.fasterxml.jackson.</pattern>
                         <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                        <pattern>org.apache.avro.</pattern>
+                        <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
                     </relocation>
                 </relocations>
             </configuration>
