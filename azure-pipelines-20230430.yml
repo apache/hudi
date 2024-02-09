@@ -117,7 +117,7 @@ stages:
             displayName: "build docker image"
             inputs:
               containerRegistry: 'apachehudi-docker-hub'
-              repository: 'prettydocker/hudi-devops'
+              repository: 'apachehudi/hudi-ci-bundle-validation-base'
               command: 'buildAndPush'
               Dockerfile: '**/Dockerfile'
               tags: "azure_ci_test_base_new"
