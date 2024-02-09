@@ -89,7 +89,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
@@ -277,7 +276,7 @@ public class HoodieIndexUtils {
    * @return List of pairs of candidate keys and positions that are available in the file
    */
   public static List<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
-                                                            List<String> candidateRecordKeys,
+                                                            Set<String> candidateRecordKeys,
                                                             HoodieStorage storage) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
     List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
@@ -288,7 +287,7 @@ public class HoodieIndexUtils {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();
-        Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys.stream().collect(Collectors.toSet()));
+        Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys);
         foundRecordKeys.addAll(fileRowKeys);
         log.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size());
