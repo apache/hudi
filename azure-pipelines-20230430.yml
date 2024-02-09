@@ -145,6 +145,15 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - task: reportgenerator@4
+            inputs:
+              reports: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
+              targetdir: '$(System.DefaultWorkingDirectory)/JacocoResults'
+          - task: PublishCodeCoverageResults@1
+            displayName: code coverage result
+            inputs:
+              codeCoverageTool: 'JaCoCo'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/JacocoResults/jacoco.xml'
       - job: UT_FT_2
         displayName: FT client/spark-client & hudi-spark-datasource/hudi-spark
         timeoutInMinutes: '150'
@@ -171,6 +180,15 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - task: reportgenerator@4
+            inputs:
+              reports: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
+              targetdir: '$(System.DefaultWorkingDirectory)/JacocoResults'
+          - task: PublishCodeCoverageResults@1
+            displayName: code coverage result
+            inputs:
+              codeCoverageTool: 'JaCoCo'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/JacocoResults/jacoco.xml'
       - job: UT_FT_3
         displayName: UT spark-datasource
         timeoutInMinutes: '240'
@@ -197,6 +215,15 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - task: reportgenerator@4
+            inputs:
+              reports: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
+              targetdir: '$(System.DefaultWorkingDirectory)/JacocoResults'
+          - task: PublishCodeCoverageResults@1
+            displayName: code coverage result
+            inputs:
+              codeCoverageTool: 'JaCoCo'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/JacocoResults/jacoco.xml'
       - job: UT_FT_4
         displayName: UT FT other modules
         timeoutInMinutes: '240'
@@ -233,3 +260,12 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - task: reportgenerator@4
+            inputs:
+              reports: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
+              targetdir: '$(System.DefaultWorkingDirectory)/JacocoResults'
+          - task: PublishCodeCoverageResults@1
+            displayName: code coverage result
+            inputs:
+              codeCoverageTool: 'JaCoCo'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/JacocoResults/jacoco.xml'
