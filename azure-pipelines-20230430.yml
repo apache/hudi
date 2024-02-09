@@ -120,4 +120,4 @@ stages:
               repository: 'prettydocker/hudi-devops'
               command: 'buildAndPush'
               Dockerfile: '**/Dockerfile'
-              tags: "azure_ci_test_base"
+              tags: "azure_ci_test_base_new"
