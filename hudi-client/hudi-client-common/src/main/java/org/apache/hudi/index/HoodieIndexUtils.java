@@ -84,7 +84,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -276,27 +275,28 @@ public class HoodieIndexUtils {
    * @param storage
    * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static Collection<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
-                                                                  Set<String> candidateRecordKeys,
-                                                                  HoodieStorage storage) throws HoodieIndexException {
+  public static List<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
+                                                            Set<String> candidateRecordKeys,
+                                                            HoodieStorage storage) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
-    if (candidateRecordKeys.isEmpty()) {
-      return Collections.emptyList();
-    }
+    List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
     log.info("Going to filter {} keys from file {}", candidateRecordKeys.size(), filePath);
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
-      HoodieTimer timer = HoodieTimer.start();
-      Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys);
-      log.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
-          timer.endTimer(), candidateRecordKeys.size(), fileRowKeys.size());
-      log.debug("Keys matching for file {} => {}", filePath, fileRowKeys);
-      return fileRowKeys;
+      if (!candidateRecordKeys.isEmpty()) {
+        HoodieTimer timer = HoodieTimer.start();
+        Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys);
+        foundRecordKeys.addAll(fileRowKeys);
+        log.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
+            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size());
+        log.debug("Keys matching for file {} => {}", filePath, foundRecordKeys);
+      }
     } catch (Exception e) {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
     }
+    return foundRecordKeys;
   }
 
   /**
@@ -361,6 +361,7 @@ public class HoodieIndexUtils {
           .withRequestedSchema(dataSchema)
           .withInternalSchema(internalSchemaOption)
           .withProps(metaClient.getTableConfig().getProps())
+          .withEnableOptimizedLogBlockScan(config.enableOptimizedLogBlocksScan())
           .build();
       try {
         final HoodieRecordLocation currentLocation = new HoodieRecordLocation(fileSlice.getBaseInstantTime(), fileSlice.getFileId());
@@ -431,10 +432,10 @@ public class HoodieIndexUtils {
     //record is inserted or updated
     String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
     HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
-    HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
+    HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(),
         new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
-    return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
-        config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
+    return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields.toAvroSchema(), properties, Option.empty(),
+        config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema.toAvroSchema())));
   }
 
   private static <R> String inferPartitionPath(HoodieRecord<R> incoming, HoodieRecord<R> existing, HoodieSchema recordSchema, BaseKeyGenerator keyGenerator,
@@ -486,11 +487,11 @@ public class HoodieIndexUtils {
         return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, partitionPath));
       } else {
         HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
-        HoodieRecord<R> resultWithMetaFields = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
+        HoodieRecord<R> resultWithMetaFields = result.prependMetaFields(writeSchema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(),
             new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
         // the merged record needs to be converted back to the original payload
-        return Option.of(resultWithMetaFields.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
-            config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
+        return Option.of(resultWithMetaFields.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields.toAvroSchema(), properties, Option.empty(),
+            config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema.toAvroSchema())));
       }
     }
   }
