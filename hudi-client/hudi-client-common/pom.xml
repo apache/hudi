@@ -43,12 +43,6 @@
       <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
     </dependency>
-<!--    <dependency>-->
-<!--      <groupId>org.apache.hudi</groupId>-->
-<!--      <artifactId>hudi-aws</artifactId>-->
-<!--      <version>${project.version}</version>-->
-<!--      <scope>provided</scope>-->
-<!--    </dependency>-->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hive-sync</artifactId>
