@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests against {@link CheckpointUtils}.
@@ -152,6 +153,17 @@ public class TestCheckpointUtils {
     assertEquals(0, ranges[1].fromOffset());
     assertEquals(100, ranges[1].untilOffset());
 
+    // minPartitions < number of topic partitions
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1, 2}, new long[] {0, 0, 0}),
+        makeOffsetMap(new int[] {0, 1, 2}, new long[] {1000, 1000, 1000}), 300, 2);
+    assertEquals(3, ranges.length);
+    assertEquals(0, ranges[0].fromOffset());
+    assertEquals(100, ranges[0].untilOffset());
+    assertEquals(0, ranges[1].fromOffset());
+    assertEquals(100, ranges[1].untilOffset());
+    assertEquals(0, ranges[1].fromOffset());
+    assertEquals(100, ranges[1].untilOffset());
+
     // 1 TopicPartition to N offset ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
         makeOffsetMap(new int[] {0}, new long[] {1000}), 300, 3);
@@ -163,16 +175,25 @@ public class TestCheckpointUtils {
     assertEquals(200, ranges[2].fromOffset());
     assertEquals(300, ranges[2].untilOffset());
 
-    // N skewed TopicPartitions to M offset ranges
+    // This fails the validation for now
+    assertThrows(IllegalArgumentException.class, () -> {
+      // N skewed TopicPartitions to M offset ranges
+      CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {0, 0}),
+          makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 3);
+    });
+
+    // minPartitions is 2x of number of topic partitions
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {0, 0}),
-        makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 3);
-    assertEquals(3, ranges.length);
+        makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 4);
+    assertEquals(4, ranges.length);
     assertEquals(0, ranges[0].fromOffset());
     assertEquals(100, ranges[0].untilOffset());
     assertEquals(0, ranges[1].fromOffset());
-    assertEquals(250, ranges[1].untilOffset());
-    assertEquals(250, ranges[2].fromOffset());
-    assertEquals(500, ranges[2].untilOffset());
+    assertEquals(167, ranges[1].untilOffset());
+    assertEquals(167, ranges[2].fromOffset());
+    assertEquals(334, ranges[2].untilOffset());
+    assertEquals(334, ranges[3].fromOffset());
+    assertEquals(500, ranges[3].untilOffset());
 
     // range inexact multiple of minPartitions
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
@@ -187,21 +208,18 @@ public class TestCheckpointUtils {
 
     // do not ignore empty ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}),
-        makeOffsetMap(new int[] {0, 1}, new long[] {100, 600}), 600, 3);
-    assertEquals(3, ranges.length);
+        makeOffsetMap(new int[] {0, 1}, new long[] {100, 600}), 600, 0);
+    assertEquals(2, ranges.length);
     assertEquals(0, ranges[0].partition());
     assertEquals(100, ranges[0].fromOffset());
     assertEquals(100, ranges[0].untilOffset());
     assertEquals(1, ranges[1].partition());
     assertEquals(0, ranges[1].fromOffset());
-    assertEquals(300, ranges[1].untilOffset());
-    assertEquals(1, ranges[2].partition());
-    assertEquals(300, ranges[2].fromOffset());
-    assertEquals(600, ranges[2].untilOffset());
+    assertEquals(600, ranges[1].untilOffset());
 
     // all empty ranges, do not ignore empty ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}),
-        makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}), 600, 3);
+        makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}), 600, 0);
     assertEquals(0, CheckpointUtils.totalNewMessages(ranges));
     assertEquals(2, ranges.length);
     assertEquals(0, ranges[0].partition());
