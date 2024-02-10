@@ -108,6 +108,9 @@ variables:
 
 stages:
   - stage: test
+    variables:
+      - name: DOCKER_BUILDKIT
+        value: 1
     jobs:
       - job: UT_FT_1
         displayName: UT FT common & flink & UT client/spark-client
