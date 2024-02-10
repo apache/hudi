@@ -124,15 +124,26 @@ public class KafkaOffsetGen {
                                                     Map<TopicPartition, Long> toOffsetMap,
                                                     long numEvents,
                                                     long minPartitions) {
+      boolean needSplitToMinPartitions = minPartitions > toOffsetMap.size();
+      if (needSplitToMinPartitions && minPartitions % toOffsetMap.size() != 0) {
+        throw new IllegalArgumentException("The config "
+            + KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key()
+            + " must be multiples of the number of topic partitions: minPartitions="
+            + minPartitions
+            + " numTopicPartitions="
+            + toOffsetMap.size());
+      }
+
       // Create initial offset ranges for each 'to' partition, with default from = 0 offsets.
-      OffsetRange[] ranges = toOffsetMap.keySet().stream().map(tp -> {
-        long fromOffset = fromOffsetMap.getOrDefault(tp, 0L);
-        return OffsetRange.create(tp, fromOffset, toOffsetMap.get(tp));
-      })
+      OffsetRange[] ranges = toOffsetMap.keySet().stream()
+          .map(tp -> {
+            long fromOffset = fromOffsetMap.getOrDefault(tp, 0L);
+            return OffsetRange.create(tp, fromOffset, toOffsetMap.get(tp));
+          })
           .sorted(SORT_BY_PARTITION)
           .collect(Collectors.toList())
           .toArray(new OffsetRange[toOffsetMap.size()]);
-      LOG.debug("numEvents {}, minPartitions {}, ranges {}", numEvents, minPartitions, ranges);
+      LOG.info("numEvents {}, minPartitions {}, ranges {}", numEvents, minPartitions, ranges);
 
       // choose the actualNumEvents with min(totalEvents, numEvents)
       long actualNumEvents = Math.min(totalNewMessages(ranges), numEvents);
@@ -186,7 +197,6 @@ public class KafkaOffsetGen {
                       OffsetRange.create(kv.getKey(), kv.getValue(), kv.getValue()))))
               .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
       finalRanges.putAll(missedRanges);
-
       OffsetRange[] sortedRangeArray = finalRanges.values().stream().flatMap(Collection::stream)
           .sorted(SORT_BY_PARTITION).toArray(OffsetRange[]::new);
       if (actualNumEvents == 0) {
