@@ -51,7 +51,9 @@ class LazyFileSystemView implements SyncableFileSystemView, Serializable {
 
   @Override
   public void close() {
-    getView().close();
+    if (view != null) {
+      getView().close();
+    }
   }
 
   @Override
