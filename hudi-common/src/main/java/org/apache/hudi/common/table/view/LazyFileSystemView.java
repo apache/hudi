@@ -29,11 +29,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-class LazyFileSystemView implements SyncableFileSystemView {
+class LazyFileSystemView implements SyncableFileSystemView, Serializable {
   private final SerializableSupplier<SyncableFileSystemView> viewSupplier;
   private SyncableFileSystemView view;
 
