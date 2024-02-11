@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -51,18 +52,29 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private static final Logger LOG = LoggerFactory.getLogger(PriorityBasedFileSystemView.class);
 
   private final SyncableFileSystemView preferredView;
-  private final SyncableFileSystemView secondaryView;
+  private final SerializableSupplier<SyncableFileSystemView> secondaryViewSupplier;
+  private transient SyncableFileSystemView secondaryView;
   private boolean errorOnPreferredView;
 
-  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SyncableFileSystemView secondaryView) {
+  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SerializableSupplier<SyncableFileSystemView> secondaryViewSuplier) {
     this.preferredView = preferredView;
-    this.secondaryView = secondaryView;
+    this.secondaryViewSupplier = secondaryViewSuplier;
     this.errorOnPreferredView = false;
+  }
+
+  /**
+   * Lazily initialize the secondary view to avoid any object creation and file system listing or reads that are not necessary.
+   */
+  private synchronized void initSecondaryView() {
+    if (secondaryView == null) {
+      secondaryView = secondaryViewSupplier.get();
+    }
   }
 
   private <R> R execute(Function0<R> preferredFunction, Function0<R> secondaryFunction) {
     if (errorOnPreferredView) {
       LOG.warn("Routing request to secondary file-system view");
+      initSecondaryView();
       return secondaryFunction.apply();
     } else {
       try {
@@ -78,6 +90,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private <T1, R> R execute(T1 val, Function1<T1, R> preferredFunction, Function1<T1, R> secondaryFunction) {
     if (errorOnPreferredView) {
       LOG.warn("Routing request to secondary file-system view");
+      initSecondaryView();
       return secondaryFunction.apply(val);
     } else {
       try {
@@ -94,6 +107,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       Function2<T1, T2, R> secondaryFunction) {
     if (errorOnPreferredView) {
       LOG.warn("Routing request to secondary file-system view");
+      initSecondaryView();
       return secondaryFunction.apply(val, val2);
     } else {
       try {
@@ -110,6 +124,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       Function3<T1, T2, T3, R> secondaryFunction) {
     if (errorOnPreferredView) {
       LOG.warn("Routing request to secondary file-system view");
+      initSecondaryView();
       return secondaryFunction.apply(val, val2, val3);
     } else {
       try {
