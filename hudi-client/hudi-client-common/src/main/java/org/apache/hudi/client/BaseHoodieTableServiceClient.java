@@ -72,6 +72,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -892,9 +893,25 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         String instantToRollback = rollbackPlan.getInstantToRollback().getCommitTime();
         if (ignoreCompactionAndClusteringInstants) {
           if (!HoodieTimeline.COMPACTION_ACTION.equals(action)) {
-            boolean isClustering = HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)
-                && ClusteringUtils.getClusteringPlan(metaClient, new HoodieInstant(true, action, instantToRollback)).isPresent();
-            if (!isClustering) {
+            HoodieInstant requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, action, instantToRollback);
+            try {
+              if (fs.exists(metaClient.getActiveTimeline().getInstantFileNamePath(requestedInstant.getFileName()))) {
+                // Requested file exists now check for clustering plan.
+                // This check is done so that if there are 2 rollbacks on the same instant and one plan
+                // successfully executed and deleted the clustering instant, then there is no clustering plan to read.
+                // This check here skips checking the clustering plan and tries to complete the clustering.
+                boolean rollbackClusteringCommits = canRollbackClustering();
+                boolean isClustering = HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)
+                    && ClusteringUtils.getClusteringPlan(metaClient, requestedInstant).isPresent();
+                if (rollbackClusteringCommits || !isClustering) {
+                  infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
+                }
+              } else {
+                infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
+              }
+            } catch (FileNotFoundException e) {
+              // Requested file is not present but clustering is still part of a pending rollback plan.
+              // So, include this occurrence.
               infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
             }
           }
@@ -906,6 +923,16 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
     }
     return infoMap;
+  }
+
+  /**
+   * Checks if the clustering plan can be removed. The clustering plan can be removed in following case.
+   * When ingestion writers are given preference over clustering writers, this can be found using the
+   * conflict resolution strategy, in this case updates strategy that will be used is SparkAllowUpdateStrategy.
+   */
+  private boolean canRollbackClustering() {
+    return config.getWriteConflictResolutionStrategy().isPreCommitRequired()
+        || !config.getClusteringUpdatesStrategyClass().equals(HoodieClusteringConfig.UPDATES_STRATEGY.defaultValue());
   }
 
   /**
@@ -980,8 +1007,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   protected List<String> getInstantsToRollback(HoodieTableMetaClient metaClient, HoodieFailedWritesCleaningPolicy cleaningPolicy, Option<String> curInstantTime) {
-    Stream<HoodieInstant> inflightInstantsStream = getInflightTimelineExcludeCompactionAndClustering(metaClient)
-        .getReverseOrderedInstants();
+    Stream<HoodieInstant> inflightInstantsStream = canRollbackClustering()
+        ? metaClient.getCommitsTimeline().filterPendingExcludingCompaction().getReverseOrderedInstants()
+        : getInflightTimelineExcludeCompactionAndClustering(metaClient).getReverseOrderedInstants();
     if (cleaningPolicy.isEager()) {
       // Metadata table uses eager cleaning policy, but we need to exclude inflight delta commits
       // from the async indexer (`HoodieIndexer`).
@@ -1027,7 +1055,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (!expiredInstants.isEmpty()) {
       // Only return instants that haven't been completed by other writers
       metaClient.reloadActiveTimeline();
-      HoodieTimeline refreshedInflightTimeline = getInflightTimelineExcludeCompactionAndClustering(metaClient);
+      HoodieTimeline refreshedInflightTimeline = canRollbackClustering()
+          ? metaClient.getCommitsTimeline().filterPendingExcludingCompaction()
+          : getInflightTimelineExcludeCompactionAndClustering(metaClient);
       return expiredInstants.stream().filter(refreshedInflightTimeline::containsInstant).collect(Collectors.toList());
     } else {
       return Collections.emptyList();

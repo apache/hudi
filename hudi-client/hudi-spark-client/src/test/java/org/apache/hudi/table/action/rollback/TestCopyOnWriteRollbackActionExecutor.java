@@ -24,19 +24,31 @@ import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringTestUtils;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -62,10 +74,12 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -472,5 +486,71 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutorForClustering = new CopyOnWriteRollbackActionExecutor(
         context, table.getConfig(), table, rollbackInstant, needRollBackInstant, true, false, true);
     copyOnWriteRollbackActionExecutorForClustering.execute();
+  }
+
+  /**
+   * This method tests whether the ingestion can auto recover when there are removal clustering plans
+   * and pending ingestion commits present in the timeline, and along with them multiple rollback plans
+   * that are also scheduled. This scenario can happen since we do not acquire lock during schedule step.
+   */
+  @Test
+  public void testConcurrentRollbackPlansOnSameInstant() throws Exception {
+    TimeGenerator timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(""), hadoopConf);
+    // insert data
+    HoodieWriteConfig writeConfig = getConfigBuilder().withAutoCommit(false)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(0).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .withConflictResolutionStrategy(new PreferWriterConflictResolutionStrategy()).build())
+        .build();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    // Create a base(first) commit.
+    int numRecords = 200;
+    String firstCommit = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+    String partitionStr = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    dataGen = new HoodieTestDataGenerator(new String[]{partitionStr});
+    writeBatch(writeClient, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
+        numRecords, dataGen::generateInserts, SparkRDDWriteClient::insert, true, numRecords, numRecords,
+        1, true);
+
+    // Create inflight(second) commit and stop its heartbeat.
+    String secondCommit = writeClient.startCommit();
+    // Write data into the second commit.
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(dataGen.generateInserts(secondCommit, numRecords), 1);
+    JavaRDD<WriteStatus> result = writeClient.insert(writeRecords, secondCommit);
+    List<WriteStatus> statuses = result.collect();
+    assertNoWriteErrors(statuses);
+    // writeClient.commit(secondCommit, result);
+    writeClient.getHeartbeatClient().stop(secondCommit);
+
+    Option<String> clusteringCommit = writeClient.scheduleClustering(Option.empty());
+    assertFalse(clusteringCommit.isEmpty());
+
+    HoodieInstant inflightInstant = metaClient.reloadActiveTimeline().filterInflightsAndRequested().firstInstant().get();
+    HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context);
+    HoodieSparkTable table2 = HoodieSparkTable.create(writeConfig, context);
+    assertEquals(0, metaClient.reloadActiveTimeline().getRollbackTimeline().filterInflightsAndRequested().countInstants());
+
+    Stream.of(table, table2).forEach(t -> {
+      String rollbackInstantTime = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      t.scheduleRollback(context, rollbackInstantTime, inflightInstant, false, true,false);
+      rollbackInstantTime = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      t.scheduleRollback(context, rollbackInstantTime, new HoodieInstant(HoodieInstant.State.REQUESTED,
+              HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommit.get()), false, true,false);
+    });
+    assertEquals(4, metaClient.reloadActiveTimeline().getRollbackTimeline().filterInflightsAndRequested().countInstants());
+
+    for (int i = 0; i < 2; i++) {
+      String currCommit = writeClient.startCommit();
+      result = writeClient.insert(writeRecords, currCommit);
+      statuses = result.collect();
+      assertNoWriteErrors(statuses);
+      writeClient.commit(currCommit, result);
+    }
+    assertEquals(0, metaClient.reloadActiveTimeline().filterInflightsAndRequested().countInstants());
   }
 }
