@@ -16,7 +16,7 @@ public class ITTestGlueUtil extends ITTestSyncUtil {
     protected static final String MOTO_ENDPOINT = "http://localhost:5000";
     public static final String AWS_REGION = "eu-west-1";
 
-    protected static Properties getAwsProperties() {
+    protected Properties getAwsProperties() {
         Properties hiveProps = new TypedProperties();
         hiveProps.setProperty(HoodieAWSConfig.AWS_ACCESS_KEY.key(), "dummy");
         hiveProps.setProperty(HoodieAWSConfig.AWS_SECRET_KEY.key(), "dummy");
@@ -26,16 +26,24 @@ public class ITTestGlueUtil extends ITTestSyncUtil {
         return hiveProps;
     }
 
-    protected static GlueAsyncClient getGlueAsyncClient(Properties hiveProps) throws URISyntaxException {
+    protected GlueAsyncClient getGlueAsyncClient() throws URISyntaxException {
       GlueAsyncClient testclient = GlueAsyncClient.builder()
-              .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(hiveProps))
+              .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(getAwsProperties()))
               .endpointOverride(new URI(MOTO_ENDPOINT))
               .region(Region.of(AWS_REGION))
               .build();
       return testclient;
     }
     @AfterEach
+    @Override
     public void cleanUp() {
+        super.cleanUp();
         // drop database and table
+        try {
+            getGlueAsyncClient().deleteDatabase(r -> r.name(DB_NAME));
+            getGlueAsyncClient().deleteTable(r -> r.name(TABLE_NAME).databaseName(DB_NAME));
+        } catch (URISyntaxException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

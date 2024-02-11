@@ -18,11 +18,15 @@
 
 package org.apache.hudi.aws.sync;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
 import software.amazon.awssdk.services.glue.model.GetDatabaseRequest;
@@ -39,6 +43,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+
 public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
 
   @Test
@@ -50,6 +56,8 @@ public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
     String newCommitTime = client.startCommit();
     List<HoodieRecord<HoodieAvroPayload>> writeRecords = getHoodieRecords(newCommitTime, 1, "driver1");
     client.insert(writeRecords, newCommitTime);
+    writeRecords = getHoodieRecords(newCommitTime, 1, "driver2");
+    client.insert(writeRecords, newCommitTime);
     client.close();
 
     Properties hiveProps = getAwsProperties();
@@ -59,7 +67,7 @@ public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
     awsGlueCatalogSyncTool.initSyncClient(new HiveSyncConfig(hiveProps));
     awsGlueCatalogSyncTool.syncHoodieTable();
     awsGlueCatalogSyncTool.close();
-    GlueAsyncClient testclient = getGlueAsyncClient(hiveProps);
+    GlueAsyncClient testclient = getGlueAsyncClient();
 
     GetDatabaseResponse db = testclient.getDatabase(GetDatabaseRequest.builder().name(DB_NAME).build()).get();
     Assertions.assertTrue(db.database().name().equals(DB_NAME));
@@ -67,7 +75,6 @@ public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
     Assertions.assertTrue(tbl.table().name().equals(TABLE_NAME));
 
     GetPartitionsResponse partitions = testclient.getPartitions(GetPartitionsRequest.builder().databaseName(DB_NAME).tableName(TABLE_NAME).build()).get();
-    Assertions.assertEquals(3, partitions.partitions().size());
+    Assertions.assertEquals(2, partitions.partitions().size());
   }
-
 }
