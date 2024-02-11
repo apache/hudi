@@ -36,7 +36,7 @@ import java.util.stream.Stream;
 
 class LazyFileSystemView implements SyncableFileSystemView, Serializable {
   private final SerializableSupplier<SyncableFileSystemView> viewSupplier;
-  private SyncableFileSystemView view;
+  private transient SyncableFileSystemView view;
 
   LazyFileSystemView(SerializableSupplier<SyncableFileSystemView> viewSupplier) {
     this.viewSupplier = viewSupplier;
