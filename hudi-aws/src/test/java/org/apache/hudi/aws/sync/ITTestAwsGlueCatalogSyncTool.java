@@ -18,15 +18,13 @@
 
 package org.apache.hudi.aws.sync;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.junit.jupiter.api.AfterEach;
+
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
 import software.amazon.awssdk.services.glue.model.GetDatabaseRequest;
@@ -39,11 +37,8 @@ import software.amazon.awssdk.services.glue.model.GetTableResponse;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
 
@@ -51,7 +46,7 @@ public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
   public void testJavaClient() throws IOException, ExecutionException, InterruptedException, URISyntaxException {
 
     String parts = "driver";
-    HoodieJavaWriteClient<HoodieAvroPayload> client = clientCOW(HoodieDataGenerator.TRIP_EXAMPLE_SCHEMA, Optional.of(parts));
+    HoodieJavaWriteClient<HoodieAvroPayload> client = clientCOW(HoodieDataGenerator.TRIP_EXAMPLE_SCHEMA, Option.of(parts));
 
     String newCommitTime = client.startCommit();
     List<HoodieRecord<HoodieAvroPayload>> writeRecords = getHoodieRecords(newCommitTime, 1, "driver1");
