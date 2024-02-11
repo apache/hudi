@@ -18,16 +18,11 @@
 
 package org.apache.hudi.aws.sync;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -36,6 +31,10 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.index.HoodieIndex;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
@@ -53,25 +52,43 @@ public class ITTestSyncUtil {
   protected static final String DB_NAME = "db_name";
   protected static final String TABLE_NAME = "tbl_name";
   protected final Configuration hadoopConf = new Configuration();
+  protected final Properties hiveProps = new Properties();
+  protected HoodieJavaWriteClient<HoodieAvroPayload> hudiJavaClient;
+  private HoodieTableMetaClient.PropertyBuilder propertyBuilder = HoodieTableMetaClient.withPropertyBuilder();
 
-  protected static void addMetaSyncProps(Properties hiveProps, String parts) {
+  @BeforeEach
+  protected void setup() {
     hiveProps.setProperty(META_SYNC_BASE_PATH.key(), TABLE_PATH);
     hiveProps.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
     hiveProps.setProperty(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), DB_NAME);
     hiveProps.setProperty(HiveSyncConfig.META_SYNC_TABLE_NAME.key(), TABLE_NAME);
     hiveProps.setProperty(HiveSyncConfig.META_SYNC_BASE_PATH.key(), TABLE_PATH);
-    hiveProps.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), parts);
-  }
 
-  protected HoodieJavaWriteClient<HoodieAvroPayload> clientCOW(String avroSchema, Option<String> hudiPartitions) throws IOException {
-    HoodieTableMetaClient.PropertyBuilder propertyBuilder = HoodieTableMetaClient.withPropertyBuilder();
-    if (hudiPartitions.isPresent()) {
-      propertyBuilder = propertyBuilder.setPartitionFields(hudiPartitions.get());
-    }
-    propertyBuilder
+    propertyBuilder = propertyBuilder
         .setTableType(TABLE_TYPE)
         .setTableName(TABLE_NAME)
-        .setPayloadClassName(HoodieAvroPayload.class.getName())
+        .setPayloadClassName(HoodieAvroPayload.class.getName());
+  }
+
+  @AfterEach
+  public void cleanUp() {
+    try {
+      getFs().delete(new Path(TABLE_PATH), true);
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to delete table path " + TABLE_PATH);
+    }
+    if (hudiJavaClient != null) {
+      hudiJavaClient.close();
+    }
+  }
+
+  protected void setupPartitions(String parts) {
+    hiveProps.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), parts);
+    propertyBuilder = propertyBuilder.setPartitionFields(parts);
+  }
+
+  protected HoodieJavaWriteClient<HoodieAvroPayload> clientCOW(String avroSchema) throws IOException {
+    propertyBuilder
         .initTable(hadoopConf, TABLE_PATH);
 
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(TABLE_PATH)
@@ -97,12 +114,4 @@ public class ITTestSyncUtil {
     return HadoopFSUtils.getFs(TABLE_PATH, hadoopConf);
   }
 
-  @BeforeEach
-  public void cleanUp() {
-    try {
-      getFs().delete(new Path(TABLE_PATH), true);
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to delete table path " + TABLE_PATH);
-    }
-  }
 }

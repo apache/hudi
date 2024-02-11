@@ -18,58 +18,31 @@
 
 package org.apache.hudi.aws.sync;
 
-import org.apache.hudi.client.HoodieJavaWriteClient;
-import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hive.HiveSyncConfig;
-
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import software.amazon.awssdk.services.glue.GlueAsyncClient;
-import software.amazon.awssdk.services.glue.model.GetDatabaseRequest;
-import software.amazon.awssdk.services.glue.model.GetDatabaseResponse;
-import software.amazon.awssdk.services.glue.model.GetPartitionsRequest;
-import software.amazon.awssdk.services.glue.model.GetPartitionsResponse;
-import software.amazon.awssdk.services.glue.model.GetTableRequest;
-import software.amazon.awssdk.services.glue.model.GetTableResponse;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
-import java.util.List;
-import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
 
   @Test
-  public void testJavaClient() throws IOException, ExecutionException, InterruptedException, URISyntaxException {
+  public void testWhenCreatePartitionsShouldExistsInGlue() throws IOException, ExecutionException, InterruptedException {
+    setupPartitions("driver");
 
-    String parts = "driver";
-    HoodieJavaWriteClient<HoodieAvroPayload> client = clientCOW(HoodieDataGenerator.TRIP_EXAMPLE_SCHEMA, Option.of(parts));
+    hudiJavaClient = clientCOW(HoodieDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    String newCommitTime = hudiJavaClient.startCommit();
+    hudiJavaClient.insert(getHoodieRecords(newCommitTime, 1, "driver1"), newCommitTime);
+    hudiJavaClient.insert(getHoodieRecords(newCommitTime, 1, "driver2"), newCommitTime);
 
-    String newCommitTime = client.startCommit();
-    List<HoodieRecord<HoodieAvroPayload>> writeRecords = getHoodieRecords(newCommitTime, 1, "driver1");
-    client.insert(writeRecords, newCommitTime);
-    writeRecords = getHoodieRecords(newCommitTime, 1, "driver2");
-    client.insert(writeRecords, newCommitTime);
-    client.close();
+    getAwsGlueCatalogSyncTool().syncHoodieTable();
 
-    Properties hiveProps = getAwsProperties();
-    addMetaSyncProps(hiveProps, parts);
+    Assertions.assertTrue(glueClient.getDatabase(d ->
+        d.name(DB_NAME)).get().database().name().equals(DB_NAME));
+    Assertions.assertTrue(glueClient.getTable(t ->
+        t.databaseName(DB_NAME).name(TABLE_NAME)).get().table().name().equals(TABLE_NAME));
 
-    AwsGlueCatalogSyncTool awsGlueCatalogSyncTool = new AwsGlueCatalogSyncTool(hiveProps, hadoopConf);
-    awsGlueCatalogSyncTool.initSyncClient(new HiveSyncConfig(hiveProps));
-    awsGlueCatalogSyncTool.syncHoodieTable();
-    awsGlueCatalogSyncTool.close();
-    GlueAsyncClient testclient = getGlueAsyncClient();
-
-    GetDatabaseResponse db = testclient.getDatabase(GetDatabaseRequest.builder().name(DB_NAME).build()).get();
-    Assertions.assertTrue(db.database().name().equals(DB_NAME));
-    GetTableResponse tbl = testclient.getTable(GetTableRequest.builder().databaseName(DB_NAME).name(TABLE_NAME).build()).get();
-    Assertions.assertTrue(tbl.table().name().equals(TABLE_NAME));
-
-    GetPartitionsResponse partitions = testclient.getPartitions(GetPartitionsRequest.builder().databaseName(DB_NAME).tableName(TABLE_NAME).build()).get();
-    Assertions.assertEquals(2, partitions.partitions().size());
+    Assertions.assertEquals(2, glueClient.getPartitions(p ->
+        p.databaseName(DB_NAME).tableName(TABLE_NAME)).get().partitions().size());
   }
 }
