@@ -30,7 +30,7 @@ public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
   public void testWhenCreatePartitionsShouldExistsInGlue() throws IOException, ExecutionException, InterruptedException {
     setupPartitions("driver");
 
-    hudiJavaClient = clientCOW(HoodieDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    hudiJavaClient = clientCOW();
     String newCommitTime = hudiJavaClient.startCommit();
     hudiJavaClient.insert(getHoodieRecords(newCommitTime, 1, "driver1"), newCommitTime);
     hudiJavaClient.insert(getHoodieRecords(newCommitTime, 1, "driver2"), newCommitTime);
@@ -41,8 +41,27 @@ public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
         d.name(DB_NAME)).get().database().name().equals(DB_NAME));
     Assertions.assertTrue(glueClient.getTable(t ->
         t.databaseName(DB_NAME).name(TABLE_NAME)).get().table().name().equals(TABLE_NAME));
-
     Assertions.assertEquals(2, glueClient.getPartitions(p ->
         p.databaseName(DB_NAME).tableName(TABLE_NAME)).get().partitions().size());
   }
+
+  @Test
+  public void testWhenCreateNestedTableShouldExistsInGlue() throws IOException, ExecutionException, InterruptedException {
+    setupPartitions("driver");
+    setDataGenerator(HoodieNestedDataGenerator.class);
+
+    hudiJavaClient = clientCOW();
+    String newCommitTime = hudiJavaClient.startCommit();
+    hudiJavaClient.insert(getHoodieRecords(newCommitTime, 1, "driver1"), newCommitTime);
+
+    getAwsGlueCatalogSyncTool().syncHoodieTable();
+
+    Assertions.assertTrue(glueClient.getDatabase(d ->
+        d.name(DB_NAME)).get().database().name().equals(DB_NAME));
+    Assertions.assertTrue(glueClient.getTable(t ->
+        t.databaseName(DB_NAME).name(TABLE_NAME)).get().table().name().equals(TABLE_NAME));
+    Assertions.assertEquals(1, glueClient.getPartitions(p ->
+        p.databaseName(DB_NAME).tableName(TABLE_NAME)).get().partitions().size());
+  }
+
 }

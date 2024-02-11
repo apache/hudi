@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -38,7 +39,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -54,7 +54,8 @@ public class ITTestSyncUtil {
   protected final Configuration hadoopConf = new Configuration();
   protected final Properties hiveProps = new Properties();
   protected HoodieJavaWriteClient<HoodieAvroPayload> hudiJavaClient;
-  private HoodieTableMetaClient.PropertyBuilder propertyBuilder = HoodieTableMetaClient.withPropertyBuilder();
+  private HoodieTableMetaClient.PropertyBuilder propertyBuilder;
+  private Class<? extends HoodieDataGenerator> dataGenClass;
 
   @BeforeEach
   protected void setup() {
@@ -64,21 +65,23 @@ public class ITTestSyncUtil {
     hiveProps.setProperty(HiveSyncConfig.META_SYNC_TABLE_NAME.key(), TABLE_NAME);
     hiveProps.setProperty(HiveSyncConfig.META_SYNC_BASE_PATH.key(), TABLE_PATH);
 
-    propertyBuilder = propertyBuilder
+    propertyBuilder = HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(TABLE_TYPE)
         .setTableName(TABLE_NAME)
         .setPayloadClassName(HoodieAvroPayload.class.getName());
+
+    dataGenClass = HoodieDataGenerator.class;
   }
 
   @AfterEach
   public void cleanUp() {
+    if (hudiJavaClient != null) {
+      hudiJavaClient.close();
+    }
     try {
       getFs().delete(new Path(TABLE_PATH), true);
     } catch (IOException e) {
       throw new RuntimeException("Failed to delete table path " + TABLE_PATH);
-    }
-    if (hudiJavaClient != null) {
-      hudiJavaClient.close();
     }
   }
 
@@ -87,12 +90,13 @@ public class ITTestSyncUtil {
     propertyBuilder = propertyBuilder.setPartitionFields(parts);
   }
 
-  protected HoodieJavaWriteClient<HoodieAvroPayload> clientCOW(String avroSchema) throws IOException {
+  protected HoodieJavaWriteClient<HoodieAvroPayload> clientCOW() throws IOException {
     propertyBuilder
         .initTable(hadoopConf, TABLE_PATH);
 
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(TABLE_PATH)
-        .withSchema(avroSchema).withParallelism(1, 1)
+        .withSchema(getDataGen().getAvroSchemaString())
+        .withParallelism(1, 1)
         .withDeleteParallelism(1).forTable(TABLE_NAME)
         .withEmbeddedTimelineServerEnabled(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
@@ -101,17 +105,25 @@ public class ITTestSyncUtil {
     return new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(hadoopConf), cfg);
   }
 
-  protected static List<HoodieRecord<HoodieAvroPayload>> getHoodieRecords(String newCommitTime, int numRecords, String... partitionPath) {
-    HoodieDataGenerator<HoodieAvroPayload> dataGen = new HoodieDataGenerator<>(partitionPath);
+  protected List<HoodieRecord<HoodieAvroPayload>> getHoodieRecords(String newCommitTime, int numRecords, String... partitionPath) {
+    HoodieDataGenerator<HoodieAvroPayload> dataGen = getDataGen(partitionPath);
     List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, numRecords);
-    List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
     List<HoodieRecord<HoodieAvroPayload>> writeRecords =
-        recordsSoFar.stream().map(r -> new HoodieAvroRecord<>(r)).collect(Collectors.toList());
+        records.stream().map(r -> new HoodieAvroRecord<>(r)).collect(Collectors.toList());
     return writeRecords;
+  }
+
+  private HoodieDataGenerator<HoodieAvroPayload> getDataGen(String... partitionPath) {
+    HoodieDataGenerator<HoodieAvroPayload> dataGen = ReflectionUtils.loadClass(dataGenClass.getName());
+    dataGen.setPartitionPaths(partitionPath);
+    return dataGen;
   }
 
   protected FileSystem getFs() {
     return HadoopFSUtils.getFs(TABLE_PATH, hadoopConf);
   }
 
+  protected void setDataGenerator(Class<? extends HoodieDataGenerator> dataGenClass) {
+    this.dataGenClass = dataGenClass;
+  }
 }

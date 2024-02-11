@@ -21,7 +21,7 @@ package org.apache.hudi.aws.sync;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.avro.HoodieAvroUtils;
+
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,18 +52,14 @@ public class HoodieDataGenerator<T extends HoodieRecordPayload<T>> {
 
   public static final String[] DEFAULT_PARTITION_PATHS =
       {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
-  public static String TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\",\"name\": \"triprec\",\"fields\": [ "
-      + "{\"name\": \"ts\",\"type\": \"long\"},{\"name\": \"uuid\", \"type\": \"string\"},"
-      + "{\"name\": \"rider\", \"type\": \"string\"},{\"name\": \"driver\", \"type\": \"string\"},"
-      + "{\"name\": \"begin_lat\", \"type\": \"double\"},{\"name\": \"begin_lon\", \"type\": \"double\"},"
-      + "{\"name\": \"end_lat\", \"type\": \"double\"},{\"name\": \"end_lon\", \"type\": \"double\"},"
-      + "{\"name\":\"fare\",\"type\": \"double\"}]}";
-  public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+
 
   private static final Random RAND = new Random(46474747);
 
   private final Map<Integer, KeyPartition> existingKeys;
-  private final String[] partitionPaths;
+
+
+  private String[] partitionPaths;
   private int numExistingKeys;
 
   public HoodieDataGenerator(String[] partitionPaths) {
@@ -80,6 +75,19 @@ public class HoodieDataGenerator<T extends HoodieRecordPayload<T>> {
     this.existingKeys = keyPartitionMap;
   }
 
+  public String getAvroSchemaString() {
+    return "{\"type\": \"record\",\"name\": \"triprec\",\"fields\": [ "
+        + "{\"name\": \"ts\",\"type\": \"long\"},{\"name\": \"uuid\", \"type\": \"string\"},"
+        + "{\"name\": \"rider\", \"type\": \"string\"},{\"name\": \"driver\", \"type\": \"string\"},"
+        + "{\"name\": \"begin_lat\", \"type\": \"double\"},{\"name\": \"begin_lon\", \"type\": \"double\"},"
+        + "{\"name\": \"end_lat\", \"type\": \"double\"},{\"name\": \"end_lon\", \"type\": \"double\"},"
+        + "{\"name\":\"fare\",\"type\": \"double\"}]}";
+  }
+
+  public Schema getAvroSchema() {
+    return new Schema.Parser().parse(getAvroSchemaString());
+  }
+
   /**
    * Generates a new avro record of the above schema format, retaining the key if optionally provided.
    */
@@ -91,7 +99,7 @@ public class HoodieDataGenerator<T extends HoodieRecordPayload<T>> {
 
   public GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
                                              long timestamp) {
-    GenericRecord rec = new GenericData.Record(avroSchema);
+    GenericRecord rec = new GenericData.Record(getAvroSchema());
     rec.put("uuid", rowKey);
     rec.put("ts", timestamp);
     rec.put("rider", riderName);
@@ -192,25 +200,13 @@ public class HoodieDataGenerator<T extends HoodieRecordPayload<T>> {
     return new HoodieAvroRecord<>(key, generateRandomValue(key, commitTime));
   }
 
-  private Option<String> convertToString(HoodieRecord<T> record) {
-    try {
-      String str = HoodieAvroUtils
-          .bytesToAvro(((HoodieAvroPayload) record.getData()).getRecordBytes(), avroSchema)
-          .toString();
-      str = "{" + str.substring(str.indexOf("\"ts\":"));
-      return Option.of(str.replaceAll("}", ", \"partitionpath\": \"" + record.getPartitionPath() + "\"}"));
-    } catch (IOException e) {
-      return Option.empty();
-    }
-  }
-
-  public List<String> convertToStringList(List<HoodieRecord<T>> records) {
-    return records.stream().map(this::convertToString).filter(Option::isPresent).map(Option::get)
-        .collect(Collectors.toList());
-  }
-
   public int getNumExistingKeys() {
     return numExistingKeys;
+  }
+
+  public HoodieDataGenerator<T> setPartitionPaths(String[] partitionPaths) {
+    this.partitionPaths = partitionPaths;
+    return this;
   }
 
   public static class KeyPartition implements Serializable {

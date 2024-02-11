@@ -57,7 +57,6 @@ public class ITTestGlueUtil extends ITTestSyncUtil {
   @Override
   public void cleanUp() {
     super.cleanUp();
-    // drop database and table
     glueClient.deleteDatabase(r -> r.name(DB_NAME));
     glueClient.deleteTable(r -> r.name(TABLE_NAME).databaseName(DB_NAME));
     awsGlueCatalogSyncTool.close();
