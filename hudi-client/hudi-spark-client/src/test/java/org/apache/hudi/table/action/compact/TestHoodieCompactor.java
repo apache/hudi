@@ -308,6 +308,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     writeStatuses.forEach(writeStatus -> {
       final HoodieWriteStat.RuntimeStats stats = writeStatus.getStat().getRuntimeStats();
       assertNotNull(stats);
+      assertEquals(stats.getTotalCreateTime(), 0);
       assertTrue(stats.getTotalUpsertTime() > 0);
       assertTrue(stats.getTotalScanTime() > 0);
     });
