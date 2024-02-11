@@ -21,7 +21,6 @@ package org.apache.hudi.aws.sync;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -46,7 +45,7 @@ public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
   public void testJavaClient() throws IOException, ExecutionException, InterruptedException, URISyntaxException {
 
     String parts = "driver";
-    HoodieJavaWriteClient<HoodieAvroPayload> client = clientCOW(HoodieExampleDataGenerator.TRIP_EXAMPLE_SCHEMA, Optional.of(parts));
+    HoodieJavaWriteClient<HoodieAvroPayload> client = clientCOW(HoodieDataGenerator.TRIP_EXAMPLE_SCHEMA, Optional.of(parts));
 
     String newCommitTime = client.startCommit();
     List<HoodieRecord<HoodieAvroPayload>> writeRecords = getHoodieRecords(newCommitTime, 10);

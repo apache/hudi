@@ -10,7 +10,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.junit.jupiter.api.AfterEach;
@@ -65,7 +64,7 @@ public class ITTestSyncUtil {
     }
 
     protected static List<HoodieRecord<HoodieAvroPayload>> getHoodieRecords(String newCommitTime, int numRecords) {
-        HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
+        HoodieDataGenerator<HoodieAvroPayload> dataGen = new HoodieDataGenerator<>();
         List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, numRecords);
         List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
         List<HoodieRecord<HoodieAvroPayload>> writeRecords =
