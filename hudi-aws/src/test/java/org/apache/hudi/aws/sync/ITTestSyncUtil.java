@@ -63,8 +63,8 @@ public class ITTestSyncUtil {
       return new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(hadoopConf), cfg);
     }
 
-    protected static List<HoodieRecord<HoodieAvroPayload>> getHoodieRecords(String newCommitTime, int numRecords) {
-        HoodieDataGenerator<HoodieAvroPayload> dataGen = new HoodieDataGenerator<>();
+    protected static List<HoodieRecord<HoodieAvroPayload>> getHoodieRecords(String newCommitTime, int numRecords, String...partitionPath) {
+        HoodieDataGenerator<HoodieAvroPayload> dataGen = new HoodieDataGenerator<>(partitionPath);
         List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, numRecords);
         List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
         List<HoodieRecord<HoodieAvroPayload>> writeRecords =

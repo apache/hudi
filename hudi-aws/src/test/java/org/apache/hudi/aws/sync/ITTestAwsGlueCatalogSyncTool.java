@@ -48,7 +48,7 @@ public class ITTestAwsGlueCatalogSyncTool extends ITTestGlueUtil {
     HoodieJavaWriteClient<HoodieAvroPayload> client = clientCOW(HoodieDataGenerator.TRIP_EXAMPLE_SCHEMA, Optional.of(parts));
 
     String newCommitTime = client.startCommit();
-    List<HoodieRecord<HoodieAvroPayload>> writeRecords = getHoodieRecords(newCommitTime, 10);
+    List<HoodieRecord<HoodieAvroPayload>> writeRecords = getHoodieRecords(newCommitTime, 1, "driver1");
     client.insert(writeRecords, newCommitTime);
     client.close();
 
