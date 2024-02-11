@@ -145,10 +145,13 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
-          - task: reportgenerator@4
+          - task: reportgenerator@5
+            displayName: ReportGenerator
             inputs:
-              reports: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
-              targetdir: '$(System.DefaultWorkingDirectory)/JacocoResults'
+              reports: jacoco.xml
+              targetdir: $(System.DefaultWorkingDirectory)
+              reporttypes: Html;XML
+              verbosity: Verbose
           - task: PublishCodeCoverageResults@1
             displayName: code coverage result
             inputs:
@@ -180,10 +183,13 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
-          - task: reportgenerator@4
+          - task: reportgenerator@5
+            displayName: ReportGenerator
             inputs:
-              reports: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
-              targetdir: '$(System.DefaultWorkingDirectory)/JacocoResults'
+              reports: jacoco.xml
+              targetdir: $(System.DefaultWorkingDirectory)
+              reporttypes: Html;XML
+              verbosity: Verbose
           - task: PublishCodeCoverageResults@1
             displayName: code coverage result
             inputs:
@@ -215,10 +221,13 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
-          - task: reportgenerator@4
+          - task: reportgenerator@5
+            displayName: ReportGenerator
             inputs:
-              reports: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
-              targetdir: '$(System.DefaultWorkingDirectory)/JacocoResults'
+              reports: jacoco.xml
+              targetdir: $(System.DefaultWorkingDirectory)
+              reporttypes: Html;XML
+              verbosity: Verbose
           - task: PublishCodeCoverageResults@1
             displayName: code coverage result
             inputs:
@@ -260,10 +269,13 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
-          - task: reportgenerator@4
+          - task: reportgenerator@5
+            displayName: ReportGenerator
             inputs:
-              reports: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
-              targetdir: '$(System.DefaultWorkingDirectory)/JacocoResults'
+              reports: jacoco.xml
+              targetdir: $(System.DefaultWorkingDirectory)
+              reporttypes: Html;XML
+              verbosity: Verbose
           - task: PublishCodeCoverageResults@1
             displayName: code coverage result
             inputs:
