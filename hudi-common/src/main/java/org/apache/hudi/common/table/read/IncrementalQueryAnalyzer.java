@@ -148,8 +148,8 @@ public class IncrementalQueryAnalyzer {
         // no dataset committed in the table
         return QueryContext.EMPTY;
       }
-      HoodieTimeline readTimeline = getReadTimeline(this.metaClient);
-      List<String> instantTimeList = completionTimeQueryView.getStartTimes(readTimeline, startTime, endTime, rangeType);
+      HoodieTimeline filteredTimeline = getFilteredTimeline(this.metaClient);
+      List<String> instantTimeList = completionTimeQueryView.getStartTimes(filteredTimeline, startTime, endTime, rangeType);
       if (instantTimeList.isEmpty()) {
         // no instants completed within the give time range, returns early.
         return QueryContext.EMPTY;
@@ -163,7 +163,7 @@ public class IncrementalQueryAnalyzer {
       List<HoodieInstant> activeInstants = new ArrayList<>();
       HoodieTimeline archivedReadTimeline = null;
       if (!activeInstantTime.isEmpty()) {
-        activeInstants = readTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.getTimestamp())).collect(Collectors.toList());
+        activeInstants = filteredTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.getTimestamp())).collect(Collectors.toList());
         if (limit > 0 && limit < activeInstants.size()) {
           // streaming read speed limit, limits the maximum number of commits allowed to read for each run
           activeInstants = activeInstants.subList(0, limit);
@@ -182,10 +182,11 @@ public class IncrementalQueryAnalyzer {
         instants = Collections.singletonList(instants.get(instants.size() - 1));
       }
       String lastInstant = instants.get(instants.size() - 1);
-      // keep the same semantics with streaming read, default start from the latest commit
+      // null => if starting from earliest, if no start time is specified, start from the latest instant like usual streaming read semantics.
+      // if startTime is neither, then use the earliest instant as the start instant.
       String startInstant = START_COMMIT_EARLIEST.equalsIgnoreCase(startTime.orElse(null)) ? null : startTime.isEmpty() ? lastInstant : instants.get(0);
       String endInstant = endTime.isEmpty() ? null : lastInstant;
-      return QueryContext.create(startInstant, endInstant, instants, archivedInstants, activeInstants, readTimeline, archivedReadTimeline);
+      return QueryContext.create(startInstant, endInstant, instants, archivedInstants, activeInstants, filteredTimeline, archivedReadTimeline);
     }
   }
 
@@ -203,7 +204,7 @@ public class IncrementalQueryAnalyzer {
     }
   }
 
-  private HoodieTimeline getReadTimeline(HoodieTableMetaClient metaClient) {
+  private HoodieTimeline getFilteredTimeline(HoodieTableMetaClient metaClient) {
     HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
     return filterInstantsAsPerUserConfigs(metaClient, timeline, this.skipCompaction, this.skipClustering);
   }
