@@ -111,6 +111,7 @@ stages:
     variables:
       - name: DOCKER_BUILDKIT
         value: 1
+    jobs:
       - job: UT_FT_4
         displayName: UT FT other modules
         timeoutInMinutes: '240'
