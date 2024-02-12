@@ -18,12 +18,12 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -144,7 +144,7 @@ public class DFSPropertiesConfiguration {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
 
-    FileSystem fs = FSUtils.getFs(
+    FileSystem fs = HadoopFSUtils.getFs(
         filePath.toString(),
         Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
     );
@@ -182,7 +182,7 @@ public class DFSPropertiesConfiguration {
         String[] split = splitProperty(line);
         if (line.startsWith("include=") || line.startsWith("include =")) {
           Path providedPath = new Path(split[1]);
-          FileSystem providedFs = FSUtils.getFs(split[1], hadoopConfig);
+          FileSystem providedFs = HadoopFSUtils.getFs(split[1], hadoopConfig);
           // In the case that only filename is provided, assume it's in the same directory.
           if ((!providedPath.isAbsolute() || StringUtils.isNullOrEmpty(providedFs.getScheme()))
               && cfgFilePath != null) {

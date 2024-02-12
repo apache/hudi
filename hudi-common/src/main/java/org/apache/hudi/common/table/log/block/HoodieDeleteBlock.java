@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.io.BinaryDecoder;
@@ -37,7 +38,6 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +50,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
@@ -96,17 +97,17 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     this.recordsToDelete = recordsToDelete.stream().map(Pair::getLeft).toArray(DeleteRecord[]::new);
   }
 
-  public HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
+  public HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
                            Map<HeaderMetadataType, String> footer) {
     // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
-    this(content, inputStream, readBlockLazily, blockContentLocation, header, footer, false);
+    this(content, inputStreamSupplier, readBlockLazily, blockContentLocation, header, footer, false);
   }
 
-  HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
+  HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                     Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
                     Map<HeaderMetadataType, String> footer, boolean shouldWriteRecordPositions) {
-    super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    super(header, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
     this.shouldWriteRecordPositions = shouldWriteRecordPositions;
   }
 

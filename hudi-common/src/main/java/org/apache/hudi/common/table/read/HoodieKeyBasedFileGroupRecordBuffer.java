@@ -29,11 +29,13 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
@@ -52,9 +54,13 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
                                              Option<String> partitionNameOverrideOpt,
                                              Option<String[]> partitionPathFieldOpt,
                                              HoodieRecordMerger recordMerger,
-                                             TypedProperties payloadProps) {
+                                             TypedProperties payloadProps,
+                                             long maxMemorySizeInBytes,
+                                             String spillableMapBasePath,
+                                             ExternalSpillableMap.DiskMapType diskMapType,
+                                             boolean isBitCaskDiskMapCompressionEnabled) {
     super(readerContext, readerSchema, baseFileSchema, partitionNameOverrideOpt, partitionPathFieldOpt,
-        recordMerger, payloadProps);
+        recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
   @Override
@@ -84,7 +90,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   }
 
   @Override
-  public void processNextDataRecord(T record, Map<String, Object> metadata, Object recordKey) throws IOException {
+  public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable recordKey) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
     Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
         doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
@@ -96,7 +102,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   }
 
   @Override
-  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
+  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
     Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
     while (it.hasNext()) {
       DeleteRecord record = it.next();
@@ -106,7 +112,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   }
 
   @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Object recordKey) {
+  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {

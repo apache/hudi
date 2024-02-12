@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.testutils.FunctionalTestHarness;
 import org.apache.hudi.utilities.HoodieSnapshotCopier;
 
@@ -58,7 +59,7 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
     outputPath = rootPath + "/output";
 
     final Configuration hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    fs = FSUtils.getFs(basePath, hadoopConf);
+    fs = HadoopFSUtils.getFs(basePath, hadoopConf);
     HoodieTestUtils.init(hadoopConf, basePath);
   }
 

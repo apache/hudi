@@ -39,7 +39,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -66,6 +65,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -123,6 +123,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -287,15 +288,11 @@ public class StreamSync implements Serializable, Closeable {
     Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, schemaProvider, metrics);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
-    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
-        Option.ofNullable(schemaProvider).map(SchemaProvider::getSourceSchema), this.errorTableWriter.isPresent());
-    if (this.cfg.operation == WriteOperationType.BULK_INSERT && source.getSourceType() == Source.SourceType.ROW
-        && this.props.getBoolean(DataSourceWriteOptions.ENABLE_ROW_WRITER().key(), false)) {
-      // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
-      this.useRowWriter = true;
-    } else {
-      this.useRowWriter = false;
-    }
+    Supplier<Option<Schema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceSchema());
+    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), schemaSupplier, this.errorTableWriter.isPresent());
+    // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
+    this.useRowWriter = this.cfg.operation == WriteOperationType.BULK_INSERT && source.getSourceType() == Source.SourceType.ROW
+        && this.props.getBoolean(DataSourceWriteOptions.ENABLE_ROW_WRITER().key(), false);
   }
 
   /**
@@ -458,7 +455,7 @@ public class StreamSync implements Serializable, Closeable {
 
   private Option<String> getLastPendingClusteringInstant(Option<HoodieTimeline> commitTimelineOpt) {
     if (commitTimelineOpt.isPresent()) {
-      Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().getLastPendingClusterCommit();
+      Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().getLastPendingClusterInstant();
       return pendingClusteringInstant.isPresent() ? Option.of(pendingClusteringInstant.get().getTimestamp()) : Option.empty();
     }
     return Option.empty();
@@ -545,7 +542,7 @@ public class StreamSync implements Serializable, Closeable {
       return inputBatch;
     } else {
       Option<JavaRDD<HoodieRecord>> recordsOpt = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), schemaProvider,
-          recordType, autoGenerateRecordKeys, instantTime);
+          recordType, autoGenerateRecordKeys, instantTime, errorTableWriter);
       return new InputBatch(recordsOpt, checkpointStr, schemaProvider);
     }
   }
@@ -633,8 +630,21 @@ public class StreamSync implements Serializable, Closeable {
         // Rewrite transformed records into the expected target schema
         schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getTargetSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
         String serializedTargetSchema = schemaProvider.getTargetSchema().toString();
-        avroRDDOptional = dataAndCheckpoint.getBatch().map(t -> t.mapPartitions(iterator ->
-            new LazyCastingIterator(iterator, serializedTargetSchema)));
+        if (errorTableWriter.isPresent()
+            && props.getBoolean(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
+            HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue())) {
+          avroRDDOptional = dataAndCheckpoint.getBatch().map(
+              records -> {
+                Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeRewriteRDD(records.rdd(), serializedTargetSchema);
+                errorTableWriter.get().addErrorEvents(safeCreateRDDs._2().toJavaRDD()
+                    .map(evStr -> new ErrorEvent<>(evStr,
+                        ErrorEvent.ErrorReason.INVALID_RECORD_SCHEMA)));
+                return safeCreateRDDs._1.toJavaRDD();
+              });
+        } else {
+          avroRDDOptional = dataAndCheckpoint.getBatch().map(t -> t.mapPartitions(iterator ->
+              new LazyCastingIterator(iterator, serializedTargetSchema)));
+        }
       }
     }
     if (useRowWriter) {
@@ -659,7 +669,7 @@ public class StreamSync implements Serializable, Closeable {
     // Deduce proper target (writer's) schema for the input dataset, reconciling its
     // schema w/ the table's one
     Schema targetSchema = HoodieSparkSqlWriter.deduceWriterSchema(
-          incomingSchema,
+          HoodieAvroUtils.removeMetadataFields(incomingSchema),
           HoodieConversionUtils.toScalaOption(latestTableSchemaOpt),
           HoodieConversionUtils.toScalaOption(internalSchemaOpt), props);
 
@@ -960,7 +970,7 @@ public class StreamSync implements Serializable, Closeable {
     }
     if (cfg.enableMetaSync) {
       LOG.debug("[MetaSync] Starting sync");
-      FileSystem fs = FSUtils.getFs(cfg.targetBasePath, hoodieSparkContext.hadoopConfiguration());
+      FileSystem fs = HadoopFSUtils.getFs(cfg.targetBasePath, hoodieSparkContext.hadoopConfiguration());
 
       TypedProperties metaProps = new TypedProperties();
       metaProps.putAll(props);

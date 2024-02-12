@@ -33,7 +33,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.util.StringUtils;
@@ -42,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
@@ -365,17 +365,17 @@ public class MarkerDirState implements Serializable {
     LOG.debug("Write to " + markerDirPath + "/" + MARKERS_FILENAME_PREFIX + markerFileIndex);
     HoodieTimer timer = HoodieTimer.start();
     Path markersFilePath = new Path(markerDirPath, MARKERS_FILENAME_PREFIX + markerFileIndex);
-    FSDataOutputStream fsDataOutputStream = null;
+    OutputStream outputStream = null;
     BufferedWriter bufferedWriter = null;
     try {
-      fsDataOutputStream = fileSystem.create(markersFilePath);
-      bufferedWriter = new BufferedWriter(new OutputStreamWriter(fsDataOutputStream, StandardCharsets.UTF_8));
+      outputStream = fileSystem.create(markersFilePath);
+      bufferedWriter = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
       bufferedWriter.write(fileMarkersMap.get(markerFileIndex).toString());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to overwrite marker file " + markersFilePath, e);
     } finally {
       closeQuietly(bufferedWriter);
-      closeQuietly(fsDataOutputStream);
+      closeQuietly(outputStream);
     }
     LOG.debug(markersFilePath.toString() + " written in " + timer.endTimer() + " ms");
   }

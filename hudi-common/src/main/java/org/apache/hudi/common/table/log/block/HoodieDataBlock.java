@@ -24,9 +24,9 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.SeekableDataInputStream;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
@@ -109,7 +110,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
   protected HoodieDataBlock(Option<byte[]> content,
-                            FSDataInputStream inputStream,
+                            Supplier<SeekableDataInputStream> inputStreamSupplier,
                             boolean readBlockLazily,
                             Option<HoodieLogBlockContentLocation> blockContentLocation,
                             Option<Schema> readerSchema,
@@ -117,7 +118,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             Map<HeaderMetadataType, String> footer,
                             String keyFieldName,
                             boolean enablePointLookups) {
-    super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    super(headers, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
     // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
     this.shouldWriteRecordPositions = false;
     this.records = Option.empty();

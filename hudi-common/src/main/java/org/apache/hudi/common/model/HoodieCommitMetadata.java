@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -35,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -47,6 +47,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -185,7 +186,7 @@ public class HoodieCommitMetadata implements Serializable {
         String relativeFilePath = stat.getPath();
         Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
         if (fullPath != null) {
-          long blockSize = FSUtils.getFs(fullPath.toString(), hadoopConf).getDefaultBlockSize(fullPath);
+          long blockSize = HadoopFSUtils.getFs(fullPath.toString(), hadoopConf).getDefaultBlockSize(fullPath);
           FileStatus fileStatus = new FileStatus(stat.getFileSizeInBytes(), false, 0, blockSize,
               0, fullPath);
           fullPathToFileStatus.put(fullPath.getName(), fileStatus);
@@ -248,9 +249,8 @@ public class HoodieCommitMetadata implements Serializable {
   // TODO: refactor this method to avoid doing the json tree walking (HUDI-4822).
   public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(byte[] bytes, HoodieFileGroupId fileGroupId) {
     try {
-      String jsonStr = new String(
-          convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class),
-          StandardCharsets.UTF_8);
+      String jsonStr = fromUTF8Bytes(
+          convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class));
       if (jsonStr.isEmpty()) {
         return Option.empty();
       }
@@ -516,9 +516,8 @@ public class HoodieCommitMetadata implements Serializable {
         return clazz.newInstance();
       }
       return fromJsonString(
-          new String(
-              convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class),
-              StandardCharsets.UTF_8),
+          fromUTF8Bytes(
+              convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class)),
           clazz);
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);

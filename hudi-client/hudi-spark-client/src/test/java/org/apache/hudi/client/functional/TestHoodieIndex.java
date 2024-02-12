@@ -34,8 +34,6 @@ import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -62,6 +60,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -194,11 +193,11 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         new RawTripTestPayload(recordStr4).toHoodieRecord());
   }
 
-  private static List<HoodieRecord> getInsertsBatch2() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"005\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
-    String recordStr2 = "{\"_row_key\":\"006\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
-    String recordStr3 = "{\"_row_key\":\"007\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
-    String recordStr4 = "{\"_row_key\":\"008\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
+  private static List<HoodieRecord> getInsertsWithSameKeyInTwoPartitions() throws IOException {
+    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}";
+    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":2}";
+    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":3}";
+    String recordStr4 = "{\"_row_key\":\"003\",\"time\":\"2015-01-31T00:00:04.000Z\",\"number\":4}";
     return Arrays.asList(
         new RawTripTestPayload(recordStr1).toHoodieRecord(),
         new RawTripTestPayload(recordStr2).toHoodieRecord(),
@@ -206,16 +205,34 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         new RawTripTestPayload(recordStr4).toHoodieRecord());
   }
 
-  private static List<HoodieRecord> getUpdates() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
-    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
-    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
-    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
-    return new ArrayList<>(Arrays.asList(
-        new RawTripTestPayload(recordStr1).toHoodieRecord(),
-        new RawTripTestPayload(recordStr2).toHoodieRecord(),
-        new RawTripTestPayload(recordStr3).toHoodieRecord(),
-        new RawTripTestPayload(recordStr4).toHoodieRecord()));
+  @Test
+  public void testRecordIndexForNonGlobalWrites() throws Exception {
+    setUp(IndexType.RECORD_INDEX, true, true);
+    final int totalRecords = 4;
+    List<HoodieRecord> records = getInsertsWithSameKeyInTwoPartitions();
+    JavaRDD<HoodieRecord> writtenRecords = jsc.parallelize(records, 1);
+
+    // Insert totalRecords records
+    String newCommitTime = writeClient.createNewInstantTime();
+    writeClient.startCommitWithTime(newCommitTime);
+    JavaRDD<WriteStatus> writeStatusRdd = writeClient.upsert(writtenRecords, newCommitTime);
+    List<WriteStatus> writeStatuses = writeStatusRdd.collect();
+    assertNoWriteErrors(writeStatuses);
+    String[] fileIdsFromWriteStatuses = writeStatuses.stream().map(WriteStatus::getFileId)
+        .sorted().toArray(String[]::new);
+
+    // Now commit this & update location of records inserted and validate no errors
+    writeClient.commit(newCommitTime, writeStatusRdd);
+    // Now tagLocation for these records, index should tag them correctly
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writtenRecords, hoodieTable);
+    Map<String, String> recordKeyToPartitionPathMap = new HashMap();
+    List<HoodieRecord> hoodieRecords = writtenRecords.collect();
+    hoodieRecords.forEach(entry -> recordKeyToPartitionPathMap.put(entry.getRecordKey(), entry.getPartitionPath()));
+    String[] taggedFileIds = javaRDD.map(record -> record.getCurrentLocation().getFileId()).distinct().collect()
+        .stream().sorted().toArray(String[]::new);
+    assertArrayEquals(taggedFileIds, fileIdsFromWriteStatuses);
   }
 
   @ParameterizedTest
@@ -402,6 +419,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     return Stream.of(data).map(Arguments::of);
   }
 
+  @Disabled("HUDI-7353")
   @ParameterizedTest
   @MethodSource("regularIndexTypeParams")
   public void testTagLocationAndFetchRecordLocations(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
@@ -644,8 +662,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
-        .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+        .withEmbeddedTimelineServerEnabled(true);
   }
 
   private JavaPairRDD<HoodieKey, Option<Pair<String, String>>> getRecordLocations(JavaRDD<HoodieKey> keyRDD, HoodieTable hoodieTable) {

@@ -19,10 +19,8 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -40,18 +38,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -66,13 +58,11 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
+import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFile;
 
 /**
  * Utility methods to aid testing inside the HoodieClient module.
@@ -206,7 +196,7 @@ public class HoodieClientTestUtils {
           return rows.count();
         }
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
-        Stream<GenericRecord> genericRecordStream = readHFile(jsc, paths);
+        Stream<GenericRecord> genericRecordStream = readHFile(jsc.hadoopConfiguration(), paths);
         if (lastCommitTimeOpt.isPresent()) {
           return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
               gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
@@ -269,38 +259,6 @@ public class HoodieClientTestUtils {
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie table as a dataframe", e);
     }
-  }
-
-  public static Stream<GenericRecord> readHFile(JavaSparkContext jsc, String[] paths) {
-    // TODO: this should be ported to use HoodieStorageReader
-    List<GenericRecord> valuesAsList = new LinkedList<>();
-
-    FileSystem fs = FSUtils.getFs(paths[0], jsc.hadoopConfiguration());
-    CacheConfig cacheConfig = new CacheConfig(fs.getConf());
-    Schema schema = null;
-    for (String path : paths) {
-      try {
-        HFile.Reader reader =
-            HoodieHFileUtils.createHFileReader(fs, new Path(path), cacheConfig, fs.getConf());
-        if (schema == null) {
-          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(getUTF8Bytes(SCHEMA_KEY))));
-        }
-        HFileScanner scanner = reader.getScanner(false, false);
-        if (!scanner.seekTo()) {
-          // EOF reached
-          continue;
-        }
-
-        do {
-          Cell c = scanner.getCell();
-          byte[] value = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
-          valuesAsList.add(HoodieAvroUtils.bytesToAvro(value, schema));
-        } while (scanner.next());
-      } catch (IOException e) {
-        throw new HoodieException("Error reading hfile " + path + " as a dataframe", e);
-      }
-    }
-    return valuesAsList.stream();
   }
 
   /**

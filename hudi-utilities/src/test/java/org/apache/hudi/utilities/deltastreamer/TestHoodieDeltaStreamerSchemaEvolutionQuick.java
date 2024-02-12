@@ -157,7 +157,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     this.useTransformer = true;
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
-    tableBasePath = basePath + "test_parquet_table" + testNum;
+    tableName = "test_parquet_table" + testNum;
+    tableBasePath = basePath + tableName;
     this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(allowNullForDeletedCols), jsc);
 
     //first write
@@ -283,7 +284,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
-    tableBasePath = basePath + "test_parquet_table" + testNum;
+    tableName =  "test_parquet_table" + testNum;
+    tableBasePath = basePath + tableName;
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
@@ -353,7 +355,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
-    tableBasePath = basePath + "test_parquet_table" + testNum;
+    tableName = "test_parquet_table" + testNum;
+    tableBasePath = basePath + tableName;
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
@@ -431,7 +434,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
-    tableBasePath = basePath + "test_parquet_table" + testNum;
+    tableName = "test_parquet_table" + testNum;
+    tableBasePath = basePath + tableName;
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
@@ -510,7 +514,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
-    tableBasePath = basePath + "test_parquet_table" + testNum;
+    tableName = "test_parquet_table" + testNum;
+    tableBasePath = basePath + tableName;
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
@@ -597,7 +602,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
-    tableBasePath = basePath + "test_parquet_table" + testNum;
+    tableName = "test_parquet_table" + testNum;
+    tableBasePath = basePath + tableName;
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();

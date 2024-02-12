@@ -25,7 +25,6 @@ import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -41,6 +40,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 
@@ -64,6 +64,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieClient.class);
 
+  private static final long serialVersionUID = 1L;
   protected final transient FileSystem fs;
   protected final transient HoodieEngineContext context;
   protected final transient Configuration hadoopConf;
@@ -89,7 +90,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
     this.hadoopConf = context.getHadoopConf().get();
-    this.fs = FSUtils.getFs(clientConfig.getBasePath(), hadoopConf);
+    this.fs = HadoopFSUtils.getFs(clientConfig.getBasePath(), hadoopConf);
     this.context = context;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;

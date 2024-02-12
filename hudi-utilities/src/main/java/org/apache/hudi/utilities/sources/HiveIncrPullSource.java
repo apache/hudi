@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.config.HiveIncrPullSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
@@ -83,7 +83,7 @@ public class HiveIncrPullSource extends AvroSource {
     super(props, sparkContext, sparkSession, schemaProvider);
     checkRequiredConfigProperties(props, Collections.singletonList(HiveIncrPullSourceConfig.ROOT_INPUT_PATH));
     this.incrPullRootPath = getStringWithAltKeys(props, HiveIncrPullSourceConfig.ROOT_INPUT_PATH);
-    this.fs = FSUtils.getFs(incrPullRootPath, sparkContext.hadoopConfiguration());
+    this.fs = HadoopFSUtils.getFs(incrPullRootPath, sparkContext.hadoopConfiguration());
   }
 
   /**

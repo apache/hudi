@@ -20,8 +20,8 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.InputSplitUtils;
+import org.apache.hudi.hadoop.fs.CachingPath;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.InputSplitWithLocationInfo;

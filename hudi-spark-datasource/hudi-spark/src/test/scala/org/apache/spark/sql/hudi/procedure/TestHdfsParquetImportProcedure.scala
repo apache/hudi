@@ -17,14 +17,18 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.common.fs.FSUtils
+
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.HoodieLocation
 import org.apache.hudi.testutils.HoodieClientTestUtils
+
 import org.apache.parquet.avro.AvroParquetWriter
 import org.apache.parquet.hadoop.ParquetWriter
 import org.apache.spark.api.java.JavaSparkContext
@@ -41,9 +45,9 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call hdfs_parquet_import Procedure with insert operation") {
     withTempDir { tmp =>
-      val fs: FileSystem = FSUtils.getFs(tmp.getCanonicalPath, spark.sparkContext.hadoopConfiguration)
+      val fs: FileSystem = HadoopFSUtils.getFs(tmp.getCanonicalPath, spark.sparkContext.hadoopConfiguration)
       val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath + Path.SEPARATOR + tableName
+      val tablePath = tmp.getCanonicalPath + HoodieLocation.SEPARATOR + tableName
       val sourcePath = new Path(tmp.getCanonicalPath, "source")
       val targetPath = new Path(tablePath)
       val schemaFile = new Path(tmp.getCanonicalPath, "file.schema").toString
@@ -74,9 +78,9 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call hdfs_parquet_import Procedure with upsert operation") {
     withTempDir { tmp =>
-      val fs: FileSystem = FSUtils.getFs(tmp.getCanonicalPath, spark.sparkContext.hadoopConfiguration)
+      val fs: FileSystem = HadoopFSUtils.getFs(tmp.getCanonicalPath, spark.sparkContext.hadoopConfiguration)
       val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath + Path.SEPARATOR + tableName
+      val tablePath = tmp.getCanonicalPath + HoodieLocation.SEPARATOR + tableName
       val sourcePath = new Path(tmp.getCanonicalPath, "source")
       val targetPath = new Path(tablePath)
       val schemaFile = new Path(tmp.getCanonicalPath, "file.schema").toString

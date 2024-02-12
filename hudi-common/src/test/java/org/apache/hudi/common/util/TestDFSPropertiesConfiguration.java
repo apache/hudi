@@ -20,9 +20,9 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -184,7 +184,7 @@ public class TestDFSPropertiesConfiguration {
     ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
     DFSPropertiesConfiguration.refreshGlobalProps();
     try {
-      if (!FSUtils.getFs(DFSPropertiesConfiguration.DEFAULT_PATH, new Configuration()).exists(DFSPropertiesConfiguration.DEFAULT_PATH)) {
+      if (!HadoopFSUtils.getFs(DFSPropertiesConfiguration.DEFAULT_PATH, new Configuration()).exists(DFSPropertiesConfiguration.DEFAULT_PATH)) {
         assertEquals(0, DFSPropertiesConfiguration.getGlobalProps().size());
       }
     } catch (IOException e) {

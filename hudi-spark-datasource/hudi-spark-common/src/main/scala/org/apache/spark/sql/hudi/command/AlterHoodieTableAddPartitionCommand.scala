@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodiePartitionMetadata
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}

@@ -22,10 +22,10 @@ import org.apache.hudi.cli.utils.SparkTempViewProvider;
 import org.apache.hudi.cli.utils.TempViewProvider;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -73,7 +73,7 @@ public class HoodieCLI {
 
   public static boolean initConf() {
     if (HoodieCLI.conf == null) {
-      HoodieCLI.conf = FSUtils.prepareHadoopConf(new Configuration());
+      HoodieCLI.conf = HadoopFSUtils.prepareHadoopConf(new Configuration());
       return true;
     }
     return false;

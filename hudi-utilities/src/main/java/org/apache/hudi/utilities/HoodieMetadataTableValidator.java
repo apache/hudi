@@ -22,6 +22,7 @@ import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -47,6 +48,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
@@ -87,6 +89,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -95,13 +98,14 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
+import static org.apache.hudi.hadoop.fs.CachingPath.getPathWithoutSchemeAndAuthority;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -160,6 +164,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBaseP
  */
 public class HoodieMetadataTableValidator implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataTableValidator.class);
 
   // Spark context
@@ -491,9 +496,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     try (HoodieMetadataValidationContext metadataTableBasedContext =
-             new HoodieMetadataValidationContext(engineContext, cfg, metaClient, true);
+             new HoodieMetadataValidationContext(engineContext, props, metaClient, true);
          HoodieMetadataValidationContext fsBasedContext =
-             new HoodieMetadataValidationContext(engineContext, cfg, metaClient, false)) {
+             new HoodieMetadataValidationContext(engineContext, props, metaClient, false)) {
       Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
       List<Pair<Boolean, String>> result = new ArrayList<>(
           engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
@@ -1267,6 +1272,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataValidationContext.class);
 
+    private final Properties props;
     private final HoodieTableMetaClient metaClient;
     private final HoodieTableFileSystemView fileSystemView;
     private final HoodieTableMetadata tableMetadata;
@@ -1274,8 +1280,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     private List<String> allColumnNameList;
 
     public HoodieMetadataValidationContext(
-        HoodieEngineContext engineContext, Config cfg, HoodieTableMetaClient metaClient,
+        HoodieEngineContext engineContext, Properties props, HoodieTableMetaClient metaClient,
         boolean enableMetadataTable) {
+      this.props = props;
       this.metaClient = metaClient;
       this.enableMetadataTable = enableMetadataTable;
       HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -1377,7 +1384,11 @@ public class HoodieMetadataTableValidator implements Serializable {
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
       Path path = new Path(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath), filename);
       BloomFilter bloomFilter;
-      try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(), path)) {
+      HoodieConfig hoodieConfig = new HoodieConfig();
+      hoodieConfig.setValue(USE_NATIVE_HFILE_READER,
+          Boolean.toString(ConfigUtils.getBooleanWithAltKeys(props, USE_NATIVE_HFILE_READER)));
+      try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
+          .getFileReader(hoodieConfig, metaClient.getHadoopConf(), path)) {
         bloomFilter = fileReader.readBloomFilter();
         if (bloomFilter == null) {
           LOG.error("Failed to read bloom filter for " + path);

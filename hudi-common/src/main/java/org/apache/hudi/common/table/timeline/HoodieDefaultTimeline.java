@@ -517,7 +517,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public Option<HoodieInstant> getLastPendingClusterCommit() {
+  public Option<HoodieInstant> getLastPendingClusterInstant() {
     return  Option.fromJavaOptional(filterPendingReplaceTimeline()
         .getReverseOrderedInstants()
         .filter(i -> ClusteringUtils.isPendingClusteringInstant(this, i)).findFirst());

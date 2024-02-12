@@ -19,10 +19,10 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.client.transaction.DirectMarkerTransactionManager;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

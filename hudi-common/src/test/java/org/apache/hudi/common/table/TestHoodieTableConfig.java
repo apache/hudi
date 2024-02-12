@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +32,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -122,7 +122,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   public void testReadsWithUpdateFailures() throws IOException {
     HoodieTableConfig config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     fs.delete(cfgPath, false);
-    try (FSDataOutputStream out = fs.create(backupCfgPath)) {
+    try (OutputStream out = fs.create(backupCfgPath)) {
       config.getProps().store(out, "");
     }
 
@@ -139,7 +139,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     if (!shouldPropsFileExist) {
       fs.delete(cfgPath, false);
     }
-    try (FSDataOutputStream out = fs.create(backupCfgPath)) {
+    try (OutputStream out = fs.create(backupCfgPath)) {
       config.getProps().store(out, "");
     }
 
@@ -163,13 +163,13 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     // Should return backup config if hoodie.properties is corrupted
     Properties props = new Properties();
     props.put(TABLE_CHECKSUM.key(), "0");
-    try (FSDataOutputStream out = fs.create(cfgPath)) {
+    try (OutputStream out = fs.create(cfgPath)) {
       props.store(out, "Wrong checksum in file so is invalid");
     }
     new HoodieTableConfig(fs, metaPath.toString(), null, null);
 
     // Should throw exception if both hoodie.properties and backup are corrupted
-    try (FSDataOutputStream out = fs.create(backupCfgPath)) {
+    try (OutputStream out = fs.create(backupCfgPath)) {
       props.store(out, "Wrong checksum in file so is invalid");
     }
     assertThrows(IllegalArgumentException.class, () -> new HoodieTableConfig(fs, metaPath.toString(), null, null));

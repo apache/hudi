@@ -22,7 +22,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -30,11 +29,11 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -43,6 +42,7 @@ import org.junit.jupiter.api.BeforeEach;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -61,7 +61,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     this.jsc = new JavaSparkContext(
         HoodieClientTestUtils.getSparkConfForTest(TestTimelineServerBasedWriteMarkers.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
-    this.fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
+    this.fs = HadoopFSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
     this.markerFolderPath =  new Path(metaClient.getMarkerFolderPath("000"));
 
     FileSystemViewStorageConfig storageConf =
@@ -110,10 +110,10 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     // Verifies the marker type file
     Path markerTypeFilePath = new Path(markerFolderPath, MarkerUtils.MARKER_TYPE_FILENAME);
     assertTrue(MarkerUtils.doesMarkerTypeFileExist(fs, markerFolderPath.toString()));
-    FSDataInputStream fsDataInputStream = fs.open(markerTypeFilePath);
+    InputStream inputStream = fs.open(markerTypeFilePath);
     assertEquals(MarkerType.TIMELINE_SERVER_BASED.toString(),
-        FileIOUtils.readAsUTFString(fsDataInputStream));
-    closeQuietly(fsDataInputStream);
+        FileIOUtils.readAsUTFString(inputStream));
+    closeQuietly(inputStream);
   }
 
   /**

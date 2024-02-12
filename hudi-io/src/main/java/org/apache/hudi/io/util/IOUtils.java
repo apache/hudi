@@ -19,8 +19,13 @@
 
 package org.apache.hudi.io.util;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
 
 /**
  * Util methods on I/O.
@@ -197,6 +202,35 @@ public class IOUtils {
   }
 
   /**
+   * Returns the start position of the first occurrence of the specified {@code
+   * target} within {@code array}, or {@code -1} if there is no such occurrence.
+   *
+   * <p>More formally, returns the lowest index {@code i} such that the range
+   * [i, i + target.length) in {@code array} contains exactly the same elements
+   * as {@code target}.
+   *
+   * @param array  the array to search for the sequence {@code target}.
+   * @param target the array to search for as a sub-sequence of {@code array}.
+   * @return the start position if found; {@code -1} if there is no such occurrence.
+   */
+  public static int indexOf(byte[] array, byte[] target) {
+    if (target.length == 0) {
+      return 0;
+    }
+
+    outer:
+    for (int i = 0; i < array.length - target.length + 1; i++) {
+      for (int j = 0; j < target.length; j++) {
+        if (array[i + j] != target[j]) {
+          continue outer;
+        }
+      }
+      return i;
+    }
+    return -1;
+  }
+
+  /**
    * @param bytes  input byte array.
    * @param offset offset to start reading.
    * @param length length of bytes to read.
@@ -208,6 +242,38 @@ public class IOUtils {
       sb.append((char) bytes[i]);
     }
     return sb.toString();
+  }
+
+  /**
+   * Converts an int value to a byte array using big-endian.
+   *
+   * @param val value to convert.
+   * @return the byte array.
+   */
+  public static byte[] toBytes(int val) {
+    byte[] b = new byte[4];
+    for (int i = 3; i > 0; i--) {
+      b[i] = (byte) val;
+      val >>>= 8;
+    }
+    b[0] = (byte) val;
+    return b;
+  }
+
+  /**
+   * Converts a long value to a byte array using big-endian.
+   *
+   * @param val value to convert.
+   * @return the byte array.
+   */
+  public static byte[] toBytes(long val) {
+    byte[] b = new byte[8];
+    for (int i = 7; i > 0; i--) {
+      b[i] = (byte) val;
+      val >>>= 8;
+    }
+    b[0] = (byte) val;
+    return b;
   }
 
   /**
@@ -248,5 +314,48 @@ public class IOUtils {
       totalBytesRead += bytesRead;
     }
     return totalBytesRead;
+  }
+
+  public static byte[] readAsByteArray(InputStream input, int outputSize) throws IOException {
+    ByteArrayOutputStream bos = new ByteArrayOutputStream(outputSize);
+    copy(input, bos);
+    return bos.toByteArray();
+  }
+
+  public static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
+    byte[] buffer = new byte[1024];
+    int len;
+    while ((len = inputStream.read(buffer)) != -1) {
+      outputStream.write(buffer, 0, len);
+    }
+  }
+
+  /**
+   * @param byteBuffer {@link ByteBuffer} containing the bytes.
+   * @return {@link DataInputStream} based on the byte buffer.
+   */
+  public static DataInputStream getDataInputStream(ByteBuffer byteBuffer) {
+    return new DataInputStream(new ByteArrayInputStream(
+        byteBuffer.array(), byteBuffer.arrayOffset(), byteBuffer.limit() - byteBuffer.arrayOffset()));
+  }
+
+  /**
+   * Returns a new byte array, copied from the given {@code buf}, from the index 0 (inclusive)
+   * to the limit (exclusive), regardless of the current position.
+   * The position and the other index parameters are not changed.
+   *
+   * @param buf a byte buffer.
+   * @return the byte array.
+   */
+  public static byte[] toBytes(ByteBuffer buf) {
+    ByteBuffer dup = buf.duplicate();
+    dup.position(0);
+    return readBytes(dup);
+  }
+
+  private static byte[] readBytes(ByteBuffer buf) {
+    byte[] result = new byte[buf.remaining()];
+    buf.get(result);
+    return result;
   }
 }

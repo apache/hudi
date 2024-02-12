@@ -19,9 +19,9 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -47,7 +47,7 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
     this.jsc = new JavaSparkContext(
         HoodieClientTestUtils.getSparkConfForTest(TestDirectWriteMarkers.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
-    this.fs = FSUtils.getFs(metaClient.getBasePathV2().toString(), metaClient.getHadoopConf());
+    this.fs = HadoopFSUtils.getFs(metaClient.getBasePathV2().toString(), metaClient.getHadoopConf());
     this.markerFolderPath =  new Path(Paths.get(metaClient.getMarkerFolderPath("000")).toUri());
     this.writeMarkers = new DirectWriteMarkers(
         fs, metaClient.getBasePathV2().toString(), markerFolderPath.toString(), "000");

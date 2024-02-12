@@ -62,7 +62,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.FileCreateUtils;
@@ -86,7 +85,8 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.io.storage.HoodieAvroHFileReader;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -98,6 +98,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -107,10 +108,8 @@ import org.apache.hudi.testutils.TestHoodieMetadataBase;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.util.Time;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
@@ -126,6 +125,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -536,9 +536,10 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     table.getHoodieView().sync();
     List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
-    HoodieAvroHFileReader hoodieHFileReader = new HoodieAvroHFileReader(context.getHadoopConf().get(), new Path(baseFile.getPath()),
-        new CacheConfig(context.getHadoopConf().get()));
-    List<IndexedRecord> records = HoodieAvroHFileReader.readAllRecords(hoodieHFileReader);
+    HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
+        HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
+            writeConfig, context.getHadoopConf().get(), new Path(baseFile.getPath()));
+    List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (populateMetaFields) {
         assertNotNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
@@ -956,10 +957,10 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     final HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
 
-    HoodieAvroHFileReader hoodieHFileReader = new HoodieAvroHFileReader(context.getHadoopConf().get(),
-        new Path(baseFile.getPath()),
-        new CacheConfig(context.getHadoopConf().get()));
-    List<IndexedRecord> records = HoodieAvroHFileReader.readAllRecords(hoodieHFileReader);
+    HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
+        HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
+            table.getConfig(), context.getHadoopConf().get(), new Path(baseFile.getPath()));
+    List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (enableMetaFields) {
         assertNotNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
@@ -1229,7 +1230,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     // remove the MDT partition from dataset to simulate failed bootstrap
     Properties updateProperties = new Properties();
     updateProperties.setProperty(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), "");
-    HoodieTableConfig.update(fs, new Path(basePath + Path.SEPARATOR + METAFOLDER_NAME),
+    HoodieTableConfig.update(fs, new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME),
         updateProperties);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -2179,7 +2180,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
       // instant so that only the inflight is left over.
       String commitInstantFileName = metaClient.getActiveTimeline().getReverseOrderedInstants().findFirst().get().getFileName();
-      assertTrue(fs.delete(new Path(basePath + Path.SEPARATOR + METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME,
           commitInstantFileName), false));
     }
 
@@ -2279,7 +2280,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
       // instant so that only the inflight is left over.
       String commitInstantFileName = metaClient.getActiveTimeline().getReverseOrderedInstants().findFirst().get().getFileName();
-      assertTrue(fs.delete(new Path(basePath + Path.SEPARATOR + METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME,
           commitInstantFileName), false));
     }
 
@@ -2422,7 +2423,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // To simulate failed clean on the main dataset, we will delete the completed clean instant
       String cleanInstantFileName = metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants()
           .getReverseOrderedInstants().findFirst().get().getFileName();
-      assertTrue(fs.delete(new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + HoodieLocation.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
           cleanInstantFileName), false));
       assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflights().countInstants(), 1);
       assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants().countInstants(), 0);
@@ -2493,7 +2494,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(false).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+            .build());
   }
 
   @Test
@@ -2855,7 +2856,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     metaClient.getTableConfig().setTableVersion(version);
     Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
-    try (FSDataOutputStream os = metaClient.getFs().create(propertyFile)) {
+    try (OutputStream os = metaClient.getFs().create(propertyFile)) {
       metaClient.getTableConfig().getProps().store(os, "");
     }
   }

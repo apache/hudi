@@ -39,7 +39,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
@@ -175,7 +174,7 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, Bef
     byte[] bytes = serializeCommitMetadata(commitMetadata).get();
     Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
-    FSDataOutputStream fsout = dfsCluster.getFileSystem().create(fullPath, true);
+    OutputStream fsout = dfsCluster.getFileSystem().create(fullPath, true);
     fsout.write(bytes);
     fsout.close();
   }

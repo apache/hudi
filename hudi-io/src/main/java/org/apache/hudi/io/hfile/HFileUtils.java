@@ -26,6 +26,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+
 /**
  * Util methods for reading and writing HFile.
  */
@@ -71,6 +73,38 @@ public class HFileUtils {
     return IOUtils.compareTo(
         key1.getBytes(), key1.getContentOffset(), key1.getContentLength(),
         key2.getBytes(), key2.getContentOffset(), key2.getContentLength());
+  }
+
+  /**
+   * @param prefix the prefix to check
+   * @param key    key to check
+   * @return whether the key starts with the prefix.
+   */
+  public static boolean isPrefixOfKey(Key prefix, Key key) {
+    int prefixLength = prefix.getContentLength();
+    int keyLength = key.getLength();
+    if (prefixLength > keyLength) {
+      return false;
+    }
+
+    byte[] prefixBytes = prefix.getBytes();
+    byte[] keyBytes = key.getBytes();
+    for (int i = 0; i < prefixLength; i++) {
+      if (prefixBytes[prefix.getContentOffset() + i] != keyBytes[key.getContentOffset() + i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Gets the value in String.
+   *
+   * @param kv {@link KeyValue} instance.
+   * @return the String with UTF-8 decoding.
+   */
+  public static String getValue(KeyValue kv) {
+    return fromUTF8Bytes(kv.getBytes(), kv.getValueOffset(), kv.getValueLength());
   }
 
   /**

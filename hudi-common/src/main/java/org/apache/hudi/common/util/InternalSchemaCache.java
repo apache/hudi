@@ -19,13 +19,13 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
@@ -36,13 +36,13 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -185,7 +185,7 @@ public class InternalSchemaCache {
     Set<String> commitSet = Arrays.stream(validCommits.split(",")).collect(Collectors.toSet());
     List<String> validateCommitList = commitSet.stream().map(HoodieInstant::extractTimestamp).collect(Collectors.toList());
 
-    FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(tablePath, hadoopConf);
     Path hoodieMetaPath = new Path(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
     //step1:
     Path candidateCommitFile = commitSet.stream().filter(fileName -> HoodieInstant.extractTimestamp(fileName).equals(versionId + ""))
@@ -193,7 +193,7 @@ public class InternalSchemaCache {
     if (candidateCommitFile != null) {
       try {
         byte[] data;
-        try (FSDataInputStream is = fs.open(candidateCommitFile)) {
+        try (InputStream is = fs.open(candidateCommitFile)) {
           data = FileIOUtils.readAsByteArray(is);
         } catch (IOException e) {
           throw e;

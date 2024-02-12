@@ -71,6 +71,7 @@ public class HFileCursor {
 
   public void setEof() {
     this.eof = true;
+    this.keyValue = Option.empty();
   }
 
   public void unsetEof() {
