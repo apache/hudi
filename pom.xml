@@ -607,6 +607,8 @@
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
             <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
+            <forkCount>1</forkCount>
+            <reuseForks>true</reuseForks>
           </configuration>
         </plugin>
         <plugin>
