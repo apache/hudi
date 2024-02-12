@@ -20,6 +20,8 @@ package org.apache.hudi.metrics.cloudwatch;
 
 import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.metrics.MetricsReporterFactory;
+import org.apache.hudi.metrics.MetricsReporterType;
 
 import com.codahale.metrics.MetricRegistry;
 import org.junit.jupiter.api.Test;
@@ -27,8 +29,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.lang.reflect.InvocationTargetException;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -58,5 +63,19 @@ public class TestCloudWatchMetricsReporter {
 
     metricsReporter.stop();
     verify(reporter, times(1)).stop();
+  }
+
+  @Test
+  public void testReporterViaReporterFactory() {
+    try {
+      when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
+      // MetricsReporterFactory uses reflection to create CloudWatchMetricsReporter
+      // This test verifies that reflection is working well and is able to invoke the CloudWatchMetricsReporter constructor
+      MetricsReporterFactory.createReporter(metricsConfig, registry).get();
+    } catch (Exception e) {
+      assertTrue(e.getCause() instanceof InvocationTargetException);
+      assertTrue(Arrays.stream(((InvocationTargetException) e.getCause()).getTargetException().getStackTrace()).anyMatch(
+          ste -> ste.toString().contains("org.apache.hudi.aws.cloudwatch.CloudWatchReporter.getAmazonCloudWatchClient")));
+    }
   }
 }
