@@ -150,7 +150,7 @@ public class HoodieMetadataWriteUtils {
     properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD_NAME);
     if (nonEmpty(writeConfig.getMetricReporterMetricsNamePrefix())) {
       properties.put(HoodieMetricsConfig.METRICS_REPORTER_PREFIX.key(),
-          writeConfig.getMetricReporterMetricsNamePrefix() + "_metadata");
+          writeConfig.getMetricReporterMetricsNamePrefix() + METADATA_TABLE_NAME_SUFFIX);
     }
     builder.withProperties(properties);
 
