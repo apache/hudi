@@ -56,8 +56,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -172,8 +172,8 @@ public class HoodieIndexUtils {
    * @param candidateRecordKeys - Candidate keys to filter
    * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static List<Pair<String, Long>> filterKeysFromFile(Path filePath, Set<String> candidateRecordKeys,
-                                                            Configuration configuration) throws HoodieIndexException {
+  public static Collection<Pair<String, Long>> filterKeysFromFile(Path filePath, Set<String> candidateRecordKeys,
+                                                                  Configuration configuration) throws HoodieIndexException {
     if (candidateRecordKeys.isEmpty()) {
       return Collections.emptyList();
     }
@@ -182,8 +182,7 @@ public class HoodieIndexUtils {
         .getFileReader(configuration, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       HoodieTimer timer = HoodieTimer.start();
-      Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys);
-      List<Pair<String, Long>> foundRecordKeys = new ArrayList<>(fileRowKeys);
+      Set<Pair<String, Long>> foundRecordKeys = fileReader.filterRowKeys(candidateRecordKeys);
       LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
           timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
       if (LOG.isDebugEnabled()) {

@@ -57,6 +57,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -331,14 +332,15 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         new HashSet<>(Arrays.asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey()));
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    List<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
+    Collection<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
         new Path(Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
 
+    Set<String> actualFileIds = results.stream().map(Pair::getLeft).collect(Collectors.toSet());
+    Set<String> expectedFileIds = new HashSet<>();
+    expectedFileIds.add("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0");
+    expectedFileIds.add("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0");
+    assertEquals(expectedFileIds, actualFileIds);
     assertEquals(results.size(), 2);
-    assertTrue(results.get(0).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
-        || results.get(1).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
-    assertTrue(results.get(0).getLeft().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")
-        || results.get(1).getLeft().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0"));
     // TODO(vc): Need more coverage on actual filenames
     // assertTrue(results.get(0)._2().equals(filename));
     // assertTrue(results.get(1)._2().equals(filename));

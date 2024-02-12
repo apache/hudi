@@ -68,7 +68,7 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
                 .apply(fileComparisonPairList.iterator())
             )
             .flatMap(Collection::stream)
-            .filter(lr -> lr.getMatchingRecordKeysAndPositions().size() > 0)
+            .filter(lr -> !lr.getMatchingRecordKeysAndPositions().isEmpty())
             .collect(toList());
 
     return context.parallelize(keyLookupResults).flatMap(lookupResult ->
