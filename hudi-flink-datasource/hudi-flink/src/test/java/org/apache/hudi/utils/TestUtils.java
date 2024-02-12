@@ -138,11 +138,13 @@ public class TestUtils {
         serializeCommitMetadata(metadata));
   }
 
-  public static void amendCompletionTimeToLatest(HoodieTableMetaClient metaClient, java.nio.file.Path sourcePath, String instantTime) throws IOException {
+  public static String amendCompletionTimeToLatest(HoodieTableMetaClient metaClient, java.nio.file.Path sourcePath, String instantTime) throws IOException {
     String fileExt = sourcePath.getFileName().toString().split("\\.")[1];
-    String newFileName = instantTime + "_" + metaClient.createNewInstantTime() + "." + fileExt;
+    String newCompletionTime = metaClient.createNewInstantTime();
+    String newFileName = instantTime + "_" + newCompletionTime + "." + fileExt;
 
     java.nio.file.Path newFilePath = sourcePath.getParent().resolve(newFileName);
     Files.move(sourcePath, newFilePath);
+    return newCompletionTime;
   }
 }

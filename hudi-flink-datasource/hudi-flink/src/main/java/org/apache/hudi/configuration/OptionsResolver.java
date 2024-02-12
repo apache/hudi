@@ -273,10 +273,10 @@ public class OptionsResolver {
   }
 
   /**
-   * Returns whether the read commits limit is specified.
+   * Returns the read commits limit or -1 if not specified.
    */
-  public static boolean hasReadCommitsLimit(Configuration conf) {
-    return conf.contains(FlinkOptions.READ_COMMITS_LIMIT);
+  public static int getReadCommitsLimit(Configuration conf) {
+    return conf.getInteger(FlinkOptions.READ_COMMITS_LIMIT, -1);
   }
 
   /**
@@ -406,5 +406,13 @@ public class OptionsResolver {
       }
     }
     return options;
+  }
+
+  /**
+   * Whether the reader only consumes new commit instants.
+   */
+  public static boolean isOnlyConsumingNewCommits(Configuration conf) {
+    return isMorTable(conf) && conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT) // this is only true for flink.
+        || isAppendMode(conf) && conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING);
   }
 }
