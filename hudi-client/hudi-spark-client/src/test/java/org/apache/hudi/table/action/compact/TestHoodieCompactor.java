@@ -27,6 +27,7 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -64,6 +65,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -299,9 +301,17 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
    * Verify that all partition paths are present in the WriteStatus result.
    */
   private void verifyCompaction(HoodieData<WriteStatus> result) {
+    List<WriteStatus> writeStatuses = result.collectAsList();
     for (String partitionPath : dataGen.getPartitionPaths()) {
-      List<WriteStatus> writeStatuses = result.collectAsList();
       assertTrue(writeStatuses.stream().anyMatch(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath)));
     }
+
+    writeStatuses.forEach(writeStatus -> {
+      final HoodieWriteStat.RuntimeStats stats = writeStatus.getStat().getRuntimeStats();
+      assertNotNull(stats);
+      assertEquals(stats.getTotalCreateTime(), 0);
+      assertTrue(stats.getTotalUpsertTime() > 0);
+      assertTrue(stats.getTotalScanTime() > 0);
+    });
   }
 }
