@@ -534,11 +534,7 @@ Interested users can implement `org.apache.hudi.utilities.deltastreamer.Configur
 
 ## MultiTableStreamer
 
-`HoodieMultiTableStreamer`, a wrapper on top of `HoodieStreamer`, enables one to ingest multiple tables at a single go
-into hudi datasets. Currently it only supports sequential processing of tables to be ingested and COPY_ON_WRITE storage
-type. The command line options for `HoodieMultiTableStreamer` are pretty much similar to `HoodieStreamer` with the only
-exception that you are required to provide table wise configs in separate files in a dedicated config folder. The
-following command line options are introduced
+`HoodieMultiTableStreamer`, an extension of `HoodieStreamer`, facilitates the simultaneous ingestion of multiple tables into Hudi datasets. At present, it supports the sequential ingestion of tables and accommodates both COPY_ON_WRITE and MERGE_ON_READ storage types. The command line parameters for `HoodieMultiTableStreamer` largely mirror those of `HoodieStreamer`, with the notable difference being the necessity to supply table-specific configurations in separate files in a dedicated config folder. New command line options have been introduced to support this functionality:
 
 ```java
   * --config-folder
