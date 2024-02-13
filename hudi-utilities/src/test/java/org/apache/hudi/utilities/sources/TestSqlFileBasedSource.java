@@ -63,7 +63,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(true, true, false);
+    UtilitiesTestBase.initTestServices(false, true, false);
     FileSystem fs = UtilitiesTestBase.fs;
     UtilitiesTestBase.Helpers.copyToDFS(
         "streamer-config/sql-file-based-source.sql", fs,
