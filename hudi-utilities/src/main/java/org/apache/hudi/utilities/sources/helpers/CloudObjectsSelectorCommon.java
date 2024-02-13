@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
@@ -33,6 +32,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -204,7 +204,6 @@ public class CloudObjectsSelectorCommon {
     } else {
       dataset = reader.load(paths.toArray(new String[cloudObjectMetadata.size()]));
     }
-    dataset = coalesceOrRepartition(dataset, numPartitions);
     // add partition column from source path if configured
     if (containsConfigProperty(props, PATH_BASED_PARTITION_FIELDS)) {
       String[] partitionKeysToAdd = getStringWithAltKeys(props, PATH_BASED_PARTITION_FIELDS).split(",");
@@ -215,6 +214,7 @@ public class CloudObjectsSelectorCommon {
         dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), "/").getItem(0));
       }
     }
+    dataset = coalesceOrRepartition(dataset, numPartitions);
     return Option.of(dataset);
   }
 
