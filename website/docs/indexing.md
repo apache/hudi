@@ -22,6 +22,9 @@ could end up having to merge all the base files against all incoming updates/del
 ![Fact table](/assets/images/blog/hudi-indexes/with_without_index.png)
 <p align = "center">Figure: Comparison of merge cost for updates (dark blue blocks) against base files (light blue blocks)</p>
 
+## Multi-modal Indexing
+Hudi supoprts a multi-modal index by augmenting the metadata table with the capability to incorporate new types of indexes, complemented by an asynchronous mechanism for index construction. This enhancement supports a range of indexes within the metadata table, significantly improving the efficiency of both writing to and reading from the table. For additional information on Hudi's metadata table, check out Hudi's [metadata table](https://hudi.apache.org/docs/next/metadata) documentation.
+
 ## Index Types in Hudi
 
 Currently, Hudi supports the following index types. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java 
