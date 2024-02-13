@@ -200,7 +200,15 @@ public class HoodieMetadataWriteUtils {
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
         // we will trigger cleaning manually, to control the instant times
-        .withCleanConfig(cleanConfigBuilder.build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
+            .withAutoClean(false)
+            .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .retainFileVersions(2)
+            .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
+            .retainCommits(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED)
+            .build())
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .archiveCommitsWith(
