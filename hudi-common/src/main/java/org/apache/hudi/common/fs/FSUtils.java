@@ -42,8 +42,8 @@ import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
 import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.hadoop.conf.Configuration;
@@ -131,7 +131,7 @@ public class FSUtils {
    * @param location to be qualified.
    * @return qualified location, prefixed with the URI of the target HoodieStorage object provided.
    */
-  public static HoodieLocation makeQualified(HoodieStorage storage, HoodieLocation location) {
+  public static StoragePath makeQualified(HoodieStorage storage, StoragePath location) {
     return location.makeQualified(storage.getUri());
   }
 

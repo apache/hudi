@@ -34,8 +34,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
 import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
-import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
@@ -587,14 +587,14 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     FileSystem wrapperFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
     HoodieStorage storage = new HoodieHadoopStorage(fs);
     HoodieStorage wrapperStorage = new HoodieHadoopStorage(wrapperFs);
-    assertEquals(new HoodieLocation("file:///x/y"),
-        FSUtils.makeQualified(storage, new HoodieLocation("/x/y")));
-    assertEquals(new HoodieLocation("file:///x/y"),
-        FSUtils.makeQualified(wrapperStorage, new HoodieLocation("/x/y")));
-    assertEquals(new HoodieLocation("s3://x/y"),
-        FSUtils.makeQualified(storage, new HoodieLocation("s3://x/y")));
-    assertEquals(new HoodieLocation("s3://x/y"),
-        FSUtils.makeQualified(wrapperStorage, new HoodieLocation("s3://x/y")));
+    assertEquals(new StoragePath("file:///x/y"),
+        FSUtils.makeQualified(storage, new StoragePath("/x/y")));
+    assertEquals(new StoragePath("file:///x/y"),
+        FSUtils.makeQualified(wrapperStorage, new StoragePath("/x/y")));
+    assertEquals(new StoragePath("s3://x/y"),
+        FSUtils.makeQualified(storage, new StoragePath("s3://x/y")));
+    assertEquals(new StoragePath("s3://x/y"),
+        FSUtils.makeQualified(wrapperStorage, new StoragePath("s3://x/y")));
   }
 
   private Path getHoodieTempDir() {

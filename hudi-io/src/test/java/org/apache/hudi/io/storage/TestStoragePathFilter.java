@@ -19,8 +19,8 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.storage.HoodieLocation;
-import org.apache.hudi.storage.HoodieLocationFilter;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,39 +31,39 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests {@link HoodieLocationFilter}
+ * Tests {@link StoragePathFilter}
  */
-public class TestHoodieLocationFilter {
+public class TestStoragePathFilter {
   @Test
   public void testFilter() {
-    HoodieLocation location1 = new HoodieLocation("/x/y/1");
-    HoodieLocation location2 = new HoodieLocation("/x/y/2");
-    HoodieLocation location3 = new HoodieLocation("/x/z/1");
-    HoodieLocation location4 = new HoodieLocation("/x/z/2");
+    StoragePath path1 = new StoragePath("/x/y/1");
+    StoragePath path2 = new StoragePath("/x/y/2");
+    StoragePath path3 = new StoragePath("/x/z/1");
+    StoragePath path4 = new StoragePath("/x/z/2");
 
-    List<HoodieLocation> locationList = Arrays.stream(
-        new HoodieLocation[] {location1, location2, location3, location4}
+    List<StoragePath> pathList = Arrays.stream(
+        new StoragePath[] {path1, path2, path3, path4}
     ).collect(Collectors.toList());
 
-    List<HoodieLocation> expected = Arrays.stream(
-        new HoodieLocation[] {location1, location2}
+    List<StoragePath> expected = Arrays.stream(
+        new StoragePath[] {path1, path2}
     ).collect(Collectors.toList());
 
     assertEquals(expected.stream().sorted().collect(Collectors.toList()),
-        locationList.stream()
-            .filter(e -> new HoodieLocationFilter() {
+        pathList.stream()
+            .filter(e -> new StoragePathFilter() {
               @Override
-              public boolean accept(HoodieLocation location) {
-                return location.getParent().equals(new HoodieLocation("/x/y"));
+              public boolean accept(StoragePath path) {
+                return path.getParent().equals(new StoragePath("/x/y"));
               }
             }.accept(e))
             .sorted()
             .collect(Collectors.toList()));
-    assertEquals(locationList,
-        locationList.stream()
-            .filter(e -> new HoodieLocationFilter() {
+    assertEquals(pathList,
+        pathList.stream()
+            .filter(e -> new StoragePathFilter() {
               @Override
-              public boolean accept(HoodieLocation location) {
+              public boolean accept(StoragePath path) {
                 return true;
               }
             }.accept(e))

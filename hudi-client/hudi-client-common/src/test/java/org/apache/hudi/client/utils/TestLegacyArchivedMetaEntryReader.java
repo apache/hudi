@@ -39,7 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -74,7 +74,7 @@ public class TestLegacyArchivedMetaEntryReader {
   @Test
   void testReadLegacyArchivedTimeline() throws Exception {
     String tableName = "testTable";
-    String tablePath = tempFile.getAbsolutePath() + HoodieLocation.SEPARATOR + tableName;
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareLegacyArchivedTimeline(metaClient);
     LegacyArchivedMetaEntryReader reader = new LegacyArchivedMetaEntryReader(metaClient);
