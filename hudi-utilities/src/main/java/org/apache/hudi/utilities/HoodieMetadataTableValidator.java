@@ -59,6 +59,7 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.utilities.util.BloomFilterData;
 
 import com.beust.jcommander.JCommander;
@@ -265,13 +266,13 @@ public class HoodieMetadataTableValidator implements Serializable {
         description = "Validate the number of entries in the record index, which should be equal "
             + "to the number of record keys in the latest snapshot of the table",
         required = false)
-    public boolean validateRecordIndexCount = false;
+    public boolean validateRecordIndexCount = true;
 
     @Parameter(names = {"--validate-record-index-content"},
         description = "Validate the content of the record index so that each record key should "
             + "have the correct location, and there is no additional or missing entry",
         required = false)
-    public boolean validateRecordIndexContent = false;
+    public boolean validateRecordIndexContent = true;
 
     @Parameter(names = {"--num-record-index-error-samples"},
         description = "Number of error samples to show for record index validation",
@@ -819,6 +820,10 @@ public class HoodieMetadataTableValidator implements Serializable {
   private void validateRecordIndex(HoodieSparkEngineContext sparkEngineContext,
                                    HoodieTableMetaClient metaClient,
                                    HoodieTableMetadata tableMetadata) {
+    if (!metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
+      return;
+    }
+
     if (cfg.validateRecordIndexContent) {
       validateRecordIndexContent(sparkEngineContext, metaClient, tableMetadata);
     } else if (cfg.validateRecordIndexCount) {
