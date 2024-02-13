@@ -27,27 +27,18 @@ could end up having to merge all the base files against all incoming updates/del
 Currently, Hudi supports the following index types. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java 
 engines.
 
-- **BLOOM:** Employs bloom filters built out of the record keys, optionally also pruning candidate files using 
-  record key ranges.Key uniqueness is enforced inside partitions.
-- **GLOBAL_BLOOM:** Employs bloom filters built out of the record keys, optionally also pruning candidate files using 
-  record key ranges. Key uniqueness is enforced across all partitions in the table.
-- **SIMPLE (default for Spark engines):** Default index type for spark engine. Performs a lean join of the incoming records against keys extracted from the table on 
-  storage. Key uniqueness is enforced inside partitions. 
-- **GLOBAL_SIMPLE:** Performs a lean join of the incoming records against keys extracted from the table on
-  storage. Key uniqueness is enforced across all partitions in the table.
-- **HBASE:** Manages the index mapping in an external Apache HBase table.
+- **BLOOM:** Uses bloom filters generated from record keys, with the option to further narrow down candidate files based on the ranges of the record keys. It requires keys to be partition-level unique so it can function correctly.
+- **GLOBAL_BLOOM:** Utilizes bloom filters created from record keys, and may also refine the selection of candidate files by using the ranges of record keys. It requires keys to be table/global-level unique so it can function correctly.
+- **SIMPLE (default for Spark engines):** This is the standard index type for the Spark engine. It executes an efficient join of incoming records with keys retrieved from the table stored on disk. It requires keys to be partition-level unique so it can function correctly. 
+- **GLOBAL_SIMPLE:** Performs a lean join of the incoming records against keys extracted from the table on storage. It requires keys to be table/global-level unique so it can function correctly.
+- **HBASE:** Mangages the index mapping through an external table in Apache HBase.
 - **INMEMORY (default for Flink and Java):** Uses in-memory hashmap in Spark and Java engine and Flink in-memory state in Flink for indexing.
-- **BUCKET:** Employs bucket hashing to locates the file group containing the records. Particularly beneficial in 
-  large scale. Use `hoodie.index.bucket.engine` to choose bucket engine type, i.e., how buckets are generated;
-  - `SIMPLE(default)`: Uses a fixed number of buckets for file groups per partition which cannot shrink or expand. This works for both COW and 
-     MOR tables. Since the num of buckets cannot be changed and design of one-on-one mapping between buckets and file groups, 
-     this index might not suit well for highly skewed partitions. 
-  - `CONSISTENT_HASHING`: Supports dynamic number of buckets with bucket resizing to properly size each bucket. This 
-     solves potential data skew problem where partitions with high volume of data can be dynamically resized to have 
-     multiple buckets that are reasonably sized in contrast to the fixed number of buckets per partition in SIMPLE 
-     bucket engine type. This only works with MOR tables.
-- **RECORD_INDEX:** Index which saves the record key to location mappings in the HUDI Metadata Table. Record index is a 
-  global index, enforcing key uniqueness across all partitions in the table. Supports sharding to achieve very high scale.
+- **BUCKET:** Utilizes bucket hashing to identify the file group that houses the records, which proves to be particularly advantageous on a large scale. To select the type of bucket engine—that is, the method by which buckets are created—use the `hoodie.index.bucket.engine` configuration option.
+  - `SIMPLE(default)`: This index employs a fixed number of buckets for file groups within each partition, which do not have the capacity to decrease or increase in size. It is applicable to both COW and MOR tables. Due to the unchangeable number of buckets and the design principle of mapping each bucket to a single file group, this indexing method may not be ideal for partitions with significant data skew.
+  - `CONSISTENT_HASHING`: This index accommodates a dynamic number of buckets, with the capability for bucket resizing to ensure each bucket is sized appropriately. This addresses the issue of data skew in partitions with a high volume of data by allowing these partitions to be dynamically resized. As a result, partitions can have multiple reasonably sized buckets, unlike the fixed bucket count per partition seen in the SIMPLE bucket engine type. This feature is exclusively compatible with MOR tables.
+  
+- **RECORD_INDEX:** This index saves the record key to location mappings in the HUDI Metadata Table. It functions as a global index, requiring keys to be unique across all partitions within the table. To accommodate very high scales, it utilizes sharding. The record index is specifically optimized to enable fast upserts. Additionally, when it comes to reading data, the index is crafted to allow for rapid point lookups, significantly speeding up data retrieval processes.
+
 - **Bring your own implementation:** You can extend this [public API](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/index/HoodieIndex.java) 
 to implement custom indexing.
 
