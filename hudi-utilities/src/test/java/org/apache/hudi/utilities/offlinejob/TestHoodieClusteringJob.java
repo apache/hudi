@@ -31,6 +31,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Properties;
 
@@ -40,9 +42,11 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
  * Test cases for {@link HoodieClusteringJob}.
  */
 public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
-  @Test
-  public void testHoodieClusteringJobWithClean() throws Exception {
-    String tableBasePath = basePath + "/asyncClustering";
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testHoodieClusteringJobWithClean(boolean skipClean) throws Exception {
+    String tableBasePath = basePath + "/asyncClustering_" + skipClean;
     Properties props = getPropertiesForKeyGen(true);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("asyncClustering")
@@ -76,7 +80,7 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
 
     // offline clustering execute without clean
     HoodieClusteringJob hoodieCluster =
-        init(tableBasePath, true, "scheduleAndExecute", false);
+        init(tableBasePath, true, "scheduleAndExecute", skipClean);
     hoodieCluster.cluster(0);
     HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(1, tableBasePath, fs);
     HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath, fs);
@@ -86,29 +90,31 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
 
     // offline clustering execute with sync clean
     hoodieCluster =
-        init(tableBasePath, true, "scheduleAndExecute", true);
+        init(tableBasePath, true, "scheduleAndExecute", skipClean);
     hoodieCluster.cluster(0);
     HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(2, tableBasePath, fs);
-    HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(1, tableBasePath, fs);
+    if (!skipClean) {
+      HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(1, tableBasePath, fs);
+    }
   }
 
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private HoodieClusteringJob init(String tableBasePath, boolean runSchedule, String scheduleAndExecute, boolean isAutoClean) {
-    HoodieClusteringJob.Config clusterConfig = buildHoodieClusteringUtilConfig(tableBasePath, runSchedule, scheduleAndExecute, isAutoClean);
+  private HoodieClusteringJob init(String tableBasePath, boolean runSchedule, String scheduleAndExecute, boolean skipClean) {
+    HoodieClusteringJob.Config clusterConfig = buildHoodieClusteringUtilConfig(tableBasePath, runSchedule, scheduleAndExecute, skipClean);
     clusterConfig.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
     return new HoodieClusteringJob(jsc, clusterConfig);
   }
 
-  private HoodieClusteringJob.Config  buildHoodieClusteringUtilConfig(String basePath, boolean runSchedule, String runningMode, boolean isAutoClean) {
+  private HoodieClusteringJob.Config  buildHoodieClusteringUtilConfig(String basePath, boolean runSchedule, String runningMode, boolean skipClean) {
     HoodieClusteringJob.Config config = new HoodieClusteringJob.Config();
     config.basePath = basePath;
     config.runSchedule = runSchedule;
     config.runningMode = runningMode;
     config.configs.add("hoodie.metadata.enable=false");
-    config.configs.add(String.format("%s=%s", HoodieCleanConfig.AUTO_CLEAN.key(), isAutoClean));
+    config.skipClean = skipClean;
     config.configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), 1));
     config.configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), 1));
     return config;
