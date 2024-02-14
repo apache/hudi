@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * @param <T> configuration type.
  */
-public abstract class TestStorageConfigurationBase<T> {
+public abstract class BaseTestStorageConfiguration<T> {
   private static final Map<String, String> EMPTY_MAP = new HashMap<>();
   private static final String KEY_STRING = "hudi.key.string";
   private static final String KEY_BOOLEAN = "hudi.key.boolean";

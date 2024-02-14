@@ -19,7 +19,7 @@
 
 package org.apache.hudi.storage.hadoop;
 
-import org.apache.hudi.io.storage.TestStorageConfigurationBase;
+import org.apache.hudi.io.storage.BaseTestStorageConfiguration;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
@@ -29,7 +29,7 @@ import java.util.Map;
 /**
  * Tests {@link HadoopStorageConfiguration}.
  */
-public class TestHadoopStorageConfiguration extends TestStorageConfigurationBase<Configuration> {
+public class TestStorageConfigurationHadoopStorageConfiguration extends BaseTestStorageConfiguration<Configuration> {
   @Override
   protected StorageConfiguration<Configuration> getStorageConfiguration(Configuration conf) {
     return new HadoopStorageConfiguration(conf);
