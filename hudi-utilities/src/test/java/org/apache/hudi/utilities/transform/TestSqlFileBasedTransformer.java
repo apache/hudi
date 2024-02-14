@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -51,22 +52,10 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   @BeforeAll
   public static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
-    UtilitiesTestBase.Helpers.copyToDFS(
-        "streamer-config/sql-file-transformer.sql",
-        UtilitiesTestBase.fs,
-        UtilitiesTestBase.basePath + "/sql-file-transformer.sql");
-    UtilitiesTestBase.Helpers.copyToDFS(
-        "streamer-config/sql-file-transformer-invalid.sql",
-        UtilitiesTestBase.fs,
-        UtilitiesTestBase.basePath + "/sql-file-transformer-invalid.sql");
-    UtilitiesTestBase.Helpers.copyToDFS(
-        "streamer-config/sql-file-transformer-empty.sql",
-        UtilitiesTestBase.fs,
-        UtilitiesTestBase.basePath + "/sql-file-transformer-empty.sql");
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanupClass() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
@@ -106,7 +95,12 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   }
 
   @Test
-  public void testSqlFileBasedTransformerInvalidSQL() {
+  public void testSqlFileBasedTransformerInvalidSQL() throws IOException {
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "streamer-config/sql-file-transformer-invalid.sql",
+        UtilitiesTestBase.fs,
+        UtilitiesTestBase.basePath + "/sql-file-transformer-invalid.sql");
+
     // Test if the SQL file based transformer works as expected for the invalid SQL statements.
     props.setProperty(
         "hoodie.deltastreamer.transformer.sql.file",
@@ -117,7 +111,12 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   }
 
   @Test
-  public void testSqlFileBasedTransformerEmptyDataset() {
+  public void testSqlFileBasedTransformerEmptyDataset() throws IOException {
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "streamer-config/sql-file-transformer-empty.sql",
+        UtilitiesTestBase.fs,
+        UtilitiesTestBase.basePath + "/sql-file-transformer-empty.sql");
+
     // Test if the SQL file based transformer works as expected for the empty SQL statements.
     props.setProperty(
         "hoodie.deltastreamer.transformer.sql.file",
@@ -129,7 +128,12 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   }
 
   @Test
-  public void testSqlFileBasedTransformer() {
+  public void testSqlFileBasedTransformer() throws IOException {
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "streamer-config/sql-file-transformer.sql",
+        UtilitiesTestBase.fs,
+        UtilitiesTestBase.basePath + "/sql-file-transformer.sql");
+
     // Test if the SQL file based transformer works as expected for the correct input.
     props.setProperty(
         "hoodie.deltastreamer.transformer.sql.file",
