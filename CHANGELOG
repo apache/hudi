@@ -26,3 +26,8 @@ a6b1f8cbf [ENG-6237] handle case where source schema is providing the kafka offs
 80617645a [ENG-6494] Add validation on hoodie.streamer.source.kafka.minPartitions config and improve logging on kafka offsets (#543)
 7b879a76b [ENG-5489] Skip validation if table not found (#533)
 483f205d6 Upgrade to version release-v1.2.1 (#538)
+
+---[2024-02-13 23:01:53] [release-v1.2.3] Adding release tag for hudi-internal release-v1.2.3---
+cb4346e23ec [ENG-6636] Revert changes around Spark partitioning inside cloud source (#550)
+8ee50ee2d1f [ENG-6636] Fix Spark repartition causing input file name to be null in cloud incremental source (#545)
+1b6bf4730f3 Upgrade to version release-v1.2.2
