@@ -20,6 +20,7 @@
 package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.hfile.Key;

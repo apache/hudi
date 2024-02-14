@@ -19,6 +19,8 @@
 package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
+import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
+import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
