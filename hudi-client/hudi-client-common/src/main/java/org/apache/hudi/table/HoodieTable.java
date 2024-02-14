@@ -64,12 +64,13 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -848,8 +849,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       Schema writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
       Schema tableSchema = HoodieAvroUtils.createHoodieWriteSchema(existingTableSchema.get());
       AvroSchemaUtils.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
+    } catch (SchemaCompatibilityException e) {
+      throw e;
     } catch (Exception e) {
-      throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
+      throw new SchemaCompatibilityException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
     }
   }
 
