@@ -29,7 +29,7 @@ import java.util.Map;
 /**
  * Tests {@link HadoopStorageConfiguration}.
  */
-public class TestStorageConfigurationHadoopStorageConfiguration extends BaseTestStorageConfiguration<Configuration> {
+public class TestHadoopStorageConfiguration extends BaseTestStorageConfiguration<Configuration> {
   @Override
   protected StorageConfiguration<Configuration> getStorageConfiguration(Configuration conf) {
     return new HadoopStorageConfiguration(conf);
