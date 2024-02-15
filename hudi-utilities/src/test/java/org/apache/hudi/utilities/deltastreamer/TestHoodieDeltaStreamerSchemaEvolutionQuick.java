@@ -486,7 +486,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
       assertTrue(containsErrorMessage(e, "java.lang.NullPointerException",
-          "Incoming batch schema is not compatible with the table's one"));
+          "Schema validation failed due to missing field."));
     }
   }
 
