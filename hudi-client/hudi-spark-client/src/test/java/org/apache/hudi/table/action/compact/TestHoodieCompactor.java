@@ -199,7 +199,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       writeClient.insert(recordsRDD, newCommitTime).collect();
 
-      // Update all the 100 records
+      // Update all the 1000 records across 5 commits to generate sufficient log files.
       int i = 1;
       for (; i < 5; i++) {
         newCommitTime = String.format("10%s", i);
