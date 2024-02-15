@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -238,18 +239,25 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     scanner.close();
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
-      s.getStat().setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
-      s.getStat().setTotalLogFilesCompacted(scanner.getTotalLogFiles());
-      s.getStat().setTotalLogRecords(scanner.getTotalLogRecords());
-      s.getStat().setPartitionPath(operation.getPartitionPath());
-      s.getStat()
+      final HoodieWriteStat stat = s.getStat();
+      stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
+      stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
+      stat.setTotalLogRecords(scanner.getTotalLogRecords());
+      stat.setPartitionPath(operation.getPartitionPath());
+      stat
           .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
-      s.getStat().setTotalLogBlocks(scanner.getTotalLogBlocks());
-      s.getStat().setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
-      s.getStat().setTotalRollbackBlocks(scanner.getTotalRollbacks());
+      stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
+      stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
+      stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
       RuntimeStats runtimeStats = new RuntimeStats();
+      // scan time has to be obtained from scanner.
       runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
-      s.getStat().setRuntimeStats(runtimeStats);
+      // create and upsert time are obtained from the create or merge handle.
+      if (stat.getRuntimeStats() != null) {
+        runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
+        runtimeStats.setTotalUpsertTime(stat.getRuntimeStats().getTotalUpsertTime());
+      }
+      stat.setRuntimeStats(runtimeStats);
     }).collect(toList());
   }
 
