@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
@@ -126,6 +126,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       b.add(Arguments.of("COPY_ON_WRITE", true, true, true, true, true));
       b.add(Arguments.of("COPY_ON_WRITE", true, false, false, false, true));
       b.add(Arguments.of("MERGE_ON_READ", true, true, true, false, false));
+      b.add(Arguments.of("MERGE_ON_READ", true, true, false, false, false));
       b.add(Arguments.of("MERGE_ON_READ", true, false, true, true, false));
     }
     return b.build();
@@ -221,8 +222,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       addData(df, false);
       deltaStreamer.sync();
       assertTrue(allowNullForDeletedCols);
-    } catch (SchemaCompatibilityException e) {
-      assertTrue(e.getMessage().contains("Incoming batch schema is not compatible with the table's one"));
+    } catch (MissingSchemaFieldException e) {
       assertFalse(allowNullForDeletedCols);
       return;
     }
@@ -405,10 +405,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
           .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
-    } catch (SchemaCompatibilityException e) {
+    } catch (MissingSchemaFieldException e) {
       assertFalse(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
-      assertTrue(e.getMessage().contains("Incoming batch schema is not compatible with the table's one"));
-      assertFalse(allowNullForDeletedCols);
     }
   }
 

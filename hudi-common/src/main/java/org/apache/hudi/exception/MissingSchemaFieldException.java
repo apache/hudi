@@ -18,22 +18,19 @@
 
 package org.apache.hudi.exception;
 
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import java.util.List;
 
 /**
- * An exception thrown when schema has compatibility problems.
+ * Thrown when the schema of the incoming data is missing fields that are in the table schema.
  */
-public class SchemaCompatibilityException extends HoodieSchemaException {
+public class MissingSchemaFieldException extends SchemaCompatibilityException {
 
-  public SchemaCompatibilityException(String message) {
-    super(message);
+  public MissingSchemaFieldException(List<String> missingFields) {
+    super(constructExceptionMessage(missingFields));
   }
 
-  public SchemaCompatibilityException(String message, Throwable t) {
-    super(message, t);
-  }
-
-  public SchemaCompatibilityException(Throwable t) {
-    super(t);
+  private static String constructExceptionMessage(List<String> missingFields) {
+    return "Schema validation failed due to missing field. Fields missing from incoming schema: {"
+        + String.join(", ", missingFields) + "}";
   }
 }
