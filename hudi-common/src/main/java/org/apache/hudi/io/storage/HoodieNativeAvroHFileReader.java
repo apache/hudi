@@ -28,9 +28,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
+import org.apache.hudi.io.ByteArraySeekableDataInputStream;
+import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.hfile.KeyValue;
@@ -41,7 +45,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -256,15 +259,15 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   private HFileReader newHFileReader() throws IOException {
-    FSDataInputStream inputStream;
+    SeekableDataInputStream inputStream;
     long fileSize;
     if (path.isPresent()) {
       FileSystem fs = HadoopFSUtils.getFs(path.get(), conf);
       fileSize = fs.getFileStatus(path.get()).getLen();
-      inputStream = fs.open(path.get());
+      inputStream = new HadoopSeekableDataInputStream(fs.open(path.get()));
     } else {
       fileSize = bytesContent.get().length;
-      inputStream = new FSDataInputStream(new SeekableByteArrayInputStream(bytesContent.get()));
+      inputStream = new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(bytesContent.get()));
     }
     return new HFileReaderImpl(inputStream, fileSize);
   }

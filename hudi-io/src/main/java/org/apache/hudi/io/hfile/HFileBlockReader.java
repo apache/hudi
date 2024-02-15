@@ -19,7 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hudi.io.SeekableDataInputStream;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -30,7 +30,7 @@ import java.io.IOException;
 public class HFileBlockReader {
   private final HFileContext context;
   private final long streamStartOffset;
-  private final FSDataInputStream stream;
+  private final SeekableDataInputStream stream;
   private final byte[] byteBuff;
   private int offset;
   private boolean isReadFully = false;
@@ -44,7 +44,7 @@ public class HFileBlockReader {
    * @param endOffset   end offset to stop at.
    */
   public HFileBlockReader(HFileContext context,
-                          FSDataInputStream stream,
+                          SeekableDataInputStream stream,
                           long startOffset,
                           long endOffset) {
     this.context = context;
