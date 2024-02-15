@@ -256,7 +256,7 @@ public class TestHoodieSchemaUtils {
   }
 
   private static Schema.Field createNestedField(String name, Schema schema) {
-    return new Schema.Field(name, createRecord(name, new Schema.Field("nested", schema)), null, null);
+    return new Schema.Field(name, createRecord(name, new Schema.Field("nested", schema, null, null)), null, null);
   }
 
   private static Schema.Field createArrayField(String name, Schema.Type type) {
@@ -264,7 +264,7 @@ public class TestHoodieSchemaUtils {
   }
 
   private static Schema.Field createArrayField(String name, Schema schema) {
-    return new Schema.Field(name, Schema.createArray(schema));
+    return new Schema.Field(name, Schema.createArray(schema), null, null);
   }
 
   private static Schema.Field createMapField(String name, Schema.Type type) {
@@ -272,11 +272,11 @@ public class TestHoodieSchemaUtils {
   }
 
   private static Schema.Field createMapField(String name, Schema schema) {
-    return new Schema.Field(name, Schema.createMap(schema));
+    return new Schema.Field(name, Schema.createMap(schema), null, null);
   }
 
   private static Schema.Field createPrimitiveField(String name, Schema.Type type) {
-    return new Schema.Field(name, Schema.create(type));
+    return new Schema.Field(name, Schema.create(type), null, null);
   }
   
   private static Schema createRecord(String name, Schema.Field... fields) {
