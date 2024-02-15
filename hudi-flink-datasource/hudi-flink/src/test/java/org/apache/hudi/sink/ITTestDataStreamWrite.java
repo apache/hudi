@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
+import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
@@ -557,13 +558,13 @@ public class ITTestDataStreamWrite extends TestLogger {
     } catch (JobExecutionException e) {
       Throwable actualException = e;
       while (actualException != null) {
-        if (actualException.getClass() == SchemaCompatibilityException.class) {
+        if (actualException.getClass() == MissingSchemaFieldException.class) {
           // test is passed
           return;
         }
         actualException = actualException.getCause();
       }
     }
-    throw new AssertionError(String.format("Excepted exception %s is not found", SchemaCompatibilityException.class));
+    throw new AssertionError(String.format("Excepted exception %s is not found", MissingSchemaFieldException.class));
   }
 }
