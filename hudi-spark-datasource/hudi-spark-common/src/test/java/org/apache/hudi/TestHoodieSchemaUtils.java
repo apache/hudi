@@ -256,7 +256,7 @@ public class TestHoodieSchemaUtils {
   }
 
   private static Schema.Field createNestedField(String name, Schema schema) {
-    return new Schema.Field(name, createRecord(name, new Schema.Field("nested", schema)));
+    return new Schema.Field(name, createRecord(name, new Schema.Field("nested", schema)), null, null);
   }
 
   private static Schema.Field createArrayField(String name, Schema.Type type) {
