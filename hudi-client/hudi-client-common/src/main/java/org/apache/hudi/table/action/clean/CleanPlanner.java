@@ -230,7 +230,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     LOG.info("Including partitions part of savepointed commits which was removed after last known clean " + partitionsFromDeletedSavepoints.toString());
     List<String> partitionsOfInterest = new ArrayList<>(incrementalPartitions);
     partitionsOfInterest.addAll(partitionsFromDeletedSavepoints);
-    return incrementalPartitions.stream().distinct().collect(Collectors.toList());
+    return partitionsOfInterest.stream().distinct().collect(Collectors.toList());
   }
 
   private List<String> getPartitionsFromDeletedSavepoint(HoodieCleanMetadata cleanMetadata) {

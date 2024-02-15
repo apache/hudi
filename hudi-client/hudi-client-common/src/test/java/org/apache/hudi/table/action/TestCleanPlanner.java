@@ -41,6 +41,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -378,7 +379,7 @@ public class TestCleanPlanner {
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanParitionsCases(
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1),
         Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1)),
-        activeInstantsPartitionsMap2, Collections.emptyMap(), twoPartitionsInActiveTimeline));
+        activeInstantsPartitionsMap2, Collections.emptyMap(), threePartitionsInActiveTimeline));
 
     // previous savepoint still exists and touches partition1. uncleaned touches only partition2 and partition3. expected partition2 and partition3.
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanParitionsCases(
@@ -409,6 +410,17 @@ public class TestCleanPlanner {
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanParitionsCases(
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1),
         previousSavepoints, activeInstantsPartitionsMap3, Collections.singletonMap(savepoint3, Collections.singletonList(PARTITION2)), threePartitionsInActiveTimeline));
+
+    // unpartitioned test case. savepoint removed.
+    List<String> unPartitionsInActiveTimeline = Arrays.asList(StringUtils.EMPTY_STRING);
+    Map<String, List<String>> activeInstantsUnPartitionsMap = new HashMap<>();
+    activeInstantsUnPartitionsMap.put(earliestInstantMinusThreeDays, unPartitionsInActiveTimeline);
+
+    arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanParitionsCases(
+        earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(StringUtils.EMPTY_STRING),
+        Collections.singletonMap(savepoint2, Collections.singletonList(StringUtils.EMPTY_STRING)),
+        activeInstantsUnPartitionsMap, Collections.emptyMap(), unPartitionsInActiveTimeline));
+
     return arguments.stream();
   }
 
