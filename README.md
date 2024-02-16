@@ -16,7 +16,7 @@
   limitations under the License.
 -->
 
-# Apache Hudi
+# Apache Hudi Internal
 
 Apache Hudi (pronounced Hoodie) stands for `Hadoop Upserts Deletes and Incrementals`. Hudi manages the storage of large
 analytical datasets on DFS (Cloud stores, HDFS or any Hadoop FileSystem compatible storage).
@@ -32,6 +32,41 @@ analytical datasets on DFS (Cloud stores, HDFS or any Hadoop FileSystem compatib
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/apache/hudi)
 [![Join on Slack](https://img.shields.io/badge/slack-%23hudi-72eff8?logo=slack&color=48c628&label=Join%20on%20Slack)](https://join.slack.com/t/apache-hudi/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w)
 ![Twitter Follow](https://img.shields.io/twitter/follow/ApacheHudi)
+
+## hudi-internal PR Process
+
+This repo serves as the internal mirror of Apache Hudi OSS with the latest fixes for cutting internal Hudi releases.
+Any proprietary code should be committed [onehouse-dataplane repo](https://github.com/onehouseinc/onehouse-dataplane)
+instead.
+
+In the case of a new proprietary feature that requires changing Hudi abstraction and APIs, e.g., add new source or
+plugged-in functionality in write client, you should break the code changes into two part: (1) API changes, such as
+method signature changes or new public interface and abstract class, only in Hudi, which is merged in Hudi OSS and this
+repo, (2) actual implementation in [onehouse-dataplane repo](https://github.com/onehouseinc/onehouse-dataplane). One
+example is the feature Onehouse added as a proprietary one: Snapshot load query split by considering row limit, which
+is split into two (1) `SnapshotLoadQuerySplitter`: an abstract class with the APIs in Hudi,
+(2) `SnapshotLoadQuerySplitterByRowLimit`: an implementation of `SnapshotLoadQuerySplitter` class
+in `onehouse-dataplane`.
+
+Here is the process for creating a `hudi-internal` PR:
+
+- **Feature development and bug fixes**: create [Hudi JIRA](https://issues.apache.org/jira/projects/HUDI/issues),
+  create a [Hudi OSS](https://github.com/apache/hudi) PR, get reviews and approval, and then cherry-pick the same
+  changes into `hudi-internal` with the same PR title and OSS PR link `apache/hudi#<pr_id>` mentioned in the PR
+  description (this is enforced by PR compliance check).
+- **Urgent feature and hotfix**: for urgent feature and hotfix for outage mitigation,
+  create [Hudi JIRA](https://issues.apache.org/jira/projects/HUDI/issues), create a
+  placeholder [Hudi OSS](https://github.com/apache/hudi) PR, then in parallel create a `hudi-internal` PR of the
+  hotfix with the same PR title and OSS PR link `apache/hudi#<pr_id>` mentioned in the PR description (this is enforced
+  by PR compliance check). This is to make sure we always remember to upstream the hotfix later on. In such a case,
+  [Hudi Committers](https://github.com/orgs/onehouseinc/teams/hudi-committers) are responsible for reviewing and
+  approving the `hudi-internal` PR by holding the same standard as Hudi OSS PR review and approval (e.g., backwards
+  compatibility, extreme care around public interface changes and format changes, test coverage, etc.).
+- **Release cut**: create AUDIT ticket and PR with the AUDIT ticket in the title (
+  e.g., `[AUDIT-XXX] Upgrade to release`), by
+  following [Dataplane Rollout Process](https://app.clickup.com/18029943/v/dc/h67bq-7724/h67bq-72820)
+- **Other breakglass cases**: in rare cases when there is no companion Hudi OSS PR, add `[BREAKGLASS]` to the PR title
+  to skip the PR compliance check and provide reason why this is required.
 
 ## Features
 

@@ -1,0 +1,44 @@
+name: PR Compliance Check
+on:
+  pull_request:
+    types: [ opened, edited, reopened, synchronize ]
+    branches:
+      - master
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    if: >
+      !contains(github.event.pull_request.title, '[BREAKGLASS]') &&
+      !contains(github.event.pull_request.title, '[AUDIT-')
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REQUEST_BODY: ${{ github.event.pull_request.body }}
+      REQUEST_TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+      - name: Install the gh cli
+        uses: ksivamuthu/actions-setup-gh-cli@v2
+        with:
+          version: 2.24.3
+      - name: Check companion PR in Hudi OSS
+        run: |
+          set -e
+          export HUDI_OSS_PR_ID=$(echo "${{ github.event.pull_request.body }}" | grep -Eo 'apache/hudi#[0-9]+')
+          export TMP_HUDI_OSS_PR_TITLE=$(echo $HUDI_OSS_PR_ID | grep -Eo '[0-9]+' | xargs -I {} gh pr view {} --repo apache/hudi | head -n 1 | grep -Eo '\[.*')
+          echo "HUDI_OSS_PR_TITLE=$TMP_HUDI_OSS_PR_TITLE" >> $GITHUB_ENV
+          ((([ -n "$HUDI_OSS_PR_ID" ] || (echo "Unable to find companion Hudi OSS PR based on the PR description" && exit 1)) &&
+          [ -n "$TMP_HUDI_OSS_PR_TITLE" ] &&
+          echo "Companion Hudi OSS PR is: $HUDI_OSS_PR_ID $TMP_HUDI_OSS_PR_TITLE") ||
+          (echo "Unable to extract title of the Hudi OSS PR: $HUDI_OSS_PR_ID" && exit 1))
+      - name: Check PR title identity
+        run: |
+          if [[ "$HUDI_OSS_PR_TITLE" == "${{ github.event.pull_request.title }}" ]]; then
+            echo "PR title is the same as the companion Hudi OSS PR. Validation passes."
+          else
+            echo "PR title is different from the companion Hudi OSS PR. Validation fails."
+            exit 1
+          fi
+      - name: Check PR title and description
+        run: python3 scripts/pr_compliance.py

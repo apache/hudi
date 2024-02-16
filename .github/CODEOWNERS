@@ -1,0 +1,6 @@
+# Each line is a file pattern followed by one or more owners.
+
+# All hudi internal reviews are required to be reviewed by
+# the hudi core team.
+
+* @onehouseinc/hudi-committers
