@@ -1716,11 +1716,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(1000, c);
   }
 
-  private static void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName) {
+  private void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName) {
     prepareJsonKafkaDFSFiles(numRecords, createTopic, topicName, 2);
   }
 
-  private static void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName, int numPartitions) {
+  private void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName, int numPartitions) {
     if (createTopic) {
       try {
         testUtils.createTopic(topicName, numPartitions);

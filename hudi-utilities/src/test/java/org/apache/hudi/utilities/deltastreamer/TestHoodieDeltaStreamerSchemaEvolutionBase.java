@@ -129,7 +129,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   @AfterAll
   static void teardownAll() {
     defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
-    HoodieDeltaStreamerTestBase.cleanupKafkaTestUtils();
   }
 
   protected HoodieStreamer deltaStreamer;

@@ -28,7 +28,6 @@ import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.AnalysisException;
@@ -64,17 +63,10 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
   @BeforeAll
   public static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices(false, true, false);
-    FileSystem fs = UtilitiesTestBase.fs;
-    UtilitiesTestBase.Helpers.copyToDFS(
-        "streamer-config/sql-file-based-source.sql", fs,
-        UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
-    UtilitiesTestBase.Helpers.copyToDFS(
-        "streamer-config/sql-file-based-source-invalid-table.sql", fs,
-        UtilitiesTestBase.basePath + "/sql-file-based-source-invalid-table.sql");
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanupClass() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
@@ -113,7 +105,11 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
    * @throws IOException
    */
   @Test
-  public void testSqlFileBasedSourceAvroFormat() {
+  public void testSqlFileBasedSourceAvroFormat() throws IOException {
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "streamer-config/sql-file-based-source.sql", fs,
+        UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
+
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
     sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
@@ -136,7 +132,11 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
    * @throws IOException
    */
   @Test
-  public void testSqlFileBasedSourceRowFormat() {
+  public void testSqlFileBasedSourceRowFormat() throws IOException {
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "streamer-config/sql-file-based-source.sql", fs,
+        UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
+
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
     sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
@@ -154,7 +154,11 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
    * @throws IOException
    */
   @Test
-  public void testSqlFileBasedSourceMoreRecordsThanSourceLimit() {
+  public void testSqlFileBasedSourceMoreRecordsThanSourceLimit() throws IOException {
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "streamer-config/sql-file-based-source.sql", fs,
+        UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
+
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
     sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
@@ -171,7 +175,11 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
    * @throws IOException
    */
   @Test
-  public void testSqlFileBasedSourceInvalidTable() {
+  public void testSqlFileBasedSourceInvalidTable() throws IOException {
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "streamer-config/sql-file-based-source-invalid-table.sql", fs,
+        UtilitiesTestBase.basePath + "/sql-file-based-source-invalid-table.sql");
+
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source-invalid-table.sql");
     sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
@@ -182,7 +190,11 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
   }
 
   @Test
-  public void shouldSetCheckpointForSqlFileBasedSourceWithEpochCheckpoint() {
+  public void shouldSetCheckpointForSqlFileBasedSourceWithEpochCheckpoint() throws IOException {
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "streamer-config/sql-file-based-source.sql", fs,
+        UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
+
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
     props.setProperty(sqlFileSourceConfigEmitChkPointConf, "true");
 
