@@ -62,7 +62,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanupClass() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 

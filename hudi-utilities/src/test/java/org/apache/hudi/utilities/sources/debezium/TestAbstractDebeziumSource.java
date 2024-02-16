@@ -39,11 +39,14 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -57,19 +60,28 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
 
   private final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
-  private static KafkaTestUtils testUtils;
+  private KafkaTestUtils testUtils;
 
   @BeforeAll
   public static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
+  }
+
+  @BeforeEach
+  public void setUpKafkaTestUtils() {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanUpUtilitiesTestServices();
+  @AfterEach
+  public void tearDownKafkaTestUtils() {
     testUtils.teardown();
+    testUtils = null;
+  }
+
+  @AfterAll
+  public static void cleanupClass() throws IOException {
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   private TypedProperties createPropsForJsonSource() {

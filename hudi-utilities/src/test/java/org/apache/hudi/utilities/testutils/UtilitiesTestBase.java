@@ -164,7 +164,12 @@ public class UtilitiesTestBase {
   }
 
   @AfterAll
-  public static void cleanUpUtilitiesTestServices() {
+  public static void cleanUpUtilitiesTestServices() throws IOException {
+    if (fs != null) {
+      fs.delete(new Path(basePath), true);
+      fs.close();
+      fs = null;
+    }
     if (hdfsTestService != null) {
       hdfsTestService.stop();
       hdfsTestService = null;
@@ -197,6 +202,10 @@ public class UtilitiesTestBase {
   @BeforeEach
   public void setup() throws Exception {
     TestDataSource.initDataGen();
+    // This prevents test methods from using existing files or folders.
+    if (fs != null) {
+      fs.delete(new Path(basePath), true);
+    }
   }
 
   @AfterEach
