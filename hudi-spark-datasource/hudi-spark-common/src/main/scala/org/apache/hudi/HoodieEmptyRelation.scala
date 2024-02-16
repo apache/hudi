@@ -18,10 +18,9 @@
 
 package org.apache.hudi
 
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SQLContext}
 
 /**
   * This is a dummy Spark relation that can be used if needed to return a place holder relation that does not get used.
@@ -29,12 +28,8 @@ import org.apache.spark.sql.{Row, SQLContext}
   * @param sqlContext Spark SQL Context
   * @param userSchema Users data schema
   */
-case class HoodieEmptyRelation(sqlContext: SQLContext,
-                               userSchema: StructType) extends BaseRelation with PrunedFilteredScan {
+class HoodieEmptyRelation(val sqlContext: SQLContext,
+                          val userSchema: StructType) extends BaseRelation {
 
   override def schema: StructType = userSchema
-
-  override def buildScan(requiredColumns: Array[String],
-                         filters: Array[Filter]): RDD[Row] = sqlContext.emptyDataFrame.rdd
-
 }

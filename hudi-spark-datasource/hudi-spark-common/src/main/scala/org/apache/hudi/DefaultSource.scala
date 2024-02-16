@@ -76,7 +76,7 @@ class DefaultSource extends RelationProvider
     try {
       createRelation(sqlContext, parameters, null)
     } catch {
-      case _: HoodieSchemaNotFoundException => HoodieEmptyRelation(sqlContext, new StructType())
+      case _: HoodieSchemaNotFoundException => new EmptyRelation(sqlContext, new StructType())
       case e => throw e
     }
   }
@@ -159,7 +159,7 @@ class DefaultSource extends RelationProvider
       HoodieSparkSqlWriter.cleanup()
     }
 
-    HoodieEmptyRelation(sqlContext, df.schema)
+    new HoodieEmptyRelation(sqlContext, df.schema)
   }
 
   override def createSink(sqlContext: SQLContext,
