@@ -19,7 +19,7 @@
 package org.apache.hudi.metrics.prometheus;
 
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.MetricsReporter;
 
@@ -55,15 +55,15 @@ public class PrometheusReporter extends MetricsReporter {
   private final CollectorRegistry collectorRegistry;
   private final int serverPort;
 
-  public PrometheusReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    this.serverPort = config.getPrometheusPort();
+  public PrometheusReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
+    this.serverPort = metricsConfig.getPrometheusPort();
     if (!PORT_TO_SERVER.containsKey(serverPort) || !PORT_TO_COLLECTOR_REGISTRY.containsKey(serverPort)) {
       startHttpServer(serverPort);
     }
     List<String> labelNames = new ArrayList<>();
     List<String> labelValues = new ArrayList<>();
-    if (StringUtils.nonEmpty(config.getPushGatewayLabels())) {
-      LABEL_PATTERN.splitAsStream(config.getPushGatewayLabels().trim()).map(s -> s.split(":", 2))
+    if (StringUtils.nonEmpty(metricsConfig.getPushGatewayLabels())) {
+      LABEL_PATTERN.splitAsStream(metricsConfig.getPushGatewayLabels().trim()).map(s -> s.split(":", 2))
           .forEach(parts -> {
             labelNames.add(parts[0]);
             labelValues.add(parts[1]);
