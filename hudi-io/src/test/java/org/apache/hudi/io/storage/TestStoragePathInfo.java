@@ -19,8 +19,8 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.storage.HoodieFileStatus;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -36,34 +36,34 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
- * Tests {@link HoodieFileStatus}
+ * Tests {@link StoragePathInfo}
  */
-public class TestHoodieFileStatus {
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieFileStatus.class);
+public class TestStoragePathInfo {
+  private static final Logger LOG = LoggerFactory.getLogger(TestStoragePathInfo.class);
   private static final long LENGTH = 100;
   private static final long MODIFICATION_TIME = System.currentTimeMillis();
   private static final String PATH1 = "/abc/xyz1";
   private static final String PATH2 = "/abc/xyz2";
-  private static final HoodieLocation LOCATION1 = new HoodieLocation(PATH1);
-  private static final HoodieLocation LOCATION2 = new HoodieLocation(PATH2);
+  private static final StoragePath STORAGE_PATH1 = new StoragePath(PATH1);
+  private static final StoragePath STORAGE_PATH2 = new StoragePath(PATH2);
 
   @Test
   public void testConstructor() {
-    HoodieFileStatus fileStatus = new HoodieFileStatus(LOCATION1, LENGTH, false, MODIFICATION_TIME);
-    validateAccessors(fileStatus, PATH1, LENGTH, false, MODIFICATION_TIME);
-    fileStatus = new HoodieFileStatus(LOCATION2, -1, true, MODIFICATION_TIME + 2L);
-    validateAccessors(fileStatus, PATH2, -1, true, MODIFICATION_TIME + 2L);
+    StoragePathInfo pathInfo = new StoragePathInfo(STORAGE_PATH1, LENGTH, false, MODIFICATION_TIME);
+    validateAccessors(pathInfo, PATH1, LENGTH, false, MODIFICATION_TIME);
+    pathInfo = new StoragePathInfo(STORAGE_PATH2, -1, true, MODIFICATION_TIME + 2L);
+    validateAccessors(pathInfo, PATH2, -1, true, MODIFICATION_TIME + 2L);
   }
 
   @Test
   public void testSerializability() throws IOException, ClassNotFoundException {
-    HoodieFileStatus fileStatus = new HoodieFileStatus(LOCATION1, LENGTH, false, MODIFICATION_TIME);
+    StoragePathInfo pathInfo = new StoragePathInfo(STORAGE_PATH1, LENGTH, false, MODIFICATION_TIME);
     try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
          ObjectOutputStream oos = new ObjectOutputStream(baos)) {
-      oos.writeObject(fileStatus);
+      oos.writeObject(pathInfo);
       try (ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
            ObjectInputStream ois = new ObjectInputStream(bais)) {
-        HoodieFileStatus deserialized = (HoodieFileStatus) ois.readObject();
+        StoragePathInfo deserialized = (StoragePathInfo) ois.readObject();
         validateAccessors(deserialized, PATH1, LENGTH, false, MODIFICATION_TIME);
       }
     }
@@ -71,32 +71,32 @@ public class TestHoodieFileStatus {
 
   @Test
   public void testEquals() {
-    HoodieFileStatus fileStatus1 = new HoodieFileStatus(
-        new HoodieLocation(PATH1), LENGTH, false, MODIFICATION_TIME);
-    HoodieFileStatus fileStatus2 = new HoodieFileStatus(
-        new HoodieLocation(PATH1), LENGTH + 2, false, MODIFICATION_TIME + 2L);
-    assertEquals(fileStatus1, fileStatus2);
+    StoragePathInfo pathInfo1 = new StoragePathInfo(
+        new StoragePath(PATH1), LENGTH, false, MODIFICATION_TIME);
+    StoragePathInfo pathInfo2 = new StoragePathInfo(
+        new StoragePath(PATH1), LENGTH + 2, false, MODIFICATION_TIME + 2L);
+    assertEquals(pathInfo1, pathInfo2);
   }
 
   @Test
   public void testNotEquals() {
-    HoodieFileStatus fileStatus1 = new HoodieFileStatus(
-        LOCATION1, LENGTH, false, MODIFICATION_TIME);
-    HoodieFileStatus fileStatus2 = new HoodieFileStatus(
-        LOCATION2, LENGTH, false, MODIFICATION_TIME + 2L);
-    assertFalse(fileStatus1.equals(fileStatus2));
-    assertFalse(fileStatus2.equals(fileStatus1));
+    StoragePathInfo pathInfo1 = new StoragePathInfo(
+        STORAGE_PATH1, LENGTH, false, MODIFICATION_TIME);
+    StoragePathInfo pathInfo2 = new StoragePathInfo(
+        STORAGE_PATH2, LENGTH, false, MODIFICATION_TIME + 2L);
+    assertFalse(pathInfo1.equals(pathInfo2));
+    assertFalse(pathInfo2.equals(pathInfo1));
   }
 
-  private void validateAccessors(HoodieFileStatus fileStatus,
-                                 String location,
+  private void validateAccessors(StoragePathInfo pathInfo,
+                                 String path,
                                  long length,
                                  boolean isDirectory,
                                  long modificationTime) {
-    assertEquals(new HoodieLocation(location), fileStatus.getLocation());
-    assertEquals(length, fileStatus.getLength());
-    assertEquals(isDirectory, fileStatus.isDirectory());
-    assertEquals(!isDirectory, fileStatus.isFile());
-    assertEquals(modificationTime, fileStatus.getModificationTime());
+    assertEquals(new StoragePath(path), pathInfo.getPath());
+    assertEquals(length, pathInfo.getLength());
+    assertEquals(isDirectory, pathInfo.isDirectory());
+    assertEquals(!isDirectory, pathInfo.isFile());
+    assertEquals(modificationTime, pathInfo.getModificationTime());
   }
 }

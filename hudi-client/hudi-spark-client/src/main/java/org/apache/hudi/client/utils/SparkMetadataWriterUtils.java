@@ -31,7 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.functional.HoodieFunctionalIndex;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
@@ -245,7 +245,7 @@ public class SparkMetadataWriterUtils {
     if (partition.isEmpty()) {
       return new Path(basePath, filename);
     } else {
-      return new Path(basePath, partition + HoodieLocation.SEPARATOR + filename);
+      return new Path(basePath, partition + StoragePath.SEPARATOR + filename);
     }
   }
 }

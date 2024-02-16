@@ -29,7 +29,7 @@ import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.stats.ColumnStatsIndices;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -121,7 +121,7 @@ public class FileIndex {
     }
     List<Map<String, String>> partitions = new ArrayList<>();
     for (String partitionPath : partitionPaths) {
-      String[] paths = partitionPath.split(HoodieLocation.SEPARATOR);
+      String[] paths = partitionPath.split(StoragePath.SEPARATOR);
       Map<String, String> partitionMapping = new LinkedHashMap<>();
       if (hivePartition) {
         Arrays.stream(paths).forEach(p -> {

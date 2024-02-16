@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
@@ -66,7 +66,7 @@ public class TestCompletionTimeQueryView {
   @Test
   void testReadCompletionTime() throws Exception {
     String tableName = "testTable";
-    String tablePath = tempFile.getAbsolutePath() + HoodieLocation.SEPARATOR + tableName;
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
@@ -95,7 +95,7 @@ public class TestCompletionTimeQueryView {
   @Test
   void testReadStartTime() throws Exception {
     String tableName = "testTable";
-    String tablePath = tempFile.getAbsolutePath() + HoodieLocation.SEPARATOR + tableName;
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient, String.format("%08d", 3))) {

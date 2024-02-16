@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -78,7 +78,7 @@ public abstract class DirectMarkerBasedDetectionStrategy implements EarlyConflic
    * @throws IOException upon errors.
    */
   public boolean checkMarkerConflict(String basePath, long maxAllowableHeartbeatIntervalInMs) throws IOException {
-    String tempFolderPath = basePath + HoodieLocation.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
+    String tempFolderPath = basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
 
     List<String> candidateInstants = MarkerUtils.getCandidateInstants(activeTimeline, Arrays.stream(fs.listStatus(new Path(tempFolderPath))).map(FileStatus::getPath).collect(Collectors.toList()),
         instantTime, maxAllowableHeartbeatIntervalInMs, fs, basePath);
