@@ -196,19 +196,18 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 1000);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       writeClient.insert(recordsRDD, newCommitTime).collect();
 
-      // Update all the 100 records
-      newCommitTime = "101";
-      updateRecords(config, newCommitTime, records);
-
-      assertLogFilesNumEqualsTo(config, 1);
-
-      String compactionInstantTime = "102";
-      HoodieData<WriteStatus> result = compact(writeClient, compactionInstantTime);
-
+      // Update all the 1000 records across 5 commits to generate sufficient log files.
+      int i = 1;
+      for (; i < 5; i++) {
+        newCommitTime = String.format("10%s", i);
+        updateRecords(config, newCommitTime, records);
+        assertLogFilesNumEqualsTo(config, i);
+      }
+      HoodieData<WriteStatus> result = compact(writeClient, String.format("10%s", i));
       verifyCompaction(result);
 
       // Verify compaction.requested, compaction.completed metrics counts.
@@ -244,7 +243,6 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         assertLogFilesNumEqualsTo(config, 1);
 
         HoodieData<WriteStatus> result = compact(writeClient, "10" + (i + 1));
-
         verifyCompaction(result);
 
         // Verify compaction.requested, compaction.completed metrics counts.
@@ -305,7 +303,6 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     for (String partitionPath : dataGen.getPartitionPaths()) {
       assertTrue(writeStatuses.stream().anyMatch(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath)));
     }
-
     writeStatuses.forEach(writeStatus -> {
       final HoodieWriteStat.RuntimeStats stats = writeStatus.getStat().getRuntimeStats();
       assertNotNull(stats);
