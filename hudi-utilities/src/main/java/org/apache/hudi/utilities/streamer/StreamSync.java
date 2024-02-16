@@ -259,12 +259,12 @@ public class StreamSync implements Serializable, Closeable {
   public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                     TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
-    this(cfg, sparkSession, schemaProvider, props, new HoodieSparkEngineContext(jssc), fs, conf, onInitializingHoodieWriteClient);
+    this(cfg, sparkSession, schemaProvider, props, new HoodieSparkEngineContext(jssc), fs, conf, onInitializingHoodieWriteClient, Option.empty());
   }
 
   public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                     TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
-                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, Option<StreamProfileSupplier> streamProfileSupplier) throws IOException {
     this.cfg = cfg;
     this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
@@ -285,7 +285,7 @@ public class StreamSync implements Serializable, Closeable {
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     refreshTimeline();
-    Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, schemaProvider, metrics);
+    Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, schemaProvider, metrics, streamProfileSupplier);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
     Supplier<Option<Schema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceSchema());

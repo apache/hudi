@@ -66,6 +66,7 @@ import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
+import org.apache.hudi.utilities.streamer.StreamProfileSupplier;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -150,6 +151,24 @@ public class UtilHelpers {
             new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class},
             cfg, jssc, sparkSession, schemaProvider);
+      }
+    } catch (Throwable e) {
+      throw new IOException("Could not load source class " + sourceClass, e);
+    }
+  }
+
+  public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
+                                    SparkSession sparkSession, SchemaProvider schemaProvider, HoodieIngestionMetrics metrics, Option<StreamProfileSupplier> streamProfileSupplier)
+      throws IOException {
+    try {
+      try {
+        return (Source) ReflectionUtils.loadClass(sourceClass,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
+                SparkSession.class, SchemaProvider.class,
+                HoodieIngestionMetrics.class, streamProfileSupplier.getClass()},
+            cfg, jssc, sparkSession, schemaProvider, metrics, streamProfileSupplier);
+      } catch (HoodieException e) {
+        return createSource(sourceClass, cfg, jssc, sparkSession, schemaProvider, metrics);
       }
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);

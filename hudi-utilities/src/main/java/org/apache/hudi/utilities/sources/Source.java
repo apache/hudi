@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.callback.SourceCommitCallback;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.streamer.StreamProfileSupplier;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -44,6 +45,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   protected transient TypedProperties props;
   protected transient JavaSparkContext sparkContext;
   protected transient SparkSession sparkSession;
+  protected transient Option<StreamProfileSupplier> streamProfilerSupplier;
   private transient SchemaProvider overriddenSchemaProvider;
 
   private final SourceType sourceType;
@@ -55,11 +57,17 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
 
   protected Source(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider, SourceType sourceType) {
+    this(props, sparkContext, sparkSession, schemaProvider, sourceType, Option.empty());
+  }
+
+  protected Source(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+                   SchemaProvider schemaProvider, SourceType sourceType, Option<StreamProfileSupplier> streamProfilerSupplier) {
     this.props = props;
     this.sparkContext = sparkContext;
     this.sparkSession = sparkSession;
     this.overriddenSchemaProvider = schemaProvider;
     this.sourceType = sourceType;
+    this.streamProfilerSupplier = streamProfilerSupplier;
   }
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)

@@ -19,12 +19,14 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
+import org.apache.hudi.utilities.streamer.StreamProfileSupplier;
 
 import com.google.protobuf.Message;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -51,9 +53,14 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
 
   private final String className;
 
+  public ProtoKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+                          SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
+    this(props, sparkContext, sparkSession, schemaProvider, metrics, Option.empty());
+  }
+
   public ProtoKafkaSource(TypedProperties props, JavaSparkContext sparkContext,
-                          SparkSession sparkSession, SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
-    super(props, sparkContext, sparkSession, schemaProvider, SourceType.PROTO, metrics);
+                          SparkSession sparkSession, SchemaProvider schemaProvider, HoodieIngestionMetrics metrics, Option<StreamProfileSupplier> streamProfileSupplier) {
+    super(props, sparkContext, sparkSession, schemaProvider, SourceType.PROTO, metrics, streamProfileSupplier);
     checkRequiredConfigProperties(props, Collections.singletonList(
         ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME));
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class);

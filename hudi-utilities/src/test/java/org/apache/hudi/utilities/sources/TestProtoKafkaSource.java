@@ -89,7 +89,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   @Override
   SourceFormatAdapter createSource(TypedProperties props) {
     this.schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
-    Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics, streamProfile);
     return new SourceFormatAdapter(protoKafkaSource);
   }
 

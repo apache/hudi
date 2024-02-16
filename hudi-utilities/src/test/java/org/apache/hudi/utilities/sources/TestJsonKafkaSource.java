@@ -23,9 +23,11 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
@@ -37,7 +39,11 @@ import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -52,6 +58,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -60,10 +67,10 @@ import scala.Tuple2;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TARGET_TABLE;
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
-import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecords;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecordsByPartitions;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecordsByPartitionsWithNullKafkaKey;
@@ -104,7 +111,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
 
   @Override
   SourceFormatAdapter createSource(TypedProperties props) {
-    return new SourceFormatAdapter(new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics));
+    return new SourceFormatAdapter(new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics, streamProfile));
   }
 
   // test whether empty messages can be filtered
@@ -355,5 +362,42 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     dfNoOffsetInfo.unpersist();
     dfWithOffsetInfo.unpersist();
     dfWithOffsetInfoAndNullKafkaKey.unpersist();
+  }
+
+  @Test
+  public void testCreateSource() throws IOException {
+    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceCreation";
+    testUtils.createTopic(topic, 2);
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    Source jsonKafkaSource = UtilHelpers.createSource(JsonKafkaSource.class.getName(), props, jsc(), spark(), schemaProvider, metrics, streamProfile);
+    assertEquals(Source.SourceType.JSON, jsonKafkaSource.getSourceType());
+  }
+
+  private void sendMessagesToKafkaWithJsonSchemaSerializer(String topic, int numPartitions,
+                                                           List<RawTripTestPayload> insertRecords) {
+    Properties config = getProducerPropertiesForJsonKafkaSchemaSerializer();
+    try (Producer<String, RawTripTestPayload> producer = new KafkaProducer<>(config)) {
+      for (int i = 0; i < insertRecords.size(); i++) {
+        // use consistent keys to get even spread over partitions for test expectations
+        producer.send(new ProducerRecord<>(topic, Integer.toString(i % numPartitions),
+            insertRecords.get(i)));
+      }
+    }
+  }
+
+  private Properties getProducerPropertiesForJsonKafkaSchemaSerializer() {
+    Properties props = new Properties();
+    props.put("bootstrap.servers", testUtils.brokerAddress());
+    props.put("value.serializer",
+        "io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer");
+    props.put("value.deserializer",
+        "io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer");
+    // Key serializer is required.
+    props.put("key.serializer", StringSerializer.class.getName());
+    props.put("schema.registry.url", "mock://127.0.0.1:8081");
+    props.put("auto.register.schemas", "true");
+    // wait for all in-sync replicas to ack sends
+    props.put("acks", "all");
+    return props;
   }
 }
