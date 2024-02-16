@@ -21,17 +21,25 @@ package org.apache.hudi.config.metrics;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.metrics.datadog.DatadogHttpClient;
 
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * Fetch the configurations used by the Metrics system.
@@ -156,6 +164,165 @@ public class HoodieMetricsConfig extends HoodieConfig {
     return new Builder();
   }
 
+  /**
+   * base properties.
+   */
+  public String getBasePath() {
+    return getString(HoodieCommonConfig.BASE_PATH);
+  }
+
+  /**
+   * metrics properties.
+   */
+  public boolean isMetricsOn() {
+    return getBoolean(HoodieMetricsConfig.TURN_METRICS_ON);
+  }
+
+  /**
+   * metrics properties.
+   */
+  public boolean isCompactionLogBlockMetricsOn() {
+    return getBoolean(HoodieMetricsConfig.TURN_METRICS_COMPACTION_LOG_BLOCKS_ON);
+  }
+
+  public boolean isExecutorMetricsEnabled() {
+    return Boolean.parseBoolean(
+        getStringOrDefault(HoodieMetricsConfig.EXECUTOR_METRICS_ENABLE, "false"));
+  }
+
+  public boolean isLockingMetricsEnabled() {
+    return getBoolean(HoodieMetricsConfig.LOCK_METRICS_ENABLE);
+  }
+
+  public MetricsReporterType getMetricsReporterType() {
+    return MetricsReporterType.valueOf(getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE));
+  }
+
+  public String getGraphiteServerHost() {
+    return getString(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_HOST_NAME);
+  }
+
+  public int getGraphiteServerPort() {
+    return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_PORT_NUM);
+  }
+
+  public String getGraphiteMetricPrefix() {
+    return getString(HoodieMetricsGraphiteConfig.GRAPHITE_METRIC_PREFIX_VALUE);
+  }
+
+  public int getGraphiteReportPeriodSeconds() {
+    return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS);
+  }
+
+  public String getJmxHost() {
+    return getString(HoodieMetricsJmxConfig.JMX_HOST_NAME);
+  }
+
+  public String getJmxPort() {
+    return getString(HoodieMetricsJmxConfig.JMX_PORT_NUM);
+  }
+
+  public int getDatadogReportPeriodSeconds() {
+    return getInt(HoodieMetricsDatadogConfig.REPORT_PERIOD_IN_SECONDS);
+  }
+
+  public DatadogHttpClient.ApiSite getDatadogApiSite() {
+    return DatadogHttpClient.ApiSite.valueOf(getString(HoodieMetricsDatadogConfig.API_SITE_VALUE));
+  }
+
+  public String getDatadogApiKey() {
+    if (props.containsKey(HoodieMetricsDatadogConfig.API_KEY.key())) {
+      return getString(HoodieMetricsDatadogConfig.API_KEY);
+
+    } else {
+      Supplier<String> apiKeySupplier = ReflectionUtils.loadClass(
+          getString(HoodieMetricsDatadogConfig.API_KEY_SUPPLIER));
+      return apiKeySupplier.get();
+    }
+  }
+
+  public boolean getDatadogApiKeySkipValidation() {
+    return getBoolean(HoodieMetricsDatadogConfig.API_KEY_SKIP_VALIDATION);
+  }
+
+  public int getDatadogApiTimeoutSeconds() {
+    return getInt(HoodieMetricsDatadogConfig.API_TIMEOUT_IN_SECONDS);
+  }
+
+  public String getDatadogMetricPrefix() {
+    return getString(HoodieMetricsDatadogConfig.METRIC_PREFIX_VALUE);
+  }
+
+  public String getDatadogMetricHost() {
+    return getString(HoodieMetricsDatadogConfig.METRIC_HOST_NAME);
+  }
+
+  public List<String> getDatadogMetricTags() {
+    return Arrays.stream(getStringOrDefault(
+        HoodieMetricsDatadogConfig.METRIC_TAG_VALUES, ",").split("\\s*,\\s*")).collect(Collectors.toList());
+  }
+
+  public int getCloudWatchReportPeriodSeconds() {
+    return getInt(HoodieMetricsCloudWatchConfig.REPORT_PERIOD_SECONDS);
+  }
+
+  public String getCloudWatchMetricPrefix() {
+    return getString(HoodieMetricsCloudWatchConfig.METRIC_PREFIX);
+  }
+
+  public String getCloudWatchMetricNamespace() {
+    return getString(HoodieMetricsCloudWatchConfig.METRIC_NAMESPACE);
+  }
+
+  public int getCloudWatchMaxDatumsPerRequest() {
+    return getInt(HoodieMetricsCloudWatchConfig.MAX_DATUMS_PER_REQUEST);
+  }
+
+  public String getMetricReporterClassName() {
+    return getString(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME);
+  }
+
+  public int getPrometheusPort() {
+    return getInt(HoodieMetricsPrometheusConfig.PROMETHEUS_PORT_NUM);
+  }
+
+  public String getPushGatewayHost() {
+    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_HOST_NAME);
+  }
+
+  public int getPushGatewayPort() {
+    return getInt(HoodieMetricsPrometheusConfig.PUSHGATEWAY_PORT_NUM);
+  }
+
+  public int getPushGatewayReportPeriodSeconds() {
+    return getInt(HoodieMetricsPrometheusConfig.PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS);
+  }
+
+  public boolean getPushGatewayDeleteOnShutdown() {
+    return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE);
+  }
+
+  public String getPushGatewayJobName() {
+    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOBNAME);
+  }
+
+  public String getPushGatewayLabels() {
+    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_LABELS);
+  }
+
+  public boolean getPushGatewayRandomJobNameSuffix() {
+    return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX);
+  }
+
+  public String getMetricReporterMetricsNamePrefix() {
+    // Metrics prefixes should not have a dot as this is usually a separator
+    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX).replaceAll("\\.", "_");
+  }
+
+  public String getMetricReporterFileBasedConfigs() {
+    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_FILE_BASED_CONFIGS_PATH);
+  }
+
   public static class Builder {
 
     private final HoodieMetricsConfig hoodieMetricsConfig = new HoodieMetricsConfig();
@@ -164,6 +331,15 @@ public class HoodieMetricsConfig extends HoodieConfig {
       try (FileReader reader = new FileReader(propertiesFile)) {
         this.hoodieMetricsConfig.getProps().load(reader);
         return this;
+      }
+    }
+
+    public Builder fromInputStream(InputStream inputStream) throws IOException {
+      try {
+        this.hoodieMetricsConfig.getProps().load(inputStream);
+        return this;
+      } finally {
+        inputStream.close();
       }
     }
 
@@ -179,6 +355,11 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
     public Builder compactionLogBlocksEnable(boolean compactionLogBlockMetricsEnable) {
       hoodieMetricsConfig.setValue(TURN_METRICS_COMPACTION_LOG_BLOCKS_ON, String.valueOf(compactionLogBlockMetricsEnable));
+      return this;
+    }
+
+    public Builder withPath(String basePath) {
+      hoodieMetricsConfig.setValue(HoodieCommonConfig.BASE_PATH, basePath);
       return this;
     }
 
