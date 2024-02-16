@@ -26,7 +26,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -226,8 +226,8 @@ public class CkpMetadata implements Serializable, AutoCloseable {
 
   protected static String ckpMetaPath(String basePath, String uniqueId) {
     // .hoodie/.aux/ckp_meta
-    String metaPath = basePath + HoodieLocation.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME
-        + HoodieLocation.SEPARATOR + CKP_META;
+    String metaPath = basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME
+        + StoragePath.SEPARATOR + CKP_META;
     return StringUtils.isNullOrEmpty(uniqueId) ? metaPath : metaPath + "_" + uniqueId;
   }
 

@@ -19,10 +19,10 @@
 
 package org.apache.hudi.storage.hadoop;
 
-import org.apache.hudi.storage.HoodieFileStatus;
-import org.apache.hudi.storage.HoodieLocation;
-import org.apache.hudi.storage.HoodieLocationFilter;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -60,108 +60,108 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
-  public OutputStream create(HoodieLocation location, boolean overwrite) throws IOException {
-    return fs.create(convertHoodieLocationToPath(location), overwrite);
+  public OutputStream create(StoragePath path, boolean overwrite) throws IOException {
+    return fs.create(convertToHadoopPath(path), overwrite);
   }
 
   @Override
-  public InputStream open(HoodieLocation location) throws IOException {
-    return fs.open(convertHoodieLocationToPath(location));
+  public InputStream open(StoragePath path) throws IOException {
+    return fs.open(convertToHadoopPath(path));
   }
 
   @Override
-  public OutputStream append(HoodieLocation location) throws IOException {
-    return fs.append(convertHoodieLocationToPath(location));
+  public OutputStream append(StoragePath path) throws IOException {
+    return fs.append(convertToHadoopPath(path));
   }
 
   @Override
-  public boolean exists(HoodieLocation location) throws IOException {
-    return fs.exists(convertHoodieLocationToPath(location));
+  public boolean exists(StoragePath path) throws IOException {
+    return fs.exists(convertToHadoopPath(path));
   }
 
   @Override
-  public HoodieFileStatus getFileStatus(HoodieLocation location) throws IOException {
-    return convertToHoodieFileStatus(fs.getFileStatus(convertHoodieLocationToPath(location)));
+  public StoragePathInfo getPathInfo(StoragePath path) throws IOException {
+    return convertToStoragePathInfo(fs.getFileStatus(convertToHadoopPath(path)));
   }
 
   @Override
-  public boolean createDirectory(HoodieLocation location) throws IOException {
-    return fs.mkdirs(convertHoodieLocationToPath(location));
+  public boolean createDirectory(StoragePath path) throws IOException {
+    return fs.mkdirs(convertToHadoopPath(path));
   }
 
   @Override
-  public List<HoodieFileStatus> listDirectEntries(HoodieLocation location) throws IOException {
-    return Arrays.stream(fs.listStatus(convertHoodieLocationToPath(location)))
-        .map(this::convertToHoodieFileStatus)
+  public List<StoragePathInfo> listDirectEntries(StoragePath path) throws IOException {
+    return Arrays.stream(fs.listStatus(convertToHadoopPath(path)))
+        .map(this::convertToStoragePathInfo)
         .collect(Collectors.toList());
   }
 
   @Override
-  public List<HoodieFileStatus> listFiles(HoodieLocation location) throws IOException {
-    List<HoodieFileStatus> result = new ArrayList<>();
-    RemoteIterator<LocatedFileStatus> iterator = fs.listFiles(convertHoodieLocationToPath(location), true);
+  public List<StoragePathInfo> listFiles(StoragePath path) throws IOException {
+    List<StoragePathInfo> result = new ArrayList<>();
+    RemoteIterator<LocatedFileStatus> iterator = fs.listFiles(convertToHadoopPath(path), true);
     while (iterator.hasNext()) {
-      result.add(convertToHoodieFileStatus(iterator.next()));
+      result.add(convertToStoragePathInfo(iterator.next()));
     }
     return result;
   }
 
   @Override
-  public List<HoodieFileStatus> listDirectEntries(List<HoodieLocation> locationList) throws IOException {
-    return Arrays.stream(fs.listStatus(locationList.stream()
-            .map(this::convertHoodieLocationToPath)
+  public List<StoragePathInfo> listDirectEntries(List<StoragePath> pathList) throws IOException {
+    return Arrays.stream(fs.listStatus(pathList.stream()
+            .map(this::convertToHadoopPath)
             .toArray(Path[]::new)))
-        .map(this::convertToHoodieFileStatus)
+        .map(this::convertToStoragePathInfo)
         .collect(Collectors.toList());
   }
 
   @Override
-  public List<HoodieFileStatus> listDirectEntries(HoodieLocation location,
-                                                  HoodieLocationFilter filter)
+  public List<StoragePathInfo> listDirectEntries(StoragePath path,
+                                                 StoragePathFilter filter)
       throws IOException {
     return Arrays.stream(fs.listStatus(
-            convertHoodieLocationToPath(location), path ->
-                filter.accept(convertPathToHoodieLocation(path))))
-        .map(this::convertToHoodieFileStatus)
+            convertToHadoopPath(path), e ->
+                filter.accept(convertToStoragePath(e))))
+        .map(this::convertToStoragePathInfo)
         .collect(Collectors.toList());
   }
 
   @Override
-  public List<HoodieFileStatus> globEntries(HoodieLocation locationPattern)
+  public List<StoragePathInfo> globEntries(StoragePath pathPattern)
       throws IOException {
-    return Arrays.stream(fs.globStatus(convertHoodieLocationToPath(locationPattern)))
-        .map(this::convertToHoodieFileStatus)
+    return Arrays.stream(fs.globStatus(convertToHadoopPath(pathPattern)))
+        .map(this::convertToStoragePathInfo)
         .collect(Collectors.toList());
   }
 
   @Override
-  public List<HoodieFileStatus> globEntries(HoodieLocation locationPattern, HoodieLocationFilter filter)
+  public List<StoragePathInfo> globEntries(StoragePath pathPattern, StoragePathFilter filter)
       throws IOException {
-    return Arrays.stream(fs.globStatus(convertHoodieLocationToPath(locationPattern), path ->
-            filter.accept(convertPathToHoodieLocation(path))))
-        .map(this::convertToHoodieFileStatus)
+    return Arrays.stream(fs.globStatus(convertToHadoopPath(pathPattern), path ->
+            filter.accept(convertToStoragePath(path))))
+        .map(this::convertToStoragePathInfo)
         .collect(Collectors.toList());
   }
 
   @Override
-  public boolean rename(HoodieLocation oldLocation, HoodieLocation newLocation) throws IOException {
-    return fs.rename(convertHoodieLocationToPath(oldLocation), convertHoodieLocationToPath(newLocation));
+  public boolean rename(StoragePath oldPath, StoragePath newPath) throws IOException {
+    return fs.rename(convertToHadoopPath(oldPath), convertToHadoopPath(newPath));
   }
 
   @Override
-  public boolean deleteDirectory(HoodieLocation location) throws IOException {
-    return fs.delete(convertHoodieLocationToPath(location), true);
+  public boolean deleteDirectory(StoragePath path) throws IOException {
+    return fs.delete(convertToHadoopPath(path), true);
   }
 
   @Override
-  public boolean deleteFile(HoodieLocation location) throws IOException {
-    return fs.delete(convertHoodieLocationToPath(location), false);
+  public boolean deleteFile(StoragePath path) throws IOException {
+    return fs.delete(convertToHadoopPath(path), false);
   }
 
   @Override
-  public HoodieLocation makeQualified(HoodieLocation location) {
-    return convertPathToHoodieLocation(
-        fs.makeQualified(convertHoodieLocationToPath(location)));
+  public StoragePath makeQualified(StoragePath path) {
+    return convertToStoragePath(
+        fs.makeQualified(convertToHadoopPath(path)));
   }
 
   @Override
@@ -175,26 +175,26 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
-  public OutputStream create(HoodieLocation location) throws IOException {
-    return fs.create(convertHoodieLocationToPath(location));
+  public OutputStream create(StoragePath path) throws IOException {
+    return fs.create(convertToHadoopPath(path));
   }
 
   @Override
-  public boolean createNewFile(HoodieLocation location) throws IOException {
-    return fs.createNewFile(convertHoodieLocationToPath(location));
+  public boolean createNewFile(StoragePath path) throws IOException {
+    return fs.createNewFile(convertToHadoopPath(path));
   }
 
-  private Path convertHoodieLocationToPath(HoodieLocation loc) {
+  private Path convertToHadoopPath(StoragePath loc) {
     return new Path(loc.toUri());
   }
 
-  private HoodieLocation convertPathToHoodieLocation(Path path) {
-    return new HoodieLocation(path.toUri());
+  private StoragePath convertToStoragePath(Path path) {
+    return new StoragePath(path.toUri());
   }
 
-  private HoodieFileStatus convertToHoodieFileStatus(FileStatus fileStatus) {
-    return new HoodieFileStatus(
-        convertPathToHoodieLocation(fileStatus.getPath()),
+  private StoragePathInfo convertToStoragePathInfo(FileStatus fileStatus) {
+    return new StoragePathInfo(
+        convertToStoragePath(fileStatus.getPath()),
         fileStatus.getLen(),
         fileStatus.isDirectory(),
         fileStatus.getModificationTime());

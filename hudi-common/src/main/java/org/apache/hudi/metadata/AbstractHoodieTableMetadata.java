@@ -27,7 +27,7 @@ import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.hadoop.fs.SerializablePath;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.Collections;
 import java.util.List;
@@ -57,14 +57,14 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
 
     int level = 1;
     for (int i = 1; i < path.length() - 1; i++) {
-      if (path.charAt(i) == HoodieLocation.SEPARATOR_CHAR) {
+      if (path.charAt(i) == StoragePath.SEPARATOR_CHAR) {
         level++;
       }
     }
-    if (path.startsWith(HoodieLocation.SEPARATOR)) {
+    if (path.startsWith(StoragePath.SEPARATOR)) {
       level--;
     }
-    if (path.endsWith(HoodieLocation.SEPARATOR)) {
+    if (path.endsWith(StoragePath.SEPARATOR)) {
       level--;
     }
     return level;

@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -106,7 +106,7 @@ public class TestUtils {
   public static String getSplitPartitionPath(MergeOnReadInputSplit split) {
     assertTrue(split.getLogPaths().isPresent());
     final String logPath = split.getLogPaths().get().get(0);
-    String[] paths = logPath.split(HoodieLocation.SEPARATOR);
+    String[] paths = logPath.split(StoragePath.SEPARATOR);
     return paths[paths.length - 2];
   }
 

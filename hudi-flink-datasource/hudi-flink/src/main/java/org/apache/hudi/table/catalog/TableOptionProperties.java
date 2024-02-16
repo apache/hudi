@@ -25,7 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 
@@ -138,7 +138,7 @@ public class TableOptionProperties {
   }
 
   private static Path getPropertiesFilePath(String basePath) {
-    String auxPath = basePath + HoodieLocation.SEPARATOR + AUXILIARYFOLDER_NAME;
+    String auxPath = basePath + StoragePath.SEPARATOR + AUXILIARYFOLDER_NAME;
     return new Path(auxPath, FILE_NAME);
   }
 

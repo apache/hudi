@@ -101,7 +101,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -1636,7 +1636,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // remove the MDT partition from dataset to simulate failed bootstrap
     Properties updateProperties = new Properties();
     updateProperties.setProperty(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), "");
-    HoodieTableConfig.update(fs, new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME),
+    HoodieTableConfig.update(fs, new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME),
         updateProperties);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -2629,7 +2629,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
       // instant so that only the inflight is left over.
       String commitInstantFileName = HoodieTimeline.makeCommitFileName(newCommitTime);
-      assertTrue(fs.delete(new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME,
           commitInstantFileName), false));
     }
 
@@ -2681,9 +2681,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // metadata table partitions are rebootstrapped.
     metadataWriter.dropMetadataPartitions(Arrays.asList(MetadataPartitionType.RECORD_INDEX, FILES));
     assertFalse(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + HoodieLocation.SEPARATOR + FILES.getPartitionPath())));
+        + StoragePath.SEPARATOR + FILES.getPartitionPath())));
     assertFalse(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + HoodieLocation.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
+        + StoragePath.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // Insert/upsert third batch of records
@@ -2700,14 +2700,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
     }
     assertNoWriteErrors(writeStatuses);
-    assertTrue(fs.exists(new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME)));
+    assertTrue(fs.exists(new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME)));
     metaClient = HoodieTableMetaClient.reload(metaClient);
     assertFalse(metaClient.getActiveTimeline().filterCompletedInstants().filterCompletedInstants().findInstantsAfterOrEquals(commitTime, 1).empty());
 
     assertTrue(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + HoodieLocation.SEPARATOR + FILES.getPartitionPath())));
+        + StoragePath.SEPARATOR + FILES.getPartitionPath())));
     assertTrue(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + HoodieLocation.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
+        + StoragePath.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
   }
 
   /**
@@ -2848,7 +2848,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
       // instant so that only the inflight is left over.
       String commitInstantFileName = HoodieTimeline.makeCommitFileName(newCommitTime);
-      assertTrue(fs.delete(new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME,
           commitInstantFileName), false));
     }
 
@@ -3053,7 +3053,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // To simulate failed clean on the main dataset, we will delete the completed clean instant
       String cleanInstantFileName = HoodieTimeline.makeCleanerFileName(cleanInstantTime);
-      assertTrue(fs.delete(new Path(basePath + HoodieLocation.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
           cleanInstantFileName), false));
       assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflights().countInstants(), 1);
       assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants().countInstants(), 0);

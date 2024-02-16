@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.HoodieLocation
+import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.specific.SpecificData
@@ -158,7 +158,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
                 null
             }
             val instantTime = archiveEntryRecord.get("commitTime").toString
-            val outPath = localFolder + HoodieLocation.SEPARATOR + instantTime + "." + action
+            val outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action
             if (metadata != null) writeToFile(fileSystem, outPath, HoodieAvroUtils.avroToJson(metadata, true))
             if ( {
               copyCount += 1;
@@ -181,7 +181,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
       val timeline = metaClient.getActiveTimeline
       val fileSystem = HadoopFSUtils.getFs(metaClient.getBasePath, jsc.hadoopConfiguration())
       for (instant <- instants) {
-        val localPath = localFolder + HoodieLocation.SEPARATOR + instant.getFileName
+        val localPath = localFolder + StoragePath.SEPARATOR + instant.getFileName
         val data: Array[Byte] = instant.getAction match {
           case HoodieTimeline.CLEAN_ACTION =>
             val metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get)

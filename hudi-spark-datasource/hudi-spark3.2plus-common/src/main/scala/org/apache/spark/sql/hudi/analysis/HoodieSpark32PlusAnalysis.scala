@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
-import org.apache.hudi.storage.HoodieLocation
+import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
@@ -92,7 +92,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
     case HoodieTableChanges(args) =>
       val (tablePath, opts) = HoodieTableChangesOptionsParser.parseOptions(args, HoodieTableChanges.FUNC_NAME)
       val hoodieDataSource = new DefaultSource
-      if (tablePath.contains(HoodieLocation.SEPARATOR)) {
+      if (tablePath.contains(StoragePath.SEPARATOR)) {
         // the first param is table path
         val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> tablePath))
         LogicalRelation(relation)
