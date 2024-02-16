@@ -335,14 +335,11 @@ for more details.
 
 ## Doris
 
-Copy on Write Tables in Hudi version 0.10.0 can be queried via Doris external tables starting from Doris version 1.1.
-Please refer
-to [Doris Hudi external table](https://doris.apache.org/docs/ecosystem/external-table/hudi-external-table/ )
-for more details on the setup.
+The Doris integration currently support Copy on Write and Merge On Read tables in Hudi since version 0.10.0. You can query Hudi tables via Doris from Doris version 2.0 Doris offers a multi-catalog, which is designed to make it easier to connect to external data catalogs to enhance Doris's data lake analysis and federated data query capabilities. Please refer
+to [Doris-Hudi external catalog](https://doris.apache.org/docs/lakehouse/multi-catalog/hudi/) for more details on the setup.
 
 :::note
-The current default supported version of Hudi is 0.10.0 and has not been tested in other versions. More versions
-will be supported in the future.
+The current default supported version of Hudi is 0.10.0 ~ 0.13.1, and has not been tested in other versions. More versions will be supported in the future.
 :::
 
 ## StarRocks
@@ -401,7 +398,7 @@ Following tables show whether a given query is supported on specific query engin
 | **Trino**           |N|N|Y|
 | **Impala**          |N|N|Y|
 | **Redshift Spectrum** |N|N|N|
-| **Doris**           |N|N|N|
+| **Doris**           |Y|N|Y|
 | **StarRocks**       |N|N|N|
 | **ClickHouse**      |N|N|N|
 
