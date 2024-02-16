@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[37960],{8512:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/real-time-query","name":"real-time query","count":1,"permalink":"/blog/tags/real-time-query"}')}}]);

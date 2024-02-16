@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[90868],{72843:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/write-operations","name":"write operations","count":4,"permalink":"/cn/videos/tags/write-operations"}')}}]);

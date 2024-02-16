@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[9516],{81720:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/async-indexing","name":"async indexing","count":1,"permalink":"/blog/tags/async-indexing"}')}}]);

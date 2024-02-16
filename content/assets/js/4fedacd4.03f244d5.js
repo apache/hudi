@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[17760],{38324:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/rtinsights","name":"rtinsights","count":1,"permalink":"/blog/tags/rtinsights"}')}}]);

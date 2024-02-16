@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[43240],{17872:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/apache-flink","name":"apache flink","count":10,"permalink":"/videos/tags/apache-flink"}')}}]);

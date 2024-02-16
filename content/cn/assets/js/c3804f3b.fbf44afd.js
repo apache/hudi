@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[45376],{74304:e=>{e.exports=JSON.parse('{"permalink":"/cn/blog","page":1,"postsPerPage":12,"totalPages":16,"totalCount":183,"previousPage":null,"nextPage":"/cn/blog/page/2","blogDescription":"Blog","blogTitle":"Blogs List Page"}')}}]);

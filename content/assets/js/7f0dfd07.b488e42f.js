@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[89733],{21469:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/spark-datasource-writer","name":"spark datasource writer","count":1,"permalink":"/videos/tags/spark-datasource-writer"}')}}]);

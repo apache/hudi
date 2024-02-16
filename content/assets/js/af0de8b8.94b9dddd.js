@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[82880],{89172:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/async-mode","name":"async mode","count":1,"permalink":"/videos/tags/async-mode"}')}}]);

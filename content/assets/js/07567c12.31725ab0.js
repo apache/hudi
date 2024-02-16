@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[55846],{83020:e=>{e.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/internet-gateway","name":"internet gateway","count":1,"permalink":"/videos/tags/internet-gateway"}')}}]);

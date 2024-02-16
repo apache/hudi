@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[97404],{44632:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/fastapi","name":"fastapi","count":1,"permalink":"/videos/tags/fastapi"}')}}]);

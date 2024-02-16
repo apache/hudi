@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[41224],{71520:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/fast-api","name":"FastAPI","count":1,"permalink":"/blog/tags/fast-api"}')}}]);

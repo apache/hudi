@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[52120],{74160:e=>{e.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/multi-table","name":"multi table","count":1,"permalink":"/videos/tags/multi-table"}')}}]);

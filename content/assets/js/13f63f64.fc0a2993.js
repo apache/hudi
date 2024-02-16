@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[90376],{49354:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/glue-studio","name":"glue studio","count":1,"permalink":"/blog/tags/glue-studio"}')}}]);

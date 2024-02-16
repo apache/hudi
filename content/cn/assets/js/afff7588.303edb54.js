@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[89896],{14152:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/dimension-fields","name":"dimension fields","count":1,"permalink":"/cn/videos/tags/dimension-fields"}')}}]);

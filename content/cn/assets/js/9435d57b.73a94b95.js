@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[36824],{95120:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/snapshot-query","name":"snapshot-query","count":2,"permalink":"/cn/videos/tags/snapshot-query"}')}}]);

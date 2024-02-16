@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[26184],{69712:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/diva-portal","name":"diva-portal","count":1,"permalink":"/blog/tags/diva-portal"}')}}]);

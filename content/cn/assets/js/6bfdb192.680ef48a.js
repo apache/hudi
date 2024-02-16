@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[38951],{15694:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/amazon-athena-spark-notebook","name":"amazon athena spark notebook","count":1,"permalink":"/cn/videos/tags/amazon-athena-spark-notebook"}')}}]);

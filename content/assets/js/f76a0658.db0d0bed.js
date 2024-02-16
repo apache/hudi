@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[68940],{33408:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/cost-efficiency","name":"cost efficiency","count":3,"permalink":"/blog/tags/cost-efficiency"}')}}]);

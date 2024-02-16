@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[88696],{87040:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/best-practices","name":"best practices","count":1,"permalink":"/cn/blog/tags/best-practices"}')}}]);

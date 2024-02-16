@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[86712],{29008:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/point-lookups","name":"point lookups","count":1,"permalink":"/cn/videos/tags/point-lookups"}')}}]);

@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[22468],{23344:l=>{l.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/google-scholar","name":"google scholar","count":1,"permalink":"/cn/blog/tags/google-scholar"}')}}]);

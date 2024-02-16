@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[2448],{57892:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/archival-timeline","name":"archival timeline","count":1,"permalink":"/cn/blog/tags/archival-timeline"}')}}]);

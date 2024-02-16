@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[66031],{74508:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/gdpr","name":"gdpr","count":1,"permalink":"/cn/videos/tags/gdpr"}')}}]);

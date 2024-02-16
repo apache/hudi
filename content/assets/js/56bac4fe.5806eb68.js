@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[32915],{8371:e=>{e.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/record-level-index","name":"record level index","count":5,"permalink":"/videos/tags/record-level-index"}')}}]);

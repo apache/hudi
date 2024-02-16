@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[26966],{23240:l=>{l.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/logicalclocks","name":"logicalclocks","count":1,"permalink":"/blog/tags/logicalclocks"}')}}]);

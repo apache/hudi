@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[7384],{69376:e=>{e.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/copy-on-write","name":"copy on write","count":2,"permalink":"/videos/tags/copy-on-write"}')}}]);
