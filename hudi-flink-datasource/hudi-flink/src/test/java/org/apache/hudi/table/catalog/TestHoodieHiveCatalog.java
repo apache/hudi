@@ -370,6 +370,19 @@ public class TestHoodieHiveCatalog {
     assertThrows(NoSuchObjectException.class, () -> getHivePartition(partitionSpec));
   }
 
+  @Test
+  public void testMappingHiveConfPropsToHiveTableParams() throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
+    HoodieHiveCatalog catalog = HoodieCatalogTestUtils.createHiveCatalog("myCatalog", true);
+    catalog.open();
+    Map<String, String> originOptions = new HashMap<>();
+    originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    CatalogTable table = new CatalogTableImpl(schema, originOptions, "hudi table");
+    catalog.createTable(tablePath, table, false);
+
+    Table hiveTable = hoodieCatalog.getHiveTable(tablePath);
+    assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.schema.verification"));
+  }
+
   private Partition getHivePartition(CatalogPartitionSpec partitionSpec) throws Exception {
     return hoodieCatalog.getClient().getPartition(
         tablePath.getDatabaseName(),
