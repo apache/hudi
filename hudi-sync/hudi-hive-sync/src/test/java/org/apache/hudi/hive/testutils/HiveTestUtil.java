@@ -212,6 +212,7 @@ public class HiveTestUtil {
       if (ddlExecutor != null) {
         ddlExecutor.close();
         ddlExecutor = null;
+        LOG.error("+++++++++++ released ddl executor");
       }
     } catch (Exception ex) {
       ex.printStackTrace();
@@ -221,6 +222,7 @@ public class HiveTestUtil {
     try {
       if (hiveServer != null) {
         hiveServer.stop();
+        LOG.error("+++++++++++ released hive server");
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -230,6 +232,7 @@ public class HiveTestUtil {
     try {
       if (hiveTestService != null) {
         hiveTestService.stop();
+        LOG.error("+++++++++++ released hiveTestService");
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -239,6 +242,7 @@ public class HiveTestUtil {
     try {
       if (zkServer != null) {
         zkServer.shutdown(true);
+        LOG.error("+++++++++++ released zkServer");
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -248,6 +252,7 @@ public class HiveTestUtil {
     try {
       if (zkService != null) {
         zkService.stop();
+        LOG.error("+++++++++++ released zkService");
       }
     } catch (RuntimeException re) {
       re.printStackTrace();
@@ -257,15 +262,14 @@ public class HiveTestUtil {
     try {
       if (fileSystem != null) {
         fileSystem.close();
+        LOG.error("+++++++++++ released fileSystem");
       }
     } catch (IOException ie) {
       ie.printStackTrace();
       failedReleases.add("FileSystem");
     }
 
-    if (!failedReleases.isEmpty()) {
-      LOG.error("Exception happened during releasing: " + String.join(",", failedReleases));
-    }
+    LOG.error("Exception happened during releasing: " + String.join(",", failedReleases));
   }
 
   public static void createCOWTable(String instantTime, int numberOfPartitions, boolean useSchemaFromCommitMetadata,

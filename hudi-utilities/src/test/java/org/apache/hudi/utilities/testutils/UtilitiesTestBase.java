@@ -172,6 +172,7 @@ public class UtilitiesTestBase {
         fs.delete(new Path(basePath), true);
         fs.close();
         fs = null;
+        LOG.error("------ released fs");
       }
     } catch (IOException ie) {
       ie.printStackTrace();
@@ -182,6 +183,7 @@ public class UtilitiesTestBase {
       if (hdfsTestService != null) {
         hdfsTestService.stop();
         hdfsTestService = null;
+        LOG.error("------ released hdfs");
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -192,6 +194,7 @@ public class UtilitiesTestBase {
       if (hiveServer != null) {
         hiveServer.stop();
         hiveServer = null;
+        LOG.error("------ released hiveserver");
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -202,6 +205,7 @@ public class UtilitiesTestBase {
       if (hiveTestService != null) {
         hiveTestService.stop();
         hiveTestService = null;
+        LOG.error("------ released hive service");
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -212,6 +216,7 @@ public class UtilitiesTestBase {
       if (zookeeperTestService != null) {
         zookeeperTestService.stop();
         zookeeperTestService = null;
+        LOG.error("------ released zookeeper service");
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -222,6 +227,7 @@ public class UtilitiesTestBase {
       if (jsc != null) {
         jsc.stop();
         jsc = null;
+        LOG.error("------ released jsc");
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -232,6 +238,7 @@ public class UtilitiesTestBase {
       if (sparkSession != null) {
         sparkSession.close();
         sparkSession = null;
+        LOG.error("------ released spark session");
       }
     } catch (Exception e) {
       e.printStackTrace();
