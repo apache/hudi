@@ -174,12 +174,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     } orElse {
       schemaSpec.map(s => convertToAvroSchema(s, tableName))
     } getOrElse {
-      Try(schemaResolver.getTableAvroSchema) match {
-        case Success(schema) => schema
-        case Failure(e) =>
-          logError("Failed to fetch schema from the table", e)
-          throw new HoodieSchemaException("Failed to fetch schema from the table")
-      }
+      schemaResolver.getTableAvroSchema
     }
 
     (avroSchema, internalSchemaOpt)
