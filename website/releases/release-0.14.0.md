@@ -77,9 +77,13 @@ by the key generation policy, can only be ingested once into the target table.
 
 With this addition, an older related configuration setting, 
 [`hoodie.datasource.write.insert.drop.duplicates`](https://hudi.apache.org/docs/configurations#hoodiedatasourcewriteinsertdropduplicates), 
-is now deprecated. The newer configuration will take precedence over the old one when both are specified. If no specific 
+will be deprecated. The newer configuration will take precedence over the old one when both are specified. If no specific 
 configurations are provided, the default value for the newer configuration will be assumed. Users are strongly encouraged 
-to migrate to the use of these newer configurations. 
+to migrate to the use of these newer configurations when using Spark SQL. 
+
+:::caution
+This is only applicable to Spark SQL writing.
+:::
 
 
 #### Compaction with MOR table
