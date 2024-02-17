@@ -51,7 +51,7 @@ public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   }
 
   @AfterAll
-  public static void cleanUpUtilitiesTestServices() throws IOException {
+  public static void cleanUpUtilitiesTestServices() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
