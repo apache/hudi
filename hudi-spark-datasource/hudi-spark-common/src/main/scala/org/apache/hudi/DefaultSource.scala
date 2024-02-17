@@ -261,7 +261,7 @@ object DefaultSource {
         !parameters.getOrDefault(SCHEMA_EVOLUTION_ENABLED.key(), SCHEMA_EVOLUTION_ENABLED.defaultValue().toString).toBoolean &&
         parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue()).equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
       if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-        new EmptyRelation(sqlContext, new StructType())
+        new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
       } else if (isCdcQuery) {
         if (useNewParquetFileFormat) {
           if (tableType == COPY_ON_WRITE) {
@@ -378,7 +378,9 @@ object DefaultSource {
         AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
       } catch {
         case _: Exception =>
-          require(schema.isDefined, "Fail to resolve source schema")
+          if (schema.isEmpty || schema.get == null) {
+            throw new HoodieSchemaNotFoundException("Failed to resolve source schema")
+          }
           schema.get
       }
     }
