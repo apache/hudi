@@ -18,14 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
-      - name: Install the gh cli
-        uses: ksivamuthu/actions-setup-gh-cli@v2
-        with:
-          version: 2.24.3
       - name: Check companion PR in Hudi OSS
         run: |
           set -e
-          export HUDI_OSS_PR_ID=$(echo "${{ github.event.pull_request.body }}" | grep -Eo 'apache/hudi#[0-9]+')
+          export HUDI_OSS_PR_ID=$(echo "${{ github.event.pull_request.body }}" | grep -Eo 'apache/hudi#[0-9]+|https://github.com/apache/hudi/pull/[0-9]+' | head -n 1)
           export TMP_HUDI_OSS_PR_TITLE=$(echo $HUDI_OSS_PR_ID | grep -Eo '[0-9]+' | xargs -I {} gh pr view {} --repo apache/hudi | head -n 1 | grep -Eo '\[.*')
           echo "HUDI_OSS_PR_TITLE=$TMP_HUDI_OSS_PR_TITLE" >> $GITHUB_ENV
           ((([ -n "$HUDI_OSS_PR_ID" ] || (echo "Unable to find companion Hudi OSS PR based on the PR description" && exit 1)) &&

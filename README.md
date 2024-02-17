@@ -52,14 +52,14 @@ Here is the process for creating a `hudi-internal` PR:
 
 - **Feature development and bug fixes**: create [Hudi JIRA](https://issues.apache.org/jira/projects/HUDI/issues),
   create a [Hudi OSS](https://github.com/apache/hudi) PR, get reviews and approval, and then cherry-pick the same
-  changes into `hudi-internal` with the same PR title and OSS PR link `apache/hudi#<pr_id>` mentioned in the PR
+  changes into `hudi-internal` with the same PR title and OSS PR link `apache/hudi#<pr_id>` (or URL) mentioned in the PR
   description (this is enforced by PR compliance check).
 - **Urgent feature and hotfix**: for urgent feature and hotfix for outage mitigation,
   create [Hudi JIRA](https://issues.apache.org/jira/projects/HUDI/issues), create a
   placeholder [Hudi OSS](https://github.com/apache/hudi) PR, then in parallel create a `hudi-internal` PR of the
-  hotfix with the same PR title and OSS PR link `apache/hudi#<pr_id>` mentioned in the PR description (this is enforced
-  by PR compliance check). This is to make sure we always remember to upstream the hotfix later on. In such a case,
-  [Hudi Committers](https://github.com/orgs/onehouseinc/teams/hudi-committers) are responsible for reviewing and
+  hotfix with the same PR title and OSS PR link `apache/hudi#<pr_id>` (or URL) mentioned in the PR description (this is
+  enforced by PR compliance check). This is to make sure we always remember to upstream the hotfix later on. In such a
+  case, [Hudi Committers](https://github.com/orgs/onehouseinc/teams/hudi-committers) are responsible for reviewing and
   approving the `hudi-internal` PR by holding the same standard as Hudi OSS PR review and approval (e.g., backwards
   compatibility, extreme care around public interface changes and format changes, test coverage, etc.).
 - **Release cut**: create AUDIT ticket and PR with the AUDIT ticket in the title (
