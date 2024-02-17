@@ -62,11 +62,11 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, true, false);
+    UtilitiesTestBase.initTestServices(false, false, false);
   }
 
   @AfterAll
-  public static void cleanupClass() throws IOException {
+  public static void cleanupClass() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
