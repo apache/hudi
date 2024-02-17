@@ -53,6 +53,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -78,7 +79,7 @@ public class TestPriorityBasedFileSystemView {
 
   @BeforeEach
   public void setUp() {
-    fsView = new PriorityBasedFileSystemView(primary, secondary);
+    fsView = new PriorityBasedFileSystemView(primary, () -> secondary);
     testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
     testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
         "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
@@ -595,7 +596,17 @@ public class TestPriorityBasedFileSystemView {
   }
 
   @Test
-  public void testClose() {
+  public void testClose_noSecondaryInitialized() {
+    fsView.close();
+    verify(primary, times(1)).close();
+    verify(secondary, never()).close();
+  }
+
+  @Test
+  public void testClose_withSecondaryInitialized() {
+    // force secondary view to initialize
+    when(secondary.getLatestBaseFiles()).thenReturn(Stream.empty());
+    fsView.getSecondaryView().getLatestBaseFiles();
     fsView.close();
     verify(primary, times(1)).close();
     verify(secondary, times(1)).close();
@@ -705,7 +716,7 @@ public class TestPriorityBasedFileSystemView {
 
   @Test
   public void testGetSecondaryView() {
-    assertEquals(secondary, fsView.getSecondaryView());
+    assertTrue(fsView.getSecondaryView() instanceof LazyFileSystemView);
   }
 
   class TestLogAppender extends AbstractAppender {

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -54,9 +55,9 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private final SyncableFileSystemView secondaryView;
   private boolean errorOnPreferredView;
 
-  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SyncableFileSystemView secondaryView) {
+  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SerializableSupplier<SyncableFileSystemView> secondaryViewSuplier) {
     this.preferredView = preferredView;
-    this.secondaryView = secondaryView;
+    this.secondaryView = new LazyFileSystemView(secondaryViewSuplier);
     this.errorOnPreferredView = false;
   }
 
