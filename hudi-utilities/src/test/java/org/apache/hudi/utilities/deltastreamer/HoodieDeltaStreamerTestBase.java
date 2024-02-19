@@ -49,6 +49,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
@@ -67,7 +68,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-import static org.apache.hudi.common.config.HoodieCommonConfig.HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS;
+import static org.apache.hudi.common.config.HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
@@ -127,14 +128,15 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static final String HOODIE_CONF_PARAM = "--hoodie-conf";
   static final String HOODIE_CONF_VALUE1 = "hoodie.datasource.hive_sync.table=test_table";
   static final String HOODIE_CONF_VALUE2 = "hoodie.datasource.write.recordkey.field=Field1,Field2,Field3";
-  public static KafkaTestUtils testUtils;
   protected static String topicName;
   protected static String defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   protected static int testNum = 1;
 
   Map<String, String> hudiOpts = new HashMap<>();
+  public KafkaTestUtils testUtils;
 
-  protected static void prepareTestSetup() throws IOException {
+  @BeforeEach
+  protected void prepareTestSetup() throws IOException {
     PARQUET_SOURCE_ROOT = basePath + "/parquetFiles";
     ORC_SOURCE_ROOT = basePath + "/orcFiles";
     JSON_KAFKA_SOURCE_ROOT = basePath + "/jsonKafkaFiles";
@@ -242,16 +244,15 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   @BeforeAll
   public static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices(false, true, false);
-    prepareTestSetup();
   }
 
   @AfterAll
-  public static void tearDown() {
-    cleanupKafkaTestUtils();
+  public static void tearDown() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
-  public static void cleanupKafkaTestUtils() {
+  @AfterEach
+  public void cleanupKafkaTestUtils() {
     if (testUtils != null) {
       testUtils.teardown();
     }
@@ -610,7 +611,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         cfg.schemaProviderClassName = schemaProviderClassName;
       }
       List<String> cfgs = new ArrayList<>();
-      cfgs.add(HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS.key() + "=true");
+      cfgs.add(SET_NULL_FOR_MISSING_COLUMNS.key() + "=true");
       cfgs.add("hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt=" + addReadLatestOnMissingCkpt);
       cfgs.add("hoodie.deltastreamer.source.hoodieincr.path=" + srcBasePath);
       // No partition

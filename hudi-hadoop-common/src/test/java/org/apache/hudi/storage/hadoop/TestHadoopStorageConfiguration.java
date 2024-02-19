@@ -17,37 +17,28 @@
  * under the License.
  */
 
-package org.apache.hudi.hadoop.storage;
+package org.apache.hudi.storage.hadoop;
 
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.io.storage.TestHoodieStorageBase;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.io.storage.BaseTestStorageConfiguration;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+
+import java.util.Map;
 
 /**
- * Tests {@link HoodieHadoopStorage}.
+ * Tests {@link HadoopStorageConfiguration}.
  */
-public class TestHoodieHadoopStorage extends TestHoodieStorageBase {
-  private static final String CONF_KEY = "hudi.testing.key";
-  private static final String CONF_VALUE = "value";
-
+public class TestHadoopStorageConfiguration extends BaseTestStorageConfiguration<Configuration> {
   @Override
-  protected HoodieStorage getHoodieStorage(Object fs, Object conf) {
-    return new HoodieHadoopStorage((FileSystem) fs);
+  protected StorageConfiguration<Configuration> getStorageConfiguration(Configuration conf) {
+    return new HadoopStorageConfiguration(conf);
   }
 
   @Override
-  protected Object getFileSystem(Object conf) {
-    return HadoopFSUtils.getFs(getTempDir(), (Configuration) conf, true);
-  }
-
-  @Override
-  protected Object getConf() {
+  protected Configuration getConf(Map<String, String> mapping) {
     Configuration conf = new Configuration();
-    conf.set(CONF_KEY, CONF_VALUE);
+    mapping.forEach(conf::set);
     return conf;
   }
 }

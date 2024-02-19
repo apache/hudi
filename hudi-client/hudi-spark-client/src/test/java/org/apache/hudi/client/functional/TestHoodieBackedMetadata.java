@@ -103,7 +103,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -1048,7 +1048,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
         context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-    Map<String, HoodieRecordGlobalLocation> result = metadataReader
+    Map<String, List<HoodieRecordGlobalLocation>> result = metadataReader
         .readRecordIndex(records1.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
     assertEquals(0, result.size(), "RI should not return entries that are rolled back.");
     result = metadataReader
@@ -1647,7 +1647,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // remove the MDT partition from dataset to simulate failed bootstrap
     Properties updateProperties = new Properties();
     updateProperties.setProperty(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), "");
-    HoodieTableConfig.update(fs, new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME),
+    HoodieTableConfig.update(fs, new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME),
         updateProperties);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -1860,9 +1860,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // there are 3 partitions in total and 2 commits. total entries should be 6.
       assertEquals(result.size(), 6);
-      result.forEach(entry -> {
-        //LOG.warn("Prefix search entries just for record key col : " + entry.getRecordKey().toString() + " :: " + entry.getData().getColumnStatMetadata().get().toString());
-      });
 
       // prefix search for col(_hoodie_record_key) and first partition. only 2 files should be matched
       PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
@@ -1871,7 +1868,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
       result.forEach(entry -> {
-        // LOG.warn("Prefix search entries for record key col and first partition : " + entry.getRecordKey().toString() + " :: " + entry.getData().getColumnStatMetadata().get().toString());
         HoodieMetadataColumnStats metadataColumnStats = entry.getData().getColumnStatMetadata().get();
         String fileName = metadataColumnStats.getFileName();
         if (fileName.contains(firstCommit)) {
@@ -2647,7 +2643,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
       // instant so that only the inflight is left over.
       String commitInstantFileName = metaClient.getActiveTimeline().getReverseOrderedInstants().findFirst().get().getFileName();
-      assertTrue(fs.delete(new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME,
           commitInstantFileName), false));
     }
 
@@ -2699,9 +2695,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // metadata table partitions are rebootstrapped.
     metadataWriter.dropMetadataPartitions(Arrays.asList(MetadataPartitionType.RECORD_INDEX, FILES));
     assertFalse(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + HoodieLocation.SEPARATOR + FILES.getPartitionPath())));
+        + StoragePath.SEPARATOR + FILES.getPartitionPath())));
     assertFalse(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + HoodieLocation.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
+        + StoragePath.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // Insert/upsert third batch of records
@@ -2718,14 +2714,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
     }
     assertNoWriteErrors(writeStatuses);
-    assertTrue(fs.exists(new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME)));
+    assertTrue(fs.exists(new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME)));
     metaClient = HoodieTableMetaClient.reload(metaClient);
     assertFalse(metaClient.getActiveTimeline().filterCompletedInstants().filterCompletedInstants().findInstantsAfterOrEquals(commitTime, 1).empty());
 
     assertTrue(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + HoodieLocation.SEPARATOR + FILES.getPartitionPath())));
+        + StoragePath.SEPARATOR + FILES.getPartitionPath())));
     assertTrue(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + HoodieLocation.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
+        + StoragePath.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
   }
 
   /**
@@ -2866,7 +2862,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
       // instant so that only the inflight is left over.
       String commitInstantFileName = metaClient.getActiveTimeline().getReverseOrderedInstants().findFirst().get().getFileName();
-      assertTrue(fs.delete(new Path(basePath + HoodieLocation.SEPARATOR + METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME,
           commitInstantFileName), false));
     }
 
@@ -3072,7 +3068,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // To simulate failed clean on the main dataset, we will delete the completed clean instant
       String cleanInstantFileName = metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants()
           .getReverseOrderedInstants().findFirst().get().getFileName();
-      assertTrue(fs.delete(new Path(basePath + HoodieLocation.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
           cleanInstantFileName), false));
       assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflights().countInstants(), 1);
       assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants().countInstants(), 0);
@@ -3318,9 +3314,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // RI should have created mappings for all the records inserted above
       HoodieTableMetadata metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      Map<String, HoodieRecordGlobalLocation> result = metadataReader
+      Map<String, List<HoodieRecordGlobalLocation>> result = metadataReader
           .readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
-      assertEquals(allRecords.size(), result.size(), "RI should have mapping for all the records in firstCommit");
+      assertEquals(allRecords.size(), (int) result.values().stream().flatMap(List::stream).count(), "RI should have mapping for all the records in firstCommit");
 
       // Delete some records from each commit. This should also remove the RI mapping.
       recordsToDelete = firstBatchOfrecords.subList(0, 3);
@@ -3350,7 +3346,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // RI should not return mappings for deleted records
       metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      Map<String, HoodieRecordGlobalLocation> result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      Map<String, List<HoodieRecordGlobalLocation>> result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
       assertEquals(allRecords.size() - keysToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
 
@@ -3361,9 +3357,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // New mappings should have been created for re-inserted records and should map to the new commit time
       metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
-      assertEquals(allRecords.size(), result.size(), "RI should have mappings for re-inserted records");
+      assertEquals(allRecords.size(), (int) result.values().stream().flatMap(List::stream).count(), "RI should have mappings for re-inserted records");
       for (String reInsertedKey : keysToDelete) {
-        assertEquals(reinsertTime, result.get(reInsertedKey).getInstantTime(), "RI mapping for re-inserted keys should have new commit time");
+        assertTrue(result.get(reInsertedKey).stream().anyMatch(location -> location.getInstantTime().equals(reinsertTime)), "RI mapping for re-inserted keys should have new commit time");
       }
     }
   }

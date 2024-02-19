@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -37,14 +38,20 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.io.hfile.TestHFileReader.KEY_CREATOR;
@@ -138,5 +145,61 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
         KEY_CREATOR,
         VALUE_CREATOR,
         uniqueKeys);
+  }
+
+  /**
+   * Test HFile reader with duplicates.
+   * HFile can have duplicates in case of secondary index for instance.
+   */
+  @Test
+  public void testHFileReaderWriterWithDuplicates() throws Exception {
+    Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchema.avsc");
+    HoodieAvroHFileWriter writer = createWriter(avroSchema, false);
+    List<String> keys = new ArrayList<>();
+    Map<String, List<GenericRecord>> recordMap = new TreeMap<>();
+    for (int i = 0; i < 50; i++) {
+      // If i is a multiple of 10, select the previous key for duplication
+      String key = i != 0 && i % 10 == 0 ? String.format("%s%04d", "key", i - 1) : String.format("%s%04d", "key", i);
+
+      // Create a list of records for each key to handle duplicates
+      if (!recordMap.containsKey(key)) {
+        recordMap.put(key, new ArrayList<>());
+      }
+
+      // Create the record
+      GenericRecord record = new GenericData.Record(avroSchema);
+      record.put("_row_key", key);
+      record.put("time", Integer.toString(RANDOM.nextInt()));
+      record.put("number", i);
+      writer.writeAvro(key, record);
+
+      // Add to the record map and key list
+      recordMap.get(key).add(record);
+      keys.add(key);
+    }
+    writer.close();
+
+    Configuration conf = new Configuration();
+    try (HoodieAvroHFileReaderImplBase hFileReader =
+             (HoodieAvroHFileReaderImplBase) createReader(conf)) {
+      List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hFileReader);
+      assertEquals(recordMap.values().stream().flatMap(List::stream).collect(Collectors.toList()), records);
+    }
+
+    for (int i = 0; i < 2; i++) {
+      int randomRowstoFetch = 5 + RANDOM.nextInt(10);
+      Set<String> rowsToFetch = getRandomKeys(randomRowstoFetch, keys);
+
+      List<String> rowsList = new ArrayList<>(rowsToFetch);
+      Collections.sort(rowsList);
+
+      List<GenericRecord> expectedRecords = rowsList.stream().flatMap(row -> recordMap.get(row).stream()).collect(Collectors.toList());
+
+      try (HoodieAvroHFileReaderImplBase hFileReader =
+               (HoodieAvroHFileReaderImplBase) createReader(conf)) {
+        List<GenericRecord> result = HoodieAvroHFileReaderImplBase.readRecords(hFileReader, rowsList).stream().map(r -> (GenericRecord) r).collect(Collectors.toList());
+        assertEquals(expectedRecords, result);
+      }
+    }
   }
 }

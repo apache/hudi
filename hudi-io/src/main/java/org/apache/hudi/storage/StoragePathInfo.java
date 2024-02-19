@@ -26,33 +26,33 @@ import org.apache.hudi.PublicAPIMethod;
 import java.io.Serializable;
 
 /**
- * Represents the information of a directory or a file.
+ * Represents the information of a storage path representing a directory or a file.
  * The APIs are mainly based on {@code org.apache.hadoop.fs.FileStatus} class
  * with simplification based on what Hudi needs.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
-public class HoodieFileStatus implements Serializable {
-  private final HoodieLocation location;
+public class StoragePathInfo implements Serializable {
+  private final StoragePath path;
   private final long length;
   private final boolean isDirectory;
   private final long modificationTime;
 
-  public HoodieFileStatus(HoodieLocation location,
-                          long length,
-                          boolean isDirectory,
-                          long modificationTime) {
-    this.location = location;
+  public StoragePathInfo(StoragePath path,
+                         long length,
+                         boolean isDirectory,
+                         long modificationTime) {
+    this.path = path;
     this.length = length;
     this.isDirectory = isDirectory;
     this.modificationTime = modificationTime;
   }
 
   /**
-   * @return the location.
+   * @return the path.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public HoodieLocation getLocation() {
-    return location;
+  public StoragePath getPath() {
+    return path;
   }
 
   /**
@@ -95,23 +95,23 @@ public class HoodieFileStatus implements Serializable {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    HoodieFileStatus that = (HoodieFileStatus) o;
+    StoragePathInfo that = (StoragePathInfo) o;
     // PLEASE NOTE that here we follow the same contract hadoop's FileStatus provides,
-    // i.e., the equality is purely based on the location.
-    return getLocation().equals(that.getLocation());
+    // i.e., the equality is purely based on the path.
+    return getPath().equals(that.getPath());
   }
 
   @Override
   public int hashCode() {
     // PLEASE NOTE that here we follow the same contract hadoop's FileStatus provides,
-    // i.e., the hash code is purely based on the location.
-    return getLocation().hashCode();
+    // i.e., the hash code is purely based on the path.
+    return getPath().hashCode();
   }
 
   @Override
   public String toString() {
-    return "HoodieFileStatus{"
-        + "location=" + location
+    return "StoragePathInfo{"
+        + "path=" + path
         + ", length=" + length
         + ", isDirectory=" + isDirectory
         + ", modificationTime=" + modificationTime

@@ -30,9 +30,12 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackCo
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -43,19 +46,27 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 public class TestKafkaCallbackProvider extends UtilitiesTestBase {
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
 
-  private static KafkaTestUtils testUtils;
+  private KafkaTestUtils testUtils;
 
   @BeforeAll
   public static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
+  }
+
+  @BeforeEach
+  public void setup() {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanUpUtilitiesTestServices();
+  @AfterEach
+  public void tearDown() {
     testUtils.teardown();
+  }
+
+  @AfterAll
+  public static void cleanupClass() throws IOException {
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @Test

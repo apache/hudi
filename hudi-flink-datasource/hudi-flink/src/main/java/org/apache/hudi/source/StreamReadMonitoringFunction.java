@@ -212,7 +212,7 @@ public class StreamReadMonitoringFunction
       return;
     }
     IncrementalInputSplits.Result result =
-        incrementalInputSplits.inputSplits(metaClient, this.issuedInstant, this.issuedOffset, this.cdcEnabled);
+        incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled);
     if (result.isEmpty()) {
       // no new instants, returns early
       return;

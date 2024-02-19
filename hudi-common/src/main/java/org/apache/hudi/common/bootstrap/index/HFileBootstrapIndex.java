@@ -33,6 +33,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
+import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.hfile.Key;
@@ -41,7 +43,6 @@ import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.io.util.IOUtils;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.CellComparatorImpl;
@@ -238,7 +239,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       LOG.info("Opening HFile for reading :" + hFilePath);
       Path path = new Path(hFilePath);
       long fileSize = fileSystem.getFileStatus(path).getLen();
-      FSDataInputStream stream = fileSystem.open(path);
+      SeekableDataInputStream stream = new HadoopSeekableDataInputStream(fileSystem.open(path));
       return new HFileReaderImpl(stream, fileSize);
     }
 

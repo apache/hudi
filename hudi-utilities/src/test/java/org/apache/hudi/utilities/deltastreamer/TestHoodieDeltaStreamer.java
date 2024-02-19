@@ -1705,11 +1705,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(1000, c);
   }
 
-  private static void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName) {
+  private void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName) {
     prepareJsonKafkaDFSFiles(numRecords, createTopic, topicName, 2);
   }
 
-  private static void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName, int numPartitions) {
+  private void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName, int numPartitions) {
     if (createTopic) {
       try {
         testUtils.createTopic(topicName, numPartitions);
@@ -2109,6 +2109,36 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertNotEquals(firstCommit, secondCommit);
     assertNotEquals(lastCommitSchema, Schema.create(Schema.Type.NULL));
     deltaStreamer2.shutdownGracefully();
+  }
+
+  @Test
+  public void testEmptyBatchWithNullSchemaFirstBatch() throws Exception {
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
+    int parquetRecordsCount = 10;
+    prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(false, false, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "0");
+
+    String tableBasePath = basePath + "/test_parquet_table" + testNum;
+    HoodieDeltaStreamer.Config config = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
+        null, PROPS_FILENAME_TEST_PARQUET, false,
+        false, 100000, false, null, null, "timestamp", null);
+
+    config.schemaProviderClassName = NullValueSchemaProvider.class.getName();
+    config.sourceClassName = TestParquetDFSSourceEmptyBatch.class.getName();
+    HoodieDeltaStreamer deltaStreamer1 = new HoodieDeltaStreamer(config, jsc);
+    deltaStreamer1.sync();
+    deltaStreamer1.shutdownGracefully();
+    assertRecordCount(0, tableBasePath, sqlContext);
+
+    config.schemaProviderClassName = null;
+    config.sourceClassName = ParquetDFSSource.class.getName();
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
+    HoodieDeltaStreamer deltaStreamer2 = new HoodieDeltaStreamer(config, jsc);
+    deltaStreamer2.sync();
+    deltaStreamer2.shutdownGracefully();
+    //since first batch has empty schema, only records from the second batch should be written
+    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
   }
 
   @Test

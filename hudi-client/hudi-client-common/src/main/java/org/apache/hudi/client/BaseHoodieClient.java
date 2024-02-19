@@ -64,6 +64,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieClient.class);
 
+  private static final long serialVersionUID = 1L;
   protected final transient FileSystem fs;
   protected final transient HoodieEngineContext context;
   protected final transient Configuration hadoopConf;
