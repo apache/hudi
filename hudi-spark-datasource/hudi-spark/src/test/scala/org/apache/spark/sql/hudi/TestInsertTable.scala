@@ -84,6 +84,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |""".stripMargin
       )
 
+      // check result after insert and merge data into target table
       checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
         Seq("1", "aa", 123, "2024-02-19", 10),
         Seq("2", "bb", 456, "2024-02-19", 10)
