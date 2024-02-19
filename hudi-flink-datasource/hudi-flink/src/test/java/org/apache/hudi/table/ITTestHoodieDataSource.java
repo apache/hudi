@@ -61,6 +61,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.time.ZoneId;
+import java.util.TimeZone;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -1828,8 +1829,11 @@ public class ITTestHoodieDataSource {
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testWriteReadWithTimestampWithoutTZ(HoodieTableType tableType) {
+    //Timezone in JVM Properties is used to convert Flink TimestampData to Timestamp. So timezone should be set to ensure that test runs correctly.
+    TimeZone preDefaultTimeZone = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone(ZoneId.of("America/Los_Angeles")));
     TableEnvironment tableEnv = batchTableEnv;
-    tableEnv.getConfig().setLocalTimeZone(ZoneId.of("Asia/Shanghai"));
+    tableEnv.getConfig().setLocalTimeZone(ZoneId.of("America/Los_Angeles"));
     String createTable = sql("t1")
         .field("f0 int")
         .field("f1 varchar(10)")
@@ -1847,15 +1851,17 @@ public class ITTestHoodieDataSource {
     tableEnv.executeSql(createTable);
 
     String insertInto = "insert into t1 values\n"
-        + "(1, 'abc', TIMESTAMP '1970-01-01 08:00:01', TIMESTAMP '1970-01-01 08:00:02'),\n"
-        + "(2, 'def', TIMESTAMP '1970-01-01 08:00:03', TIMESTAMP '1970-01-01 08:00:04')";
+        + "(1, 'abc', TIMESTAMP '1970-01-01 16:00:01', TIMESTAMP '1970-01-01 16:00:02'),\n"
+        + "(2, 'def', TIMESTAMP '1970-01-01 16:00:03', TIMESTAMP '1970-01-01 16:00:04')";
     execInsertSql(tableEnv, insertInto);
 
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     final String expected = "["
-        + "+I[1, abc, 1970-01-01T00:00:01, 1970-01-01T00:00:02], "
-        + "+I[2, def, 1970-01-01T00:00:03, 1970-01-01T00:00:04]]";
+        + "+I[1, abc, 1970-01-02T00:00:01, 1970-01-02T00:00:02], "
+        + "+I[2, def, 1970-01-02T10:00:03, 1970-01-02T00:00:04]]";
+
+    TimeZone.setDefault(preDefaultTimeZone);
     assertRowsEquals(result, expected);
   }
 
