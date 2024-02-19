@@ -20,17 +20,21 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
+import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.loadAsDataset;
 
 /**
@@ -39,21 +43,28 @@ import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorComm
  */
 public class CloudDataFetcher implements Serializable {
 
-  private final String fileFormat;
-  private TypedProperties props;
+  private static final String EMPTY_STRING = "";
+
+  private final TypedProperties props;
 
   private static final Logger LOG = LoggerFactory.getLogger(CloudDataFetcher.class);
 
   private static final long serialVersionUID = 1L;
 
-  public CloudDataFetcher(TypedProperties props, String fileFormat) {
-    this.fileFormat = fileFormat;
+  public CloudDataFetcher(TypedProperties props) {
     this.props = props;
+  }
+
+  public static String getFileFormat(TypedProperties props) {
+    // This is to ensure backward compatibility where we were using the
+    // config SOURCE_FILE_FORMAT for file format in previous versions.
+    return StringUtils.isNullOrEmpty(getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING))
+        ? getStringWithAltKeys(props, SOURCE_FILE_FORMAT, true)
+        : getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING);
   }
 
   public Option<Dataset<Row>> getCloudObjectDataDF(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,
                                                    TypedProperties props, Option<SchemaProvider> schemaProviderOption) {
-    return loadAsDataset(spark, cloudObjectMetadata, props, fileFormat, schemaProviderOption);
+    return loadAsDataset(spark, cloudObjectMetadata, props, getFileFormat(props), schemaProviderOption);
   }
-
 }

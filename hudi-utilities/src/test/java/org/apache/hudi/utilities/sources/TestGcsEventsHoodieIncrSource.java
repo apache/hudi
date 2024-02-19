@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
@@ -283,7 +284,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
                              TypedProperties typedProperties) {
 
     GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(typedProperties, jsc(),
-        spark(), schemaProvider.orElse(null), new GcsObjectMetadataFetcher(typedProperties, "json"), gcsObjectDataFetcher, queryRunner);
+        spark(), schemaProvider.orElse(null), new GcsObjectMetadataFetcher(typedProperties), gcsObjectDataFetcher, queryRunner);
 
     Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = incrSource.fetchNextBatch(checkpointToPull, sourceLimit);
 
@@ -374,7 +375,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     properties.setProperty("hoodie.deltastreamer.source.hoodieincr.path", basePath());
     properties.setProperty("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy",
         missingCheckpointStrategy.name());
-    properties.setProperty("hoodie.deltastreamer.source.gcsincr.datafile.format", "json");
+    properties.setProperty(CloudSourceConfig.DATAFILE_FORMAT.key(), "json");
     return new TypedProperties(properties);
   }
 
