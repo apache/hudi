@@ -106,9 +106,13 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
   }
 
+  /**
+   * If populate meta fields is false, then getRecordKeyFields()
+   * should return exactly 1 recordkey field.
+   */
   private static String assertSingleKey(Option<String[]> recordKeyFieldsOpt) {
-    ValidationUtils.checkArgument(recordKeyFieldsOpt.isPresent(), "no record key field");
-    ValidationUtils.checkArgument(recordKeyFieldsOpt.get().length == 1, "more than 1 record key, and not meta fields");
+    ValidationUtils.checkArgument(recordKeyFieldsOpt.isPresent(), "No record key field set in table config, but populateMetaFields is disabled");
+    ValidationUtils.checkArgument(recordKeyFieldsOpt.get().length == 1, "More than 1 record key set in table config, but populateMetaFields is disabled");
     return recordKeyFieldsOpt.get()[0];
   }
 
@@ -132,7 +136,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     }
     ClosableIterator<ArrayWritable> recordIterator = new RecordReaderValueIterator<>(recordReader);
     if (modifiedDataSchema.equals(requiredSchema)) {
-      return  recordIterator;
+      return recordIterator;
     }
     //The record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
     return new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
