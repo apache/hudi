@@ -127,7 +127,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES) -Dtest=TestHoodieClientOnCopyOnWriteStorage
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
@@ -138,7 +138,7 @@ stages:
           - task: reportgenerator@5
             displayName: ReportGenerator
             inputs:
-              reports: '$(System.DefaultWorkingDirectory)/**/target/site/jacoco/jacoco.xml'
+              reports: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
               targetdir: '$(System.DefaultWorkingDirectory)/JacocoResults'
               reporttypes: Html;XML
               verbosity: Verbose
