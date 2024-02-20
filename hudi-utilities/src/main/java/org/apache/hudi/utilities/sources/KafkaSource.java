@@ -26,8 +26,8 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
+import org.apache.hudi.utilities.streamer.StreamContext;
 import org.apache.hudi.utilities.streamer.StreamProfile;
-import org.apache.hudi.utilities.streamer.StreamProfileSupplier;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -52,9 +52,9 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   protected final boolean shouldAddOffsets;
 
   protected KafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-                        SchemaProvider schemaProvider, SourceType sourceType, HoodieIngestionMetrics metrics, Option<StreamProfileSupplier> streamProfileSupplier) {
-    super(props, sparkContext, sparkSession, schemaProvider, sourceType, streamProfileSupplier);
-    this.schemaProvider = schemaProvider;
+                        SourceType sourceType, HoodieIngestionMetrics metrics, StreamContext streamContext) {
+    super(props, sparkContext, sparkSession, sourceType, streamContext);
+    this.schemaProvider = streamContext.getSchemaProvider();
     this.metrics = metrics;
     this.shouldAddOffsets = KafkaOffsetPostProcessor.Config.shouldAddOffsets(props);
   }

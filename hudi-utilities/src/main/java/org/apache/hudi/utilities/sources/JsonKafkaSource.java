@@ -28,7 +28,8 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
-import org.apache.hudi.utilities.streamer.StreamProfileSupplier;
+import org.apache.hudi.utilities.streamer.DefaultStreamContext;
+import org.apache.hudi.utilities.streamer.StreamContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -58,14 +59,11 @@ public class JsonKafkaSource extends KafkaSource<String> {
 
   public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
                          SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
-    this(properties, sparkContext, sparkSession, schemaProvider, metrics, Option.empty());
+    this(properties, sparkContext, sparkSession, metrics, new DefaultStreamContext(UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, properties, sparkContext), Option.empty()));
   }
 
-  public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
-                         SchemaProvider schemaProvider, HoodieIngestionMetrics metrics, Option<StreamProfileSupplier> streamProfileSupplier) {
-    super(properties, sparkContext, sparkSession,
-        UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, properties, sparkContext),
-        SourceType.JSON, metrics, streamProfileSupplier);
+  public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession, HoodieIngestionMetrics metrics, StreamContext streamContext) {
+    super(properties, sparkContext, sparkSession, SourceType.JSON, metrics, streamContext);
     properties.put("key.deserializer", StringDeserializer.class.getName());
     properties.put("value.deserializer", StringDeserializer.class.getName());
     this.offsetGen = new KafkaOffsetGen(props);

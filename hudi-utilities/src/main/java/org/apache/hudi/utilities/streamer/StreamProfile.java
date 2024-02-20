@@ -19,6 +19,10 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
+
 /**
  * A profile containing details about how the next input batch in StreamSync should be consumed and written.
  * For eg: KafkaStreamProfile contains number of events to consume in this sync round.
@@ -27,20 +31,24 @@ package org.apache.hudi.utilities.streamer;
  *
  * @param <T> The type for source context, varies based on sourceType as described above.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface StreamProfile<T> {
 
   /**
    * @return The maxBytes that will be consumed from the source in this sync round.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   long getMaxSourceBytes();
 
   /**
    * @return The number of output partitions required in source RDD.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   int getSourcePartitions();
 
   /**
    * @return The source specific context based on sourceType as described above.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   T getSourceSpecificContext();
 }
