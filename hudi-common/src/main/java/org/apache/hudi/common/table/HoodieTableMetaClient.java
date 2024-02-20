@@ -144,7 +144,6 @@ public class HoodieTableMetaClient implements Serializable {
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private Option<HoodieFunctionalIndexMetadata> functionalIndexMetadata = Option.empty();
 
-
   /**
    * Instantiate HoodieTableMetaClient.
    * Can only be called if table already exists
@@ -470,7 +469,7 @@ public class HoodieTableMetaClient implements Serializable {
   public String createNewInstantTime(boolean shouldLock) {
     TimeGenerator timeGenerator = TimeGenerators
         .getTimeGenerator(timeGeneratorConfig, hadoopConf.get());
-    return HoodieActiveTimeline.createNewInstantTime(shouldLock, timeGenerator);
+    return HoodieTimeline.createNewInstantTime(shouldLock, timeGenerator);
   }
 
   public HoodieTimeGeneratorConfig getTimeGeneratorConfig() {

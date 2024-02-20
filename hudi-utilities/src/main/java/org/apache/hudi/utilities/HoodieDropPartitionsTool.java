@@ -22,7 +22,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
@@ -295,7 +294,7 @@ public class HoodieDropPartitionsTool implements Serializable {
       if (StringUtils.isNullOrEmpty(cfg.instantTime)) {
         TimeGenerator timeGenerator = TimeGenerators
             .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(cfg.basePath), jsc.hadoopConfiguration());
-        cfg.instantTime = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
+        cfg.instantTime = HoodieTimeline.createNewInstantTime(true, timeGenerator);
       }
       LOG.info(cfg.toString());
 

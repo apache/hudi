@@ -328,7 +328,7 @@ COMMIT / ROLLBACK
          private val tables: mutable.Map[String, CatalogTable] = mutable.Map()
          // Transactional methods
          def beginTransaction(): String = {
-           val newTransactionId = HoodieActiveTimeline.createNewInstantTime()
+           val newTransactionId = HoodieTimeline.createNewInstantTime()
            currentTransaction = Some(Transaction(newTransactionId, mutable.Set()))
            newTransactionId
          }

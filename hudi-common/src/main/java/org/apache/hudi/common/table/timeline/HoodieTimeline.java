@@ -465,6 +465,29 @@ public interface HoodieTimeline extends Serializable {
         && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
   }
 
+  /**
+   * Returns next instant time in the correct format.
+   * Ensures each instant time is at least 1 millisecond apart since we create instant times at millisecond granularity.
+   *
+   * @param shouldLock whether the lock should be enabled to get the instant time.
+   * @param timeGenerator TimeGenerator used to generate the instant time.
+   */
+  static String createNewInstantTime(boolean shouldLock, TimeGenerator timeGenerator) {
+    return createNewInstantTime(shouldLock, timeGenerator, 0L);
+  }
+
+  /**
+   * Returns next instant time in the correct format.
+   * Ensures each instant time is at least 1 millisecond apart since we create instant times at millisecond granularity.
+   *
+   * @param shouldLock whether the lock should be enabled to get the instant time.
+   * @param timeGenerator TimeGenerator used to generate the instant time.
+   * @param milliseconds Milliseconds to add to current time while generating the new instant time
+   */
+  static String createNewInstantTime(boolean shouldLock, TimeGenerator timeGenerator, long milliseconds) {
+    return HoodieInstantTimeGenerator.createNewInstantTime(shouldLock, timeGenerator, milliseconds);
+  }
+
   static HoodieInstant getRequestedInstant(final HoodieInstant instant) {
     return new HoodieInstant(State.REQUESTED, instant.getAction(), instant.getTimestamp());
   }
