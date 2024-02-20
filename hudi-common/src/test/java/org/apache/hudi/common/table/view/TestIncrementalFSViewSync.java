@@ -627,7 +627,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     HoodieInstant cleanInflightInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);
-    HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(cleanInstant, Option.empty(), cleanStats);
+    HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(cleanInstant, Option.empty(), cleanStats, Collections.EMPTY_MAP);
     metaClient.getActiveTimeline().saveAsComplete(cleanInflightInstant,
         TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
   }

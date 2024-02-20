@@ -776,7 +776,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
         instantTime,
         Option.of(0L),
-        Arrays.asList(cleanStat1, cleanStat2)
+        Arrays.asList(cleanStat1, cleanStat2),
+        Collections.EMPTY_MAP
     );
     metadata.setVersion(CleanerUtils.CLEAN_METADATA_VERSION_1);
 
@@ -1134,9 +1135,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
       // add clean instant
       HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
-          "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
+          "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
       HoodieCleanMetadata cleanMeta = new HoodieCleanMetadata("", 0L, 0,
-          "20", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
+          "20", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), Collections.emptyMap());
       testTable.addClean("30", cleanerPlan, cleanMeta);
 
       // add file in partition "part_2"
