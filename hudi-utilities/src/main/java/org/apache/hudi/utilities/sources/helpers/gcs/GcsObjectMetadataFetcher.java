@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -51,10 +52,6 @@ import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorComm
  */
 public class GcsObjectMetadataFetcher implements Serializable {
 
-  /**
-   * The default file format to assume if {@link GcsIngestionConfig#GCS_INCR_DATAFILE_EXTENSION} is not given.
-   */
-  private final String fileFormat;
   private final TypedProperties props;
 
   private static final String GCS_PREFIX = "gs://";
@@ -62,13 +59,8 @@ public class GcsObjectMetadataFetcher implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(GcsObjectMetadataFetcher.class);
 
-  /**
-   * @param fileFormat The default file format to assume if {@link GcsIngestionConfig#GCS_INCR_DATAFILE_EXTENSION}
-   *                   is not given.
-   */
-  public GcsObjectMetadataFetcher(TypedProperties props, String fileFormat) {
+  public GcsObjectMetadataFetcher(TypedProperties props) {
     this.props = props;
-    this.fileFormat = fileFormat;
   }
 
   /**
@@ -87,40 +79,41 @@ public class GcsObjectMetadataFetcher implements Serializable {
   }
 
   /**
-   * @param cloudObjectMetadataDF a Dataset that contains metadata of GCS objects. Assumed to be a persisted form
-   *                              of a Cloud Storage Pubsub Notification event.
-   * @return Dataset<Row> after apply the filtering.
-   */
-  public Dataset<Row> applyFilter(Dataset<Row> cloudObjectMetadataDF) {
-    String filter = createFilter();
-    LOG.info("Adding filter string to Dataset: " + filter);
-
-    return cloudObjectMetadataDF.filter(filter);
-  }
-
-  /**
    * Add optional filters that narrow down the list of GCS objects to fetch.
    */
-  private String createFilter() {
+  public static String generateFilter(TypedProperties props) {
     StringBuilder filter = new StringBuilder("size > 0");
 
-    getPropVal(SELECT_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name like '" + val + "%'"));
-    getPropVal(IGNORE_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name not like '" + val + "%'"));
-    getPropVal(IGNORE_RELATIVE_PATH_SUBSTR).ifPresent(val -> filter.append(" and name not like '%" + val + "%'"));
+    getPropVal(props, SELECT_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name like '" + val + "%'"));
+    getPropVal(props, IGNORE_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name not like '" + val + "%'"));
+    getPropVal(props, IGNORE_RELATIVE_PATH_SUBSTR).ifPresent(val -> filter.append(" and name not like '%" + val + "%'"));
 
     // Match files with a given extension, or use the fileFormat as the default.
-    getPropVal(CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
+    String fileFormat = CloudDataFetcher.getFileFormat(props);
+    getPropVal(props, CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
         .map(val -> filter.append(" and name like '%" + val + "'"));
 
     return filter.toString();
   }
 
-  private Option<String> getPropVal(ConfigProperty<String> configProperty) {
+  private static Option<String> getPropVal(TypedProperties props, ConfigProperty<String> configProperty) {
     String value = getStringWithAltKeys(props, configProperty, true);
     if (!isNullOrEmpty(value)) {
       return Option.of(value);
     }
 
     return Option.empty();
+  }
+
+  /**
+   * @param cloudObjectMetadataDF a Dataset that contains metadata of GCS objects. Assumed to be a persisted form
+   *                              of a Cloud Storage Pubsub Notification event.
+   * @return Dataset<Row> after apply the filtering.
+   */
+  public Dataset<Row> applyFilter(Dataset<Row> cloudObjectMetadataDF) {
+    String filter = generateFilter(props);
+    LOG.info("Adding filter string to Dataset: " + filter);
+
+    return cloudObjectMetadataDF.filter(filter);
   }
 }

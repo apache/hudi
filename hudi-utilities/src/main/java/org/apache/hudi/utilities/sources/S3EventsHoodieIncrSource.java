@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
@@ -52,11 +51,9 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
-import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_SUBSTRING;
@@ -72,11 +69,9 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
 public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(S3EventsHoodieIncrSource.class);
-  private static final String EMPTY_STRING = "";
   private final String srcPath;
   private final int numInstantsPerFetch;
   private final boolean checkIfFileExists;
-  private final String fileFormat;
   private final IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy;
   private final QueryRunner queryRunner;
   private final CloudDataFetcher cloudDataFetcher;
@@ -123,7 +118,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     this(props, sparkContext, sparkSession, schemaProvider, new QueryRunner(sparkSession, props),
-        new CloudDataFetcher(props, getStringWithAltKeys(props, CloudSourceConfig.DATAFILE_FORMAT, true)));
+        new CloudDataFetcher(props));
   }
 
   public S3EventsHoodieIncrSource(
@@ -138,18 +133,32 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     this.srcPath = getStringWithAltKeys(props, HOODIE_SRC_BASE_PATH);
     this.numInstantsPerFetch = getIntWithAltKeys(props, NUM_INSTANTS_PER_FETCH);
     this.checkIfFileExists = getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK);
-
-    // This is to ensure backward compatibility where we were using the
-    // config SOURCE_FILE_FORMAT for file format in previous versions.
-    this.fileFormat = StringUtils.isNullOrEmpty(getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING))
-        ? getStringWithAltKeys(props, SOURCE_FILE_FORMAT, true)
-        : getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING);
-
     this.missingCheckpointStrategy = getMissingCheckpointStrategy(props);
     this.queryRunner = queryRunner;
     this.cloudDataFetcher = cloudDataFetcher;
     this.schemaProvider = Option.ofNullable(schemaProvider);
     this.snapshotLoadQuerySplitter = SnapshotLoadQuerySplitter.getInstance(props);
+  }
+
+  public static String generateFilter(TypedProperties props) {
+    String fileFormat = CloudDataFetcher.getFileFormat(props);
+    String filter = S3_OBJECT_SIZE + " > 0";
+    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, S3_KEY_PREFIX, true))) {
+      filter = filter + " and " + S3_OBJECT_KEY + " like '" + getStringWithAltKeys(props, S3_KEY_PREFIX) + "%'";
+    }
+    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, S3_IGNORE_KEY_PREFIX, true))) {
+      filter = filter + " and " + S3_OBJECT_KEY + " not like '" + getStringWithAltKeys(props, S3_IGNORE_KEY_PREFIX) + "%'";
+    }
+    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, S3_IGNORE_KEY_SUBSTRING, true))) {
+      filter = filter + " and " + S3_OBJECT_KEY + " not like '%" + getStringWithAltKeys(props, S3_IGNORE_KEY_SUBSTRING) + "%'";
+    }
+    // Match files with a given extension, or use the fileFormat as the fallback incase the config is not set.
+    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, CLOUD_DATAFILE_EXTENSION, true))) {
+      filter = filter + " and " + S3_OBJECT_KEY + " like '%" + getStringWithAltKeys(props, CLOUD_DATAFILE_EXTENSION) + "'";
+    } else {
+      filter = filter + " and " + S3_OBJECT_KEY + " like '%" + fileFormat + "%'";
+    }
+    return filter;
   }
 
   @Override
@@ -172,7 +181,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     }
     Pair<QueryInfo, Dataset<Row>> queryInfoDatasetPair = queryRunner.run(queryInfo, snapshotLoadQuerySplitter);
     queryInfo = queryInfoDatasetPair.getLeft();
-    Dataset<Row> filteredSourceData = applyFilter(queryInfoDatasetPair.getRight(), fileFormat);
+    Dataset<Row> filteredSourceData = queryInfoDatasetPair.getRight().filter(generateFilter(props));
 
     LOG.info("Adjusting end checkpoint:" + queryInfo.getEndInstant() + " based on sourceLimit :" + sourceLimit);
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =
@@ -198,26 +207,5 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
     Option<Dataset<Row>> datasetOption = cloudDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props, schemaProvider);
     return Pair.of(datasetOption, checkPointAndDataset.getLeft().toString());
-  }
-
-  Dataset<Row> applyFilter(Dataset<Row> source, String fileFormat) {
-    String filter = S3_OBJECT_SIZE + " > 0";
-    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, S3_KEY_PREFIX, true))) {
-      filter = filter + " and " + S3_OBJECT_KEY + " like '" + getStringWithAltKeys(props, S3_KEY_PREFIX) + "%'";
-    }
-    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, S3_IGNORE_KEY_PREFIX, true))) {
-      filter = filter + " and " + S3_OBJECT_KEY + " not like '" + getStringWithAltKeys(props, S3_IGNORE_KEY_PREFIX) + "%'";
-    }
-    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, S3_IGNORE_KEY_SUBSTRING, true))) {
-      filter = filter + " and " + S3_OBJECT_KEY + " not like '%" + getStringWithAltKeys(props, S3_IGNORE_KEY_SUBSTRING) + "%'";
-    }
-    // Match files with a given extension, or use the fileFormat as the fallback incase the config is not set.
-    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, CLOUD_DATAFILE_EXTENSION, true))) {
-      filter = filter + " and " + S3_OBJECT_KEY + " like '%" + getStringWithAltKeys(props, CLOUD_DATAFILE_EXTENSION) + "'";
-    } else {
-      filter = filter + " and " + S3_OBJECT_KEY + " like '%" + fileFormat + "%'";
-    }
-
-    return source.filter(filter);
   }
 }
