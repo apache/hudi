@@ -135,6 +135,9 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - task: PublishTestResults@2
+            inputs:
+              testResultsFiles: '$(System.DefaultWorkingDirectory)/**/target/surefire-reports/*.xml'
           - task: reportgenerator@5
             displayName: ReportGenerator
             inputs:
@@ -146,4 +149,4 @@ stages:
             displayName: code coverage result
             inputs:
               codeCoverageTool: 'JaCoCo'
-              summaryFileLocation: '$(System.DefaultWorkingDirectory)/JacocoResults/jacoco.xml'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/JacocoResults/Summary.xml'
