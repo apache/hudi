@@ -865,10 +865,10 @@ public class StreamSync implements Serializable, Closeable {
       writeClient.rollback(instantTime);
       throw new HoodieStreamerWriteException("Commit " + instantTime + " failed and rolled-back !");
     }
-    long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
+    long overallTimeNanos = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
     // Send DeltaStreamer Metrics
-    metrics.updateStreamerMetrics(overallTimeMs);
+    metrics.updateStreamerMetrics(overallTimeNanos);
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
   }
 
@@ -991,10 +991,11 @@ public class StreamSync implements Serializable, Closeable {
           LOG.error("SyncTool class {0} failed with exception {1}",  impl.trim(), e);
           failedMetaSyncs.put(impl, e);
         }
-        long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
-        metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
+        long metaSyncTimeNanos = syncContext != null ? syncContext.stop() : 0;
+        metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeNanos);
         if (success) {
-          LOG.info("[MetaSync] SyncTool class {0} completed successfully and took {1} ", impl.trim(), metaSyncTimeMs);
+          long timeMs = metaSyncTimeNanos / 1000000L;
+          LOG.info("[MetaSync] SyncTool class {} completed successfully and took {} s {} ms ", impl.trim(), timeMs / 1000L, timeMs % 1000L);
         }
       }
       if (!failedMetaSyncs.isEmpty()) {
