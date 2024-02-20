@@ -24,8 +24,7 @@ type reconciliations. The following table summarizes the schema changes compatib
 
 The incoming schema will automatically have missing columns added with null values from the table schema.
 For this we need to enable the following config
-`hoodie.write.handle.missing.cols.with.lossless.type.promotion`, otherwise the pipeline will fail. Note: This particular config will also do best effort to solve some of the backward incompatible
-type promotions eg., 'long' to 'int'.
+`hoodie.write.set.null.for.missing.columns`, otherwise the pipeline will fail.
 
 | Schema Change                                                   | COW | MOR | Remarks                                                                                                                                                                                                                                                                                       |
 |:----------------------------------------------------------------|:----|:----|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
