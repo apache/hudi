@@ -127,7 +127,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES)
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES) -Dtest=TestConsistentBucketIndex
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
