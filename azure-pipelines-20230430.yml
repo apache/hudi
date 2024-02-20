@@ -150,5 +150,5 @@ stages:
             inputs:
               codeCoverageTool: 'JaCoCo'
               summaryFileLocation: '$(System.DefaultWorkingDirectory)/JacocoResults/Summary.xml'
-              reportDirectory: '$(System.DefaultWorkingDirectory)/JacocoResults'
+              reportDirectory: '$(System.DefaultWorkingDirectory)/**/target/site/*/'
               additionalCodeCoverageFiles: '$(System.DefaultWorkingDirectory)/**/target/jacoco.exec'
