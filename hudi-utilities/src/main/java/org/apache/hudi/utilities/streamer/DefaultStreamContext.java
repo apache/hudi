@@ -21,6 +21,11 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+/**
+ * The default implementation for the StreamContext interface,
+ * composes SchemaProvider and StreamProfileSupplier currently,
+ * can be extended for other arguments in the future.
+ */
 public class DefaultStreamContext implements StreamContext {
 
   private final SchemaProvider schemaProvider;

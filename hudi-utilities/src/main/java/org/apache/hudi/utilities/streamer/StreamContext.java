@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 /**
- * A class containing context to sync one batch of data to hoodie table using StreamSync.
+ * The context required to sync one batch of data to hoodie table using StreamSync.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface StreamContext {
