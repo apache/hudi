@@ -75,6 +75,7 @@ public class HoodieCompactor {
       // add default lock config options if MDT is enabled.
       UtilHelpers.addLockOptions(cfg.basePath, this.props);
     }
+    this.fs = HadoopFSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
   }
 
   public static class Config implements Serializable {
@@ -181,7 +182,6 @@ public class HoodieCompactor {
   }
 
   public int compact(int retry) {
-    this.fs = HadoopFSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     // need to do validate in case that users call compact() directly without setting cfg.runningMode
     validateRunningMode(cfg);
     LOG.info(cfg.toString());
@@ -240,17 +240,8 @@ public class HoodieCompactor {
   }
 
   private int doCompact(JavaSparkContext jsc) throws Exception {
-    // Get schema.
-    String schemaStr;
-    if (StringUtils.isNullOrEmpty(cfg.schemaFile)) {
-      schemaStr = getSchemaFromLatestInstant();
-    } else {
-      schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
-    }
-    LOG.info("Schema --> : " + schemaStr);
-
     try (SparkRDDWriteClient<HoodieRecordPayload> client =
-             UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+             UtilHelpers.createHoodieClient(jsc, cfg.basePath, getSchema(), cfg.parallelism, Option.empty(), props)) {
       // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
       // instant from the active timeline
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
@@ -271,9 +262,9 @@ public class HoodieCompactor {
     }
   }
 
-  private Option<String> doSchedule(JavaSparkContext jsc) {
+  private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
     try (SparkRDDWriteClient client =
-             UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
+             UtilHelpers.createHoodieClient(jsc, cfg.basePath, getSchema(), cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
 
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
         LOG.warn("No instant time is provided for scheduling compaction.");
@@ -285,7 +276,7 @@ public class HoodieCompactor {
     }
   }
 
-  private String getSchemaFromLatestInstant() throws Exception {
+  String getSchemaFromLatestInstant() throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     Schema schema = schemaUtil.getTableAvroSchema(false);
     return schema.toString();
@@ -295,5 +286,12 @@ public class HoodieCompactor {
     if (client.getConfig().isAutoClean()) {
       client.clean();
     }
+  }
+
+  String getSchema() throws Exception {
+    if (StringUtils.isNullOrEmpty(cfg.schemaFile)) {
+      return getSchemaFromLatestInstant();
+    }
+    return UtilHelpers.parseSchema(fs, cfg.schemaFile);
   }
 }
