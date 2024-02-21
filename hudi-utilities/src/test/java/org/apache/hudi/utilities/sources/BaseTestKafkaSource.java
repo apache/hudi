@@ -28,8 +28,8 @@ import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
-import org.apache.hudi.utilities.streamer.StreamProfile;
-import org.apache.hudi.utilities.streamer.StreamProfileSupplier;
+import org.apache.hudi.utilities.streamer.SourceProfile;
+import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -63,7 +63,7 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
   protected static final String TEST_TOPIC_PREFIX = "hoodie_test_";
 
   protected final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
-  protected final Option<StreamProfileSupplier> streamProfile = Option.of(mock(StreamProfileSupplier.class));
+  protected final Option<SourceProfileSupplier> sourceProfile = Option.of(mock(SourceProfileSupplier.class));
 
   protected SchemaProvider schemaProvider;
   protected KafkaTestUtils testUtils;
@@ -283,13 +283,13 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void testKafkaSourceWithOffsetsFromStreamProfile() {
+  public void testKafkaSourceWithOffsetsFromSourceProfile() {
     // topic setup.
     final String topic = TEST_TOPIC_PREFIX + "testKafkaSourceWithOffsetRanges";
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
 
-    when(streamProfile.get().getStreamProfile()).thenReturn(new TestStreamProfile(Long.MAX_VALUE, 4, 500));
+    when(sourceProfile.get().getSourceProfile()).thenReturn(new TestSourceProfile(Long.MAX_VALUE, 4, 500));
     SourceFormatAdapter kafkaSource = createSource(props);
 
     // Test for empty data.
@@ -301,13 +301,13 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
     assertEquals(500, fetch1.getBatch().get().count());
   }
 
-  static class TestStreamProfile implements StreamProfile<Long> {
+  static class TestSourceProfile implements SourceProfile<Long> {
 
     private final long maxSourceBytes;
     private final int sourcePartitions;
     private final long numEvents;
 
-    public TestStreamProfile(long maxSourceBytes, int sourcePartitions, long numEvents) {
+    public TestSourceProfile(long maxSourceBytes, int sourcePartitions, long numEvents) {
       this.maxSourceBytes = maxSourceBytes;
       this.sourcePartitions = sourcePartitions;
       this.numEvents = numEvents;

@@ -20,9 +20,9 @@
 package org.apache.hudi.utilities.streamer;
 
 /**
- * Supplier for StreamProfile
+ * Supplier for SourceProfile
  */
-public interface StreamProfileSupplier {
+public interface SourceProfileSupplier {
   @SuppressWarnings("rawtypes")
-  StreamProfile getStreamProfile();
+  SourceProfile getSourceProfile();
 }

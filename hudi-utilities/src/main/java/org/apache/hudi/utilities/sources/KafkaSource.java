@@ -26,8 +26,8 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
+import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.StreamContext;
-import org.apache.hudi.utilities.streamer.StreamProfile;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -63,12 +63,12 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   protected InputBatch<JavaRDD<T>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
     try {
       OffsetRange[] offsetRanges;
-      if (streamProfilerSupplier.isPresent() && streamProfilerSupplier.get().getStreamProfile() != null) {
-        StreamProfile<Long> kafkaStreamProfile = streamProfilerSupplier.get().getStreamProfile();
-        offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, kafkaStreamProfile.getSourceSpecificContext(), kafkaStreamProfile.getSourcePartitions(), metrics);
+      if (sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null) {
+        SourceProfile<Long> kafkaSourceProfile = sourceProfileSupplier.get().getSourceProfile();
+        offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getSourcePartitions(), metrics);
         LOG.info("About to read numEvents {} of size {} bytes in {} partitions from Kafka for topic {} with offsetRanges {}",
-            kafkaStreamProfile.getSourceSpecificContext(), kafkaStreamProfile.getMaxSourceBytes(),
-            kafkaStreamProfile.getSourcePartitions(), offsetGen.getTopicName(), offsetRanges);
+            kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getMaxSourceBytes(),
+            kafkaSourceProfile.getSourcePartitions(), offsetGen.getTopicName(), offsetRanges);
       } else {
         offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
       }

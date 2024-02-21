@@ -23,17 +23,17 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 
 /**
  * The default implementation for the StreamContext interface,
- * composes SchemaProvider and StreamProfileSupplier currently,
+ * composes SchemaProvider and SourceProfileSupplier currently,
  * can be extended for other arguments in the future.
  */
 public class DefaultStreamContext implements StreamContext {
 
   private final SchemaProvider schemaProvider;
-  private final Option<StreamProfileSupplier> streamProfileSupplier;
+  private final Option<SourceProfileSupplier> sourceProfileSupplier;
 
-  public DefaultStreamContext(SchemaProvider schemaProvider, Option<StreamProfileSupplier> streamProfileSupplier) {
+  public DefaultStreamContext(SchemaProvider schemaProvider, Option<SourceProfileSupplier> sourceProfileSupplier) {
     this.schemaProvider = schemaProvider;
-    this.streamProfileSupplier = streamProfileSupplier;
+    this.sourceProfileSupplier = sourceProfileSupplier;
   }
 
   @Override
@@ -42,7 +42,7 @@ public class DefaultStreamContext implements StreamContext {
   }
 
   @Override
-  public Option<StreamProfileSupplier> getStreamProfileSupplier() {
-    return streamProfileSupplier;
+  public Option<SourceProfileSupplier> getSourceProfileSupplier() {
+    return sourceProfileSupplier;
   }
 }

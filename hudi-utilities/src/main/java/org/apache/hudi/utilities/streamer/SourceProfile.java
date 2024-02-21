@@ -25,14 +25,14 @@ import org.apache.hudi.PublicAPIMethod;
 
 /**
  * A profile containing details about how the next input batch in StreamSync should be consumed and written.
- * For eg: KafkaStreamProfile contains number of events to consume in this sync round.
- * S3StreamProfile contains the list of files to consume in this sync round.
- * HudiIncrementalStreamProfile contains the beginInstant and endInstant commit times to consume in this sync round etc.
+ * For eg: KafkaSourceProfile contains number of events to consume in this sync round.
+ * S3SourceProfile contains the list of files to consume in this sync round.
+ * HudiIncrementalSourceProfile contains the beginInstant and endInstant commit times to consume in this sync round etc.
  *
  * @param <T> The type for source context, varies based on sourceType as described above.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
-public interface StreamProfile<T> {
+public interface SourceProfile<T> {
 
   /**
    * @return The maxBytes that will be consumed from the source in this sync round.

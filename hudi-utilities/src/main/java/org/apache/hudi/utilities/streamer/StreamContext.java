@@ -40,5 +40,5 @@ public interface StreamContext {
    * An optional stream profile supplying details regarding how the next input batch in StreamSync should be consumed and written.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  Option<StreamProfileSupplier> getStreamProfileSupplier();
+  Option<SourceProfileSupplier> getSourceProfileSupplier();
 }

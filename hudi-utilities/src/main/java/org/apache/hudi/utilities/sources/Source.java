@@ -26,8 +26,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.callback.SourceCommitCallback;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
+import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
-import org.apache.hudi.utilities.streamer.StreamProfileSupplier;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -47,7 +47,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   protected transient TypedProperties props;
   protected transient JavaSparkContext sparkContext;
   protected transient SparkSession sparkSession;
-  protected transient Option<StreamProfileSupplier> streamProfilerSupplier;
+  protected transient Option<SourceProfileSupplier> sourceProfileSupplier;
   private transient SchemaProvider overriddenSchemaProvider;
 
   private final SourceType sourceType;
@@ -68,7 +68,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     this.sparkSession = sparkSession;
     this.overriddenSchemaProvider = streamContext.getSchemaProvider();
     this.sourceType = sourceType;
-    this.streamProfilerSupplier = streamContext.getStreamProfileSupplier();
+    this.sourceProfileSupplier = streamContext.getSourceProfileSupplier();
   }
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)

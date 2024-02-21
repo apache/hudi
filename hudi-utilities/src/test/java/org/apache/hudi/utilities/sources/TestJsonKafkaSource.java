@@ -106,7 +106,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
 
   @Override
   SourceFormatAdapter createSource(TypedProperties props) {
-    return new SourceFormatAdapter(new JsonKafkaSource(props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, streamProfile)));
+    return new SourceFormatAdapter(new JsonKafkaSource(props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile)));
   }
 
   // test whether empty messages can be filtered
@@ -364,7 +364,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceCreation";
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
-    Source jsonKafkaSource = UtilHelpers.createSource(JsonKafkaSource.class.getName(), props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, streamProfile));
+    Source jsonKafkaSource = UtilHelpers.createSource(JsonKafkaSource.class.getName(), props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile));
     assertEquals(Source.SourceType.JSON, jsonKafkaSource.getSourceType());
   }
 }
