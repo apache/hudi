@@ -498,6 +498,13 @@ public class RequestHandler {
       writeValueAsString(ctx, markers);
     }, false));
 
+    app.get(MarkerOperation.APPEND_MARKERS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("APPEND_MARKERS", 1);
+      Set<String> markers = markerHandler.getAppendMarkers(
+          ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""));
+      writeValueAsString(ctx, markers);
+    }, false));
+
     app.get(MarkerOperation.MARKERS_DIR_EXISTS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("MARKERS_DIR_EXISTS", 1);
       boolean exist = markerHandler.doesMarkerDirExist(

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -30,14 +31,17 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestRollbackUtils {
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
@@ -120,5 +124,39 @@ public class TestRollbackUtils {
         dataFilesOnlyStatMerge2.getSuccessDeleteFiles().stream().sorted().collect(Collectors.toList()));
     assertEquals(Collections.singletonMap(generateFileStatus(partitionPath1 + "dataFile1.log"), 10L),
         dataFilesOnlyStatMerge2.getCommandBlocksCount());
+  }
+
+  @Test
+  public void testMergeRollbackRequestSuccess() {
+    String partitionPath = "partition/path";
+    String fileId = "fileId";
+    String latestBaseInstant = "latestBaseInstant";
+    List<String> filesToBeDeleted1 = Arrays.asList("file1", "file2");
+    Map<String, Long> logBlocksToBeDeleted1 = new HashMap<>();
+    logBlocksToBeDeleted1.put("block1", 1L);
+
+    List<String> filesToBeDeleted2 = Arrays.asList("file3", "file4");
+    Map<String, Long> logBlocksToBeDeleted2 = new HashMap<>();
+    logBlocksToBeDeleted2.put("block2", 2L);
+
+    HoodieRollbackRequest request1 = new HoodieRollbackRequest(partitionPath, fileId, latestBaseInstant, filesToBeDeleted1, logBlocksToBeDeleted1);
+    HoodieRollbackRequest request2 = new HoodieRollbackRequest(partitionPath, fileId, latestBaseInstant, filesToBeDeleted2, logBlocksToBeDeleted2);
+
+    HoodieRollbackRequest mergedRequest = RollbackUtils.mergeRollbackRequest(request1, request2);
+
+    // Verify
+    assertEquals(partitionPath, mergedRequest.getPartitionPath());
+    assertEquals(fileId, mergedRequest.getFileId());
+    assertEquals(latestBaseInstant, mergedRequest.getLatestBaseInstant());
+    assertTrue(mergedRequest.getFilesToBeDeleted().containsAll(Arrays.asList("file1", "file2", "file3", "file4")));
+    assertEquals(2, mergedRequest.getLogBlocksToBeDeleted().size());
+    assertTrue(mergedRequest.getLogBlocksToBeDeleted().keySet().containsAll(Arrays.asList("block1", "block2")));
+  }
+
+  @Test
+  public void testMergeRollbackRequestWithMismatchArguments() {
+    HoodieRollbackRequest request1 = new HoodieRollbackRequest("partition/path", "fileId", "latestBaseInstant", null, null);
+    HoodieRollbackRequest request2 = new HoodieRollbackRequest("partition/path2", "fileId2", "latestBaseInstant2", null, null);
+    assertThrows(IllegalArgumentException.class, () -> RollbackUtils.mergeRollbackRequest(request1, request2));
   }
 }

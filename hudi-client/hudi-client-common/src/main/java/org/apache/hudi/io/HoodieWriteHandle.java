@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFileWriteCallback;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -39,6 +40,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
@@ -255,9 +257,14 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         .withRolloverLogWriteToken(writeToken)
         .withLogWriteToken(latestLogFile.map(HoodieLogFile::getLogWriteToken).orElse(writeToken))
         .withSuffix(suffix)
+        .withLogWriteCallback(getLogWriteCallback())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
         .withLogBlockVersionToWrite(config.doMaintainBackwardsCompatibleWritesWith0140() ? 2 : 3)
         .build();
+  }
+
+  protected HoodieLogFileWriteCallback getLogWriteCallback() {
+    return new AppendLogWriteCallback();
   }
 
   protected HoodieLogFormat.Writer createLogWriter(String baseCommitTime, String fileSuffix) {
@@ -276,6 +283,29 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     } catch (IOException e) {
       LOG.error("Fail to get indexRecord from " + record, e);
       return Option.empty();
+    }
+  }
+
+  /**
+   * Call back to be invoked during log file creation and appends. Applicable only for AppendHandle among all write handles.
+   */
+  protected class AppendLogWriteCallback implements HoodieLogFileWriteCallback {
+
+    @Override
+    public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
+      return createAppendMarker(logFileToAppend);
+    }
+
+    @Override
+    public boolean preLogFileCreate(HoodieLogFile logFileToCreate) {
+      // TODO: HUDI-1517 may distinguish log file created from log file being appended in the future @guanziyue
+      return createAppendMarker(logFileToCreate);
+    }
+
+    private boolean createAppendMarker(HoodieLogFile logFileToAppend) {
+      WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+      return writeMarkers.createIfNotExists(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
+          config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
     }
   }
 }

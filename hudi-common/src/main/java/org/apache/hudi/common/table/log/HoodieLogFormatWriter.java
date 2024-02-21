@@ -55,20 +55,22 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final Integer bufferSize;
   private final Short replication;
   private final String rolloverLogWriteToken;
+  final HoodieLogFileWriteCallback logFileWriteCallback;
   private boolean closed = false;
   private int logBlockVersionToWrite;
   private transient Thread shutdownThread = null;
 
   private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
-  HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold, String rolloverLogWriteToken,
-                        int logBlockVersionToWrite) {
+  HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold,
+                        String rolloverLogWriteToken, HoodieLogFileWriteCallback logFileWriteCallback, int logBlockVersionToWrite) {
     this.fs = fs;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
     this.bufferSize = bufferSize;
     this.replication = replication;
     this.rolloverLogWriteToken = rolloverLogWriteToken;
+    this.logFileWriteCallback = logFileWriteCallback;
     this.logBlockVersionToWrite = logBlockVersionToWrite;
     addShutDownHook();
   }
@@ -97,7 +99,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       Path path = logFile.getPath();
       if (fs.exists(path)) {
         boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
-        if (isAppendSupported) {
+        // here we use marker file to fence concurrent append to the same file. So it is safe to use speculation in spark now.
+        boolean canAppend = isAppendSupported ? logFileWriteCallback.preLogFileOpen(logFile) : false;
+        if (canAppend) {
           LOG.info(logFile + " exists. Appending to existing file");
           try {
             // open the path for append and record the offset
@@ -119,10 +123,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
             }
           }
         }
-        if (!isAppendSupported) {
+        if (!isAppendSupported || !canAppend) {
           rollOver();
           createNewFile();
-          LOG.info("Append not supported.. Rolling over to " + logFile);
+          String rolloverReason = isAppendSupported ? "Append not supported" : "Callback failed";
+          LOG.info(rolloverReason + ". Rolling over to " + logFile);
         }
       } else {
         LOG.info(logFile + " does not exist. Create a new file");
@@ -233,6 +238,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   private void createNewFile() throws IOException {
+    logFileWriteCallback.preLogFileCreate(logFile);
     this.output =
         fs.create(this.logFile.getPath(), false, bufferSize, replication, WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
   }
@@ -242,7 +248,12 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     if (null != shutdownThread) {
       Runtime.getRuntime().removeShutdownHook(shutdownThread);
     }
-    closeStream();
+    logFileWriteCallback.preLogFileClose(logFile);
+    try {
+      closeStream();
+    } finally {
+      logFileWriteCallback.postLogFileClose(logFile);
+    }
   }
 
   private void closeStream() throws IOException {
