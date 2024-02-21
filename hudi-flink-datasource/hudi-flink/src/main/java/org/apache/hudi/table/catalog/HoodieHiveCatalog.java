@@ -553,6 +553,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     hiveTable.setCreateTime((int) (System.currentTimeMillis() / 1000));
 
     Map<String, String> properties = new HashMap<>(table.getOptions());
+    hiveConf.getAllProperties().forEach((k, v) -> properties.put("hadoop." + k, String.valueOf(v)));
 
     if (external) {
       hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
