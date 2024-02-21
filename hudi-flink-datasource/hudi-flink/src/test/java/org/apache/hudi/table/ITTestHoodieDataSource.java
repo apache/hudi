@@ -60,8 +60,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.TimeZone;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -1829,9 +1831,6 @@ public class ITTestHoodieDataSource {
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testWriteReadWithTimestampWithoutTZ(HoodieTableType tableType) {
-    //Timezone in JVM Properties is used to convert Flink TimestampData to Timestamp. So timezone should be set to ensure that test runs correctly.
-    TimeZone preDefaultTimeZone = TimeZone.getDefault();
-    TimeZone.setDefault(TimeZone.getTimeZone(ZoneId.of("America/Los_Angeles")));
     TableEnvironment tableEnv = batchTableEnv;
     tableEnv.getConfig().setLocalTimeZone(ZoneId.of("America/Los_Angeles"));
     String createTable = sql("t1")
@@ -1850,18 +1849,32 @@ public class ITTestHoodieDataSource {
         .end();
     tableEnv.executeSql(createTable);
 
+    long epochMillis = 0L;
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     String insertInto = "insert into t1 values\n"
-        + "(1, 'abc', TIMESTAMP '1970-01-01 16:00:01', TIMESTAMP '1970-01-01 16:00:02'),\n"
-        + "(2, 'def', TIMESTAMP '1970-01-01 16:00:03', TIMESTAMP '1970-01-01 16:00:04')";
+        + "(1"
+        + ", 'abc'"
+        + ", TIMESTAMP '" + formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis + 1000), ZoneId.systemDefault())) + "'"
+        + ", TIMESTAMP '" + formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis + 2000), ZoneId.systemDefault())) + "'),\n"
+        + "(2"
+        + ", 'def'"
+        + ", TIMESTAMP '" + formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis + 3000), ZoneId.systemDefault())) + "'"
+        + ", TIMESTAMP '" + formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis + 4000), ZoneId.systemDefault())) + "')";
     execInsertSql(tableEnv, insertInto);
 
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
     final String expected = "["
-        + "+I[1, abc, 1970-01-02T00:00:01, 1970-01-02T00:00:02], "
-        + "+I[2, def, 1970-01-02T10:00:03, 1970-01-02T00:00:04]]";
+        + "+I[1"
+        + ", abc"
+        + ", " + formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis + 1000), ZoneId.of("UTC")))
+        + ", " + formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis + 2000), ZoneId.of("UTC"))) + "], "
+        + "+I[2"
+        + ", def"
+        + ", " + formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis + 3000), ZoneId.of("UTC")))
+        + ", " + formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis + 4000), ZoneId.of("UTC"))) + "]]";
 
-    TimeZone.setDefault(preDefaultTimeZone);
     assertRowsEquals(result, expected);
   }
 

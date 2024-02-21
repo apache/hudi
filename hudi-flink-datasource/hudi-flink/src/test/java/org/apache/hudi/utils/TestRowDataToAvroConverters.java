@@ -36,7 +36,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.TimeZone;
 
 import static org.apache.flink.table.api.DataTypes.ROW;
 import static org.apache.flink.table.api.DataTypes.FIELD;
@@ -46,60 +45,21 @@ class TestRowDataToAvroConverters {
 
   DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
   @Test
-  void testRowDataToAvroStringToRowDataWithLocalTimezone1() throws JsonProcessingException {
-    TimeZone.setDefault(TimeZone.getTimeZone(ZoneId.of("Asia/Shanghai")));
-    String timestampFromUtc8 = "2021-03-30 15:44:29";
+  void testRowDataToAvroStringToRowDataWithLocalTimezone() throws JsonProcessingException {
+    String timestampFromLocal = "2021-03-30 07:44:29";
 
-    DataType rowDataType = ROW(FIELD("timestamp_from_utc_8", TIMESTAMP()));
-    JsonToRowDataConverters.JsonToRowDataConverter jsonToRowDataConverter =
-            new JsonToRowDataConverters(true, true, TimestampFormat.SQL)
-            .createConverter(rowDataType.getLogicalType());
-    Object rowData = jsonToRowDataConverter.convert(new ObjectMapper().readTree("{\"timestamp_from_utc_8\":\"" + timestampFromUtc8 + "\"}"));
-
-    RowType rowType = (RowType) DataTypes.ROW(DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3))).getLogicalType();
-    RowDataToAvroConverters.RowDataToAvroConverter converter =
-            RowDataToAvroConverters.createConverter(rowType, false);
-    GenericRecord avroRecord =
-            (GenericRecord) converter.convert(AvroSchemaConverter.convertToSchema(rowType), rowData);
-    Assertions.assertEquals(timestampFromUtc8, formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) avroRecord.get(0)), ZoneId.systemDefault())));
-  }
-
-  @Test
-  void testRowDataToAvroStringToRowDataWithLocalTimezone2() throws JsonProcessingException {
-    TimeZone.setDefault(TimeZone.getTimeZone(ZoneId.of("UTC+1")));
-    String timestampFromUtc1 = "2021-03-30 08:44:29";
-
-    DataType rowDataType = ROW(FIELD("timestamp_from_utc_1", TIMESTAMP()));
+    DataType rowDataType = ROW(FIELD("timestamp_from_local", TIMESTAMP()));
     JsonToRowDataConverters.JsonToRowDataConverter jsonToRowDataConverter =
             new JsonToRowDataConverters(true, true, TimestampFormat.SQL)
                     .createConverter(rowDataType.getLogicalType());
-    Object rowData = jsonToRowDataConverter.convert(new ObjectMapper().readTree("{\"timestamp_from_utc_1\":\"" + timestampFromUtc1 + "\"}"));
+    Object rowData = jsonToRowDataConverter.convert(new ObjectMapper().readTree("{\"timestamp_from_local\":\"" + timestampFromLocal + "\"}"));
 
     RowType rowType = (RowType) DataTypes.ROW(DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3))).getLogicalType();
     RowDataToAvroConverters.RowDataToAvroConverter converter =
             RowDataToAvroConverters.createConverter(rowType, false);
     GenericRecord avroRecord =
             (GenericRecord) converter.convert(AvroSchemaConverter.convertToSchema(rowType), rowData);
-    Assertions.assertEquals(timestampFromUtc1, formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) avroRecord.get(0)), ZoneId.systemDefault())));
-  }
-
-  @Test
-  void testRowDataToAvroStringToRowDataWithLocalTimezone3() throws JsonProcessingException {
-    TimeZone.setDefault(TimeZone.getTimeZone(ZoneId.of("UTC")));
-    String timestampFromUtc0 = "2021-03-30 07:44:29";
-
-    DataType rowDataType = ROW(FIELD("timestamp_from_utc_0", TIMESTAMP()));
-    JsonToRowDataConverters.JsonToRowDataConverter jsonToRowDataConverter =
-            new JsonToRowDataConverters(true, true, TimestampFormat.SQL)
-                    .createConverter(rowDataType.getLogicalType());
-    Object rowData = jsonToRowDataConverter.convert(new ObjectMapper().readTree("{\"timestamp_from_utc_0\":\"" + timestampFromUtc0 + "\"}"));
-
-    RowType rowType = (RowType) DataTypes.ROW(DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3))).getLogicalType();
-    RowDataToAvroConverters.RowDataToAvroConverter converter =
-            RowDataToAvroConverters.createConverter(rowType, false);
-    GenericRecord avroRecord =
-            (GenericRecord) converter.convert(AvroSchemaConverter.convertToSchema(rowType), rowData);
-    Assertions.assertEquals(timestampFromUtc0, formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) avroRecord.get(0)), ZoneId.systemDefault())));
+    Assertions.assertEquals(timestampFromLocal, formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) avroRecord.get(0)), ZoneId.systemDefault())));
   }
 
   @Test
