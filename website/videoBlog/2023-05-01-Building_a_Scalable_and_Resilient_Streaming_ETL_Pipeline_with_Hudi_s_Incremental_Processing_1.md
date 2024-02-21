@@ -9,8 +9,8 @@ navigate: "https://www.youtube.com/watch?v=eiOzdLrUrhg"
 tags:
 - guide
 - streaming
-- streaming-etl
-- incremental-processing
+- streaming etl
+- incremental processing
 - joins
 - near real-time analytics
 - apache hudi

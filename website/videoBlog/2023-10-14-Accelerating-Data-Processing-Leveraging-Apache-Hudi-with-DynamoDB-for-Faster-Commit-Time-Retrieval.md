@@ -15,8 +15,8 @@ tags:
 - aws lambda
 - aws glue
 - amazon s3
-- incremental ETL
-- batch ETL
+- incremental etl
+- batch etl
 ---
 
 

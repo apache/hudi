@@ -9,7 +9,7 @@ navigate: "https://youtu.be/hm2LKBCGTcU"
 tags:
 - guide
 - streaming ingestion
-- streaming-etl
+- streaming etl
 - joins
 - amazon kinesis
 - apache flink

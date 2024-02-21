@@ -8,8 +8,8 @@ image: /assets/images/video_blogs/2023-06-10-How_to_read_data_from_Multiple_Hudi
 navigate: "https://www.youtube.com/watch?v=tYyh-TNS6-E"
 tags:
 - guide
-- incremental-query
-- incremental-etl
+- incremental query
+- incremental etl
 - joins
 - amazon dynamodb
 - aws glue

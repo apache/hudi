@@ -13,7 +13,7 @@ tags:
 - amazon aurora
 - postgres
 - cdc
-- incremental-query
-- incremental-etl
+- incremental query
+- incremental etl
 - apache hudi
 ---
