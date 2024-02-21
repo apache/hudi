@@ -97,7 +97,7 @@ parameters:
 
 variables:
   BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.18'
-  PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
+  PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=false -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
@@ -109,42 +109,6 @@ variables:
 stages:
   - stage: test
     jobs:
-      - job: UT_FT_1
-        displayName: UT FT common & flink & UT client/spark-client
-        timeoutInMinutes: '150'
-        steps:
-          - task: Maven@4
-            displayName: maven install
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-          - task: Maven@4
-            displayName: UT common flink client/spark-client
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - task: Maven@4
-            displayName: FT common flink
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB1_MODULES)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - script: |
-              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
-            displayName: Top 100 long-running testcases
       - job: UT_FT_2
         displayName: FT client/spark-client & hudi-spark-datasource/hudi-spark
         timeoutInMinutes: '150'
@@ -171,65 +135,20 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
-      - job: UT_FT_3
-        displayName: UT spark-datasource
-        timeoutInMinutes: '240'
-        steps:
-          - task: Maven@4
-            displayName: maven install
+          - task: PublishTestResults@2
             inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-          - task: Maven@4
-            displayName: UT spark-datasource
+              testResultsFiles: '$(System.DefaultWorkingDirectory)/**/target/surefire-reports/*.xml'
+          - task: reportgenerator@5
+            displayName: ReportGenerator
             inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB3_MODULES)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - script: |
-              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
-            displayName: Top 100 long-running testcases
-      - job: UT_FT_4
-        displayName: UT FT other modules
-        timeoutInMinutes: '240'
-        steps:
-          - task: Maven@4
-            displayName: maven install
+              reports: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
+              targetdir: '$(System.DefaultWorkingDirectory)/JacocoResults'
+              reporttypes: Html;XML
+              verbosity: Verbose
+          - task: PublishCodeCoverageResults@1
+            displayName: code coverage result
             inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-          - task: Maven@4
-            displayName: UT other modules
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - task: Maven@4
-            displayName: FT other modules
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - script: |
-              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
-            displayName: Top 100 long-running testcases
+              codeCoverageTool: 'JaCoCo'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/JacocoResults/Summary.xml'
+              reportDirectory: '$(System.DefaultWorkingDirectory)/**/target/site/*/'
+              additionalCodeCoverageFiles: '$(System.DefaultWorkingDirectory)/**/target/jacoco.exec'
