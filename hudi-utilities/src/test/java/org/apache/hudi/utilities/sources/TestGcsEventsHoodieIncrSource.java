@@ -87,7 +87,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
   private static final Schema GCS_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
       TestGcsEventsHoodieIncrSource.class, "/streamer-config/gcs-metadata.avsc", true);
-  private static final String INVALID_FILE_EXTENSION = ".invalid";
+  private static final String IGNORE_FILE_EXTENSION = ".ignore";
 
   private ObjectMapper mapper = new ObjectMapper();
 
@@ -219,11 +219,11 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     // Add file paths and sizes to the list.
     // Check with a couple of invalid file extensions to ensure they are filtered out.
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file1%s", extension), 100L, "1"));
-    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file2%s", INVALID_FILE_EXTENSION), 800L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file2%s", IGNORE_FILE_EXTENSION), 800L, "1"));
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file3%s", extension), 200L, "1"));
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file2%s", extension), 150L, "1"));
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file4%s", extension), 50L, "2"));
-    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file4%s", INVALID_FILE_EXTENSION), 200L, "2"));
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file4%s", IGNORE_FILE_EXTENSION), 200L, "2"));
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file5%s", extension), 150L, "2"));
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
