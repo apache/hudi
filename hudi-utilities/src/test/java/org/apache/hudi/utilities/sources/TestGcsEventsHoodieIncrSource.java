@@ -60,6 +60,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -86,6 +87,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
   private static final Schema GCS_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
       TestGcsEventsHoodieIncrSource.class, "/streamer-config/gcs-metadata.avsc", true);
+  private static final String INVALID_FILE_EXTENSION = ".invalid";
 
   private ObjectMapper mapper = new ObjectMapper();
 
@@ -196,28 +198,44 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file10006.json"), 250L, "1#path/to/file10007.json");
   }
 
-  @Test
-  public void testTwoFilesAndContinueAcrossCommits() throws IOException {
+  @ParameterizedTest
+  @ValueSource(strings = {
+      ".json",
+      ".gz"
+  })
+  public void testTwoFilesAndContinueAcrossCommits(String extension) throws IOException {
     String commitTimeForWrites = "2";
     String commitTimeForReads = "1";
 
     Pair<String, List<HoodieRecord>> inserts = writeGcsMetadataRecords(commitTimeForWrites);
+
+    TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
+    // In the case the extension is explicitly set to something other than the file format.
+    if (!extension.endsWith("json")) {
+      typedProperties.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), extension);
+    }
+
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
-    // Add file paths and sizes to the list
-    filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 100L, "1"));
-    filePathSizeAndCommitTime.add(Triple.of("path/to/file3.json", 200L, "1"));
-    filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 150L, "1"));
-    filePathSizeAndCommitTime.add(Triple.of("path/to/file4.json", 50L, "2"));
-    filePathSizeAndCommitTime.add(Triple.of("path/to/file5.json", 150L, "2"));
+    // Add file paths and sizes to the list.
+    // Check with a couple of invalid file extensions to ensure they are filtered out.
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file1%s", extension), 100L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file2%s", INVALID_FILE_EXTENSION), 800L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file3%s", extension), 200L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file2%s", extension), 150L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file4%s", extension), 50L, "2"));
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file4%s", INVALID_FILE_EXTENSION), 200L, "2"));
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file5%s", extension), 150L, "2"));
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
 
-    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, "1#path/to/file1.json");
-    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file1.json"), 100L, "1#path/to/file2.json");
-    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file2.json"), 1000L, "2#path/to/file5.json");
-    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, "1#path/to/file1.json");
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1"), 100L,
+                  "1#path/to/file1" + extension, typedProperties);
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file1" + extension), 100L,
+                  "1#path/to/file2" + extension, typedProperties);
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file2" + extension), 1000L,
+                  "2#path/to/file5" + extension, typedProperties);
   }
 
   @ParameterizedTest
