@@ -179,6 +179,11 @@ public class HoodieJavaCopyOnWriteTable<T>
   }
 
   @Override
+  public HoodieWriteMetadata<List<WriteStatus>> managePartitionTTL(HoodieEngineContext context, String instantTime) {
+    throw new HoodieNotSupportedException("Manage partition ttl is not supported yet");
+  }
+
+  @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context,
                                                          String instantTime,
                                                          Option<Map<String, String>> extraMetadata) {

@@ -291,6 +291,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   public abstract HoodieWriteMetadata<O> insertOverwriteTable(HoodieEngineContext context, String instantTime, I records);
 
+  /**
+   * Delete expired partition by config
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for the action
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata<O> managePartitionTTL(HoodieEngineContext context, String instantTime);
+
   public HoodieWriteConfig getConfig() {
     return config;
   }
