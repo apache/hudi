@@ -19,10 +19,16 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
+
 /**
  * Supplier for SourceProfile
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface SourceProfileSupplier {
   @SuppressWarnings("rawtypes")
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   SourceProfile getSourceProfile();
 }
