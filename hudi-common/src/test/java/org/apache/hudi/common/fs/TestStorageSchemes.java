@@ -56,6 +56,7 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAtomicCreationSupported("jfs"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("bos"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("ks3"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("nos"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("ofs"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("oci"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("tos"));

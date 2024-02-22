@@ -48,11 +48,9 @@ import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
-import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.generateQueryInfo;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMissingCheckpointStrategy;
@@ -126,8 +124,8 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
                                    SchemaProvider schemaProvider) {
 
     this(props, jsc, spark, schemaProvider,
-        new GcsObjectMetadataFetcher(props, getSourceFileFormat(props)),
-        new CloudDataFetcher(props, getStringWithAltKeys(props, DATAFILE_FORMAT, true)),
+        new GcsObjectMetadataFetcher(props),
+        new CloudDataFetcher(props),
         new QueryRunner(spark, props)
     );
   }
@@ -196,9 +194,4 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
     Option<Dataset<Row>> fileDataRows = gcsObjectDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props, schemaProvider);
     return Pair.of(fileDataRows, queryInfo.getEndInstant());
   }
-
-  private static String getSourceFileFormat(TypedProperties props) {
-    return getStringWithAltKeys(props, SOURCE_FILE_FORMAT, true);
-  }
-
 }

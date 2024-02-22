@@ -155,7 +155,8 @@ object HoodieOptionConfig {
   def mapSqlOptionsToTableConfigs(options: Map[String, String]): Map[String, String] = {
     options.map { case (k, v) =>
       if (sqlOptionKeyToTableConfigKey.contains(k)) {
-        sqlOptionKeyToTableConfigKey(k) -> sqlOptionValueToHoodieConfigValue.getOrElse(v, v)
+        // support table type incase-sensitive
+        sqlOptionKeyToTableConfigKey(k) -> sqlOptionValueToHoodieConfigValue.getOrElse(v.toLowerCase, v)
       } else {
         k -> v
       }

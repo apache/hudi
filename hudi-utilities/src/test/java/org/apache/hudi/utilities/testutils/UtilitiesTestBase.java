@@ -73,6 +73,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -101,7 +103,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
  *
  */
 public class UtilitiesTestBase {
-
+  private static final Logger LOG = LoggerFactory.getLogger(UtilitiesTestBase.class);
   @TempDir
   protected static java.nio.file.Path sharedTempDir;
   protected static FileSystem fs;
@@ -163,38 +165,85 @@ public class UtilitiesTestBase {
   }
 
   @AfterAll
-  public static void cleanUpUtilitiesTestServices() throws IOException {
-    if (fs != null) {
-      fs.delete(new Path(basePath), true);
-      fs.close();
-      fs = null;
+  public static void cleanUpUtilitiesTestServices() {
+    List<String> failedReleases = new ArrayList<>();
+    try {
+      if (fs != null) {
+        fs.delete(new Path(basePath), true);
+        fs.close();
+        fs = null;
+      }
+    } catch (IOException ie) {
+      ie.printStackTrace();
+      failedReleases.add("FileSystem");
     }
-    if (hdfsTestService != null) {
-      hdfsTestService.stop();
-      hdfsTestService = null;
+
+    try {
+      if (hdfsTestService != null) {
+        hdfsTestService.stop();
+        hdfsTestService = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("HdfsTestService");
     }
-    if (hiveServer != null) {
-      hiveServer.stop();
-      hiveServer = null;
+
+    try {
+      if (hiveServer != null) {
+        hiveServer.stop();
+        hiveServer = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("HiveServer");
     }
-    if (hiveTestService != null) {
-      hiveTestService.stop();
-      hiveTestService = null;
+
+    try {
+      if (hiveTestService != null) {
+        hiveTestService.stop();
+        hiveTestService = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("HiveTestService");
     }
-    if (zookeeperTestService != null) {
-      zookeeperTestService.stop();
-      zookeeperTestService = null;
+
+    try {
+      if (zookeeperTestService != null) {
+        zookeeperTestService.stop();
+        zookeeperTestService = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("ZooKeeperTestService");
     }
-    if (jsc != null) {
-      jsc.stop();
-      jsc = null;
+
+    try {
+      if (jsc != null) {
+        jsc.stop();
+        jsc = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("JSC");
     }
-    if (sparkSession != null) {
-      sparkSession.close();
-      sparkSession = null;
+
+    try {
+      if (sparkSession != null) {
+        sparkSession.close();
+        sparkSession = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("SparkSession");
     }
+
     if (context != null) {
       context = null;
+    }
+
+    if (!failedReleases.isEmpty()) {
+      LOG.error("Exception happened during releasing: " + String.join(",", failedReleases));
     }
   }
 
