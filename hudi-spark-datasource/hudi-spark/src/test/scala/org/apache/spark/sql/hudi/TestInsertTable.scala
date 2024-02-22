@@ -392,6 +392,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2", 12.0)
       )
 
+      spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
       assertThrows[HoodieDuplicateKeyException] {
         try {
           spark.sql(s"insert into $tableName select 1, 'a1', 10")
@@ -1186,7 +1187,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test combine before insert") {
-    withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
+    withSQLConf("hoodie.sql.bulk.insert.enable" -> "false", "hoodie.merge.allow.duplicate.on.inserts" -> "false") {
       withRecordType()(withTempDir{tmp =>
         val tableName = generateTableName
         spark.sql(
@@ -1500,6 +1501,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 30.0, 3000, "2021-01-07")
       )
 
+      spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
       spark.sql(
         s"""
            | insert into $tableName values
