@@ -414,7 +414,7 @@ public class StreamSync implements Serializable, Closeable {
             || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
           String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
           String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
-          LOG.info("Seeing new schema. Source: {0}, Target: {1}", sourceStr, targetStr);
+          LOG.info("Seeing new schema. Source: {}, Target: {}", sourceStr, targetStr);
           // We need to recreate write client with new schema and register them.
           reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch());
           if (newSourceSchema != null) {
@@ -988,7 +988,7 @@ public class StreamSync implements Serializable, Closeable {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
           success = true;
         } catch (HoodieMetaSyncException e) {
-          LOG.error("SyncTool class {0} failed with exception {1}",  impl.trim(), e);
+          LOG.error("SyncTool class {} failed with exception {}", impl.trim(), e);
           failedMetaSyncs.put(impl, e);
         }
         long metaSyncTimeNanos = syncContext != null ? syncContext.stop() : 0;
