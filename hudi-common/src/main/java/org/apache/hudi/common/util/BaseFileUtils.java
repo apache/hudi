@@ -107,8 +107,7 @@ public abstract class BaseFileUtils {
     }
 
     return HoodieColumnRangeMetadata.create(
-        one.getFilePath(),
-        one.getColumnName(), minValue, maxValue,
+        null, one.getColumnName(), minValue, maxValue,
         one.getNullCount() + another.getNullCount(),
         one.getValueCount() + another.getValueCount(),
         one.getTotalSize() + another.getTotalSize(),

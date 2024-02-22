@@ -643,16 +643,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     });
   }
 
-  public static Stream<HoodieRecord> createPartitionStatsRecords(String partitionName,
+  public static Stream<HoodieRecord> createPartitionStatsRecords(String partitionPath,
                                                                  Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
                                                                  boolean isDeleted) {
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
-      HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionName, columnRangeMetadata),
+      HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata),
           MetadataPartitionType.PARTITION_STATS.getPartitionPath());
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
-              .setFileName(new Path(columnRangeMetadata.getFilePath()).getName())
+              .setFileName(null)
               .setColumnName(columnRangeMetadata.getColumnName())
               .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
               .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
