@@ -69,7 +69,7 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testNullRecordKeyFields() {
     GenericRecord record = getRecord();
-    Assertions.assertThrows(StringIndexOutOfBoundsException.class, () ->  {
+    Assertions.assertThrows(HoodieKeyException.class, () ->  {
       BaseKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(getPropertiesWithoutRecordKeyProp());
       keyGenerator.getRecordKey(record);
     });
