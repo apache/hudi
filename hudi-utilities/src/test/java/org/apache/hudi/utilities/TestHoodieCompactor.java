@@ -24,12 +24,12 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -43,23 +43,32 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieCompactor extends UtilitiesTestBase {
+public class TestHoodieCompactor {
   @TempDir
   protected static java.nio.file.Path sharedTempDir;
   protected static Configuration hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
   private final FileSystem fs;
-  private final JavaSparkContext jsc;
+  private JavaSparkContext jsc;
   private String base;
   private String schemaFile;
+  private String basePath;
 
   public TestHoodieCompactor() throws IOException {
     fs = FileSystem.getLocal(hadoopConf);
-    jsc = UtilHelpers.buildSparkContext(TestHoodieCompactor.class + "-hoodie", "local[4]");
     basePath = sharedTempDir.toUri().toString();
+  }
+
+  @AfterEach
+  public void tearDown() {
+    if (null != jsc) {
+      jsc.close();
+    }
   }
 
   @BeforeEach
   public void setUp() throws Exception {
+    jsc = UtilHelpers.buildSparkContext(
+        TestHoodieCompactor.class + "-hoodie", "local[4]");
     base = basePath + "base";
     schemaFile = basePath + "schema.avro";
 
