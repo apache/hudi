@@ -172,7 +172,6 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
     }
   }
 
-
   private void writeRecordsForPartition(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String partition, String instantTime) {
     List<HoodieRecord> records = dataGen.generateInsertsForPartition(instantTime, 10, partition);
     client.startCommitWithTime(instantTime);

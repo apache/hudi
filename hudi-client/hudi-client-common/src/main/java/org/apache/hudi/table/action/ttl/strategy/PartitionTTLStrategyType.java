@@ -56,7 +56,7 @@ public enum PartitionTTLStrategyType {
     throw new IllegalArgumentException("No PartitionTTLStrategyType found for class name: " + className);
   }
 
-  public static List<String> getNames() {
+  public static List<String> getPartitionTTLStrategyNames() {
     List<String> names = new ArrayList<>(PartitionTTLStrategyType.values().length);
     Arrays.stream(PartitionTTLStrategyType.values())
         .forEach(x -> names.add(x.name()));
