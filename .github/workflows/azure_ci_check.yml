@@ -25,7 +25,6 @@ on:
 
 permissions:
   issues: read
-  pull_requests: read
 
 jobs:
   check-azure-ci-report:
