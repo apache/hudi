@@ -24,6 +24,7 @@ on:
     types: [ created, edited, deleted ]
 
 permissions:
+  pull-requests: read
   issues: read
 
 jobs:
