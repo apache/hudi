@@ -20,6 +20,8 @@ name: Azure CI
 on:
   pull_request:
     types: [ opened, reopened, synchronize, edited ]
+  pull_request_review:
+    types: [ submitted, edited, dismissed ]
   issue_comment:
     types: [ created, edited, deleted ]
 
