@@ -23,6 +23,9 @@ on:
   issue_comment:
     types: [ created, edited, deleted ]
 
+permissions:
+  contents: read
+
 jobs:
   check-azure-ci-report:
     runs-on: ubuntu-latest
