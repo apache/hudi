@@ -32,8 +32,8 @@ import java.util.stream.Collectors;
  */
 public class KeepByCreationTimeStrategy extends KeepByTimeStrategy {
 
-  public KeepByCreationTimeStrategy(HoodieTable hoodieTable) {
-    super(hoodieTable);
+  public KeepByCreationTimeStrategy(HoodieTable hoodieTable, String instantTime) {
+    super(hoodieTable, instantTime);
   }
 
   @Override

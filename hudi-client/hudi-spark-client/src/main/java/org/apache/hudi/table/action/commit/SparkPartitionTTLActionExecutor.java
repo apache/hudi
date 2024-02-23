@@ -48,7 +48,7 @@ public class SparkPartitionTTLActionExecutor<T>
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     try {
-      PartitionTTLStrategy strategy = HoodiePartitionTTLStrategyFactory.createStrategy(table, config.getProps());
+      PartitionTTLStrategy strategy = HoodiePartitionTTLStrategyFactory.createStrategy(table, config.getProps(), instantTime);
       List<String> expiredPartitions = strategy.getExpiredPartitionPaths();
       LOG.info("Partition ttl find the following expired partitions to delete:  " + String.join(",", expiredPartitions));
       return new SparkDeletePartitionCommitActionExecutor<>(context, config, table, instantTime, expiredPartitions).execute();

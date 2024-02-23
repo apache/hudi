@@ -2700,8 +2700,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * TTL configs.
    */
-  public boolean isAutoPartitionTTL() {
-    return getBoolean(HoodieTTLConfig.AUTO_PARTITION_TTL);
+  public boolean isInlinePartitionTTLEnable() {
+    return getBoolean(HoodieTTLConfig.INLINE_PARTITION_TTL);
   }
 
   public String getPartitionTTLStrategyClassName() {

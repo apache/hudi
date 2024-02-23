@@ -46,16 +46,14 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
 
   protected final long ttlInMilis;
 
-  protected final Option<HoodieInstant> lastCompletedInstant;
-
-  public KeepByTimeStrategy(HoodieTable hoodieTable) {
-    super(hoodieTable);
+  public KeepByTimeStrategy(HoodieTable hoodieTable, String instantTime) {
+    super(hoodieTable, instantTime);
     this.ttlInMilis = writeConfig.getPartitionTTLStrategyDaysRetain() * 1000 * 3600 * 24;
-    this.lastCompletedInstant = hoodieTable.getActiveTimeline().filterCompletedInstants().lastInstant();
   }
 
   @Override
   public List<String> getExpiredPartitionPaths() {
+    Option<HoodieInstant> lastCompletedInstant = hoodieTable.getActiveTimeline().filterCompletedInstants().lastInstant();
     if (!lastCompletedInstant.isPresent() || ttlInMilis <= 0
         || !hoodieTable.getMetaClient().getTableConfig().getPartitionFields().isPresent()) {
       return Collections.emptyList();
@@ -87,7 +85,7 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
     int statsParallelism = Math.min(partitionPaths.size(), 200);
     return hoodieTable.getContext().map(partitionPaths, partitionPath -> {
       Option<String> partitionLastModifiedTime = hoodieTable.getHoodieView()
-          .getLatestFileSlicesBeforeOrOn(partitionPath, lastCompletedInstant.get().getTimestamp(), true)
+          .getLatestFileSlicesBeforeOrOn(partitionPath, instantTime, true)
           .map(FileSlice::getBaseInstantTime)
           .max(Comparator.naturalOrder())
           .map(Option::ofNullable)
@@ -106,7 +104,7 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
    */
   protected boolean isPartitionExpired(String referenceTime) {
     String expiredTime = instantTimePlusMillis(fixInstantTimeCompatibility(referenceTime), ttlInMilis);
-    return fixInstantTimeCompatibility(lastCompletedInstant.get().getTimestamp()).compareTo(expiredTime) > 0;
+    return fixInstantTimeCompatibility(instantTime).compareTo(expiredTime) > 0;
   }
 
 }

@@ -596,7 +596,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
 
     //  Do an inline partition ttl management if enabled
-    if (config.isAutoPartitionTTL()) {
+    if (config.isInlinePartitionTTLEnable()) {
       String instantTime = createNewInstantTime();
       table.managePartitionTTL(table.getContext(), instantTime);
     }

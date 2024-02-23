@@ -31,13 +31,19 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.ttl.strategy.PartitionTTLStrategyType;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 
 import com.github.davidmoten.guavamini.Sets;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
@@ -64,7 +70,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
   }
 
   @Test
-  void testKeepByCreationTime() {
+  public void testKeepByCreationTime() {
     final HoodieWriteConfig cfg = getConfigBuilder(true)
         .withPath(metaClient.getBasePathV2().toString())
         .withTTLConfig(HoodieTTLConfig
@@ -91,11 +97,12 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
       HoodieWriteResult result = client.managePartitionTTL(client.createNewInstantTime());
 
       Assertions.assertEquals(Sets.newHashSet(partitionPath0, partitionPath1), result.getPartitionToReplaceFileIds().keySet());
+      Assertions.assertEquals(10, readRecords(new String[] {partitionPath0, partitionPath1, partitionPath2}).size());
     }
   }
 
   @Test
-  void testKeepByTime() {
+  public void testKeepByTime() {
     final HoodieWriteConfig cfg = getConfigBuilder(true)
         .withPath(metaClient.getBasePathV2().toString())
         .withTTLConfig(HoodieTTLConfig
@@ -122,14 +129,61 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
       HoodieWriteResult result = client.managePartitionTTL(client.createNewInstantTime());
 
       Assertions.assertEquals(Sets.newHashSet(partitionPath0, partitionPath1), result.getPartitionToReplaceFileIds().keySet());
+
+      // remain 10 rows
+      Assertions.assertEquals(10, readRecords(new String[] {partitionPath0, partitionPath1, partitionPath2}).size());
     }
   }
+
+  @Test
+  public void testInlinePartitionTTL() {
+    final HoodieWriteConfig cfg = getConfigBuilder(true)
+        .withPath(metaClient.getBasePathV2().toString())
+        .withTTLConfig(HoodieTTLConfig
+            .newBuilder()
+            .withTTLDaysRetain(10)
+            .withTTLStrategyType(PartitionTTLStrategyType.KEEP_BY_TIME)
+            .enableInlinePartitionTTL(true)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
+        .build();
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      String partitionPath0 = dataGen.getPartitionPaths()[0];
+      String instant0 = getCommitTimeAtUTC(0);
+      writeRecordsForPartition(client, dataGen, partitionPath0, instant0);
+
+      // All records will be deleted
+      Assertions.assertEquals(0, readRecords(new String[] {partitionPath0}).size());
+
+      String instant1 = getCommitTimeAtUTC(1000);
+      String partitionPath1 = dataGen.getPartitionPaths()[1];
+      writeRecordsForPartition(client, dataGen, partitionPath1, instant1);
+
+      // All records will be deleted
+      Assertions.assertEquals(0, readRecords(new String[] {partitionPath1}).size());
+
+      String currentInstant = client.createNewInstantTime();
+      String partitionPath2 = dataGen.getPartitionPaths()[2];
+      writeRecordsForPartition(client, dataGen, partitionPath2, currentInstant);
+
+      // remain 10 rows
+      Assertions.assertEquals(10, readRecords(new String[] {partitionPath2}).size());
+    }
+  }
+
 
   private void writeRecordsForPartition(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String partition, String instantTime) {
     List<HoodieRecord> records = dataGen.generateInsertsForPartition(instantTime, 10, partition);
     client.startCommitWithTime(instantTime);
     JavaRDD writeStatuses = client.insert(jsc.parallelize(records, 1), instantTime);
     client.commit(instantTime, writeStatuses);
+  }
+
+  private List<GenericRecord> readRecords(String[] partitions) {
+    return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf,
+        Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()),
+        basePath, new JobConf(hadoopConf), true, false);
   }
 
 }

@@ -41,8 +41,8 @@ public class HoodieTTLConfig extends HoodieConfig {
 
   public static final String KEEP_BY_TIME_PARTITION_TTL_STRATEGY =
       "org.apache.hudi.table.action.ttl.strategy.KeepByTimeStrategy";
-  public static final ConfigProperty<Boolean> AUTO_PARTITION_TTL = ConfigProperty
-      .key("hoodie.partition.ttl.automatic")
+  public static final ConfigProperty<Boolean> INLINE_PARTITION_TTL = ConfigProperty
+      .key("hoodie.partition.ttl.inline")
       .defaultValue(false)
       .sinceVersion("1.0.0")
       .markAdvanced()
@@ -97,8 +97,8 @@ public class HoodieTTLConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieTTLConfig.Builder enableAutoPartitionTTL(Boolean enable) {
-      ttlConfig.setValue(AUTO_PARTITION_TTL, enable.toString());
+    public HoodieTTLConfig.Builder enableInlinePartitionTTL(Boolean enable) {
+      ttlConfig.setValue(INLINE_PARTITION_TTL, enable.toString());
       return this;
     }
 

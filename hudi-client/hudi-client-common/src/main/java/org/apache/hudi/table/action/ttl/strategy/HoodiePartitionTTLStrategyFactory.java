@@ -44,10 +44,11 @@ public class HoodiePartitionTTLStrategyFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodiePartitionTTLStrategyFactory.class);
 
-  public static PartitionTTLStrategy createStrategy(HoodieTable hoodieTable, TypedProperties props) throws IOException {
+  public static PartitionTTLStrategy createStrategy(HoodieTable hoodieTable, TypedProperties props, String instantTime) throws IOException {
     String strategyClassName = getPartitionTTLStrategyClassName(props);
     try {
-      return (PartitionTTLStrategy) ReflectionUtils.loadClass(strategyClassName, new Class<?>[] {HoodieTable.class}, hoodieTable);
+      return (PartitionTTLStrategy) ReflectionUtils.loadClass(strategyClassName,
+          new Class<?>[] {HoodieTable.class, String.class}, hoodieTable, instantTime);
     } catch (Throwable e) {
       throw new IOException("Could not load partition ttl management strategy class " + strategyClassName, e);
     }

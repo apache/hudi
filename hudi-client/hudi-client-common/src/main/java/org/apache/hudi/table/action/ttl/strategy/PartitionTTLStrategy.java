@@ -40,10 +40,12 @@ public abstract class PartitionTTLStrategy implements TTLStrategy, Serializable 
 
   protected final HoodieTable hoodieTable;
   protected final HoodieWriteConfig writeConfig;
+  protected final String instantTime;
 
-  public PartitionTTLStrategy(HoodieTable hoodieTable) {
+  public PartitionTTLStrategy(HoodieTable hoodieTable, String instantTime) {
     this.writeConfig = hoodieTable.getConfig();
     this.hoodieTable = hoodieTable;
+    this.instantTime = instantTime;
   }
 
   /**
