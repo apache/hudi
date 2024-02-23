@@ -10,9 +10,6 @@ jobs:
   check-azure-ci-report:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
       - name: Get last commit hash
         id: last_commit
         uses: actions/github-script@v5
@@ -30,7 +27,6 @@ jobs:
           script: |
             const lastCommitHash = '${{ steps.last_commit.outputs.last_commit_hash }}'
             const botUsername = 'hudi-bot';
-            const contentToCheck = 'specific content';
             
             const issueNumber = context.payload.pull_request.number;
             const comments = await github.rest.issues.listComments({
@@ -66,7 +62,7 @@ jobs:
                 return false;
               }
             } else {
-              console.log(`PR comments do not contain Azure CI report.`);
-              core.setFailed("PR comments do not contain Azure CI report.");
+              console.log(`Azure CI report does not seem to be ready yet.`);
+              core.setFailed("Azure CI report does not seem to be ready yet.");
               return false;
             }
