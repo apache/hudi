@@ -71,12 +71,13 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
 
   public AvroKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                          SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
-    this(props, sparkContext, sparkSession, metrics, new DefaultStreamContext(UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, props, sparkContext), Option.empty()));
+    this(props, sparkContext, sparkSession, metrics, new DefaultStreamContext(schemaProvider, Option.empty()));
   }
 
   public AvroKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession, HoodieIngestionMetrics metrics, StreamContext streamContext) {
-    super(properties, sparkContext, sparkSession, SourceType.AVRO, metrics, streamContext);
-    this.originalSchemaProvider = schemaProvider;
+    super(properties, sparkContext, sparkSession, SourceType.AVRO, metrics,
+        new DefaultStreamContext(UtilHelpers.getSchemaProviderForKafkaSource(streamContext.getSchemaProvider(), properties, sparkContext), Option.empty()));
+    this.originalSchemaProvider = streamContext.getSchemaProvider();
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
     deserializerClassName = getStringWithAltKeys(props, KAFKA_AVRO_VALUE_DESERIALIZER_CLASS, true);
