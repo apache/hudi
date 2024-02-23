@@ -27,8 +27,6 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
-import org.apache.hudi.utilities.streamer.DefaultStreamContext;
-import org.apache.hudi.utilities.streamer.StreamContext;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -71,11 +69,9 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
 
   public AvroKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                          SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
-    this(props, sparkContext, sparkSession, metrics, new DefaultStreamContext(UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, props, sparkContext), Option.empty()));
-  }
-
-  public AvroKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession, HoodieIngestionMetrics metrics, StreamContext streamContext) {
-    super(properties, sparkContext, sparkSession, SourceType.AVRO, metrics, streamContext);
+    super(props, sparkContext, sparkSession,
+        UtilHelpers.getSchemaProviderForKafkaSource(schemaProvider, props, sparkContext),
+        SourceType.AVRO, metrics);
     this.originalSchemaProvider = schemaProvider;
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
