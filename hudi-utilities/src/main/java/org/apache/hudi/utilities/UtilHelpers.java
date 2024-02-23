@@ -165,7 +165,7 @@ public class UtilHelpers {
         return (Source) ReflectionUtils.loadClass(sourceClass,
             new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class,
-                HoodieIngestionMetrics.class, streamContext.getClass()},
+                HoodieIngestionMetrics.class, StreamContext.class},
             cfg, jssc, sparkSession, metrics, streamContext);
       } catch (HoodieException e) {
         return createSource(sourceClass, cfg, jssc, sparkSession, streamContext.getSchemaProvider(), metrics);
