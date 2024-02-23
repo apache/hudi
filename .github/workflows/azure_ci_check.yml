@@ -24,7 +24,8 @@ on:
     types: [ created, edited, deleted ]
 
 permissions:
-  contents: read
+  issues: read
+  pull_requests: read
 
 jobs:
   check-azure-ci-report:
