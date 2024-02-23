@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   check-azure-ci-report:
-    if: "!contains(github.event.pull_request.body, 'HOTFIX: SKIP CI')"
+    if: "!contains(github.event.pull_request.body, 'HOTFIX: SKIP AZURE CI')"
     runs-on: ubuntu-latest
     steps:
       - name: Get last commit hash
