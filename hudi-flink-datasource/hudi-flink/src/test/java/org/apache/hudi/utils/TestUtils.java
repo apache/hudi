@@ -37,8 +37,7 @@ import org.apache.flink.core.fs.Path;
 
 import javax.annotation.Nullable;
 
-import java.nio.charset.StandardCharsets;
-
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -133,6 +132,6 @@ public class TestUtils {
 
   public static void saveInstantAsComplete(HoodieTableMetaClient metaClient, HoodieInstant instant, HoodieCommitMetadata metadata) throws Exception {
     metaClient.getActiveTimeline().saveAsComplete(new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
-        Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        Option.of(getUTF8Bytes(metadata.toJsonString())));
   }
 }

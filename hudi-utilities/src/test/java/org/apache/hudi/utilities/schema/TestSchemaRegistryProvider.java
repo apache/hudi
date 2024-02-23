@@ -31,8 +31,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.nio.charset.StandardCharsets;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.eq;
@@ -73,7 +73,7 @@ class TestSchemaRegistryProvider {
   }
 
   private static SchemaRegistryProvider getUnderTest(TypedProperties props) throws IOException {
-    InputStream is = new ByteArrayInputStream(REGISTRY_RESPONSE.getBytes(StandardCharsets.UTF_8));
+    InputStream is = new ByteArrayInputStream(getUTF8Bytes(REGISTRY_RESPONSE));
     SchemaRegistryProvider spyUnderTest = Mockito.spy(new SchemaRegistryProvider(props, null));
     Mockito.doReturn(is).when(spyUnderTest).getStream(Mockito.any());
     return spyUnderTest;

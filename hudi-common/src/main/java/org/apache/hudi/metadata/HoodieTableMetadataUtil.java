@@ -119,6 +119,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
@@ -468,7 +469,7 @@ public class HoodieTableMetadataUtil {
             LOG.error("Failed to read bloom filter for " + writeFilePath);
             return Collections.emptyListIterator();
           }
-          ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
+          ByteBuffer bloomByteBuffer = ByteBuffer.wrap(getUTF8Bytes(fileBloomFilter.serializeToString()));
           HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
               partition, fileName, instantTime, recordsGenerationParams.getBloomFilterType(), bloomByteBuffer, false);
           return Collections.singletonList(record).iterator();
@@ -896,7 +897,7 @@ public class HoodieTableMetadataUtil {
       if (fileBloomFilter == null) {
         return null;
       }
-      return ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
+      return ByteBuffer.wrap(getUTF8Bytes(fileBloomFilter.serializeToString()));
     }
   }
 

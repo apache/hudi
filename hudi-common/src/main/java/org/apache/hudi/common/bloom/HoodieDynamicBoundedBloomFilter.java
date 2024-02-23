@@ -28,7 +28,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Hoodie's dynamic bloom bounded bloom filter. This is based largely on Hadoop's DynamicBloomFilter, but with a bound
@@ -77,7 +78,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
 
   @Override
   public void add(String key) {
-    add(key.getBytes(StandardCharsets.UTF_8));
+    add(getUTF8Bytes(key));
   }
 
   @Override
@@ -87,7 +88,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
 
   @Override
   public boolean mightContain(String key) {
-    return internalDynamicBloomFilter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    return internalDynamicBloomFilter.membershipTest(new Key(getUTF8Bytes(key)));
   }
 
   @Override

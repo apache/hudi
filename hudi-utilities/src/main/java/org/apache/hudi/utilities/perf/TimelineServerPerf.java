@@ -62,6 +62,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 public class TimelineServerPerf implements Serializable {
 
   private static final long serialVersionUID = 1L;
@@ -200,7 +202,7 @@ public class TimelineServerPerf implements Serializable {
 
     private void addHeader() throws IOException {
       String header = "Partition,Thread,Min,Max,Mean,Median,75th,95th\n";
-      outputStream.write(header.getBytes());
+      outputStream.write(getUTF8Bytes(header));
       outputStream.flush();
     }
 
@@ -210,7 +212,7 @@ public class TimelineServerPerf implements Serializable {
             x.medianTime, x.p75, x.p95);
         System.out.println(row);
         try {
-          outputStream.write(row.getBytes());
+          outputStream.write(getUTF8Bytes(row));
         } catch (IOException e) {
           throw new RuntimeException(e);
         }

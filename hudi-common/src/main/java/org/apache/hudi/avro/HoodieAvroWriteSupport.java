@@ -21,13 +21,13 @@ package org.apache.hudi.avro;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.Schema;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -79,7 +79,7 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
 
     @Override
     protected byte[] getUTF8Bytes(String key) {
-      return key.getBytes(StandardCharsets.UTF_8);
+      return StringUtils.getUTF8Bytes(key);
     }
   }
 }

@@ -60,7 +60,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -81,6 +80,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -387,7 +387,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("distance_in_meters", rand.nextInt());
     rec.put("seconds_since_epoch", rand.nextLong());
     rec.put("weight", rand.nextFloat());
-    byte[] bytes = "Canada".getBytes();
+    byte[] bytes = getUTF8Bytes("Canada");
     rec.put("nation", ByteBuffer.wrap(bytes));
     long randomMillis = genRandomTimeMillis(rand);
     Instant instant = Instant.ofEpochMilli(randomMillis);
@@ -525,7 +525,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   private static void createMetadataFile(String f, String basePath, Configuration configuration, HoodieCommitMetadata commitMetadata) {
     try {
-      createMetadataFile(f, basePath, configuration, commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+      createMetadataFile(f, basePath, configuration, getUTF8Bytes(commitMetadata.toJsonString()));
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
     }
@@ -618,7 +618,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
       // Write empty commit metadata
-      os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+      os.writeBytes(new String(getUTF8Bytes(commitMetadata.toJsonString())));
     }
   }
 

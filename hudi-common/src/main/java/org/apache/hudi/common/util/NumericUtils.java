@@ -20,10 +20,11 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieException;
 
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * A utility class for numeric.
@@ -46,7 +47,7 @@ public class NumericUtils {
     } catch (NoSuchAlgorithmException e) {
       throw new HoodieException(e);
     }
-    return asLong(Objects.requireNonNull(md).digest(string.getBytes(StandardCharsets.UTF_8)));
+    return asLong(Objects.requireNonNull(md).digest(getUTF8Bytes(string)));
   }
 
   public static long asLong(byte[] bytes) {

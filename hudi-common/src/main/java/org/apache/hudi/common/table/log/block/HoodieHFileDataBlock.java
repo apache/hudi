@@ -58,6 +58,7 @@ import java.util.Properties;
 import java.util.TreeMap;
 import java.util.function.Supplier;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -153,14 +154,14 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // Write the records
     sortedRecordsMap.forEach((recordKey, recordBytes) -> {
       try {
-        KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, recordBytes);
+        KeyValue kv = new KeyValue(getUTF8Bytes(recordKey), null, null, recordBytes);
         writer.append(kv);
       } catch (IOException e) {
         throw new HoodieIOException("IOException serializing records", e);
       }
     });
 
-    writer.appendFileInfo(HoodieAvroHFileReader.SCHEMA_KEY.getBytes(), getSchema().toString().getBytes());
+    writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.SCHEMA_KEY), getUTF8Bytes(getSchema().toString()));
 
     writer.close();
     ostream.flush();

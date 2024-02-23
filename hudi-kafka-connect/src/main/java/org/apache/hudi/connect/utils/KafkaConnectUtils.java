@@ -47,7 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -61,6 +60,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Helper methods for Kafka.
@@ -232,7 +233,7 @@ public class KafkaConnectUtils {
       LOG.error("Fatal error selecting hash algorithm", e);
       throw new HoodieException(e);
     }
-    byte[] digest = Objects.requireNonNull(md).digest(stringToHash.getBytes(StandardCharsets.UTF_8));
+    byte[] digest = Objects.requireNonNull(md).digest(getUTF8Bytes(stringToHash));
     return StringUtils.toHexString(digest).toUpperCase();
   }
 

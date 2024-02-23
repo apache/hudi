@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX;
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX;
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.getTimestampFromFile;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Utilities class for consistent bucket index metadata management.
@@ -208,7 +209,7 @@ public class ConsistentBucketIndexUtils {
     if (fs.exists(fullPath)) {
       return;
     }
-    FileIOUtils.createFileInPath(fs, fullPath, Option.of(StringUtils.EMPTY_STRING.getBytes()));
+    FileIOUtils.createFileInPath(fs, fullPath, Option.of(getUTF8Bytes(StringUtils.EMPTY_STRING)));
   }
 
   /***

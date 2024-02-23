@@ -76,7 +76,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -103,6 +102,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -428,7 +428,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       metadataWriter.updateFromWriteStatuses(commitMeta, context.emptyHoodieData(), instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
           new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-          Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          Option.of(getUTF8Bytes(commitMeta.toJsonString())));
     } else {
       commitMeta = generateCommitMetadata(instantTime, new HashMap<>());
     }
@@ -552,7 +552,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // if there are damaged archive files and damaged plan, hoodie need throw ioe while loading archived timeline.
     Path damagedFile = new Path(metaClient.getArchivePath(), ".commits_.archive.300_1-0-1");
-    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, Option.of(getUTF8Bytes(s)));
 
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }

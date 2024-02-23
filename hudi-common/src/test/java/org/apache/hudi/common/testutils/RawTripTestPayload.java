@@ -52,6 +52,7 @@ import java.util.zip.InflaterInputStream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Example row change event based on some example data used by testcases. The data avro schema is
@@ -245,7 +246,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DeflaterOutputStream dos = new DeflaterOutputStream(baos, new Deflater(Deflater.BEST_COMPRESSION), true);
     try {
-      dos.write(jsonData.getBytes());
+      dos.write(getUTF8Bytes(jsonData));
     } finally {
       dos.flush();
       dos.close();

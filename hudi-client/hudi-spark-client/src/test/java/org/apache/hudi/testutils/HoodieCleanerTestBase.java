@@ -43,7 +43,6 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +51,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.bootstrap.TestBootstrapIndex.generateBootstrapIndex;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -210,7 +210,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     metadataWriter.updateFromWriteStatuses(commitMeta, context.emptyHoodieData(), instantTime);
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-        Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        Option.of(getUTF8Bytes(commitMeta.toJsonString())));
     metaClient = HoodieTableMetaClient.reload(metaClient);
   }
 

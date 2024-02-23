@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -70,8 +71,8 @@ public class TestStringUtils {
     assertEquals("Test String", StringUtils.objToString("Test String"));
 
     // assert byte buffer
-    ByteBuffer byteBuffer1 = ByteBuffer.wrap("1234".getBytes());
-    ByteBuffer byteBuffer2 = ByteBuffer.wrap("5678".getBytes());
+    ByteBuffer byteBuffer1 = ByteBuffer.wrap(getUTF8Bytes("1234"));
+    ByteBuffer byteBuffer2 = ByteBuffer.wrap(getUTF8Bytes("5678"));
     // assert equal because ByteBuffer has overwritten the toString to return a summary string
     assertEquals(byteBuffer1.toString(), byteBuffer2.toString());
     // assert not equal
@@ -103,7 +104,7 @@ public class TestStringUtils {
   @Test
   public void testHexString() {
     String str = "abcd";
-    assertEquals(StringUtils.toHexString(str.getBytes()), toHexString(str.getBytes()));
+    assertEquals(StringUtils.toHexString(getUTF8Bytes(str)), toHexString(getUTF8Bytes(str)));
   }
 
   private static String toHexString(byte[] bytes) {

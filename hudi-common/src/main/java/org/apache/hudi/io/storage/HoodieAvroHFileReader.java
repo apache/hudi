@@ -24,10 +24,10 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -62,6 +62,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -154,8 +155,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   public String[] readMinMaxRecordKeys() {
     // NOTE: This access to reader is thread-safe
     HFileInfo fileInfo = getSharedHFileReader().getHFileInfo();
-    return new String[]{new String(fileInfo.get(KEY_MIN_RECORD.getBytes())),
-        new String(fileInfo.get(KEY_MAX_RECORD.getBytes()))};
+    return new String[] {new String(fileInfo.get(getUTF8Bytes(KEY_MIN_RECORD))),
+        new String(fileInfo.get(getUTF8Bytes(KEY_MAX_RECORD)))};
   }
 
   @Override
@@ -169,7 +170,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
       byte[] bytes = new byte[buf.remaining()];
       buf.get(bytes);
       return BloomFilterFactory.fromString(new String(bytes),
-          new String(fileInfo.get(KEY_BLOOM_FILTER_TYPE_CODE.getBytes())));
+          new String(fileInfo.get(getUTF8Bytes(KEY_BLOOM_FILTER_TYPE_CODE))));
     } catch (IOException e) {
       throw new HoodieException("Could not read bloom filter from " + path, e);
     }
@@ -291,7 +292,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   }
 
   private boolean isKeyAvailable(String key, HFileScanner keyScanner) throws IOException {
-    final KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
+    final KeyValue kv = new KeyValue(getUTF8Bytes(key), null, null, null);
     return keyScanner.seekTo(kv) == 0;
   }
 
@@ -299,7 +300,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
                                                                               String keyPrefix,
                                                                               Schema writerSchema,
                                                                               Schema readerSchema) throws IOException {
-    KeyValue kv = new KeyValue(keyPrefix.getBytes(), null, null, null);
+    KeyValue kv = new KeyValue(getUTF8Bytes(keyPrefix), null, null, null);
 
     // NOTE: HFile persists both keys/values as bytes, therefore lexicographical sorted is
     //       essentially employed
@@ -377,7 +378,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   }
 
   private static Option<IndexedRecord> fetchRecordByKeyInternal(HFileScanner scanner, String key, Schema writerSchema, Schema readerSchema) throws IOException {
-    KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
+    KeyValue kv = new KeyValue(getUTF8Bytes(key), null, null, null);
     // NOTE: HFile persists both keys/values as bytes, therefore lexicographical sorted is
     //       essentially employed
     //
@@ -400,7 +401,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // key is found and the cursor is left where the key is found
     Cell c = scanner.getCell();
     byte[] valueBytes = copyValueFromCell(c);
-    GenericRecord record = deserialize(key.getBytes(), valueBytes, writerSchema, readerSchema);
+    GenericRecord record = deserialize(getUTF8Bytes(key), valueBytes, writerSchema, readerSchema);
 
     return Option.of(record);
   }
@@ -440,7 +441,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
   private static Schema fetchSchema(HFile.Reader reader) {
     HFileInfo fileInfo = reader.getHFileInfo();
-    return new Schema.Parser().parse(new String(fileInfo.get(SCHEMA_KEY.getBytes())));
+    return new Schema.Parser().parse(new String(fileInfo.get(getUTF8Bytes(SCHEMA_KEY))));
   }
 
   private static byte[] copyKeyFromCell(Cell cell) {

@@ -32,7 +32,6 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -42,6 +41,7 @@ import java.util.UUID;
 
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
@@ -114,7 +114,7 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
   static void createFileWithMetadata(String basePath, Configuration configuration, String name, String content) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
     try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
-      os.writeBytes(new String(content.getBytes(StandardCharsets.UTF_8)));
+      os.writeBytes(new String(getUTF8Bytes(content)));
     }
   }
 

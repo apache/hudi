@@ -112,6 +112,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -968,7 +969,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out a length that does not confirm with the content
     outputStream.writeLong(400);
     // Write out incomplete content
-    outputStream.write("something-random".getBytes());
+    outputStream.write(getUTF8Bytes("something-random"));
     outputStream.flush();
     outputStream.close();
 
@@ -999,7 +1000,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out a length that does not confirm with the content
     outputStream.writeLong(500);
     // Write out some bytes
-    outputStream.write("something-else-random".getBytes());
+    outputStream.write(getUTF8Bytes("something-else-random"));
     outputStream.flush();
     outputStream.close();
 
@@ -1118,7 +1119,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out a length that does not confirm with the content
     outputStream.writeLong(400);
     // Write out incomplete content
-    outputStream.write("something-random".getBytes());
+    outputStream.write(getUTF8Bytes("something-random"));
     // get corrupt block end position
     long corruptBlockEndPos = outputStream.getPos();
     outputStream.flush();
@@ -1297,8 +1298,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Write out some header
     outputStream.write(HoodieLogBlock.getLogMetadataBytes(header));
-    outputStream.writeLong("something-random".getBytes().length);
-    outputStream.write("something-random".getBytes());
+    outputStream.writeLong(getUTF8Bytes("something-random").length);
+    outputStream.write(getUTF8Bytes("something-random"));
     outputStream.flush();
     outputStream.close();
 
@@ -2594,7 +2595,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out some metadata
     // TODO : test for failure to write metadata - NA ?
     outputStream.write(HoodieLogBlock.getLogMetadataBytes(header));
-    outputStream.write("something-random".getBytes());
+    outputStream.write(getUTF8Bytes("something-random"));
     outputStream.flush();
     outputStream.close();
 
@@ -2952,7 +2953,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out a length that does not confirm with the content
     outputStream.writeLong(400);
     // Write out incomplete content
-    outputStream.write("something-random".getBytes());
+    outputStream.write(getUTF8Bytes("something-random"));
     outputStream.flush();
     outputStream.close();
 
