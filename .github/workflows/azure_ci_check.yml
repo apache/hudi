@@ -34,6 +34,7 @@ jobs:
         id: last_commit
         uses: actions/github-script@v5
         with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             const pr = context.payload.pull_request;
             const lastCommitHash = pr.head.sha;
@@ -44,6 +45,7 @@ jobs:
       - name: Check Azure CI report in PR comment
         uses: actions/github-script@v5
         with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             const lastCommitHash = '${{ steps.last_commit.outputs.last_commit_hash }}'
             const botUsername = 'hudi-bot';
@@ -86,3 +88,5 @@ jobs:
               core.setFailed("Azure CI report does not seem to be ready yet.");
               return false;
             }
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
