@@ -26,7 +26,6 @@ import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 
-import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
@@ -195,12 +194,13 @@ public class HoodieRealtimeRecordReaderUtils {
         Writable[] recordValues = new Writable[schema.getFields().size()];
         int recordValueIndex = 0;
         for (Schema.Field field : schema.getFields()) {
-          // TODO Revisit Avro exception handling in future
           Object fieldValue = null;
-          try {
+          if (record.getSchema().getField(field.name()) != null) {
             fieldValue = record.get(field.name());
-          } catch (AvroRuntimeException e) {
-            LOG.debug("Field:" + field.name() + "not found in Schema:" + schema);
+          } else {
+            if (LOG.isDebugEnabled()) {
+              LOG.debug("Field:" + field.name() + "not found in Schema:" + schema);
+            }
           }
           recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema(), supportTimestamp);
         }
