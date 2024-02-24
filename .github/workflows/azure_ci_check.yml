@@ -18,16 +18,21 @@
 name: Azure CI
 
 on:
+  pull_request:
+    types: [ opened, edited, reopened, synchronize ]
   issue_comment:
     types: [ created, edited, deleted ]
 
 permissions:
+  checks: write
   pull-requests: read
   issues: read
 
 jobs:
   check-azure-ci-report:
-    if: "!contains(github.event.pull_request.body, 'HOTFIX: SKIP AZURE CI')"
+    if: true #|
+    #github.event.issue.pull_request != null &&
+    #!contains(github.event.pull_request.body, 'HOTFIX: SKIP AZURE CI')
     runs-on: ubuntu-latest
     steps:
       - name: Get last commit hash
@@ -36,13 +41,20 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            const pr = context.payload.pull_request;
-            const lastCommitHash = pr.head.sha;
-            console.log(`Last commit hash: ${lastCommitHash}`);
+            const issueNumber = 10740; // github.event.issue.number;
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: issueNumber
+            });
+            
+            const commitHash = pullRequest.head.sha;
+            console.log(`Latest commit hash: ${commitHash}`);
             // Set the output variable to be used in subsequent step
-            core.setOutput("last_commit_hash", lastCommitHash);
+            core.setOutput("last_commit_hash", commitHash);
 
       - name: Check Azure CI report in PR comment
+        id: check_report_in_pr_comment
         uses: actions/github-script@v7
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
@@ -61,32 +73,69 @@ jobs:
             const botComments = comments.data.filter(comment => comment.user.login === botUsername);
             const lastComment = botComments.pop();
             
+            let message = '';
+            let result = false;
+            
             if (lastComment) {
               const reportPrefix = '${lastCommitHash} Azure: '
               const successReportString = '${reportPrefix}[SUCCESS]'
               const failureReportString = '${reportPrefix}[FAILURE]'
               if (lastComment.body.includes(reportPrefix)) {
                 if (lastComment.body.includes(successReportString)) {
-                  console.log(`Azure CI succeeded on the latest commit of the PR.`);
-                  return true;
+                  message = 'Azure CI succeeded on the latest commit of the PR.';
+                  result = true;
                 } else if (lastComment.body.includes(failureReportString)) {
-                  console.log(`Azure CI failed on the latest commit of the PR.`);
-                  core.setFailed("Azure CI failed on the latest commit of the PR.");
-                  return false;
+                  message = 'Azure CI failed on the latest commit of the PR';
+                  result = false;
                 } else {
-                  console.log(`Azure CI is in progress on the latest commit of the PR.`);
-                  core.setFailed("Azure CI is in progress on the latest commit of the PR.");
-                  return false;
+                  message = 'Azure CI is in progress on the latest commit of the PR.';
+                  result = false;
                 }
               } else {
-                console.log(`No Azure CI report on the latest commit of the PR.`);
-                core.setFailed("No Azure CI report on the latest commit of the PR.");
-                return false;
+                message = 'No Azure CI report on the latest commit of the PR.';
+                result = false;
               }
             } else {
-              console.log(`Azure CI report does not seem to be ready yet.`);
-              core.setFailed("Azure CI report does not seem to be ready yet.");
-              return false;
+              message = 'Azure CI report does not seem to be ready yet.';
+              result = false;
             }
+            console.log(`${message}`);
+            core.setOutput("check_result_message", message);
+            core.setOutput("is_check_successful", result);
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+      - name: Attach Azure CI report check to the PR
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            let conclusionString = 'failure';
+            if (${{ steps.check_report_in_pr_comment.outputs.is_check_successful }}) {
+              conclusionString = 'success';
+            }
+            console.log(`Check status: ${conclusionString}`);
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Azure CI Report Check',
+              head_sha: '${{ steps.last_commit.outputs.last_commit_hash }}',
+              status: 'completed',
+              conclusion: '${conclusionString}',
+              completed_at: new Date(),
+              output: {
+                title: 'Azure CI Report Check',
+                summary: '${{ steps.check_report_in_pr_comment.outputs.check_result_message }}',
+              }
+            });
+
+      - name: Remove Azure CI Blocker check
+        run: |
+          curl -X GET \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/commits/${{ steps.last_commit.outputs.last_commit_hash }}/check-runs | jq '.check_runs[] | select(.name | contains("create-azure-ci-report-check")) | .id' | xargs -I {} curl -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{"status": "neutral"}' \
+            https://api.github.com/repos/${{ github.repository }}/check-runs/{}
