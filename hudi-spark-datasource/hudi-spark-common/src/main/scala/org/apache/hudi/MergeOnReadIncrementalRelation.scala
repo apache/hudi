@@ -26,9 +26,10 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, concatTimeline, getCommitMetadata, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getWritePartitionPaths
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getWritePartitionPaths, listAffectedFilesForCommits}
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
