@@ -22,6 +22,7 @@ on:
     types: [ created, edited, deleted ]
 
 permissions:
+  statuses: write
   pull-requests: read
   issues: read
 
