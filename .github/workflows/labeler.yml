@@ -2,6 +2,10 @@ name: Label PR
 
 on: [ pull_request ]
 
+permissions:
+  issues: write
+  pull-requests: write
+
 jobs:
   labeler:
     runs-on: ubuntu-latest
