@@ -229,7 +229,7 @@ public class StreamerUtil {
       LOG.info("Table initialized under base path {}", basePath);
       return metaClient;
     } else {
-      LOG.info("Table [{}/{}] already exists, no need to initialize the table",
+      LOG.info("Table [path={}, name={}] already exists, no need to initialize the table",
           basePath, conf.getString(FlinkOptions.TABLE_NAME));
       return StreamerUtil.createMetaClient(basePath, hadoopConf);
     }
