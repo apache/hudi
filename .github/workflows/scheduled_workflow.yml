@@ -44,15 +44,19 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            const since = new Date(new Date().getTime() - (330 * 1000)).toISOString();
-            const query = `repo:${context.repo.owner}/${context.repo.repo} type:pr updated:>=${since}`;
-            const response = await github.rest.search.issuesAndPullRequests({
-              q: query
+            // Cron schedule may not be reliable so giving buffer time to avoid missing recent PRs
+            const since = new Date(new Date().getTime() - (900 * 1000)).toISOString();
+            const query = `repo:${context.repo.owner}/${context.repo.repo} type:pr state:open base:master updated:>=${since}`;
+            const openPrs = await github.paginate(github.rest.search.issuesAndPullRequests, {
+              q: query,
+              sort: 'updated',
+              order: 'desc',
+              per_page: 100
             });
             
-            // Filter for open PRs
-            const openPrs = response.data.items.filter(pr => pr.state === 'open');
             const checkAzureCiAndCreateCommitStatus = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/azure_ci.js`);
+            
+            console.log(`Number of PRs to process: ${openPrs.length}`);
             
             for (const pr of openPrs) {
               console.log(`*** Processing PR: ${pr.title}, URL: ${pr.html_url}`);
