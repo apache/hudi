@@ -20,6 +20,8 @@ name: Azure CI
 on:
   issue_comment:
     types: [ created, edited, deleted ]
+  pull_request:
+    types: [ opened, reopened, synchronize, edited ]
 
 permissions:
   statuses: write
@@ -28,10 +30,10 @@ permissions:
 
 jobs:
   check-azure-ci-and-add-commit-status:
-    if: |
-      github.event.issue.pull_request != null &&
-      github.event.issue.pull_request != '' &&
-      github.event.issue_comment.user.login == 'hudi-bot'
+    if: true #|
+    #github.event.issue.pull_request != null &&
+    #github.event.issue.pull_request != '' &&
+    #github.event.issue_comment.user.login == 'hudi-bot'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -43,7 +45,7 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            const issueNumber = github.event.issue.number;
+            const issueNumber = 10744;//github.event.issue.number;
             const { data: pullRequest } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -70,7 +72,7 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             const latestCommitHash = '${{ steps.check_pr_state.outputs.latest_commit_hash }}'            
-            const issueNumber = github.event.issue.number;
+            const issueNumber = 10744;// github.event.issue.number;
             const checkAzureCiAndCreateCommitStatus = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/azure_ci.js`);
             
             await checkAzureCiAndCreateCommitStatus({
