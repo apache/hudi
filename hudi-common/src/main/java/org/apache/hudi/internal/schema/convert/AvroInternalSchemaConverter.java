@@ -155,7 +155,9 @@ public class AvroInternalSchemaConverter {
    * @return an avro Schema where null is the first.
    */
   public static Schema fixNullOrdering(Schema schema) {
-    if (schema.getType() == Schema.Type.NULL) {
+    if (schema == null) {
+      return Schema.create(Schema.Type.NULL);
+    } else if (schema.getType() == Schema.Type.NULL) {
       return schema;
     }
     return convert(convert(schema), schema.getFullName());

@@ -20,7 +20,6 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -32,6 +31,12 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
+import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -574,6 +579,22 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     // null input
     assertThrows(NullPointerException.class, () -> FSUtils.getFileExtension(null));
+  }
+
+  @Test
+  public void testMakeQualified() {
+    FileSystem fs = HadoopFSUtils.getFs("file:///a/b/c", new Configuration());
+    FileSystem wrapperFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
+    HoodieStorage storage = new HoodieHadoopStorage(fs);
+    HoodieStorage wrapperStorage = new HoodieHadoopStorage(wrapperFs);
+    assertEquals(new StoragePath("file:///x/y"),
+        FSUtils.makeQualified(storage, new StoragePath("/x/y")));
+    assertEquals(new StoragePath("file:///x/y"),
+        FSUtils.makeQualified(wrapperStorage, new StoragePath("/x/y")));
+    assertEquals(new StoragePath("s3://x/y"),
+        FSUtils.makeQualified(storage, new StoragePath("s3://x/y")));
+    assertEquals(new StoragePath("s3://x/y"),
+        FSUtils.makeQualified(wrapperStorage, new StoragePath("s3://x/y")));
   }
 
   private Path getHoodieTempDir() {

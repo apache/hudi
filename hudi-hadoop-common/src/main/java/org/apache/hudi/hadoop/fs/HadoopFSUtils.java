@@ -19,7 +19,10 @@
 
 package org.apache.hudi.hadoop.fs;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -47,6 +50,28 @@ public class HadoopFSUtils {
       }
     }
     return conf;
+  }
+
+  public static StorageConfiguration<Configuration> getStorageConf(Configuration conf) {
+    return getStorageConf(conf, false);
+  }
+
+  public static StorageConfiguration<Configuration> getStorageConf(Configuration conf, boolean copy) {
+    return new HadoopStorageConfiguration(conf, copy);
+  }
+
+  public static <T> FileSystem getFs(String pathStr, StorageConfiguration<T> storageConf) {
+    return getFs(new Path(pathStr), storageConf);
+  }
+
+  public static <T> FileSystem getFs(Path path, StorageConfiguration<T> storageConf) {
+    return getFs(path, storageConf, false);
+  }
+
+  public static <T> FileSystem getFs(Path path, StorageConfiguration<T> storageConf, boolean newCopy) {
+    T conf = newCopy ? storageConf.newCopy() : storageConf.get();
+    ValidationUtils.checkArgument(conf instanceof Configuration);
+    return getFs(path, (Configuration) conf);
   }
 
   public static FileSystem getFs(String pathStr, Configuration conf) {

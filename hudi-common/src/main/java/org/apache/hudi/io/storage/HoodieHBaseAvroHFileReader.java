@@ -377,7 +377,10 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     return new KeyPrefixIterator();
   }
 
-  private static Option<IndexedRecord> fetchRecordByKeyInternal(HFileScanner scanner, String key, Schema writerSchema, Schema readerSchema) throws IOException {
+  private static Iterator<IndexedRecord> getRecordByKeyIteratorInternal(HFileScanner scanner,
+                                                                        String key,
+                                                                        Schema writerSchema,
+                                                                        Schema readerSchema) throws IOException {
     KeyValue kv = new KeyValue(getUTF8Bytes(key), null, null, null);
     // NOTE: HFile persists both keys/values as bytes, therefore lexicographical sorted is
     //       essentially employed
@@ -388,22 +391,59 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     //    b) 0, such that c[i] = cell and scanner is left in position i;
     //    c) and 1, such that c[i] < cell, and scanner is left in position i.
     // In summary, with exact match, we are interested in return value of 0. in all other cases, key is not found.
-    // Also, do remeber we are using reseek(), which means, the cursor will not rewind after searching for a key.
-    // Lets say the file contains key01, key02, .., key20.
+    // Also, do remember we are using reseekTo(), which means, the cursor will not rewind after searching for a key.
+    // Let's say the file contains key01, key02, .., key20.
     // After searching for key09, if we search for key05, it may not return the matching entry since just after reseeking to key09, the cursor is at key09 and
     // further reseek calls may not look back in positions.
-
-    if (scanner.reseekTo(kv) != 0) {
+    int val = scanner.reseekTo(kv);
+    if (val != 0) {
       // key is not found.
-      return Option.empty();
+      return Collections.emptyIterator();
     }
 
     // key is found and the cursor is left where the key is found
-    Cell c = scanner.getCell();
-    byte[] valueBytes = copyValueFromCell(c);
-    GenericRecord record = deserialize(getUTF8Bytes(key), valueBytes, writerSchema, readerSchema);
+    class KeyIterator implements Iterator<IndexedRecord> {
+      private IndexedRecord next = null;
+      private boolean eof = false;
 
-    return Option.of(record);
+      @Override
+      public boolean hasNext() {
+        if (next != null) {
+          return true;
+        } else if (eof) {
+          return false;
+        }
+
+        Cell c = Objects.requireNonNull(scanner.getCell());
+        byte[] keyBytes = copyKeyFromCell(c);
+        String currentKey = new String(keyBytes);
+        // Check whether we're still reading records corresponding to the key-prefix
+        if (!currentKey.equals(key)) {
+          return false;
+        }
+
+        // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterward
+        byte[] valueBytes = copyValueFromCell(c);
+        try {
+          next = deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
+          // In case scanner is not able to advance, it means we reached EOF
+          eof = !scanner.next();
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to deserialize payload", e);
+        }
+
+        return true;
+      }
+
+      @Override
+      public IndexedRecord next() {
+        IndexedRecord next = this.next;
+        this.next = null;
+        return next;
+      }
+    }
+
+    return new KeyIterator();
   }
 
   private static GenericRecord getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema) throws IOException {
@@ -517,6 +557,7 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     private final Schema writerSchema;
 
     private IndexedRecord next = null;
+    private Iterator<IndexedRecord> currentRecordIterator = null;
 
     RecordByKeyIterator(HFile.Reader reader, HFileScanner scanner, List<String> sortedKeys, Schema writerSchema, Schema readerSchema) throws IOException {
       this.sortedKeyIterator = sortedKeys.iterator();
@@ -536,13 +577,28 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           return true;
         }
 
-        while (sortedKeyIterator.hasNext()) {
-          Option<IndexedRecord> value = fetchRecordByKeyInternal(scanner, sortedKeyIterator.next(), writerSchema, readerSchema);
+        // Continue returning records for the current key, if any left
+        while (currentRecordIterator != null && currentRecordIterator.hasNext()) {
+          Option<IndexedRecord> value = Option.of(currentRecordIterator.next());
           if (value.isPresent()) {
             next = value.get();
             return true;
           }
         }
+
+        // Move on to the next key and start iterating over its records
+        while (sortedKeyIterator.hasNext()) {
+          currentRecordIterator = getRecordByKeyIteratorInternal(scanner, sortedKeyIterator.next(), writerSchema, readerSchema);
+          if (currentRecordIterator.hasNext()) {
+            Option<IndexedRecord> value = Option.of(currentRecordIterator.next());
+            if (value.isPresent()) {
+              next = value.get();
+              return true;
+            }
+          }
+        }
+
+        // No more keys or records
         return false;
       } catch (IOException e) {
         throw new HoodieIOException("unable to read next record from hfile ", e);

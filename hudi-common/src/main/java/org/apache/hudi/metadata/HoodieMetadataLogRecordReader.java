@@ -18,15 +18,15 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -111,7 +111,24 @@ public class HoodieMetadataLogRecordReader implements Closeable {
       return sortedKeys.stream()
           .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
           .filter(Objects::nonNull)
-          .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> r));
+          .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> r, (r1, r2) -> r2));
+    }
+  }
+
+  public Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> sortedKeys) {
+    if (sortedKeys.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
+    //       materialized state, to make sure there's no concurrent access
+    synchronized (this) {
+      logRecordScanner.scanByFullKeys(sortedKeys);
+      Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
+      return sortedKeys.stream()
+          .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
+          .filter(Objects::nonNull)
+          .collect(Collectors.groupingBy(HoodieRecord::getRecordKey));
     }
   }
 
@@ -200,7 +217,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
     public Builder withLogBlockTimestamps(Set<String> validLogBlockTimestamps) {
       InstantRange instantRange = InstantRange.builder()
-          .rangeType(InstantRange.RangeType.EXPLICIT_MATCH)
+          .rangeType(InstantRange.RangeType.EXACT_MATCH)
           .explicitInstants(validLogBlockTimestamps).build();
       scannerBuilder.withInstantRange(Option.of(instantRange));
       return this;

@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCExtractor;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.InstantRange;
-import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -40,10 +40,7 @@ import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
-import org.apache.hudi.util.ClusteringUtil;
-import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.types.logical.RowType;
@@ -66,11 +63,6 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 
 /**
  * Utilities to generate incremental input splits {@link MergeOnReadInputSplit}.
@@ -135,44 +127,37 @@ public class IncrementalInputSplits implements Serializable {
   public Result inputSplits(
       HoodieTableMetaClient metaClient,
       boolean cdcEnabled) {
-    HoodieTimeline commitTimeline = getReadTimeline(metaClient);
-    if (commitTimeline.empty()) {
-      LOG.warn("No splits found for the table under path " + path);
+
+    IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
+        .metaClient(metaClient)
+        .startTime(this.conf.getString(FlinkOptions.READ_START_COMMIT))
+        .endTime(this.conf.getString(FlinkOptions.READ_END_COMMIT))
+        .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
+        .skipCompaction(skipCompaction)
+        .skipClustering(skipClustering)
+        .build();
+
+    IncrementalQueryAnalyzer.QueryContext analyzingResult = analyzer.analyze();
+
+    if (analyzingResult.isEmpty()) {
+      LOG.info("No new instant found for the table under path " + path + ", skip reading");
       return Result.EMPTY;
     }
-
-    final String startCommit = this.conf.getString(FlinkOptions.READ_START_COMMIT);
-    final String endCommit = this.conf.getString(FlinkOptions.READ_END_COMMIT);
-    final boolean startFromEarliest = FlinkOptions.START_COMMIT_EARLIEST.equalsIgnoreCase(startCommit);
-    final boolean startOutOfRange = startCommit != null && commitTimeline.isBeforeTimelineStarts(startCommit);
-    final boolean endOutOfRange = endCommit != null && commitTimeline.isBeforeTimelineStarts(endCommit);
+    final HoodieTimeline commitTimeline = analyzingResult.getActiveTimeline();
+    final boolean startFromEarliest = analyzingResult.isConsumingFromEarliest();
+    final boolean hasArchivedInstants = !analyzingResult.getArchivedInstants().isEmpty();
     // We better add another premise: whether the endCommit is cleaned.
-    boolean fullTableScan = startFromEarliest || startOutOfRange || endOutOfRange;
-
-    List<HoodieInstant> instants = filterInstantsWithRange(commitTimeline, null);
+    boolean fullTableScan = startFromEarliest || hasArchivedInstants;
 
     // Step1: generates the instant range
     // if the specified end commit is archived, still uses the specified timestamp,
     // else uses the latest filtered instant time
     // (would be the latest instant time if the specified end commit is greater than the latest instant time)
-    final String rangeEnd = endOutOfRange || instants.isEmpty() ? endCommit : instants.get(instants.size() - 1).getTimestamp();
-    // keep the same semantics with streaming read, default start from the latest commit
-    final String rangeStart = startFromEarliest ? null : (startCommit == null ? rangeEnd : startCommit);
-    final InstantRange instantRange;
-    if (!fullTableScan) {
-      instantRange = InstantRange.builder().startInstant(rangeStart).endInstant(rangeEnd)
-          .rangeType(InstantRange.RangeType.CLOSE_CLOSE).nullableBoundary(cdcEnabled).build();
-    } else if (startFromEarliest && endCommit == null) {
-      // short-cut for snapshot read
-      instantRange = null;
-    } else {
-      instantRange = InstantRange.builder().startInstant(rangeStart).endInstant(rangeEnd)
-          .rangeType(InstantRange.RangeType.CLOSE_CLOSE).nullableBoundary(true).build();
-    }
+
+    final InstantRange instantRange = analyzingResult.getInstantRange().orElse(null);
+
     // Step2: decides the read end commit
-    final String endInstant = endOutOfRange || endCommit == null
-        ? commitTimeline.lastInstant().get().getTimestamp()
-        : rangeEnd;
+    final String endInstant = analyzingResult.getLastInstant();
 
     // Step3: find out the files to read, tries to read the files from the commit metadata first,
     // fallback to full table scan if any of the following conditions matches:
@@ -192,10 +177,6 @@ public class IncrementalInputSplits implements Serializable {
       }
       fileStatuses = fileIndex.getFilesInPartitions();
     } else {
-      if (instants.size() == 0) {
-        LOG.info("No new instant found for the table under path " + path + ", skip reading");
-        return Result.EMPTY;
-      }
       if (cdcEnabled) {
         // case1: cdc change log enabled
         List<MergeOnReadInputSplit> inputSplits = getCdcInputSplits(metaClient, instantRange);
@@ -203,6 +184,7 @@ public class IncrementalInputSplits implements Serializable {
       }
       // case2: normal incremental read
       String tableName = conf.getString(FlinkOptions.TABLE_NAME);
+      List<HoodieInstant> instants = analyzingResult.getActiveInstants();
       List<HoodieCommitMetadata> metadataList = instants.stream()
           .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
       readPartitions = getReadPartitions(metadataList);
@@ -233,7 +215,7 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, endInstant, instantRange, false);
+        fileStatuses, readPartitions, endInstant, analyzingResult.getMaxCompletionTime(), instantRange, false);
 
     return Result.instance(inputSplits, endInstant);
   }
@@ -242,7 +224,6 @@ public class IncrementalInputSplits implements Serializable {
    * Returns the incremental input splits.
    *
    * @param metaClient    The meta client
-   * @param issuedInstant The last issued instant, only valid in streaming read
    * @param issuedOffset  The last issued offset, only valid in streaming read
    * @param cdcEnabled    Whether cdc is enabled
    *
@@ -250,51 +231,36 @@ public class IncrementalInputSplits implements Serializable {
    */
   public Result inputSplits(
       HoodieTableMetaClient metaClient,
-      @Nullable String issuedInstant,
       @Nullable String issuedOffset,
       boolean cdcEnabled) {
     metaClient.reloadActiveTimeline();
-    HoodieTimeline commitTimeline = getReadTimeline(metaClient);
-    if (commitTimeline.empty()) {
-      LOG.warn("No splits found for the table under path " + path);
-      return Result.EMPTY;
-    }
+    IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
+        .metaClient(metaClient)
+        .startTime(issuedOffset != null ? issuedOffset : this.conf.getString(FlinkOptions.READ_START_COMMIT))
+        .endTime(this.conf.getString(FlinkOptions.READ_END_COMMIT))
+        .rangeType(issuedOffset != null ? InstantRange.RangeType.OPEN_CLOSED : InstantRange.RangeType.CLOSED_CLOSED)
+        .skipCompaction(skipCompaction)
+        .skipClustering(skipClustering)
+        .limit(OptionsResolver.getReadCommitsLimit(conf))
+        .build();
 
-    // Assumes a timeline:
-    //    c1.inflight, c2(issued instant), c3, c4
-    // -> c1,          c2(issued instant), c3, c4
-    // c1, c3 and c4 are the candidate instants,
-    // we call c1 a 'hollow' instant which has lower version number but greater completion time,
-    // filtering the timeline using just c2 could cause data loss,
-    // check these hollow instants first.
-    Result hollowSplits = getHollowInputSplits(metaClient, metaClient.getHadoopConf(), issuedInstant, issuedOffset, commitTimeline, cdcEnabled);
+    IncrementalQueryAnalyzer.QueryContext queryContext = analyzer.analyze();
 
-    List<HoodieInstant> instants = filterInstantsWithRange(commitTimeline, issuedInstant);
-    // streaming read speed limit, limits the maximum number of commits allowed to read in each instant check
-    if (OptionsResolver.hasReadCommitsLimit(conf)) {
-      int readLimit = this.conf.getInteger(FlinkOptions.READ_COMMITS_LIMIT);
-      instants = instants.subList(0, Math.min(readLimit, instants.size()));
-    }
-
-    // get the latest instant that satisfies condition
-    final String endInstant = instants.size() == 0 ? null : instants.get(instants.size() - 1).getTimestamp();
-    final InstantRange instantRange;
-    if (endInstant != null) {
-      // when cdc is enabled, returns instant range with nullable boundary
-      // to filter the reading instants on the timeline
-      instantRange = getInstantRange(issuedInstant, endInstant, cdcEnabled);
-    } else if (hollowSplits.isEmpty()) {
+    if (queryContext.isEmpty()) {
       LOG.info("No new instant found for the table under path " + path + ", skip reading");
       return Result.EMPTY;
-    } else {
-      return hollowSplits;
     }
+
+    HoodieTimeline commitTimeline = queryContext.getActiveTimeline();
+    // get the latest instant that satisfies condition
+    final String endInstant = queryContext.getLastInstant();
+    final Option<InstantRange> instantRange = queryContext.getInstantRange();
 
     // version number should be monotonically increasing
     // fetch the instant offset by completion time
-    String offsetToIssue = instants.stream().map(HoodieInstant::getCompletionTime).max(String::compareTo).orElse(endInstant);
+    String offsetToIssue = queryContext.getMaxCompletionTime();
 
-    if (instantRange == null) {
+    if (instantRange.isEmpty()) {
       // reading from the earliest, scans the partitions and files directly.
       FileIndex fileIndex = getFileIndex();
 
@@ -311,12 +277,12 @@ public class IncrementalInputSplits implements Serializable {
       }
 
       List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-          fileStatuses, readPartitions, endInstant, null, false);
+          fileStatuses, readPartitions, endInstant, offsetToIssue, null, false);
 
       return Result.instance(inputSplits, endInstant, offsetToIssue);
     } else {
-      List<MergeOnReadInputSplit> inputSplits = getIncInputSplits(metaClient, metaClient.getHadoopConf(), commitTimeline, instants, instantRange, endInstant, cdcEnabled);
-      return Result.instance(mergeList(hollowSplits.getInputSplits(), inputSplits), endInstant, offsetToIssue);
+      List<MergeOnReadInputSplit> inputSplits = getIncInputSplits(metaClient, metaClient.getHadoopConf(), commitTimeline, queryContext, instantRange.get(), endInstant, cdcEnabled);
+      return Result.instance(inputSplits, endInstant, offsetToIssue);
     }
   }
 
@@ -327,7 +293,7 @@ public class IncrementalInputSplits implements Serializable {
       HoodieTableMetaClient metaClient,
       org.apache.hadoop.conf.Configuration hadoopConf,
       HoodieTimeline commitTimeline,
-      List<HoodieInstant> instants,
+      IncrementalQueryAnalyzer.QueryContext queryContext,
       InstantRange instantRange,
       String endInstant,
       boolean cdcEnabled) {
@@ -338,9 +304,10 @@ public class IncrementalInputSplits implements Serializable {
     }
     // case2: normal streaming read
     String tableName = conf.getString(FlinkOptions.TABLE_NAME);
-    List<HoodieCommitMetadata> activeMetadataList = instants.stream()
+    List<HoodieCommitMetadata> activeMetadataList = queryContext.getActiveInstants().stream()
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
-    List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, tableName);
+    List<HoodieCommitMetadata> archivedMetadataList = queryContext.getArchivedInstants().stream()
+        .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, queryContext.getArchivedTimeline())).collect(Collectors.toList());
     if (archivedMetadataList.size() > 0) {
       LOG.warn("\n"
           + "--------------------------------------------------------------------------------\n"
@@ -364,74 +331,7 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     return getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, endInstant, instantRange, skipCompaction);
-  }
-
-  /**
-   * Returns the input splits for 'hollow' instants.
-   */
-  private Result getHollowInputSplits(
-      HoodieTableMetaClient metaClient,
-      org.apache.hadoop.conf.Configuration hadoopConf,
-      @Nullable String issuedInstant,
-      @Nullable String issuedOffset,
-      HoodieTimeline commitTimeline,
-      boolean cdcEnabled) {
-    if (issuedInstant == null || issuedOffset == null) {
-      return Result.EMPTY;
-    }
-    // find the write commit instant that finishes later than the issued instant
-    // while with smaller txn start time.
-    List<HoodieInstant> instants = commitTimeline.getInstantsAsStream()
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, issuedInstant))
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getCompletionTime(), GREATER_THAN, issuedOffset))
-        .filter(s -> StreamerUtil.isWriteCommit(metaClient.getTableType(), s, commitTimeline)).collect(Collectors.toList());
-    if (instants.isEmpty()) {
-      return Result.EMPTY;
-    }
-    String offsetToIssue = instants.stream().map(HoodieInstant::getCompletionTime).max(String::compareTo).orElse(issuedOffset);
-    List<MergeOnReadInputSplit> inputSplits = instants.stream().map(instant -> {
-      String instantTs = instant.getTimestamp();
-
-      // Assumes we consume from timeline:
-      //    c0, c1.inflight, c2(issued instant), c3, c4
-      // -> c0, c1,          c2(issued instant), c3, c4
-      // c1, c3 and c4 are the candidate instants,
-
-      // c4 data file could include overlapping records from c2,
-      // use (c2, c4] instant range for c3 and c4,
-
-      // c1 data file could include overlapping records from c0,
-      // use the [c1, c1] instant range for c1.
-      InstantRange instantRange = InstantRange.builder()
-          .startInstant(instantTs)
-          .endInstant(instantTs)
-          .nullableBoundary(cdcEnabled)
-          .rangeType(InstantRange.RangeType.CLOSE_CLOSE).build();
-      return getIncInputSplits(metaClient, hadoopConf, commitTimeline, Collections.singletonList(instant), instantRange, instantTs, cdcEnabled);
-    }).flatMap(Collection::stream).collect(Collectors.toList());
-    return Result.instance(inputSplits, issuedInstant, offsetToIssue);
-  }
-
-  @Nullable
-  private InstantRange getInstantRange(String issuedInstant, String instantToIssue, boolean nullableBoundary) {
-    if (issuedInstant != null) {
-      // the streaming reader may record the last issued instant, if the issued instant is present,
-      // the instant range should be: (issued instant, the latest instant].
-      return InstantRange.builder().startInstant(issuedInstant).endInstant(instantToIssue)
-          .nullableBoundary(nullableBoundary).rangeType(InstantRange.RangeType.OPEN_CLOSE).build();
-    } else if (this.conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent()) {
-      // first time consume and has a start commit
-      final String startCommit = this.conf.getString(FlinkOptions.READ_START_COMMIT);
-      return startCommit.equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST)
-          ? null
-          : InstantRange.builder().startInstant(startCommit).endInstant(instantToIssue)
-          .nullableBoundary(nullableBoundary).rangeType(InstantRange.RangeType.CLOSE_CLOSE).build();
-    } else {
-      // first time consume and no start commit, consumes the latest incremental data set.
-      return InstantRange.builder().startInstant(instantToIssue).endInstant(instantToIssue)
-          .nullableBoundary(nullableBoundary).rangeType(InstantRange.RangeType.CLOSE_CLOSE).build();
-    }
+        fileStatuses, readPartitions, endInstant, queryContext.getMaxCompletionTime(), instantRange, skipCompaction);
   }
 
   private List<MergeOnReadInputSplit> getInputSplits(
@@ -440,14 +340,14 @@ public class IncrementalInputSplits implements Serializable {
       FileStatus[] fileStatuses,
       Set<String> readPartitions,
       String endInstant,
+      String maxCompletionTime,
       InstantRange instantRange,
       boolean skipBaseFiles) {
     final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
-    final String maxQueryInstantTime = getMaxQueryInstantTime(fsView, endInstant);
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     return readPartitions.stream()
-        .map(relPartitionPath -> getFileSlices(fsView, relPartitionPath, maxQueryInstantTime, skipBaseFiles)
+        .map(relPartitionPath -> getFileSlices(fsView, relPartitionPath, maxCompletionTime, skipBaseFiles)
             .map(fileSlice -> {
               Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
                   .sorted(HoodieLogFile.getLogFileComparator())
@@ -465,29 +365,6 @@ public class IncrementalInputSplits implements Serializable {
         .flatMap(Collection::stream)
         .sorted(Comparator.comparing(MergeOnReadInputSplit::getLatestCommit))
         .collect(Collectors.toList());
-  }
-
-  /**
-   * Returns the upper threshold of query instant time, when NB-CC is enabled, imagine the table has actions as follows:
-   *
-   * <pre>
-   *   t1_t5.delta_commit, t2.compaction.inflight, t3_t4.delta_commit
-   * </pre>
-   *
-   * <p>If the user specified query range end instant is t1, when the query is executed at t3, the API #getXXXFileSlicesBeforeOrOn
-   * will just ignore delta commit t1_t5 because its end instant t1 is less than the latest file slice base instant t2.
-   * We should refactor this out when all the fs view incremental APIs migrate to completion time based semantics.
-   *
-   * <p>CAUTION: The query is costly when endInstant is archived.
-   */
-  private String getMaxQueryInstantTime(HoodieTableFileSystemView fsView, String endInstant) {
-    if (OptionsResolver.isMorTable(conf)) {
-      Option<String> completionTime = fsView.getCompletionTime(endInstant);
-      if (completionTime.isPresent()) {
-        return completionTime.get();
-      }
-    }
-    return endInstant;
   }
 
   private List<MergeOnReadInputSplit> getCdcInputSplits(
@@ -547,103 +424,6 @@ public class IncrementalInputSplits implements Serializable {
       return selectedPartitions;
     }
     return partitions;
-  }
-
-  /**
-   * Returns the archived metadata in case the reader consumes untimely or it wants
-   * to read from the earliest.
-   *
-   * <p>Note: should improve it with metadata table when the metadata table is stable enough.
-   *
-   * @param metaClient     The meta client
-   * @param instantRange   The instant range to filter the timeline instants
-   * @param tableName      The table name
-   * @return the list of archived metadata, or empty if there is no need to read the archived timeline
-   */
-  private List<HoodieCommitMetadata> getArchivedMetadata(
-      HoodieTableMetaClient metaClient,
-      InstantRange instantRange,
-      String tableName) {
-    if (metaClient.getActiveTimeline().isBeforeTimelineStarts(instantRange.getStartInstant())) {
-      // read the archived metadata if the start instant is archived.
-      HoodieTimeline archivedTimeline = getArchivedReadTimeline(metaClient, instantRange.getStartInstant());
-      if (!archivedTimeline.empty()) {
-        return archivedTimeline.getInstantsAsStream()
-            .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, archivedTimeline)).collect(Collectors.toList());
-      }
-    }
-    return Collections.emptyList();
-  }
-
-  private HoodieTimeline getReadTimeline(HoodieTableMetaClient metaClient) {
-    HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
-    return filterInstantsAsPerUserConfigs(timeline);
-  }
-
-  private HoodieTimeline getArchivedReadTimeline(HoodieTableMetaClient metaClient, String startInstant) {
-    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(startInstant, false);
-    HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
-    return filterInstantsAsPerUserConfigs(archivedCompleteTimeline);
-  }
-
-  /**
-   * Returns the instants with a given issuedInstant to start from.
-   *
-   * @param commitTimeline The completed commits timeline
-   * @param issuedInstant  The last issued instant that has already been delivered to downstream
-   *
-   * @return the filtered hoodie instants
-   */
-  @VisibleForTesting
-  public List<HoodieInstant> filterInstantsWithRange(
-      HoodieTimeline commitTimeline,
-      @Nullable final String issuedInstant) {
-    HoodieTimeline completedTimeline = commitTimeline.filterCompletedInstants();
-    if (issuedInstant != null) {
-      // returns early for streaming mode
-      return completedTimeline
-          .getInstantsAsStream()
-          .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, issuedInstant))
-          .collect(Collectors.toList());
-    }
-
-    Stream<HoodieInstant> instantStream = completedTimeline.getInstantsAsStream();
-
-    if (OptionsResolver.hasNoSpecificReadCommits(this.conf)) {
-      // by default read from the latest commit
-      return completedTimeline.lastInstant().map(Collections::singletonList).orElseGet(Collections::emptyList);
-    }
-
-    if (OptionsResolver.isSpecificStartCommit(this.conf)) {
-      final String startCommit = this.conf.get(FlinkOptions.READ_START_COMMIT);
-      instantStream = instantStream
-          .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, startCommit));
-    }
-    if (this.conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent()) {
-      final String endCommit = this.conf.get(FlinkOptions.READ_END_COMMIT);
-      instantStream = instantStream.filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN_OR_EQUALS, endCommit));
-    }
-    return instantStream.collect(Collectors.toList());
-  }
-
-  /**
-   * Filters out the unnecessary instants as per user specified configs.
-   *
-   * @param timeline The timeline
-   *
-   * @return the filtered timeline
-   */
-  @VisibleForTesting
-  public HoodieTimeline filterInstantsAsPerUserConfigs(HoodieTimeline timeline) {
-    final HoodieTimeline oriTimeline = timeline;
-    if (OptionsResolver.isMorTable(this.conf) & this.skipCompaction) {
-      // the compaction commit uses 'commit' as action which is tricky
-      timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
-    }
-    if (this.skipClustering) {
-      timeline = timeline.filter(instant -> !ClusteringUtil.isClusteringInstant(instant, oriTimeline));
-    }
-    return timeline;
   }
 
   private static <T> List<T> mergeList(List<T> list1, List<T> list2) {

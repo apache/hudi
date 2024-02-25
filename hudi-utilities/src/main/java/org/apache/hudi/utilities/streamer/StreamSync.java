@@ -414,7 +414,7 @@ public class StreamSync implements Serializable, Closeable {
             || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
           String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
           String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
-          LOG.info("Seeing new schema. Source: {0}, Target: {1}", sourceStr, targetStr);
+          LOG.info("Seeing new schema. Source: {}, Target: {}", sourceStr, targetStr);
           // We need to recreate write client with new schema and register them.
           reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch());
           if (newSourceSchema != null) {
@@ -455,7 +455,7 @@ public class StreamSync implements Serializable, Closeable {
 
   private Option<String> getLastPendingClusteringInstant(Option<HoodieTimeline> commitTimelineOpt) {
     if (commitTimelineOpt.isPresent()) {
-      Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().getLastPendingClusterCommit();
+      Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().getLastPendingClusterInstant();
       return pendingClusteringInstant.isPresent() ? Option.of(pendingClusteringInstant.get().getTimestamp()) : Option.empty();
     }
     return Option.empty();
@@ -865,10 +865,10 @@ public class StreamSync implements Serializable, Closeable {
       writeClient.rollback(instantTime);
       throw new HoodieStreamerWriteException("Commit " + instantTime + " failed and rolled-back !");
     }
-    long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
+    long overallTimeNanos = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
     // Send DeltaStreamer Metrics
-    metrics.updateStreamerMetrics(overallTimeMs);
+    metrics.updateStreamerMetrics(overallTimeNanos);
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
   }
 
@@ -988,13 +988,14 @@ public class StreamSync implements Serializable, Closeable {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
           success = true;
         } catch (HoodieMetaSyncException e) {
-          LOG.error("SyncTool class {0} failed with exception {1}",  impl.trim(), e);
+          LOG.error("SyncTool class {} failed with exception {}", impl.trim(), e);
           failedMetaSyncs.put(impl, e);
         }
-        long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
-        metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
+        long metaSyncTimeNanos = syncContext != null ? syncContext.stop() : 0;
+        metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeNanos);
         if (success) {
-          LOG.info("[MetaSync] SyncTool class {0} completed successfully and took {1} ", impl.trim(), metaSyncTimeMs);
+          long timeMs = metaSyncTimeNanos / 1000000L;
+          LOG.info("[MetaSync] SyncTool class {} completed successfully and took {} s {} ms ", impl.trim(), timeMs / 1000L, timeMs % 1000L);
         }
       }
       if (!failedMetaSyncs.isEmpty()) {
