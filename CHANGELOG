@@ -53,3 +53,7 @@ e49edd606 [ENG-5489] Improve mdt validator and upsert partitioner logs (#552)
 7a320d3e2 [ENG-6636] Fix Spark repartition causing input file name to be null in cloud incremental source (#545)
 b08eb3952 [ENG-6316] Bump cleaner retention for MDT (#537)
 b254a252b [AUDIT-656] Upgrade hudi-internal to release-v1.2.2 (#544)
+
+---[2024-02-25 17:00:55] [release-v1.3.1] ---
+27c362e0f [HUDI-7416] Add interface for StreamProfile to be used in StreamSync for reading and writing data (#570)
+54daa91db [ENG-6283] Upgrade to version release-v1.3.0 (#569)
