@@ -30,8 +30,7 @@ jobs:
   check-azure-ci-and-add-commit-status:
     if: |
       github.event.issue.pull_request != null &&
-      github.event.issue.pull_request != '' &&
-      github.event.issue_comment.user.login == 'hudi-bot'
+      github.event.comment.user.login == 'hudi-bot'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
