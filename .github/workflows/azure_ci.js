@@ -21,21 +21,24 @@ async function checkAzureCiAndCreateCommitStatus({ github, context, prNumber, la
   console.log(`- Checking Azure CI status of PR: ${prNumber} ${latestCommitHash}`);
   const botUsername = 'hudi-bot';
 
-  const comments = await github.rest.issues.listComments({
+  const comments = await github.paginate(github.rest.issues.listComments, {
     owner: context.repo.owner,
     repo: context.repo.repo,
     issue_number: prNumber,
+    sort: 'updated',
+    direction: 'desc',
+    per_page: 100
   });
 
   // Find the latest comment from hudi-bot containing the Azure CI report
-  const botComments = comments.data.filter(comment => comment.user.login === botUsername);
-  const lastComment = botComments.pop();
+  const botComments = comments.filter(comment => comment.user.login === botUsername);
 
   let status = 'pending';
   let message = 'In progress';
   let azureRunLink = '';
 
-  if (lastComment) {
+  if (botComments.length > 0) {
+    const lastComment = botComments[0];
     const reportPrefix = `${latestCommitHash} Azure: `
     const successReportString = `${reportPrefix}[SUCCESS]`
     const failureReportString = `${reportPrefix}[FAILURE]`
