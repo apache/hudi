@@ -1640,7 +1640,7 @@ public class HoodieTableMetadataUtil {
    *
    * @param partitionType         Type of the partition for which the file group count is to be estimated.
    * @param recordCount           The number of records expected to be written.
-   * @param averageRecordSize     Average size of each record to be writen.
+   * @param averageRecordSize     Average size of each record to be written.
    * @param minFileGroupCount     Minimum number of file groups to use.
    * @param maxFileGroupCount     Maximum number of file groups to use.
    * @param growthFactor          By what factor are the records (recordCount) expected to grow?
