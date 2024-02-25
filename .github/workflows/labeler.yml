@@ -1,24 +1,54 @@
 name: Label PR
 
-on: [ pull_request ]
+on:
+  pull_request:
+    types: [ opened, edited, reopened, synchronize ]
+
+permissions:
+  issues: write
+  pull-requests: write
 
 jobs:
   labeler:
     runs-on: ubuntu-latest
-    name: Label the PR size
     steps:
-      - uses: codelytv/pr-size-labeler@v1
+      - name: Label PR size
+        uses: actions/github-script@v7
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          xs_label: 'size-xs'
-          xs_max_size: '10'
-          s_label: 'size-s'
-          s_max_size: '100'
-          m_label: 'size-m'
-          m_max_size: '500'
-          l_label: 'size-l'
-          l_max_size: '1000'
-          xl_label: 'size-xl'
-          fail_if_xl: 'false'
-          github_api_url: 'api.github.com'
-          files_to_ignore: ''
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const { data: prData } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            
+            const additions = prData.additions;
+            const deletions = prData.deletions;
+            const totalChanges = additions + deletions;
+            
+            let label = "";
+            
+            if (totalChanges < 10) {
+              label = "size:XS";
+            } else if (totalChanges < 100) {
+              label = "size:S";
+            } else if (totalChanges < 300) {
+              label = "size:M";
+            } else if (totalChanges < 1000) {
+              label = "size:L";
+            } else {
+              label = "size:XL";
+            }
+            
+            // Apply the label
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: [label],
+            });
+            
+            console.log(`Total lines of changes: ${totalChanges}`);
+            console.log(`Label: ${label}`);
