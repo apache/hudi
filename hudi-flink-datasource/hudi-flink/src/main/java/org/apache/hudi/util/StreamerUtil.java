@@ -265,7 +265,7 @@ public class StreamerUtil {
           .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
     } else {
-      LOG.info("Table [{}/{}] already exists, no need to initialize the table",
+      LOG.info("Table [path={}, name={}] already exists, no need to initialize the table",
           basePath, conf.getString(FlinkOptions.TABLE_NAME));
     }
 
