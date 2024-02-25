@@ -27,67 +27,55 @@ permissions:
   issues: read
 
 jobs:
-  check-azure-ci-report:
-    if: "!contains(github.event.pull_request.body, 'HOTFIX: SKIP AZURE CI')"
+  check-azure-ci-and-add-commit-status:
+    if: |
+      github.event.issue.pull_request != null &&
+      github.event.issue.pull_request != '' &&
+      github.event.issue_comment.user.login == 'hudi-bot'
     runs-on: ubuntu-latest
     steps:
-      - name: Get last commit hash
-        id: last_commit
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const pr = context.payload.pull_request;
-            const lastCommitHash = pr.head.sha;
-            console.log(`Last commit hash: ${lastCommitHash}`);
-            // Set the output variable to be used in subsequent step
-            core.setOutput("last_commit_hash", lastCommitHash);
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-      - name: Check Azure CI report in PR comment
+      - name: Check PR state
+        id: check_pr_state
         uses: actions/github-script@v7
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            const lastCommitHash = '${{ steps.last_commit.outputs.last_commit_hash }}'
-            const botUsername = 'hudi-bot';
-            
-            const issueNumber = context.payload.pull_request.number;
-            const comments = await github.rest.issues.listComments({
+            const issueNumber = github.event.issue.number;
+            const { data: pullRequest } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: issueNumber,
+              pull_number: issueNumber
             });
             
-            // Find the last comment from hudi-bot containing the Azure CI report
-            const botComments = comments.data.filter(comment => comment.user.login === botUsername);
-            const lastComment = botComments.pop();
+            // Only check open PRs and a PR that is not a HOTFIX
+            const shouldSkip = (pullRequest.body.includes('HOTFIX: SKIP AZURE CI')
+              || pullRequest.state != 'open');
             
-            if (lastComment) {
-              const reportPrefix = '${lastCommitHash} Azure: '
-              const successReportString = '${reportPrefix}[SUCCESS]'
-              const failureReportString = '${reportPrefix}[FAILURE]'
-              if (lastComment.body.includes(reportPrefix)) {
-                if (lastComment.body.includes(successReportString)) {
-                  console.log(`Azure CI succeeded on the latest commit of the PR.`);
-                  return true;
-                } else if (lastComment.body.includes(failureReportString)) {
-                  console.log(`Azure CI failed on the latest commit of the PR.`);
-                  core.setFailed("Azure CI failed on the latest commit of the PR.");
-                  return false;
-                } else {
-                  console.log(`Azure CI is in progress on the latest commit of the PR.`);
-                  core.setFailed("Azure CI is in progress on the latest commit of the PR.");
-                  return false;
-                }
-              } else {
-                console.log(`No Azure CI report on the latest commit of the PR.`);
-                core.setFailed("No Azure CI report on the latest commit of the PR.");
-                return false;
-              }
-            } else {
-              console.log(`Azure CI report does not seem to be ready yet.`);
-              core.setFailed("Azure CI report does not seem to be ready yet.");
-              return false;
+            if (!shouldSkip) {
+              const commitHash = pullRequest.head.sha;
+              console.log(`Latest commit hash: ${commitHash}`);
+              // Set the output variable to be used in subsequent step
+              core.setOutput("latest_commit_hash", commitHash);
             }
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+            console.log(`Should skip Azure CI? ${shouldSkip}`);
+            return shouldSkip;
+
+      - name: Check Azure CI report and create commit status to PR
+        if: steps.check_pr_state.outputs.result != 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const latestCommitHash = '${{ steps.check_pr_state.outputs.latest_commit_hash }}'            
+            const issueNumber = github.event.issue.number;
+            const checkAzureCiAndCreateCommitStatus = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/azure_ci.js`);
+            
+            await checkAzureCiAndCreateCommitStatus({
+              github,
+              context,
+              prNumber: issueNumber,
+              latestCommitHash: latestCommitHash
+            });
