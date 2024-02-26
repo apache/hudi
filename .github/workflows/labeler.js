@@ -83,7 +83,7 @@ async function labelPrWithSize({ github, context, prNumber, prData }) {
       owner: context.repo.owner,
       repo: context.repo.repo,
       issue_number: prNumber,
-      labels: [label]
+      labels: [newSizeLabel]
     });
     console.log(`Added size Label: ${newSizeLabel}`);
   }
