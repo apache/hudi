@@ -286,10 +286,14 @@ public class HiveAvroSerializer {
           throw new HoodieException("Unexpected Avro schema for Binary TypeInfo: " + schema.getType());
         }
       case DECIMAL:
-        HiveDecimal dec = (HiveDecimal)fieldOI.getPrimitiveJavaObject(structFieldData);
-        LogicalTypes.Decimal decimal = (LogicalTypes.Decimal)schema.getLogicalType();
+        HiveDecimal dec = (HiveDecimal) fieldOI.getPrimitiveJavaObject(structFieldData);
+        LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) schema.getLogicalType();
         BigDecimal bd = new BigDecimal(dec.toString()).setScale(decimal.getScale());
-        return HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, schema, decimal);
+        if (schema.getType() == Schema.Type.BYTES) {
+          return HoodieAvroUtils.DECIMAL_CONVERSION.toBytes(bd, schema, decimal);
+        } else {
+          return HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, schema, decimal);
+        }
       case CHAR:
         HiveChar ch = (HiveChar)fieldOI.getPrimitiveJavaObject(structFieldData);
         return new Utf8(ch.getStrippedValue());
