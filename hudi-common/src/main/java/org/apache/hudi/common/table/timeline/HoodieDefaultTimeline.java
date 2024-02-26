@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -514,21 +515,9 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public Option<HoodieInstant> getLastPendingClusterCommit() {
-    return  Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
+    return  Option.fromJavaOptional(filterPendingReplaceTimeline()
         .getReverseOrderedInstants()
-        .filter(i -> {
-          try {
-            if (!i.isCompleted()) {
-              HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
-              return metadata.getOperationType().equals(WriteOperationType.CLUSTER);
-            } else {
-              return false;
-            }
-          } catch (IOException e) {
-            LOG.warn("Unable to read commit metadata for " + i + " due to " + e.getMessage());
-            return false;
-          }
-        }).findFirst());
+        .filter(i -> ClusteringUtils.isPendingClusteringInstant(this, i)).findFirst());
   }
   
   @Override
