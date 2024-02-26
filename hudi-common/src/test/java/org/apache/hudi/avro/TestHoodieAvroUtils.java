@@ -301,7 +301,7 @@ public class TestHoodieAvroUtils {
     // partitioned table test.
     String schemaStr = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
         + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
-        + "{\"name\": \"non_pii_col\", \"type\": \"string\"}]},";
+        + "{\"name\": \"non_pii_col\", \"type\": \"string\"}]}";
     Schema expectedSchema = new Schema.Parser().parse(schemaStr);
     GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
     rec.put("_row_key", "key1");
@@ -324,7 +324,7 @@ public class TestHoodieAvroUtils {
     schemaStr = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
         + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
         + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
-        + "{\"name\": \"pii_col\", \"type\": \"string\"}]},";
+        + "{\"name\": \"pii_col\", \"type\": \"string\"}]}";
     expectedSchema = new Schema.Parser().parse(schemaStr);
     rec1 = HoodieAvroUtils.removeFields(rec, Collections.singleton(""));
     assertEquals(expectedSchema, rec1.getSchema());
