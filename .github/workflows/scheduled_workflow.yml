@@ -69,11 +69,15 @@ jobs:
                 pull_number: pr.number
               });
             
-              const targetBase = '';//pullRequest.base.ref;
+              const targetBase = pullRequest.base.ref;
             
               // Label docs PR (targeting "asf-site" branch)
               if (targetBase === 'asf-site') {
-                //await labelDocsPr({ github, context, pr.number });
+                await labelDocsPr({
+                  github,
+                  context,
+                  prNumber: pr.number
+                });
               }
             
               // Label PR size

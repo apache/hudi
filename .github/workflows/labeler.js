@@ -18,7 +18,6 @@
  */
 
 async function labelDocsPr({ github, context, prNumber }) {
-/*
   await github.rest.issues.addLabels({
     owner: context.repo.owner,
     repo: context.repo.repo,
@@ -26,11 +25,10 @@ async function labelDocsPr({ github, context, prNumber }) {
     labels: ['docs']
   });
 
-  console.log(`- Labeled Docs PR: ${prNumber}`);*/
+  console.log(`- Labeled Docs PR: ${prNumber}`);
 }
 
 async function labelPrWithSize({ github, context, prNumber, prData }) {
-/*
   console.log(`Label PR based on size: ${prNumber} ${prData.html_url}`);
   const additions = prData.additions;
   const deletions = prData.deletions;
@@ -59,7 +57,7 @@ async function labelPrWithSize({ github, context, prNumber, prData }) {
   });
 
   console.log(`Total lines of changes: ${totalChanges}`);
-  console.log(`Label: ${label}`);*/
+  console.log(`Label: ${label}`);
 }
 
 module.exports = {
