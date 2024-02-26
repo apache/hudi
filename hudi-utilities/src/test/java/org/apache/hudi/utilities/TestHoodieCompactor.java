@@ -114,9 +114,8 @@ public class TestHoodieCompactor {
   public void testGetSchemaWithoutSchemaFile() throws Exception {
     HoodieCompactor.Config config = new HoodieCompactor.Config();
     config.basePath = base;
-    HoodieCompactor compactor = new HoodieCompactor(jsc, config);
 
-    HoodieCompactor spyCompactor = Mockito.spy(compactor);
+    HoodieCompactor spyCompactor = Mockito.spy(new HoodieCompactor(jsc, config));
     doReturn(TRIP_EXAMPLE_SCHEMA).when(spyCompactor).getSchemaFromLatestInstant();
     String schemaStr = spyCompactor.getSchema();
     assertEquals(TRIP_EXAMPLE_SCHEMA, schemaStr);

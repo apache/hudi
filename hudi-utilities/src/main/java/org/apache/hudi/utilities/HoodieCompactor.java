@@ -276,7 +276,7 @@ public class HoodieCompactor {
     }
   }
 
-  String getSchemaFromLatestInstant() throws Exception {
+  protected String getSchemaFromLatestInstant() throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     Schema schema = schemaUtil.getTableAvroSchema(false);
     return schema.toString();
@@ -288,7 +288,7 @@ public class HoodieCompactor {
     }
   }
 
-  String getSchema() throws Exception {
+  protected String getSchema() throws Exception {
     if (StringUtils.isNullOrEmpty(cfg.schemaFile)) {
       return getSchemaFromLatestInstant();
     }
