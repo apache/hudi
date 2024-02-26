@@ -42,6 +42,7 @@ import java.util.Properties;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
 
 public class TestHoodieCompactor {
   @TempDir
@@ -116,7 +117,7 @@ public class TestHoodieCompactor {
     HoodieCompactor compactor = new HoodieCompactor(jsc, config);
 
     HoodieCompactor spyCompactor = Mockito.spy(compactor);
-    Mockito.doReturn(TRIP_EXAMPLE_SCHEMA).when(spyCompactor).getSchemaFromLatestInstant();
+    doReturn(TRIP_EXAMPLE_SCHEMA).when(spyCompactor).getSchemaFromLatestInstant();
     String schemaStr = spyCompactor.getSchema();
     assertEquals(TRIP_EXAMPLE_SCHEMA, schemaStr);
   }
