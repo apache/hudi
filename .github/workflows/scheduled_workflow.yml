@@ -77,7 +77,12 @@ jobs:
               }
             
               // Label PR size
-              await labelPrWithSize({ github, context, pr.number, pullRequest });
+              await labelPrWithSize({
+                github,
+                context,
+                prNumber: pr.number,
+                prData: pullRequest
+              });
             
               // Check Azure CI and create commit status
               if (targetBase === 'master' && !pr.body.includes('HOTFIX: SKIP AZURE CI')) {
