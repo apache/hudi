@@ -180,21 +180,25 @@ hash-based joins, point-lookup queries, etc.
 |                           | `bloomFilter`  | bytes      | the actual bloom filter for the data file            |
 |                           | `isDeleted`    | boolean    | whether the bloom filter entry is valid              |
 
-- **column\_stats** - contains statistics of columns for all the records in the table. This enables fine 
-grained file pruning for filters and join conditions in the query. The actual payload is an instance of 
+- **column\_stats** - contains statistics of columns for all the records in the table. This enables fine-grained
+file pruning for filters and join conditions in the query. The actual payload is an instance of
 [HoodieMetadataColumnStats][17] (Refer the schema below).
 
 | Schema                      | Field Name               | Data Type                                  | Description                                   |
 |:----------------------------|:-------------------------|:-------------------------------------------|:----------------------------------------------|
-| HoodieMetadataColumnStats   | `fileName`               | string                                     | file name for which the column stat applies   |
-|                             | `columnName`             | string                                     | column name for which the column stat apples  |
+| HoodieMetadataColumnStats   | `fileName`               | string                                     | file name to which the column stat applies    |
+|                             | `columnName`             | string                                     | column name to which the column stat applies  |
 |                             | `minValue`               | [Wrapper type][19] (based on data schema)  | minimum value of the column in the file       |
 |                             | `maxValue`               | [Wrapper type][19] (based on data schema)  | maximum value of the column in the file       |
 |                             | `valueCount`             | long                                       | total count of values                         |
-|                             | `nullCount`              | long                                       | total count of null values                    |
+|                             | `nullCount`              | long                                       | total count of `null` values                  |
 |                             | `totalSize`              | long                                       | total storage size on disk                    |
 |                             | `totalUncompressedSize`  | long                                       | total uncompressed storage size on disk       |
 |                             | `isDeleted`              | boolean                                    | whether the column stat entry is valid        |
+
+Notes:
+- By default, all top-level fields are indexed for column stats.
+- When a top-level field is nested, it won't be indexed by default. Dot-notation will be recognized for indexing sub-fields via manual configuration, e.g., `set hoodie.metadata.index.column.stats.column.list=foo.a.b,foo.c`
 
 - **record\_index** - contains information about record keys and their location in the dataset. This improves 
 performance of updates since it provides file locations for the updated records and also enables fine grained 
