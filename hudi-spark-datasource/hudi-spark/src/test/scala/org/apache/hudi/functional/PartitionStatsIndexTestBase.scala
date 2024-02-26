@@ -51,9 +51,11 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = _
   var instantTime: AtomicInteger = _
+  val targetColumnsToIndex: Seq[String] = Seq("rider", "driver")
   val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
-    HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true"
+    HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
+    HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
   )
   val commonOpts: Map[String, String] = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
