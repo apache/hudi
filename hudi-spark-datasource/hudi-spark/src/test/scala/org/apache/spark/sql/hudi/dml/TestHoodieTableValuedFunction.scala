@@ -608,9 +608,9 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           assert(result3DF.count() == 3)
 
           val result4DF = spark.sql(
-            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=3"
+            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=3 or type=6"
           )
-          assert(result4DF.count() == 3)
+          assert(result4DF.count() == 6)
 
           val result5DF = spark.sql(
             s"select type, key, recordIndexMetadata from hudi_metadata('$identifier') where type=5"
