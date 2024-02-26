@@ -34,30 +34,59 @@ async function labelPrWithSize({ github, context, prNumber, prData }) {
   const deletions = prData.deletions;
   const totalChanges = additions + deletions;
 
-  let label = "";
+  let newSizeLabel = "";
 
   if (totalChanges <= 10) {
-    label = "size:XS";
+    // size:XS : <= 10 LoC
+    newSizeLabel = "size:XS";
   } else if (totalChanges <= 100) {
-    label = "size:S";
+    // size:S : (10, 100] LoC
+    newSizeLabel = "size:S";
   } else if (totalChanges <= 300) {
-    label = "size:M";
+    // size:M : (100, 300] LoC
+    newSizeLabel = "size:M";
   } else if (totalChanges <= 1000) {
-    label = "size:L";
+    // size:L : (300, 1000] LoC
+    newSizeLabel = "size:L";
   } else {
-    label = "size:XL";
+    // size:XL : > 1000 LoC
+    newSizeLabel = "size:XL";
   }
 
-  // Apply the label
-  await github.rest.issues.addLabels({
+  // Check existing size label
+  const { data: labels } = await github.rest.issues.listLabelsOnIssue({
     owner: context.repo.owner,
     repo: context.repo.repo,
-    issue_number: prNumber,
-    labels: [label]
+    issue_number: prNumber
   });
 
+  const existingSizeLabels = labels.filter(label => label.name.startsWith("size:") && label.name !== newSizeLabel);
+  const newSizeLabelInExisting = labels.filter(label => label.name === newSizeLabel);
+
+  // Remove those labels
+  for (const label of existingSizeLabels) {
+    await github.rest.issues.removeLabel({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      issue_number: prNumber,
+      name: label.name,
+    });
+    console.log(`Removed old size label: ${label.name}`);
+  }
+
   console.log(`Total lines of changes: ${totalChanges}`);
-  console.log(`Label: ${label}`);
+  if (newSizeLabelInExisting.length > 0) {
+    console.log(`Accurate size Label already exists: ${newSizeLabel}`);
+  } else {
+    // Add the new label
+    await github.rest.issues.addLabels({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      issue_number: prNumber,
+      labels: [label]
+    });
+    console.log(`Added size Label: ${newSizeLabel}`);
+  }
 }
 
 module.exports = {
