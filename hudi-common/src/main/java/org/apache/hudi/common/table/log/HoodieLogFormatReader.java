@@ -40,7 +40,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private HoodieLogFileReader currentReader;
   private final FileSystem fs;
   private final Schema readerSchema;
-  private InternalSchema internalSchema;
+  private final InternalSchema internalSchema;
   private final boolean readBlocksLazily;
   private final String recordKeyField;
   private final boolean enableInlineReading;
@@ -66,13 +66,14 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     }
   }
 
-  @Override
   /**
-   * Closes latest reader.
+   * Closes any resources held
    */
+  @Override
   public void close() throws IOException {
     if (currentReader != null) {
       currentReader.close();
+      currentReader = null;
     }
   }
 
@@ -119,5 +120,4 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   public HoodieLogBlock prev() throws IOException {
     return this.currentReader.prev();
   }
-
 }

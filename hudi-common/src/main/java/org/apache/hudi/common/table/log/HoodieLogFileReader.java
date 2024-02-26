@@ -343,9 +343,10 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   @Override
   public void close() throws IOException {
     if (!closed) {
-      LOG.info("Closing Log file reader " + logFile.getFileName());
-      this.inputStream.close();
-      this.inputStream = null;
+      LOG.info("Closing Log file reader " +  logFile.getFileName());
+      if (null != this.inputStream) {
+        this.inputStream.close();
+      }
       closed = true;
     }
   }
@@ -483,7 +484,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     try {
       fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
     } catch (IOException e) {
-      throw new HoodieIOException("Exception create input stream from file: " + logFile, e);
+      throw new HoodieIOException("Exception creating input stream from file: " + logFile, e);
     }
 
     if (FSUtils.isGCSFileSystem(fs)) {
