@@ -47,7 +47,7 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             // Cron schedule may not be reliable so giving buffer time to avoid missing recent PRs
-            const since = new Date(new Date().getTime() - (24 * 60 * 60 * 1000)).toISOString();
+            const since = new Date(new Date().getTime() - (2 * 365 * 24 * 60 * 60 * 1000)).toISOString();
             const query = `repo:${context.repo.owner}/${context.repo.repo} type:pr state:open updated:>=${since}`;
             const openPrs = await github.paginate(github.rest.search.issuesAndPullRequests, {
               q: query,
