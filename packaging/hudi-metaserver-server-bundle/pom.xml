@@ -99,7 +99,7 @@
                         </goals>
                         <configuration>
                             <artifactSet>
-                                <includes>
+                                <includes combine.children="append">
                                     <include>org.apache.hudi:hudi-common</include>
                                     <include>org.apache.hudi:hudi-metaserver-server</include>
                                     <include>org.apache.thrift:libthrift</include>

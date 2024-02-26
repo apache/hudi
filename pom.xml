@@ -41,6 +41,7 @@
     <module>hudi-aws</module>
     <module>hudi-gcp</module>
     <module>hudi-hadoop-mr</module>
+    <module>hudi-io</module>
     <module>hudi-spark-datasource</module>
     <module>hudi-timeline-service</module>
     <module>hudi-utilities</module>
@@ -127,7 +128,7 @@
     <orc.spark.version>1.6.0</orc.spark.version>
     <orc.flink.version>1.5.6</orc.flink.version>
     <roaringbitmap.version>0.9.47</roaringbitmap.version>
-    <airlift.version>0.16</airlift.version>
+    <airlift.version>0.25</airlift.version>
     <prometheus.version>0.8.0</prometheus.version>
     <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
     <aws.sdk.httpcore.version>4.4.13</aws.sdk.httpcore.version>
@@ -453,6 +454,8 @@
           <!-- common to all bundles -->
           <artifactSet>
             <includes>
+              <include>org.apache.hudi:hudi-io</include>
+              <include>io.airlift:aircompressor</include>
               <!-- org.apache.httpcomponents -->
               <include>org.apache.httpcomponents:httpclient</include>
               <include>org.apache.httpcomponents:httpcore</include>
@@ -928,6 +931,13 @@
           </exclusion>
         </exclusions>
         <scope>provided</scope>
+      </dependency>
+
+      <!-- airlift -->
+      <dependency>
+        <groupId>io.airlift</groupId>
+        <artifactId>aircompressor</artifactId>
+        <version>${airlift.version}</version>
       </dependency>
 
       <!-- Snappy -->
