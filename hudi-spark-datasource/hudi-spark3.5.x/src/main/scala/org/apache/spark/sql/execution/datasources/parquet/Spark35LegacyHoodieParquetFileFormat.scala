@@ -48,6 +48,9 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
+
+import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
+
 /**
  * This class is an extension of [[ParquetFileFormat]] overriding Spark-specific behavior
  * that's not possible to customize in any other way
@@ -59,11 +62,6 @@ import org.apache.spark.util.SerializableConfiguration
  * </ol>
  */
 class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
-
-  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    val conf = sparkSession.sessionState.conf
-    conf.parquetVectorizedReaderEnabled && schema.forall(_.dataType.isInstanceOf[AtomicType])
-  }
 
   def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
     val conf = sparkSession.sessionState.conf
@@ -134,9 +132,7 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
     val resultSchema = StructType(partitionSchema.fields ++ requiredSchema.fields)
     val sqlConf = sparkSession.sessionState.conf
     val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled
-    val enableVectorizedReader: Boolean =
-      sqlConf.parquetVectorizedReaderEnabled &&
-        resultSchema.forall(_.dataType.isInstanceOf[AtomicType])
+    val enableVectorizedReader: Boolean = supportBatch(sparkSession, resultSchema)
     val enableRecordFilter: Boolean = sqlConf.parquetRecordFilterEnabled
     val timestampConversion: Boolean = sqlConf.isParquetINT96TimestampConversion
     val capacity = sqlConf.parquetVectorizedReaderBatchSize
@@ -258,6 +254,13 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
           hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
         }
         implicitTypeChangeInfo
+      }
+
+      if (enableVectorizedReader && shouldUseInternalSchema &&
+        !typeChangeInfos.values().forall(_.getLeft.isInstanceOf[AtomicType])) {
+        throw new IllegalArgumentException(
+          "Nested types with type changes(implicit or explicit) cannot be read in vectorized mode. " +
+            "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
       }
 
       val hadoopAttemptContext =
