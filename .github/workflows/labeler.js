@@ -63,7 +63,7 @@ async function labelPrWithSize({ github, context, prNumber, prData }) {
   const existingSizeLabels = labels.filter(label => label.name.startsWith("size:") && label.name !== newSizeLabel);
   const newSizeLabelInExisting = labels.filter(label => label.name === newSizeLabel);
 
-  // Remove those labels
+  // Remove stale labels that do not match the new one
   for (const label of existingSizeLabels) {
     await github.rest.issues.removeLabel({
       owner: context.repo.owner,
@@ -71,10 +71,12 @@ async function labelPrWithSize({ github, context, prNumber, prData }) {
       issue_number: prNumber,
       name: label.name,
     });
-    console.log(`Removed old size label: ${label.name}`);
+    console.log(`Removed stale size label: ${label.name}`);
   }
 
   console.log(`Total lines of changes: ${totalChanges}`);
+
+  // Add the new size label if needed
   if (newSizeLabelInExisting.length > 0) {
     console.log(`Accurate size Label already exists: ${newSizeLabel}`);
   } else {
