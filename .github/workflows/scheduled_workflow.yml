@@ -21,8 +21,6 @@ on:
   schedule:
     # Runs every 5 minutes
     - cron: '*/5 * * * *'
-  pull_request:
-    types: [ opened, edited, reopened, synchronize ]
 
 permissions:
   statuses: write
