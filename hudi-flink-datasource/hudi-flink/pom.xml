@@ -181,6 +181,7 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>${flink.connector.kafka.artifactId}</artifactId>
+            <version>${flink.connector.kafka.version}</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
