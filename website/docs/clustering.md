@@ -322,6 +322,12 @@ def structuredStreamingWithClustering(): Unit = {
 }
 ```
 
+## Java Client
+
+Clustering is also support via Java client. Plan strategy `org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy`
+and execution strategy `org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy` are supported
+out-of-the-box. Note that as of now only linear sort is supported in Java execution strategy.
+
 ## Related Resources
 <h3>Videos</h3>
 
