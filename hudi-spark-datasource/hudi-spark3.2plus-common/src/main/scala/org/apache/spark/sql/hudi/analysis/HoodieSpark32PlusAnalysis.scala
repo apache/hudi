@@ -17,8 +17,10 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
+import org.apache.hudi.storage.HoodieLocation
+
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, EliminateSubqueryAliases, NamedRelation, UnresolvedAttribute, UnresolvedPartitionSpec}
@@ -29,14 +31,13 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
-import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
 
 /**
  * NOTE: PLEASE READ CAREFULLY
@@ -91,7 +92,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
     case HoodieTableChanges(args) =>
       val (tablePath, opts) = HoodieTableChangesOptionsParser.parseOptions(args, HoodieTableChanges.FUNC_NAME)
       val hoodieDataSource = new DefaultSource
-      if (tablePath.contains(Path.SEPARATOR)) {
+      if (tablePath.contains(HoodieLocation.SEPARATOR)) {
         // the first param is table path
         val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> tablePath))
         LogicalRelation(relation)

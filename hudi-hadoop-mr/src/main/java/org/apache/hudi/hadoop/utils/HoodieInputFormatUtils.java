@@ -43,6 +43,7 @@ import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -244,7 +245,7 @@ public class HoodieInputFormatUtils {
       return Option.empty();
     }
     String incrementalInputPaths = partitionsToList.stream()
-        .map(s -> StringUtils.isNullOrEmpty(s) ? tableMetaClient.getBasePath() : tableMetaClient.getBasePath() + Path.SEPARATOR + s)
+        .map(s -> StringUtils.isNullOrEmpty(s) ? tableMetaClient.getBasePath() : tableMetaClient.getBasePath() + HoodieLocation.SEPARATOR + s)
         .filter(s -> {
           /*
            * Ensure to return only results from the original input path that has incremental changes

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.functional.TestHDFSParquetImporter;
@@ -76,7 +77,7 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
   @BeforeEach
   public void init() throws IOException, ParseException {
     tableName = "test_table";
-    tablePath = basePath + Path.SEPARATOR + tableName;
+    tablePath = basePath + HoodieLocation.SEPARATOR + tableName;
     sourcePath = new Path(basePath, "source");
     targetPath = new Path(tablePath);
     schemaFile = new Path(basePath, "file.schema").toString();
@@ -108,7 +109,7 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
         () -> assertEquals("Table imported to hoodie format", result.toString()));
 
     // Check hudi table exist
-    String metaPath = targetPath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
+    String metaPath = targetPath + HoodieLocation.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
     assertTrue(Files.exists(Paths.get(metaPath)), "Hoodie table not exist.");
 
     // Load meta data

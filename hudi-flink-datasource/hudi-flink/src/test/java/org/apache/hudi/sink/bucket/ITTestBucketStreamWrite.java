@@ -28,6 +28,7 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
@@ -110,7 +111,7 @@ public class ITTestBucketStreamWrite {
 
     // delete successful commit to simulate an unsuccessful write
     FileSystem fs = metaClient.getFs();
-    Path path = new Path(metaClient.getMetaPath() + Path.SEPARATOR + filename);
+    Path path = new Path(metaClient.getMetaPath() + HoodieLocation.SEPARATOR + filename);
     fs.delete(path);
 
     // marker types are different for COW and MOR

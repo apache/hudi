@@ -30,11 +30,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.internal.schema.Types;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -68,7 +69,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Return the base-path of the Metadata Table for the given Dataset identified by base-path
    */
   static String getMetadataTableBasePath(String dataTableBasePath) {
-    return dataTableBasePath + Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
+    return dataTableBasePath + HoodieLocation.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
   }
 
   /**
@@ -93,7 +94,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @param metadataTableBasePath The base path of the metadata table
    */
   static String getDatasetBasePath(String metadataTableBasePath) {
-    int endPos = metadataTableBasePath.lastIndexOf(Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
+    int endPos = metadataTableBasePath.lastIndexOf(HoodieLocation.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
     checkState(endPos != -1, metadataTableBasePath + " should be base path of the metadata table");
     return metadataTableBasePath.substring(0, endPos);
   }
@@ -107,7 +108,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     if (basePath == null || basePath.isEmpty()) {
       return false;
     }
-    if (basePath.endsWith(Path.SEPARATOR)) {
+    if (basePath.endsWith(HoodieLocation.SEPARATOR)) {
       basePath = basePath.substring(0, basePath.length() - 1);
     }
     return basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);

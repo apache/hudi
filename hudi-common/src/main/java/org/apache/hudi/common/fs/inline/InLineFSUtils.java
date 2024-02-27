@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.fs.inline;
 
+import org.apache.hudi.storage.HoodieLocation;
+
 import org.apache.hadoop.fs.Path;
 
 import java.io.File;
@@ -33,8 +35,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class InLineFSUtils {
   private static final String START_OFFSET_STR = "start_offset";
   private static final String LENGTH_STR = "length";
-  private static final String PATH_SEPARATOR = "/";
-  private static final String SCHEME_SEPARATOR = ":";
+  private static final String SCHEME_SEPARATOR = "" + HoodieLocation.COLON_CHAR;
   private static final String EQUALS_STR = "=";
   private static final String LOCAL_FILESYSTEM_SCHEME = "file";
 
@@ -54,8 +55,9 @@ public class InLineFSUtils {
   public static Path getInlineFilePath(Path outerPath, String origScheme, long inLineStartOffset, long inLineLength) {
     final String subPath = new File(outerPath.toString().substring(outerPath.toString().indexOf(":") + 1)).getPath();
     return new Path(
-        InLineFileSystem.SCHEME + SCHEME_SEPARATOR + PATH_SEPARATOR + subPath + PATH_SEPARATOR + origScheme
-            + PATH_SEPARATOR + "?" + START_OFFSET_STR + EQUALS_STR + inLineStartOffset
+        InLineFileSystem.SCHEME + SCHEME_SEPARATOR
+            + HoodieLocation.SEPARATOR + subPath + HoodieLocation.SEPARATOR + origScheme
+            + HoodieLocation.SEPARATOR + "?" + START_OFFSET_STR + EQUALS_STR + inLineStartOffset
             + "&" + LENGTH_STR + EQUALS_STR + inLineLength
     );
   }
@@ -84,7 +86,7 @@ public class InLineFSUtils {
 
     final String pathExceptScheme = basePath.toString().substring(basePath.toString().indexOf(SCHEME_SEPARATOR) + 1);
     final String fullPath = outerFileScheme + SCHEME_SEPARATOR
-        + (outerFileScheme.equals(LOCAL_FILESYSTEM_SCHEME) ? PATH_SEPARATOR : "")
+        + (outerFileScheme.equals(LOCAL_FILESYSTEM_SCHEME) ? HoodieLocation.SEPARATOR : "")
         + pathExceptScheme;
     return new Path(fullPath);
   }

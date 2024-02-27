@@ -24,6 +24,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -82,7 +83,7 @@ public class ViewStorageProperties {
   }
 
   private static Path getPropertiesFilePath(String basePath, String uniqueId) {
-    String auxPath = basePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
+    String auxPath = basePath + HoodieLocation.SEPARATOR + AUXILIARYFOLDER_NAME;
     String fileName = StringUtils.isNullOrEmpty(uniqueId) ? FILE_NAME : FILE_NAME + "_" + uniqueId;
     return new Path(auxPath, fileName);
   }

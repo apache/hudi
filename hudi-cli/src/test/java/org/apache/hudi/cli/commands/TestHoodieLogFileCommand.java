@@ -44,6 +44,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieLocation;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -201,7 +202,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
 
     // write to path '2015/03/16'.
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    partitionPath = tablePath + Path.SEPARATOR + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+    partitionPath = tablePath + HoodieLocation.SEPARATOR + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     Files.createDirectories(Paths.get(partitionPath));
 
     HoodieLogFormat.Writer writer = null;

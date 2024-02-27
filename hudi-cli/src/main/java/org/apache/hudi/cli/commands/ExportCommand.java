@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -168,7 +169,7 @@ public class ExportCommand {
               LOG.error("Could not load metadata for action " + action + " at instant time " + instantTime);
               continue;
             }
-            final String outPath = localFolder + Path.SEPARATOR + instantTime + "." + action;
+            final String outPath = localFolder + HoodieLocation.SEPARATOR + instantTime + "." + action;
             writeToFile(outPath, HoodieAvroUtils.avroToJson(metadata, true));
           }
         }
@@ -190,7 +191,7 @@ public class ExportCommand {
     final HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     final HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     for (HoodieInstant instant : instants) {
-      String localPath = localFolder + Path.SEPARATOR + instant.getFileName();
+      String localPath = localFolder + HoodieLocation.SEPARATOR + instant.getFileName();
 
       byte[] data = null;
       switch (instant.getAction()) {
