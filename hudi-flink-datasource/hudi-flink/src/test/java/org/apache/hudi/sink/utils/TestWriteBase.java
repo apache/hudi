@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.util.StreamerUtil;
@@ -414,7 +414,7 @@ public class TestWriteBase {
     }
 
     private void checkWrittenDataMor(File baseFile, Map<String, String> expected, int partitions) throws Exception {
-      FileSystem fs = FSUtils.getFs(basePath, new org.apache.hadoop.conf.Configuration());
+      FileSystem fs = HadoopFSUtils.getFs(basePath, new org.apache.hadoop.conf.Configuration());
       TestData.checkWrittenDataMOR(fs, baseFile, expected, partitions);
     }
 

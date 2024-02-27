@@ -24,11 +24,11 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.beust.jcommander.Parameter;
@@ -222,7 +222,7 @@ public class HoodieSyncConfig extends HoodieConfig {
   }
 
   public FileSystem getHadoopFileSystem() {
-    return FSUtils.getFs(getString(META_SYNC_BASE_PATH), getHadoopConf());
+    return HadoopFSUtils.getFs(getString(META_SYNC_BASE_PATH), getHadoopConf());
   }
 
   public String getAbsoluteBasePath() {

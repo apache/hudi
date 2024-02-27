@@ -20,12 +20,12 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.fs.CachingPath;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
-import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
+import static org.apache.hudi.hadoop.fs.CachingPath.createRelativePathUnsafe;
 
 /**
  * Hoodie base file - Represents metadata about Hudi file in DFS.

@@ -51,6 +51,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -378,7 +379,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       throw new IllegalStateException("The base path has not been initialized.");
     }
 
-    fs = FSUtils.getFs(basePath, configuration);
+    fs = HadoopFSUtils.getFs(basePath, configuration);
     if (fs instanceof LocalFileSystem) {
       LocalFileSystem lfs = (LocalFileSystem) fs;
       // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream

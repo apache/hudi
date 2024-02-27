@@ -21,6 +21,8 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.spark.api.java.JavaRDD
@@ -50,7 +52,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     val javaRdd: JavaRDD[String] = jsc.parallelize(partitionPaths, partitionPaths.size())
     val serHadoopConf = new SerializableConfiguration(jsc.hadoopConfiguration())
     javaRdd.rdd.map(part => {
-      val fs = FSUtils.getFs(new Path(srcPath), serHadoopConf.get())
+      val fs = HadoopFSUtils.getFs(new Path(srcPath), serHadoopConf.get())
       FSUtils.getAllDataFilesInPartition(fs, FSUtils.getPartitionPath(srcPath, part))
     }).flatMap(_.toList)
       .filter(status => {

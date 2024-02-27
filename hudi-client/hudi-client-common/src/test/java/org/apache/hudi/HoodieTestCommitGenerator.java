@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -162,7 +163,7 @@ public class HoodieTestCommitGenerator {
       String basePath, Configuration configuration,
       String filename, String content) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + filename);
-    try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
+    try (FSDataOutputStream os = HadoopFSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
       os.writeBytes(new String(getUTF8Bytes(content)));
     }
   }
@@ -170,7 +171,7 @@ public class HoodieTestCommitGenerator {
   public static void createDataFile(
       String basePath, Configuration configuration,
       String partitionPath, String filename) throws IOException {
-    FileSystem fs = FSUtils.getFs(basePath, configuration);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
     Path filePath = new Path(new Path(basePath, partitionPath), filename);
     Path parent = filePath.getParent();
     if (!fs.exists(parent)) {

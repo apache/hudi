@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.storage.StorageSchemes;
+
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 

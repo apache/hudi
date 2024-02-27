@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieSerializableFileStatus;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -40,6 +39,8 @@ import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.PartialBindVisitor;
 import org.apache.hudi.expression.Predicates;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.HoodieSerializableFileStatus;
 import org.apache.hudi.internal.schema.Types;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -83,7 +84,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                                        boolean assumeDatePartitioning) {
     super(engineContext, conf, datasetBasePath);
 
-    FileSystem fs = FSUtils.getFs(dataBasePath.get(), conf.get());
+    FileSystem fs = HadoopFSUtils.getFs(dataBasePath.get(), conf.get());
     Path metaPath = new Path(dataBasePath.get(), HoodieTableMetaClient.METAFOLDER_NAME);
     TableNotFoundException.checkTableValidity(fs, this.dataBasePath.get(), metaPath);
     HoodieTableConfig tableConfig = new HoodieTableConfig(fs, metaPath.toString(), null, null);

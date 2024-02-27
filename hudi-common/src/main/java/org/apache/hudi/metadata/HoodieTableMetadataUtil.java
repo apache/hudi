@@ -68,6 +68,7 @@ import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.util.Lazy;
@@ -310,7 +311,7 @@ public class HoodieTableMetadataUtil {
    */
   public static boolean metadataPartitionExists(String basePath, HoodieEngineContext context, MetadataPartitionType partitionType) {
     final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    FileSystem fs = FSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
+    FileSystem fs = HadoopFSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
     try {
       return fs.exists(new Path(metadataTablePath, partitionType.getPartitionPath()));
     } catch (Exception e) {
@@ -1415,7 +1416,7 @@ public class HoodieTableMetadataUtil {
    */
   public static String deleteMetadataTable(HoodieTableMetaClient dataMetaClient, HoodieEngineContext context, boolean backup) {
     final Path metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2());
-    FileSystem fs = FSUtils.getFs(metadataTablePath.toString(), context.getHadoopConf().get());
+    FileSystem fs = HadoopFSUtils.getFs(metadataTablePath.toString(), context.getHadoopConf().get());
     dataMetaClient.getTableConfig().clearMetadataPartitions(dataMetaClient);
     try {
       if (!fs.exists(metadataTablePath)) {
@@ -1470,7 +1471,7 @@ public class HoodieTableMetadataUtil {
     }
 
     final Path metadataTablePartitionPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePath()), partitionType.getPartitionPath());
-    FileSystem fs = FSUtils.getFs(metadataTablePartitionPath.toString(), context.getHadoopConf().get());
+    FileSystem fs = HadoopFSUtils.getFs(metadataTablePartitionPath.toString(), context.getHadoopConf().get());
     dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, false);
     try {
       if (!fs.exists(metadataTablePartitionPath)) {

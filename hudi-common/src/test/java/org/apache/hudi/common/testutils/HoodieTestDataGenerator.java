@@ -21,7 +21,6 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -38,6 +37,7 @@ import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
@@ -536,7 +536,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
     FSDataOutputStream os = null;
     try {
-      FileSystem fs = FSUtils.getFs(basePath, configuration);
+      FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
       os = fs.create(commitFile, true);
       // Write empty commit metadata
       os.write(content);
@@ -586,7 +586,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private static void createEmptyFile(String basePath, Path filePath, Configuration configuration) throws IOException {
-    FileSystem fs = FSUtils.getFs(basePath, configuration);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
     FSDataOutputStream os = fs.create(filePath, true);
     os.close();
   }
@@ -602,7 +602,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
                                                        Configuration configuration) throws IOException {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
-    FileSystem fs = FSUtils.getFs(basePath, configuration);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
       HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
       // Write empty commit metadata
@@ -614,7 +614,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeSavePointFileName(instantTime));
-    FileSystem fs = FSUtils.getFs(basePath, configuration);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
       // Write empty commit metadata

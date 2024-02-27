@@ -18,7 +18,6 @@
 
 package org.apache.hudi.internal.schema.io;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -26,6 +25,7 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
@@ -144,7 +144,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public String getHistorySchemaStrByGivenValidCommits(List<String> validCommits) {
     List<String> commitList = validCommits == null || validCommits.isEmpty() ? getValidInstants() : validCommits;
     try {
-      FileSystem fs = FSUtils.getFs(baseSchemaPath.toString(), conf);
+      FileSystem fs = HadoopFSUtils.getFs(baseSchemaPath.toString(), conf);
       if (fs.exists(baseSchemaPath)) {
         List<String> validaSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath))
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))

@@ -18,13 +18,12 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.util.VisibleForTesting;
-
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -33,9 +32,8 @@ import org.apache.parquet.hadoop.api.WriteSupport;
 import java.io.Closeable;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.util.concurrent.atomic.AtomicLong;
-
 import java.lang.reflect.Method;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Base class of Hudi's custom {@link ParquetWriter} implementations

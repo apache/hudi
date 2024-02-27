@@ -31,7 +31,6 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -63,6 +62,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
@@ -632,7 +632,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // clean up and reinit
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
-    UtilitiesTestBase.Helpers.deleteFileFromDfs(FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration()), basePath + "/" + PROPS_FILENAME_TEST_SOURCE);
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration()), basePath + "/" + PROPS_FILENAME_TEST_SOURCE);
     writeCommonPropsToFile(fs, basePath);
     defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   }
@@ -1593,7 +1593,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     //now assert that hoodie.properties file now has updated payload class name
     Properties props = new Properties();
     String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
-    FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
     try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
       props.load(inputStream);
     }
@@ -1613,7 +1613,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     //now assert that hoodie.properties file now has updated payload class name
     Properties props = new Properties();
     String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
-    FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
     try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
       props.load(inputStream);
     }
@@ -1638,7 +1638,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     //now assert that hoodie.properties file does not have payload class prop since it is a COW table
     Properties props = new Properties();
     String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
-    FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
     try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
       props.load(inputStream);
     }

@@ -21,7 +21,6 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -29,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -213,7 +213,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   @Test
   public void testReadHFileFormatRecords() throws Exception {
     writeFileWithSimpleSchema();
-    FileSystem fs = FSUtils.getFs(getFilePath().toString(), new Configuration());
+    FileSystem fs = HadoopFSUtils.getFs(getFilePath().toString(), new Configuration());
     byte[] content = FileIOUtils.readAsByteArray(
         fs.open(getFilePath()), (int) fs.getFileStatus(getFilePath()).getLen());
     // Reading byte array in HFile format, without actual file path
@@ -419,7 +419,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     // using different Hudi releases.  The file is copied from .hoodie/.aux/.bootstrap/.partitions/
     String bootstrapIndexFile = hfilePrefix + BOOTSTRAP_INDEX_HFILE_SUFFIX;
 
-    FileSystem fs = FSUtils.getFs(getFilePath().toString(), new Configuration());
+    FileSystem fs = HadoopFSUtils.getFs(getFilePath().toString(), new Configuration());
     byte[] content = readHFileFromResources(simpleHFile);
     verifyHFileReader(
         HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),

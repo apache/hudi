@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -180,7 +181,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   public void testEnvVarVariablesPickedup() {
     environmentVariables.set("HOODIE_ENV_fs_DOT_key1", "value1");
-    Configuration conf = FSUtils.prepareHadoopConf(HoodieTestUtils.getDefaultHadoopConf());
+    Configuration conf = HadoopFSUtils.prepareHadoopConf(HoodieTestUtils.getDefaultHadoopConf());
     assertEquals("value1", conf.get("fs.key1"));
     conf.set("fs.key1", "value11");
     conf.set("fs.key2", "value2");
@@ -387,9 +388,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String log3 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 3, writeToken);
     Files.createFile(partitionPath.resolve(log3));
 
-    assertEquals(3, (int) FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
+    assertEquals(3, (int) FSUtils.getLatestLogVersion(HadoopFSUtils.getFs(basePath, new Configuration()),
         new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime).get().getLeft());
-    assertEquals(4, FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
+    assertEquals(4, FSUtils.computeNextLogVersion(HadoopFSUtils.getFs(basePath, new Configuration()),
         new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime));
   }
 

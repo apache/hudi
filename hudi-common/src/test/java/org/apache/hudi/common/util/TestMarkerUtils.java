@@ -21,10 +21,12 @@ package org.apache.hudi.common.util;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
+
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -41,7 +43,7 @@ class TestMarkerUtils extends HoodieCommonTestHarness {
   @BeforeEach
   public void setup() {
     initPath();
-    fs = FSUtils.getFs(basePath, new Configuration());
+    fs = HadoopFSUtils.getFs(basePath, new Configuration());
   }
 
   @Test

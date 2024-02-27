@@ -29,8 +29,9 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
-import org.apache.hudi.common.fs.FSUtils;
+
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 /**
  * This class helps to estimate the number of files to read a given number of total records.
@@ -40,7 +41,7 @@ public abstract class DFSDeltaInputReader implements DeltaInputReader<GenericRec
 
   protected List<String> getFilePathsToRead(String basePath, PathFilter filter, long totalRecordsToRead) throws
       IOException {
-    FileSystem fs = FSUtils.getFs(basePath, new Configuration());
+    FileSystem fs = HadoopFSUtils.getFs(basePath, new Configuration());
     // TODO : Sort list by file size and take the median file status to ensure fair calculation and change to remote
     // iterator
     List<FileStatus> fileStatuses = Arrays.asList(fs.globStatus(new Path(basePath, "*/*"), filter));

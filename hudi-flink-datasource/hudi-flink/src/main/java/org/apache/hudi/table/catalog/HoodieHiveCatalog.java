@@ -21,7 +21,6 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -35,6 +34,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.table.HoodieTableFactory;
@@ -397,7 +397,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
           } else {
             // fallback to the partition path pattern
             Path hoodieTablePath = new Path(path);
-            hiveStyle = Arrays.stream(FSUtils.getFs(hoodieTablePath, hiveConf).listStatus(hoodieTablePath))
+            hiveStyle = Arrays.stream(HadoopFSUtils.getFs(hoodieTablePath, hiveConf).listStatus(hoodieTablePath))
                 .map(fileStatus -> fileStatus.getPath().getName())
                 .filter(f -> !f.equals(".hoodie") && !f.equals("default"))
                 .anyMatch(FilePathUtils::isHiveStylePartitioning);

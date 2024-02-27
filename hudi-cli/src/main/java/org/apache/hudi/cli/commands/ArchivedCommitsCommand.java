@@ -26,7 +26,6 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -38,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -110,11 +110,11 @@ public class ArchivedCommitsCommand {
     if (folder != null && !folder.isEmpty()) {
       archivePath = new Path(basePath + "/.hoodie/" + folder);
     }
-    FileStatus[] fsStatuses = FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
+    FileStatus[] fsStatuses = HadoopFSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
     List<Comparable[]> allStats = new ArrayList<>();
     for (FileStatus fs : fsStatuses) {
       // read the archived file
-      Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
+      Reader reader = HoodieLogFormat.newReader(HadoopFSUtils.getFs(basePath, HoodieCLI.conf),
           new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
 
       List<IndexedRecord> readRecords = new ArrayList<>();
@@ -184,11 +184,11 @@ public class ArchivedCommitsCommand {
     String basePath = metaClient.getBasePath();
     Path archivePath = new Path(metaClient.getArchivePath() + "/.commits_.archive*");
     FileStatus[] fsStatuses =
-        FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
+        HadoopFSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
     List<Comparable[]> allCommits = new ArrayList<>();
     for (FileStatus fs : fsStatuses) {
       // read the archived file
-      HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
+      HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(HadoopFSUtils.getFs(basePath, HoodieCLI.conf),
           new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
 
       List<IndexedRecord> readRecords = new ArrayList<>();

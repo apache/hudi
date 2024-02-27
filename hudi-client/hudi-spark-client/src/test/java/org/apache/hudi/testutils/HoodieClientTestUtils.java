@@ -22,7 +22,6 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -40,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
@@ -275,7 +275,7 @@ public class HoodieClientTestUtils {
     // TODO: this should be ported to use HoodieStorageReader
     List<GenericRecord> valuesAsList = new LinkedList<>();
 
-    FileSystem fs = FSUtils.getFs(paths[0], jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(paths[0], jsc.hadoopConfiguration());
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
     Schema schema = null;
     for (String path : paths) {

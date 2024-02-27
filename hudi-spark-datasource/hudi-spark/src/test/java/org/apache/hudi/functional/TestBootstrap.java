@@ -52,6 +52,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.storage.HoodieAvroParquetReader;
@@ -494,7 +495,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
 
   private void verifyNoMarkerInTempFolder() throws IOException {
     String tempFolderPath = metaClient.getTempFolderPath();
-    FileSystem fileSystem = FSUtils.getFs(tempFolderPath, jsc.hadoopConfiguration());
+    FileSystem fileSystem = HadoopFSUtils.getFs(tempFolderPath, jsc.hadoopConfiguration());
     assertEquals(0, fileSystem.listStatus(new Path(tempFolderPath)).length);
   }
 

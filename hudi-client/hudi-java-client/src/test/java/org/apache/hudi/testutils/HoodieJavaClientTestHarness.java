@@ -62,6 +62,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
@@ -197,7 +198,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       throw new IllegalStateException("The base path has not been initialized.");
     }
 
-    fs = FSUtils.getFs(basePath, hadoopConf);
+    fs = HadoopFSUtils.getFs(basePath, hadoopConf);
     if (fs instanceof LocalFileSystem) {
       LocalFileSystem lfs = (LocalFileSystem) fs;
       // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream
@@ -996,7 +997,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     // TODO: this should be ported to use HoodieStorageReader
     List<GenericRecord> valuesAsList = new LinkedList<>();
 
-    FileSystem fs = FSUtils.getFs(paths[0], context.getHadoopConf().get());
+    FileSystem fs = HadoopFSUtils.getFs(paths[0], context.getHadoopConf().get());
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
     Schema schema = null;
     for (String path : paths) {
