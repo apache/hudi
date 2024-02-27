@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.internal.SQLConf;
@@ -41,7 +42,9 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
     return new HoodieSparkParquetReader(conf, path);
   }
 
-  protected HoodieFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
+  protected HoodieFileReader newHFileFileReader(Configuration conf,
+                                                Path path,
+                                                Option<Schema> schemaOption) throws IOException {
     throw new HoodieIOException("Not support read HFile");
   }
 

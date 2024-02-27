@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -36,6 +37,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
 
 public class ConfigUtils {
   public static final String STREAMER_CONFIG_PREFIX = "hoodie.streamer.";
@@ -55,6 +58,8 @@ public class ConfigUtils {
    * location to read.
    */
   public static final String TABLE_SERDE_PATH = "path";
+
+  public static final HoodieConfig DEFAULT_HUDI_CONFIG_FOR_READER = new HoodieConfig();
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigUtils.class);
 
@@ -274,11 +279,11 @@ public class ConfigUtils {
    * Gets the raw value for a {@link ConfigProperty} config from properties. The key and
    * alternative keys are used to fetch the config.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config to fetch.
    * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
    */
-  public static Option<Object> getRawValueWithAltKeys(TypedProperties props,
+  public static Option<Object> getRawValueWithAltKeys(Properties props,
                                                       ConfigProperty<?> configProperty) {
     if (props.containsKey(configProperty.key())) {
       return Option.ofNullable(props.get(configProperty.key()));
@@ -289,6 +294,32 @@ public class ConfigUtils {
                 + "and may be removed in the future. Please use the new key '%s' instead.",
             alternative, configProperty.key()));
         return Option.ofNullable(props.get(alternative));
+      }
+    }
+    return Option.empty();
+  }
+
+  /**
+   * Gets the raw value for a {@link ConfigProperty} config from Hadoop configuration. The key and
+   * alternative keys are used to fetch the config.
+   *
+   * @param conf           Configs in Hadoop {@link Configuration}.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
+   */
+  public static Option<String> getRawValueWithAltKeys(Configuration conf,
+                                                      ConfigProperty<?> configProperty) {
+    String value = conf.get(configProperty.key());
+    if (value != null) {
+      return Option.of(value);
+    }
+    for (String alternative : configProperty.getAlternatives()) {
+      String altValue = conf.get(alternative);
+      if (altValue != null) {
+        LOG.warn(String.format("The configuration key '%s' has been deprecated "
+                + "and may be removed in the future. Please use the new key '%s' instead.",
+            alternative, configProperty.key()));
+        return Option.of(altValue);
       }
     }
     return Option.empty();
@@ -407,17 +438,35 @@ public class ConfigUtils {
    * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
    * config, if exists, is returned if the config is not found in the properties.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config to fetch.
    * @return boolean value if the config exists; default boolean value if the config does not exist
    * and there is default value defined in the {@link ConfigProperty} config; {@code false} otherwise.
    */
-  public static boolean getBooleanWithAltKeys(TypedProperties props,
+  public static boolean getBooleanWithAltKeys(Properties props,
                                               ConfigProperty<?> configProperty) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
     boolean defaultValue = configProperty.hasDefaultValue()
         ? Boolean.parseBoolean(configProperty.defaultValue().toString()) : false;
     return rawValue.map(v -> Boolean.parseBoolean(v.toString())).orElse(defaultValue);
+  }
+
+  /**
+   * Gets the boolean value for a {@link ConfigProperty} config from Hadoop configuration. The key and
+   * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
+   * config, if exists, is returned if the config is not found in the configuration.
+   *
+   * @param conf           Configs in Hadoop {@link Configuration}.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return boolean value if the config exists; default boolean value if the config does not exist
+   * and there is default value defined in the {@link ConfigProperty} config; {@code false} otherwise.
+   */
+  public static boolean getBooleanWithAltKeys(Configuration conf,
+                                              ConfigProperty<?> configProperty) {
+    Option<String> rawValue = getRawValueWithAltKeys(conf, configProperty);
+    boolean defaultValue = configProperty.hasDefaultValue()
+        ? Boolean.parseBoolean(configProperty.defaultValue().toString()) : false;
+    return rawValue.map(Boolean::parseBoolean).orElse(defaultValue);
   }
 
   /**
@@ -497,5 +546,13 @@ public class ConfigUtils {
       keys.addAll(configProperty.getAlternatives());
       return keys.stream();
     }).collect(Collectors.toSet());
+  }
+
+  public static HoodieConfig getReaderConfigs(Configuration conf) {
+    HoodieConfig config = new HoodieConfig();
+    config.setAll(DEFAULT_HUDI_CONFIG_FOR_READER.getProps());
+    config.setValue(USE_NATIVE_HFILE_READER,
+        Boolean.toString(ConfigUtils.getBooleanWithAltKeys(conf, USE_NATIVE_HFILE_READER)));
+    return config;
   }
 }

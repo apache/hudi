@@ -72,6 +72,7 @@ import scala.Tuple2;
 
 import static java.util.Map.Entry.comparingByValue;
 import static java.util.stream.Collectors.toMap;
+import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * This class helps to generate updates from an already existing hoodie dataset. It supports generating updates in across partitions, files and records.
@@ -271,8 +272,8 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     if (fileSlice.getBaseFile().isPresent()) {
       // Read the base files using the latest writer schema.
       Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
-      HoodieAvroFileReader reader = TypeUtils.unsafeCast(HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(),
-          new Path(fileSlice.getBaseFile().get().getPath())));
+      HoodieAvroFileReader reader = TypeUtils.unsafeCast(HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
+          DEFAULT_HUDI_CONFIG_FOR_READER, metaClient.getHadoopConf(), new Path(fileSlice.getBaseFile().get().getPath())));
       return new CloseableMappingIterator<>(reader.getRecordIterator(schema), HoodieRecord::getData);
     } else {
       // If there is no data file, fall back to reading log files

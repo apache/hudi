@@ -33,10 +33,16 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.hfile.HFileReader;
+import org.apache.hudi.io.hfile.HFileReaderImpl;
+import org.apache.hudi.io.hfile.Key;
+import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.io.util.IOUtils;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.CellComparatorImpl;
@@ -94,7 +100,8 @@ public class HFileBootstrapIndex extends BootstrapIndex {
   private static final String HFILE_CELL_KEY_SUFFIX_PART = "//LATEST_TIMESTAMP/Put/vlen";
 
   // Additional Metadata written to HFiles.
-  public static final byte[] INDEX_INFO_KEY = Bytes.toBytes("INDEX_INFO");
+  public static final String INDEX_INFO_KEY_STRING = "INDEX_INFO";
+  public static final byte[] INDEX_INFO_KEY = Bytes.toBytes(INDEX_INFO_KEY_STRING);
 
   private final boolean isPresent;
 
@@ -165,29 +172,6 @@ public class HFileBootstrapIndex extends BootstrapIndex {
             HoodieFileFormat.HFILE.getFileExtension()));
   }
 
-  /**
-   * HFile stores cell key in the format example : "2020/03/18//LATEST_TIMESTAMP/Put/vlen=3692/seqid=0".
-   * This API returns only the user key part from it.
-   * @param cellKey HFIle Cell Key
-   * @return
-   */
-  private static String getUserKeyFromCellKey(String cellKey) {
-    int hfileSuffixBeginIndex = cellKey.lastIndexOf(HFILE_CELL_KEY_SUFFIX_PART);
-    return cellKey.substring(0, hfileSuffixBeginIndex);
-  }
-
-  /**
-   * Helper method to create HFile Reader.
-   *
-   * @param hFilePath File Path
-   * @param conf Configuration
-   * @param fileSystem File System
-   */
-  private static HFile.Reader createReader(String hFilePath, Configuration conf, FileSystem fileSystem) {
-    LOG.info("Opening HFile for reading :" + hFilePath);
-    return HoodieHFileUtils.createHFileReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf), conf);
-  }
-
   @Override
   public BootstrapIndex.IndexReader createReader() {
     return new HFileBootstrapIndexReader(metaClient);
@@ -230,8 +214,8 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     private final String indexByFileIdPath;
 
     // Index Readers
-    private transient HFile.Reader indexByPartitionReader;
-    private transient HFile.Reader indexByFileIdReader;
+    private transient HFileReader indexByPartitionReader;
+    private transient HFileReader indexByFileIdReader;
 
     // Bootstrap Index Info
     private transient HoodieBootstrapIndexInfo bootstrapIndexInfo;
@@ -245,6 +229,214 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       initIndexInfo();
       this.bootstrapBasePath = bootstrapIndexInfo.getBootstrapBasePath();
       LOG.info("Loaded HFileBasedBootstrapIndex with source base path :" + bootstrapBasePath);
+    }
+
+    /**
+     * Helper method to create native HFile Reader.
+     *
+     * @param hFilePath  file path.
+     * @param fileSystem file system.
+     */
+    private static HFileReader createReader(String hFilePath, FileSystem fileSystem) throws IOException {
+      LOG.info("Opening HFile for reading :" + hFilePath);
+      Path path = new Path(hFilePath);
+      long fileSize = fileSystem.getFileStatus(path).getLen();
+      FSDataInputStream stream = fileSystem.open(path);
+      return new HFileReaderImpl(stream, fileSize);
+    }
+
+    private synchronized void initIndexInfo() {
+      if (bootstrapIndexInfo == null) {
+        try {
+          bootstrapIndexInfo = fetchBootstrapIndexInfo();
+        } catch (IOException ioe) {
+          throw new HoodieException(ioe.getMessage(), ioe);
+        }
+      }
+    }
+
+    private HoodieBootstrapIndexInfo fetchBootstrapIndexInfo() throws IOException {
+      return TimelineMetadataUtils.deserializeAvroMetadata(
+          partitionIndexReader().getMetaInfo(new UTF8StringKey(INDEX_INFO_KEY_STRING)).get(),
+          HoodieBootstrapIndexInfo.class);
+    }
+
+    private synchronized HFileReader partitionIndexReader() throws IOException {
+      if (indexByPartitionReader == null) {
+        LOG.info("Opening partition index :" + indexByPartitionPath);
+        this.indexByPartitionReader = createReader(indexByPartitionPath, metaClient.getFs());
+      }
+      return indexByPartitionReader;
+    }
+
+    private synchronized HFileReader fileIdIndexReader() throws IOException {
+      if (indexByFileIdReader == null) {
+        LOG.info("Opening fileId index :" + indexByFileIdPath);
+        this.indexByFileIdReader = createReader(indexByFileIdPath, metaClient.getFs());
+      }
+      return indexByFileIdReader;
+    }
+
+    @Override
+    public List<String> getIndexedPartitionPaths() {
+      try {
+        return getAllKeys(partitionIndexReader(), HFileBootstrapIndex::getPartitionFromKey);
+      } catch (IOException e) {
+        throw new HoodieIOException("Unable to read indexed partition paths.", e);
+      }
+    }
+
+    @Override
+    public List<HoodieFileGroupId> getIndexedFileGroupIds() {
+      try {
+        return getAllKeys(fileIdIndexReader(), HFileBootstrapIndex::getFileGroupFromKey);
+      } catch (IOException e) {
+        throw new HoodieIOException("Unable to read indexed file group IDs.", e);
+      }
+    }
+
+    private <T> List<T> getAllKeys(HFileReader reader, Function<String, T> converter) {
+      List<T> keys = new ArrayList<>();
+      try {
+        boolean available = reader.seekTo();
+        while (available) {
+          keys.add(converter.apply(reader.getKeyValue().get().getKey().getContentInString()));
+          available = reader.next();
+        }
+      } catch (IOException ioe) {
+        throw new HoodieIOException(ioe.getMessage(), ioe);
+      }
+
+      return keys;
+    }
+
+    @Override
+    public List<BootstrapFileMapping> getSourceFileMappingForPartition(String partition) {
+      try {
+        HFileReader reader = partitionIndexReader();
+        Key lookupKey = new UTF8StringKey(getPartitionKey(partition));
+        reader.seekTo();
+        if (reader.seekTo(lookupKey) == HFileReader.SEEK_TO_FOUND) {
+          org.apache.hudi.io.hfile.KeyValue keyValue = reader.getKeyValue().get();
+          byte[] valBytes = IOUtils.copy(
+              keyValue.getBytes(), keyValue.getValueOffset(), keyValue.getValueLength());
+          HoodieBootstrapPartitionMetadata metadata =
+              TimelineMetadataUtils.deserializeAvroMetadata(valBytes, HoodieBootstrapPartitionMetadata.class);
+          return metadata.getFileIdToBootstrapFile().entrySet().stream()
+              .map(e -> new BootstrapFileMapping(bootstrapBasePath, metadata.getBootstrapPartitionPath(),
+                  partition, e.getValue(), e.getKey())).collect(Collectors.toList());
+        } else {
+          LOG.warn("No value found for partition key (" + partition + ")");
+          return new ArrayList<>();
+        }
+      } catch (IOException ioe) {
+        throw new HoodieIOException(ioe.getMessage(), ioe);
+      }
+    }
+
+    @Override
+    public String getBootstrapBasePath() {
+      return bootstrapBasePath;
+    }
+
+    @Override
+    public Map<HoodieFileGroupId, BootstrapFileMapping> getSourceFileMappingForFileIds(
+        List<HoodieFileGroupId> ids) {
+      Map<HoodieFileGroupId, BootstrapFileMapping> result = new HashMap<>();
+      // Arrange input Keys in sorted order for 1 pass scan
+      List<HoodieFileGroupId> fileGroupIds = new ArrayList<>(ids);
+      Collections.sort(fileGroupIds);
+      try {
+        HFileReader reader = fileIdIndexReader();
+        reader.seekTo();
+        for (HoodieFileGroupId fileGroupId : fileGroupIds) {
+          Key lookupKey = new UTF8StringKey(getFileGroupKey(fileGroupId));
+          if (reader.seekTo(lookupKey) == HFileReader.SEEK_TO_FOUND) {
+            org.apache.hudi.io.hfile.KeyValue keyValue = reader.getKeyValue().get();
+            byte[] valBytes = IOUtils.copy(
+                keyValue.getBytes(), keyValue.getValueOffset(), keyValue.getValueLength());
+            HoodieBootstrapFilePartitionInfo fileInfo = TimelineMetadataUtils.deserializeAvroMetadata(valBytes,
+                HoodieBootstrapFilePartitionInfo.class);
+            BootstrapFileMapping mapping = new BootstrapFileMapping(bootstrapBasePath,
+                fileInfo.getBootstrapPartitionPath(), fileInfo.getPartitionPath(), fileInfo.getBootstrapFileStatus(),
+                fileGroupId.getFileId());
+            result.put(fileGroupId, mapping);
+          }
+        }
+      } catch (IOException ioe) {
+        throw new HoodieIOException(ioe.getMessage(), ioe);
+      }
+      return result;
+    }
+
+    @Override
+    public void close() {
+      try {
+        if (indexByPartitionReader != null) {
+          indexByPartitionReader.close();
+          indexByPartitionReader = null;
+        }
+        if (indexByFileIdReader != null) {
+          indexByFileIdReader.close();
+          indexByFileIdReader = null;
+        }
+      } catch (IOException ioe) {
+        throw new HoodieIOException(ioe.getMessage(), ioe);
+      }
+    }
+  }
+
+  /**
+   * HBase HFile reader based Index Reader.  This is deprecated.
+   */
+  public static class HBaseHFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
+
+    // Base Path of external files.
+    private final String bootstrapBasePath;
+    // Well Known Paths for indices
+    private final String indexByPartitionPath;
+    private final String indexByFileIdPath;
+
+    // Index Readers
+    private transient HFile.Reader indexByPartitionReader;
+    private transient HFile.Reader indexByFileIdReader;
+
+    // Bootstrap Index Info
+    private transient HoodieBootstrapIndexInfo bootstrapIndexInfo;
+
+    public HBaseHFileBootstrapIndexReader(HoodieTableMetaClient metaClient) {
+      super(metaClient);
+      Path indexByPartitionPath = partitionIndexPath(metaClient);
+      Path indexByFilePath = fileIdIndexPath(metaClient);
+      this.indexByPartitionPath = indexByPartitionPath.toString();
+      this.indexByFileIdPath = indexByFilePath.toString();
+      initIndexInfo();
+      this.bootstrapBasePath = bootstrapIndexInfo.getBootstrapBasePath();
+      LOG.info("Loaded HFileBasedBootstrapIndex with source base path :" + bootstrapBasePath);
+    }
+
+    /**
+     * HFile stores cell key in the format example : "2020/03/18//LATEST_TIMESTAMP/Put/vlen=3692/seqid=0".
+     * This API returns only the user key part from it.
+     *
+     * @param cellKey HFIle Cell Key
+     * @return
+     */
+    private static String getUserKeyFromCellKey(String cellKey) {
+      int hfileSuffixBeginIndex = cellKey.lastIndexOf(HFILE_CELL_KEY_SUFFIX_PART);
+      return cellKey.substring(0, hfileSuffixBeginIndex);
+    }
+
+    /**
+     * Helper method to create HFile Reader.
+     *
+     * @param hFilePath  File Path
+     * @param conf       Configuration
+     * @param fileSystem File System
+     */
+    private static HFile.Reader createReader(String hFilePath, Configuration conf, FileSystem fileSystem) {
+      LOG.info("Opening HFile for reading :" + hFilePath);
+      return HoodieHFileUtils.createHFileReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf), conf);
     }
 
     private void initIndexInfo() {

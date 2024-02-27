@@ -19,10 +19,13 @@
 
 package org.apache.hudi.io.util;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 
 /**
  * Util methods on I/O.
@@ -264,5 +267,14 @@ public class IOUtils {
     while ((len = inputStream.read(buffer)) != -1) {
       outputStream.write(buffer, 0, len);
     }
+  }
+
+  /**
+   * @param byteBuffer {@link ByteBuffer} containing the bytes.
+   * @return {@link DataInputStream} based on the byte buffer.
+   */
+  public static DataInputStream getDataInputStream(ByteBuffer byteBuffer) {
+    return new DataInputStream(new ByteArrayInputStream(
+        byteBuffer.array(), byteBuffer.arrayOffset(), byteBuffer.limit() - byteBuffer.arrayOffset()));
   }
 }

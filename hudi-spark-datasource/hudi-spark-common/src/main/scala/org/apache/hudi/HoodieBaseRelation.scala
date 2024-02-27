@@ -22,10 +22,13 @@ import org.apache.hudi.HoodieBaseRelation._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, SerializableConfiguration}
+import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig, HoodieMetadataConfig, SerializableConfiguration}
+import org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.model.HoodieFileFormat.HFILE
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
@@ -40,14 +43,13 @@ import org.apache.hudi.hadoop.fs.CachingPath
 import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.io.storage.HoodieAvroHFileReader
+import org.apache.hudi.io.storage.HoodieFileReaderFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
@@ -754,7 +756,11 @@ object HoodieBaseRelation extends SparkAdapterSupport {
     partitionedFile => {
       val hadoopConf = hadoopConfBroadcast.value.get()
       val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(partitionedFile)
-      val reader = new HoodieAvroHFileReader(hadoopConf, filePath, new CacheConfig(hadoopConf))
+      val hoodieConfig = new HoodieConfig()
+      hoodieConfig.setValue(USE_NATIVE_HFILE_READER,
+        options.getOrElse(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue().toString))
+      val reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(hoodieConfig, hadoopConf, filePath, HFILE)
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema
       // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable

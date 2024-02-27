@@ -27,6 +27,7 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
@@ -120,6 +121,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
+import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -323,20 +325,22 @@ public class HoodieTableMetadataUtil {
    * Convert commit action to metadata records for the enabled partition types.
    *
    * @param commitMetadata          - Commit action metadata
+   * @param hoodieConfig            - Hudi configs
    * @param instantTime             - Action instant time
    * @param recordsGenerationParams - Parameters for the record generation
    * @return Map of partition to metadata records for the commit action
    */
   public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadataToRecords(
-      HoodieEngineContext context, HoodieCommitMetadata commitMetadata, String instantTime,
-      MetadataRecordsGenerationParams recordsGenerationParams) {
+      HoodieEngineContext context, HoodieConfig hoodieConfig, HoodieCommitMetadata commitMetadata,
+      String instantTime, MetadataRecordsGenerationParams recordsGenerationParams) {
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
         convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1);
     partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecordsRDD);
 
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.BLOOM_FILTERS)) {
-      final HoodieData<HoodieRecord> metadataBloomFilterRecords = convertMetadataToBloomFilterRecords(context, commitMetadata, instantTime, recordsGenerationParams);
+      final HoodieData<HoodieRecord> metadataBloomFilterRecords = convertMetadataToBloomFilterRecords(
+          context, hoodieConfig, commitMetadata, instantTime, recordsGenerationParams);
       partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, metadataBloomFilterRecords);
     }
 
@@ -431,7 +435,7 @@ public class HoodieTableMetadataUtil {
    * @return HoodieData of metadata table records
    */
   public static HoodieData<HoodieRecord> convertMetadataToBloomFilterRecords(
-      HoodieEngineContext context, HoodieCommitMetadata commitMetadata,
+      HoodieEngineContext context, HoodieConfig hoodieConfig, HoodieCommitMetadata commitMetadata,
       String instantTime, MetadataRecordsGenerationParams recordsGenerationParams) {
     final List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(entry -> entry.stream()).collect(Collectors.toList());
@@ -463,7 +467,8 @@ public class HoodieTableMetadataUtil {
 
       final Path writeFilePath = new Path(recordsGenerationParams.getDataMetaClient().getBasePath(), pathWithPartition);
       try (HoodieFileReader fileReader =
-               HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), writeFilePath)) {
+               HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
+                   hoodieConfig, recordsGenerationParams.getDataMetaClient().getHadoopConf(), writeFilePath)) {
         try {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
@@ -893,7 +898,9 @@ public class HoodieTableMetadataUtil {
   }
 
   private static ByteBuffer readBloomFilter(Configuration conf, Path filePath) throws IOException {
-    try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(conf, filePath)) {
+    HoodieConfig hoodieConfig = getReaderConfigs(conf);
+    try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(hoodieConfig, conf, filePath)) {
       final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
       if (fileBloomFilter == null) {
         return null;
@@ -1728,6 +1735,7 @@ public class HoodieTableMetadataUtil {
    */
   @Deprecated
   public static HoodieData<HoodieRecord> readRecordKeysFromBaseFiles(HoodieEngineContext engineContext,
+                                                                     HoodieConfig config,
                                                                      List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs,
                                                                      boolean forDelete,
                                                                      int recordIndexMaxParallelism,
@@ -1748,7 +1756,8 @@ public class HoodieTableMetadataUtil {
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
-      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(configuration.get(), dataFilePath);
+      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+          .getFileReader(config, configuration.get(), dataFilePath);
       ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
 
       return new ClosableIterator<HoodieRecord>() {
@@ -1842,7 +1851,9 @@ public class HoodieTableMetadataUtil {
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
-      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(configuration.get(), dataFilePath);
+      HoodieConfig hoodieConfig = getReaderConfigs(configuration.get());
+      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+          .getFileReader(hoodieConfig, configuration.get(), dataFilePath);
       ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
 
       return new ClosableIterator<HoodieRecord>() {
