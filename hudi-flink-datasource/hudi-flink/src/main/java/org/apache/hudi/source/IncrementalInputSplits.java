@@ -35,7 +35,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
@@ -412,7 +412,7 @@ public class IncrementalInputSplits implements Serializable {
    * @return the set of read partitions
    */
   private Set<String> getReadPartitions(List<HoodieCommitMetadata> metadataList) {
-    Set<String> partitions = HoodieInputFormatUtils.getWritePartitionPaths(metadataList);
+    Set<String> partitions = HoodieTableMetadataUtil.getWritePartitionPaths(metadataList);
     // apply partition push down
     if (this.partitionPruner != null) {
       Set<String> selectedPartitions = this.partitionPruner.filter(partitions);
