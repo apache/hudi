@@ -66,7 +66,7 @@ import static org.apache.hudi.utilities.config.HoodieStreamerConfig.TRANSFORMER_
 /**
  * Wrapper over HoodieStreamer.java class.
  * Helps with ingesting incremental data into hoodie datasets for multiple tables.
- * Currently supports only COPY_ON_WRITE storage type.
+ * Supports COPY_ON_WRITE and MERGE_ON_READ storage types.
  */
 public class HoodieMultiTableStreamer {
 
