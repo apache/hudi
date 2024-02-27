@@ -35,8 +35,6 @@ public class StoragePathInfo implements Serializable {
   private final StoragePath path;
   private final long length;
   private final boolean isDirectory;
-  // blockReplication and blockSize are kept for backwards compatibility
-  // for Hive query engine
   private final short blockReplication;
   private final long blockSize;
   private final long modificationTime;
