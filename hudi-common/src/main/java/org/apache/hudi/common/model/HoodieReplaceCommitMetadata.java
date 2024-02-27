@@ -25,11 +25,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -116,7 +117,7 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
 
   public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
     try {
-      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
+      return fromJsonString(fromUTF8Bytes(bytes), clazz);
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata", e);
     }

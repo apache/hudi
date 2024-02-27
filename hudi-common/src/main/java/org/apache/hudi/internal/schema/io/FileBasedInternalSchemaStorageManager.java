@@ -38,7 +38,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -46,6 +45,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SCHEMA_COMMIT_ACTION;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -155,7 +155,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
           try (FSDataInputStream is = fs.open(latestFilePath)) {
             content = FileIOUtils.readAsByteArray(is);
             LOG.info(String.format("read history schema success from file : %s", latestFilePath));
-            return new String(content, StandardCharsets.UTF_8);
+            return fromUTF8Bytes(content);
           } catch (IOException e) {
             throw new HoodieIOException("Could not read history schema from " + latestFilePath, e);
           }

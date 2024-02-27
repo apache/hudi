@@ -36,7 +36,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
-import static org.apache.hudi.common.util.StringUtils.getStringFromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReaderBase
     implements HoodieSeekingFileReader<IndexedRecord> {
@@ -109,7 +109,7 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
     getKeySchema(readerSchema).ifPresent(keyFieldSchema -> {
       final Object keyObject = record.get(keyFieldSchema.pos());
       if (keyObject != null && keyObject.toString().isEmpty()) {
-        record.put(keyFieldSchema.pos(), getStringFromUTF8Bytes(keyBytes, keyOffset, keyLength));
+        record.put(keyFieldSchema.pos(), fromUTF8Bytes(keyBytes, keyOffset, keyLength));
       }
     });
 

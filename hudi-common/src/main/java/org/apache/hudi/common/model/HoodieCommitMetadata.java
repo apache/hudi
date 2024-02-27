@@ -36,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -45,6 +44,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -246,7 +247,7 @@ public class HoodieCommitMetadata implements Serializable {
   // TODO: refactor this method to avoid doing the json tree walking (HUDI-4822).
   public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(
       byte[] bytes, HoodieFileGroupId fileGroupId) {
-    String jsonStr = new String(bytes, StandardCharsets.UTF_8);
+    String jsonStr = fromUTF8Bytes(bytes);
     if (jsonStr.isEmpty()) {
       return Option.empty();
     }
@@ -510,7 +511,7 @@ public class HoodieCommitMetadata implements Serializable {
 
   public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
     try {
-      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
+      return fromJsonString(fromUTF8Bytes(bytes), clazz);
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata", e);
     }

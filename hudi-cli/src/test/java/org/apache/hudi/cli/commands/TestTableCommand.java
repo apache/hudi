@@ -46,7 +46,6 @@ import org.springframework.shell.Shell;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
@@ -55,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -285,6 +285,6 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     byte[] data = new byte[(int) fileToRead.length()];
     fis.read(data);
     fis.close();
-    return new String(data, StandardCharsets.UTF_8);
+    return fromUTF8Bytes(data);
   }
 }

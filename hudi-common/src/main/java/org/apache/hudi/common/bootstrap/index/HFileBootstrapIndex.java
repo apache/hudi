@@ -54,7 +54,6 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,7 +100,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
   // Additional Metadata written to HFiles.
   public static final String INDEX_INFO_KEY_STRING = "INDEX_INFO";
-  public static final byte[] INDEX_INFO_KEY = Bytes.toBytes(INDEX_INFO_KEY_STRING);
+  public static final byte[] INDEX_INFO_KEY = getUTF8Bytes(INDEX_INFO_KEY_STRING);
 
   private final boolean isPresent;
 
@@ -515,11 +514,11 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     @Override
     public List<BootstrapFileMapping> getSourceFileMappingForPartition(String partition) {
       try (HFileScanner scanner = partitionIndexReader().getScanner(true, false)) {
-        KeyValue keyValue = new KeyValue(Bytes.toBytes(getPartitionKey(partition)), new byte[0], new byte[0],
+        KeyValue keyValue = new KeyValue(getUTF8Bytes(getPartitionKey(partition)), new byte[0], new byte[0],
             HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);
         if (scanner.seekTo(keyValue) == 0) {
           ByteBuffer readValue = scanner.getValue();
-          byte[] valBytes = Bytes.toBytes(readValue);
+          byte[] valBytes = IOUtils.toBytes(readValue);
           HoodieBootstrapPartitionMetadata metadata =
               TimelineMetadataUtils.deserializeAvroMetadata(valBytes, HoodieBootstrapPartitionMetadata.class);
           return metadata.getFileIdToBootstrapFile().entrySet().stream()
@@ -548,11 +547,11 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       Collections.sort(fileGroupIds);
       try (HFileScanner scanner = fileIdIndexReader().getScanner(true, false)) {
         for (HoodieFileGroupId fileGroupId : fileGroupIds) {
-          KeyValue keyValue = new KeyValue(Bytes.toBytes(getFileGroupKey(fileGroupId)), new byte[0], new byte[0],
+          KeyValue keyValue = new KeyValue(getUTF8Bytes(getFileGroupKey(fileGroupId)), new byte[0], new byte[0],
               HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);
           if (scanner.seekTo(keyValue) == 0) {
             ByteBuffer readValue = scanner.getValue();
-            byte[] valBytes = Bytes.toBytes(readValue);
+            byte[] valBytes = IOUtils.toBytes(readValue);
             HoodieBootstrapFilePartitionInfo fileInfo = TimelineMetadataUtils.deserializeAvroMetadata(valBytes,
                 HoodieBootstrapFilePartitionInfo.class);
             BootstrapFileMapping mapping = new BootstrapFileMapping(bootstrapBasePath,
@@ -641,7 +640,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
         Option<byte[]> bytes = TimelineMetadataUtils.serializeAvroMetadata(bootstrapPartitionMetadata, HoodieBootstrapPartitionMetadata.class);
         if (bytes.isPresent()) {
           indexByPartitionWriter
-              .append(new KeyValue(Bytes.toBytes(getPartitionKey(partitionPath)), new byte[0], new byte[0],
+              .append(new KeyValue(getUTF8Bytes(getPartitionKey(partitionPath)), new byte[0], new byte[0],
                   HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, bytes.get()));
           numPartitionKeysAdded++;
         }

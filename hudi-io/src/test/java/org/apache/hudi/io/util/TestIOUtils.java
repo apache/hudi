@@ -27,6 +27,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -106,5 +107,32 @@ public class TestIOUtils {
     assertEquals(18, IOUtils.compareTo(bytes1, 0, 6, bytes2, 0, 6));
     assertEquals(-155, IOUtils.compareTo(bytes1, 1, 4, bytes2, 0, 5));
     assertEquals(22, IOUtils.compareTo(bytes1, 4, 2, bytes2, 2, 4));
+  }
+
+  @Test
+  public void testIndexOf() {
+    byte[] array = new byte[] {(byte) 0x9b, 0, 0x18, 0x65, 0x2e, (byte) 0xf3};
+    assertEquals(0, IOUtils.indexOf(array, new byte[] {}));
+    assertEquals(0, IOUtils.indexOf(array, new byte[] {(byte) 0x9b, 0}));
+    assertEquals(2, IOUtils.indexOf(array, new byte[] {0x18, 0x65, 0x2e}));
+    assertEquals(4, IOUtils.indexOf(array, new byte[] {0x2e, (byte) 0xf3}));
+    assertEquals(-1, IOUtils.indexOf(array, new byte[] {0x2e, (byte) 0xf3, 0x31}));
+    assertEquals(-1, IOUtils.indexOf(array, new byte[] {0x31}));
+  }
+
+  @Test
+  public void testToBytes() {
+    assertArrayEquals(new byte[] {0, 0, 0, 20}, IOUtils.toBytes(20));
+    assertArrayEquals(new byte[] {0x02, (byte) 0x93, (byte) 0xed, (byte) 0x88}, IOUtils.toBytes(43249032));
+    assertArrayEquals(new byte[] {0x19, (byte) 0x99, (byte) 0x9a, 0x61}, IOUtils.toBytes(Integer.MAX_VALUE / 5 + 200));
+    assertArrayEquals(new byte[] {(byte) 0x7f, (byte) 0xff, (byte) 0xff, (byte) 0xff}, IOUtils.toBytes(Integer.MAX_VALUE));
+    assertArrayEquals(new byte[] {0, 0, 0, 0, 0, 0, 0, 20}, IOUtils.toBytes(20L));
+    assertArrayEquals(new byte[] {0, 0, 0, 0, 0x49, 0x52, 0x45, 0x32}, IOUtils.toBytes(1230128434L));
+    assertArrayEquals(
+        new byte[] {0x19, (byte) 0x99, (byte) 0x99, (byte) 0x99, (byte) 0x99, (byte) 0x99, (byte) 0x9a, 0x61},
+        IOUtils.toBytes(Long.MAX_VALUE / 5 + 200));
+    assertArrayEquals(
+        new byte[] {(byte) 0x7f, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff},
+        IOUtils.toBytes(Long.MAX_VALUE));
   }
 }
