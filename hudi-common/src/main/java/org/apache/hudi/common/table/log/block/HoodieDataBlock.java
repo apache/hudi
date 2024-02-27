@@ -25,9 +25,9 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockConte
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.SeekableDataInputStream;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FSDataInputStream;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -88,7 +88,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
   protected HoodieDataBlock(Option<byte[]> content,
-                            Supplier<FSDataInputStream> inputStreamSupplier,
+                            Supplier<SeekableDataInputStream> inputStreamSupplier,
                             boolean readBlockLazily,
                             Option<HoodieLogBlockContentLocation> blockContentLocation,
                             Option<Schema> readerSchema,

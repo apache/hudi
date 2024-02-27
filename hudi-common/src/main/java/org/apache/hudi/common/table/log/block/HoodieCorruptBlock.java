@@ -19,8 +19,7 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.util.Option;
-
-import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hudi.io.SeekableDataInputStream;
 
 import java.io.IOException;
 import java.util.Map;
@@ -32,7 +31,7 @@ import java.util.function.Supplier;
  */
 public class HoodieCorruptBlock extends HoodieLogBlock {
 
-  public HoodieCorruptBlock(Option<byte[]> corruptedBytes, Supplier<FSDataInputStream> inputStreamSupplier, boolean readBlockLazily,
+  public HoodieCorruptBlock(Option<byte[]> corruptedBytes, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                             Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
                             Map<HeaderMetadataType, String> footer) {
     super(header, footer, blockContentLocation, corruptedBytes, inputStreamSupplier, readBlockLazily);

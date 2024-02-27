@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.io.BinaryDecoder;
@@ -36,7 +37,6 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
-import org.apache.hadoop.fs.FSDataInputStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -73,9 +73,16 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     this.recordsToDelete = recordsToDelete;
   }
 
-  public HoodieDeleteBlock(Option<byte[]> content, Supplier<FSDataInputStream> inputStreamSupplier, boolean readBlockLazily,
+  public HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
                            Map<HeaderMetadataType, String> footer) {
+    // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
+    this(content, inputStreamSupplier, readBlockLazily, blockContentLocation, header, footer, false);
+  }
+
+  HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
+                    Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
+                    Map<HeaderMetadataType, String> footer, boolean shouldWriteRecordPositions) {
     super(header, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
   }
 
