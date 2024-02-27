@@ -34,7 +34,7 @@ import java.io.IOException;
  * Helper functions around FileStatus and HoodieFileStatus.
  */
 public class FileStatusUtils {
-
+  // Dummy change
   public static Path toPath(HoodiePath path) {
     if (null == path) {
       return null;
