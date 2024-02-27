@@ -24,7 +24,7 @@ on:
 
 permissions:
   statuses: write
-  pull-requests: read
+  pull-requests: write
   issues: read
 
 jobs:
@@ -54,6 +54,7 @@ jobs:
               per_page: 100
             });
             
+            const { labelDocsPr, labelPrWithSize } = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/labeler.js`);
             const checkAzureCiAndCreateCommitStatus = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/azure_ci.js`);
             
             console.log(`Number of PRs to process: ${openPrs.length}`);
@@ -69,6 +70,23 @@ jobs:
             
               const targetBase = pullRequest.base.ref;
               console.log(`Target base branch: ${targetBase}`);
+            
+              // Label docs PR (targeting "asf-site" branch)
+              if (targetBase === 'asf-site') {
+                await labelDocsPr({
+                  github,
+                  context,
+                  prNumber: pr.number
+                });
+              }
+            
+              // Label PR size
+              await labelPrWithSize({
+                github,
+                context,
+                prNumber: pr.number,
+                prData: pullRequest
+              });
             
               // Check Azure CI and create commit status (targeting "master", "release*", or "branch-0.x" branch)
               const targetBaseRegex = /^(master|release.*|branch-0\.x)$/;
