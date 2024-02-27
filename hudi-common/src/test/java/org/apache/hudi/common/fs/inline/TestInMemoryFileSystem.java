@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.fs.inline;
 
+import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
