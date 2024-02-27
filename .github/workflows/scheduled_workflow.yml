@@ -46,7 +46,7 @@ jobs:
           script: |
             // Cron schedule may not be reliable so giving buffer time to avoid missing recent PRs
             const since = new Date(new Date().getTime() - (900 * 1000)).toISOString();
-            const query = `repo:${context.repo.owner}/${context.repo.repo} type:pr state:open base:master updated:>=${since}`;
+            const query = `repo:${context.repo.owner}/${context.repo.repo} type:pr state:open updated:>=${since}`;
             const openPrs = await github.paginate(github.rest.search.issuesAndPullRequests, {
               q: query,
               sort: 'updated',
@@ -61,12 +61,19 @@ jobs:
             for (const pr of openPrs) {
               console.log(`*** Processing PR: ${pr.title}, URL: ${pr.html_url}`);
             
-              if (!pr.body.includes('HOTFIX: SKIP AZURE CI')) {
-                const { data: pullRequest } = await github.rest.pulls.get({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: pr.number
-                });
+              const { data: pullRequest } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number
+              });
+            
+              const targetBase = pullRequest.base.ref;
+              console.log(`Target base branch: ${targetBase}`);
+            
+              // Check Azure CI and create commit status (targeting "master", "release*", or "branch-0.x" branch)
+              const targetBaseRegex = /^(master|release.*|branch-0\.x)$/;
+              if (targetBaseRegex.test(targetBase)
+                && !pr.body.includes('HOTFIX: SKIP AZURE CI')) {
                 const latestCommitHash = pullRequest.head.sha;
             
                 // Create commit status based on Azure CI report to PR
