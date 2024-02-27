@@ -166,12 +166,12 @@ public class KafkaOffsetGen {
           if (toOffset == range.untilOffset()) {
             exhaustedPartitions.add(range.partition());
           }
-          allocedEvents += toOffset - range.fromOffset();
           // We need recompute toOffset if allocedEvents larger than actualNumEvents.
-          if (allocedEvents > actualNumEvents) {
+          if (allocedEvents + (toOffset - range.fromOffset()) > actualNumEvents) {
             long offsetsToAdd = Math.min(eventsPerPartition, (actualNumEvents - allocedEvents));
-            toOffset = Math.min(range.untilOffset(), toOffset + offsetsToAdd);
+            toOffset = Math.min(range.untilOffset(), range.fromOffset() + offsetsToAdd);
           }
+          allocedEvents = allocedEvents + (toOffset - range.fromOffset());
           OffsetRange thisRange = OffsetRange.create(range.topicPartition(), range.fromOffset(), toOffset);
           finalRanges.add(thisRange);
           ranges[i] = OffsetRange.create(range.topicPartition(), range.fromOffset() + thisRange.count(), range.untilOffset());
