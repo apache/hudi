@@ -31,13 +31,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -163,8 +163,8 @@ public class HoodieTestCommitGenerator {
       String basePath, Configuration configuration,
       String filename, String content) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + filename);
-    try (FSDataOutputStream os = HadoopFSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
-      os.writeBytes(new String(getUTF8Bytes(content)));
+    try (OutputStream os = HadoopFSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
+      os.write(getUTF8Bytes(content));
     }
   }
 

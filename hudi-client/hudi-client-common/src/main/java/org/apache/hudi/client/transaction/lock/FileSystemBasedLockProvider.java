@@ -37,7 +37,6 @@ import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -45,6 +44,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -181,9 +181,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   public void reloadCurrentOwnerLockInfo() {
-    try (FSDataInputStream fis = fs.open(this.lockFile)) {
+    try (InputStream is = fs.open(this.lockFile)) {
       if (fs.exists(this.lockFile)) {
-        this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(fis);
+        this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(is);
       } else {
         this.currentOwnerLockInfo = "";
       }

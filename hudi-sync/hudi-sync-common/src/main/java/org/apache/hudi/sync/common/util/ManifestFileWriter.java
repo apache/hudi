@@ -28,12 +28,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -71,7 +71,7 @@ public class ManifestFileWriter {
         LOG.info("Writing base file names to manifest file: " + baseFiles.size());
       }
       final Path manifestFilePath = getManifestFilePath(useAbsolutePath);
-      try (FSDataOutputStream outputStream = metaClient.getFs().create(manifestFilePath, true);
+      try (OutputStream outputStream = metaClient.getFs().create(manifestFilePath, true);
            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8))) {
         for (String f : baseFiles) {
           writer.write(f);

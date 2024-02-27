@@ -27,7 +27,6 @@ import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -43,6 +42,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateProperFormattedSchema;
@@ -126,7 +126,7 @@ public class TestSanitizationUtils {
   private String getJson(String path) {
     FileSystem fs = HadoopFSUtils.getFs(path, jsc.hadoopConfiguration(), true);
     String schemaStr;
-    try (FSDataInputStream in = fs.open(new Path(path))) {
+    try (InputStream in = fs.open(new Path(path))) {
       schemaStr = FileIOUtils.readAsUTFString(in);
     } catch (IOException e) {
       throw new HoodieIOException("can't read schema file", e);

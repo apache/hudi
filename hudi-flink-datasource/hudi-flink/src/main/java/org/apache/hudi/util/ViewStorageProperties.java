@@ -27,14 +27,14 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Date;
 import java.util.Properties;
 
@@ -58,7 +58,7 @@ public class ViewStorageProperties {
     Path propertyPath = getPropertiesFilePath(basePath, flinkConf.getString(FlinkOptions.WRITE_CLIENT_ID));
     FileSystem fs = HadoopFSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(flinkConf));
     fs.delete(propertyPath, false);
-    try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+    try (OutputStream outputStream = fs.create(propertyPath)) {
       config.getProps().store(outputStream,
           "Filesystem view storage properties saved on " + new Date(System.currentTimeMillis()));
     }
@@ -73,7 +73,7 @@ public class ViewStorageProperties {
     FileSystem fs = HadoopFSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(conf));
     Properties props = new Properties();
     try {
-      try (FSDataInputStream inputStream = fs.open(propertyPath)) {
+      try (InputStream inputStream = fs.open(propertyPath)) {
         props.load(inputStream);
       }
       return FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();

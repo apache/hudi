@@ -41,7 +41,6 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
@@ -50,6 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -189,7 +189,7 @@ public class TimelineServerPerf implements Serializable {
 
     private final Path dumpPath;
     private final FileSystem fileSystem;
-    private FSDataOutputStream outputStream;
+    private OutputStream outputStream;
 
     public Dumper(FileSystem fs, Path dumpPath) {
       this.dumpPath = dumpPath;

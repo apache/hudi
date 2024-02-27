@@ -29,10 +29,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -114,8 +114,8 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
 
   static void createFileWithMetadata(String basePath, Configuration configuration, String name, String content) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
-    try (FSDataOutputStream os = HadoopFSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
-      os.writeBytes(new String(getUTF8Bytes(content)));
+    try (OutputStream os = HadoopFSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
+      os.write(getUTF8Bytes(content));
     }
   }
 

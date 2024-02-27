@@ -33,7 +33,6 @@ import org.apache.hudi.utilities.functional.TestHDFSParquetImporter;
 import org.apache.hudi.utilities.functional.TestHDFSParquetImporter.HoodieTripModel;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -45,6 +44,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.ParseException;
@@ -83,7 +83,7 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
     schemaFile = new Path(basePath, "file.schema").toString();
 
     // create schema file
-    try (FSDataOutputStream schemaFileOS = fs.create(new Path(schemaFile))) {
+    try (OutputStream schemaFileOS = fs.create(new Path(schemaFile))) {
       schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
     }
 

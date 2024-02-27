@@ -99,7 +99,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -131,6 +130,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.time.Instant;
@@ -1594,7 +1594,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Properties props = new Properties();
     String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
     FileSystem fs = HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
-    try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
+    try (InputStream inputStream = fs.open(new Path(metaPath))) {
       props.load(inputStream);
     }
 
@@ -1614,7 +1614,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Properties props = new Properties();
     String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
     FileSystem fs = HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
-    try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
+    try (InputStream inputStream = fs.open(new Path(metaPath))) {
       props.load(inputStream);
     }
     assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), PartialUpdateAvroPayload.class.getName());
@@ -1639,7 +1639,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Properties props = new Properties();
     String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
     FileSystem fs = HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
-    try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
+    try (InputStream inputStream = fs.open(new Path(metaPath))) {
       props.load(inputStream);
     }
 
