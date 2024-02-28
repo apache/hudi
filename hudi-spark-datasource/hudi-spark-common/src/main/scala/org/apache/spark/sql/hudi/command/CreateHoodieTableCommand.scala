@@ -151,6 +151,7 @@ object CreateHoodieTableCommand {
       identifier = newTableIdentifier,
       storage = newStorage,
       schema = hoodieCatalogTable.tableSchema,
+      provider = Some("hudi"),
       partitionColumnNames = partitionColumnNames,
       createVersion = SPARK_VERSION,
       properties = newTblProperties
