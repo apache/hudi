@@ -19,12 +19,12 @@
 
 package org.apache.hudi.storage.hadoop;
 
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
@@ -38,6 +38,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePathInfo;
 
 /**
  * Implementation of {@link HoodieStorage} using Hadoop's {@link FileSystem}
@@ -92,7 +96,7 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public List<StoragePathInfo> listDirectEntries(StoragePath path) throws IOException {
     return Arrays.stream(fs.listStatus(convertToHadoopPath(path)))
-        .map(this::convertToStoragePathInfo)
+        .map(HadoopFSUtils::convertToStoragePathInfo)
         .collect(Collectors.toList());
   }
 
@@ -109,9 +113,9 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public List<StoragePathInfo> listDirectEntries(List<StoragePath> pathList) throws IOException {
     return Arrays.stream(fs.listStatus(pathList.stream()
-            .map(this::convertToHadoopPath)
+            .map(HadoopFSUtils::convertToHadoopPath)
             .toArray(Path[]::new)))
-        .map(this::convertToStoragePathInfo)
+        .map(HadoopFSUtils::convertToStoragePathInfo)
         .collect(Collectors.toList());
   }
 
@@ -122,7 +126,7 @@ public class HoodieHadoopStorage extends HoodieStorage {
     return Arrays.stream(fs.listStatus(
             convertToHadoopPath(path), e ->
                 filter.accept(convertToStoragePath(e))))
-        .map(this::convertToStoragePathInfo)
+        .map(HadoopFSUtils::convertToStoragePathInfo)
         .collect(Collectors.toList());
   }
 
@@ -130,7 +134,7 @@ public class HoodieHadoopStorage extends HoodieStorage {
   public List<StoragePathInfo> globEntries(StoragePath pathPattern)
       throws IOException {
     return Arrays.stream(fs.globStatus(convertToHadoopPath(pathPattern)))
-        .map(this::convertToStoragePathInfo)
+        .map(HadoopFSUtils::convertToStoragePathInfo)
         .collect(Collectors.toList());
   }
 
@@ -139,7 +143,7 @@ public class HoodieHadoopStorage extends HoodieStorage {
       throws IOException {
     return Arrays.stream(fs.globStatus(convertToHadoopPath(pathPattern), path ->
             filter.accept(convertToStoragePath(path))))
-        .map(this::convertToStoragePathInfo)
+        .map(HadoopFSUtils::convertToStoragePathInfo)
         .collect(Collectors.toList());
   }
 
@@ -182,22 +186,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public boolean createNewFile(StoragePath path) throws IOException {
     return fs.createNewFile(convertToHadoopPath(path));
-  }
-
-  private Path convertToHadoopPath(StoragePath loc) {
-    return new Path(loc.toUri());
-  }
-
-  private StoragePath convertToStoragePath(Path path) {
-    return new StoragePath(path.toUri());
-  }
-
-  private StoragePathInfo convertToStoragePathInfo(FileStatus fileStatus) {
-    return new StoragePathInfo(
-        convertToStoragePath(fileStatus.getPath()),
-        fileStatus.getLen(),
-        fileStatus.isDirectory(),
-        fileStatus.getModificationTime());
   }
 
   @Override
