@@ -22,9 +22,12 @@ package org.apache.hudi.hadoop.fs;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -106,5 +109,49 @@ public class HadoopFSUtils {
     }
     LOG.info("Resolving file " + path + "to be a remote file.");
     return providedPath;
+  }
+
+  /**
+   * @param path {@link StoragePath} instance.
+   * @return the Hadoop {@link Path} instance after conversion.
+   */
+  public static Path convertToHadoopPath(StoragePath path) {
+    return new Path(path.toUri());
+  }
+
+  /**
+   * @param path Hadoop {@link Path} instance.
+   * @return the {@link StoragePath} instance after conversion.
+   */
+  public static StoragePath convertToStoragePath(Path path) {
+    return new StoragePath(path.toUri());
+  }
+
+  /**
+   * @param fileStatus Hadoop {@link FileStatus} instance.
+   * @return the {@link StoragePathInfo} instance after conversion.
+   */
+  public static StoragePathInfo convertToStoragePathInfo(FileStatus fileStatus) {
+    return new StoragePathInfo(
+        convertToStoragePath(fileStatus.getPath()),
+        fileStatus.getLen(),
+        fileStatus.isDirectory(),
+        fileStatus.getReplication(),
+        fileStatus.getBlockSize(),
+        fileStatus.getModificationTime());
+  }
+
+  /**
+   * @param pathInfo {@link StoragePathInfo} instance.
+   * @return the {@link FileStatus} instance after conversion.
+   */
+  public static FileStatus convertToHadoopFileStatus(StoragePathInfo pathInfo) {
+    return new FileStatus(
+        pathInfo.getLength(),
+        pathInfo.isDirectory(),
+        pathInfo.getBlockReplication(),
+        pathInfo.getBlockSize(),
+        pathInfo.getModificationTime(),
+        convertToHadoopPath(pathInfo.getPath()));
   }
 }

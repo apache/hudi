@@ -164,37 +164,37 @@ public abstract class TestHoodieStorageBase {
 
     validatePathInfoList(
         Arrays.stream(new StoragePathInfo[] {
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/1.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/2.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/y"), 0, true, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/z"), 0, true, 0),
+            getStoragePathInfo("x/1.file", false),
+            getStoragePathInfo("x/2.file", false),
+            getStoragePathInfo("x/y", true),
+            getStoragePathInfo("x/z", true)
         }).collect(Collectors.toList()),
         storage.listDirectEntries(new StoragePath(getTempDir(), "x")));
 
     validatePathInfoList(
         Arrays.stream(new StoragePathInfo[] {
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/1.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/2.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/y/1.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/y/2.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/z/1.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/z/2.file"), 0, false, 0)
+            getStoragePathInfo("x/1.file", false),
+            getStoragePathInfo("x/2.file", false),
+            getStoragePathInfo("x/y/1.file", false),
+            getStoragePathInfo("x/y/2.file", false),
+            getStoragePathInfo("x/z/1.file", false),
+            getStoragePathInfo("x/z/2.file", false)
         }).collect(Collectors.toList()),
         storage.listFiles(new StoragePath(getTempDir(), "x")));
 
     validatePathInfoList(
         Arrays.stream(new StoragePathInfo[] {
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/2.file"), 0, false, 0)
+            getStoragePathInfo("x/2.file", false)
         }).collect(Collectors.toList()),
         storage.listDirectEntries(
             new StoragePath(getTempDir(), "x"), e -> e.getName().contains("2")));
 
     validatePathInfoList(
         Arrays.stream(new StoragePathInfo[] {
-            new StoragePathInfo(new StoragePath(getTempDir(), "w/1.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "w/2.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/z/1.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/z/2.file"), 0, false, 0)
+            getStoragePathInfo("w/1.file", false),
+            getStoragePathInfo("w/2.file", false),
+            getStoragePathInfo("x/z/1.file", false),
+            getStoragePathInfo("x/z/2.file", false)
         }).collect(Collectors.toList()),
         storage.listDirectEntries(Arrays.stream(new StoragePath[] {
             new StoragePath(getTempDir(), "w"),
@@ -206,21 +206,21 @@ public abstract class TestHoodieStorageBase {
 
     validatePathInfoList(
         Arrays.stream(new StoragePathInfo[] {
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/y/1.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/z/1.file"), 0, false, 0)
+            getStoragePathInfo("x/y/1.file", false),
+            getStoragePathInfo("x/z/1.file", false)
         }).collect(Collectors.toList()),
         storage.globEntries(new StoragePath(getTempDir(), "x/*/1.file")));
 
     validatePathInfoList(
         Arrays.stream(new StoragePathInfo[] {
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/1.file"), 0, false, 0),
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/2.file"), 0, false, 0),
+            getStoragePathInfo("x/1.file", false),
+            getStoragePathInfo("x/2.file", false)
         }).collect(Collectors.toList()),
         storage.globEntries(new StoragePath(getTempDir(), "x/*.file")));
 
     validatePathInfoList(
         Arrays.stream(new StoragePathInfo[] {
-            new StoragePathInfo(new StoragePath(getTempDir(), "x/y/1.file"), 0, false, 0),
+            getStoragePathInfo("x/y/1.file", false)
         }).collect(Collectors.toList()),
         storage.globEntries(
             new StoragePath(getTempDir(), "x/*/*.file"),
@@ -317,6 +317,11 @@ public abstract class TestHoodieStorageBase {
   private HoodieStorage getHoodieStorage() {
     Object conf = getConf();
     return getHoodieStorage(getFileSystem(conf), conf);
+  }
+
+  private StoragePathInfo getStoragePathInfo(String subPath, boolean isDirectory) {
+    return new StoragePathInfo(new StoragePath(getTempDir(), subPath),
+        0, isDirectory, (short) 1, 1000000L, 10L);
   }
 
   private void validatePathInfo(HoodieStorage storage,
