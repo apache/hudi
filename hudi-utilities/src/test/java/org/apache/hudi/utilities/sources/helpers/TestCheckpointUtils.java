@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -291,10 +292,7 @@ public class TestCheckpointUtils {
         OffsetRange.apply(TEST_TOPIC_NAME, 4, 77014167, 77036278),
         OffsetRange.apply(TEST_TOPIC_NAME, 4, 77036278, 77036278),
     };
-    assertEquals(expectedRanges.length, ranges.length);
-    for (int i = 0; i < expectedRanges.length; i++) {
-      assertEquals(expectedRanges[i], ranges[i]);
-    }
+    assertArrayEquals(expectedRanges, ranges);
   }
 
   private static Map<TopicPartition, Long> makeOffsetMap(int[] partitions, long[] offsets) {
