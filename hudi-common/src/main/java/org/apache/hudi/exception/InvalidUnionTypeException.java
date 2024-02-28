@@ -26,8 +26,8 @@ package org.apache.hudi.exception;
  *   <li>the incoming union has more than two types</li>
  * </ul>
  */
-public class SchemaUnbalancedUnionException extends SchemaCompatibilityException {
-  public SchemaUnbalancedUnionException(String message) {
+public class InvalidUnionTypeException extends SchemaCompatibilityException {
+  public InvalidUnionTypeException(String message) {
     super(message);
   }
 }

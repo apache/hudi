@@ -22,7 +22,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
-import org.apache.hudi.exception.SchemaUnbalancedUnionException;
+import org.apache.hudi.exception.InvalidUnionTypeException;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
@@ -486,11 +486,11 @@ public class AvroSchemaUtils {
         List<Schema> incomingNestedSchemas = incomingSchema.getTypes();
         List<Schema> latestTableNestedSchemas = latestTableSchema.getTypes();
         if (incomingNestedSchemas.size() != latestTableNestedSchemas.size()) {
-          throw new SchemaUnbalancedUnionException(String.format("Incoming batch field '%s' has union with %d types, while the table schema has %d types",
+          throw new InvalidUnionTypeException(String.format("Incoming batch field '%s' has union with %d types, while the table schema has %d types",
               String.join(".", visited), incomingNestedSchemas.size(), latestTableNestedSchemas.size()));
         }
         if (incomingNestedSchemas.size() > 2) {
-          throw new SchemaUnbalancedUnionException(String.format("Union for incoming batch field '%s' should not have more than 2 types but has %d",
+          throw new InvalidUnionTypeException(String.format("Union for incoming batch field '%s' should not have more than 2 types but has %d",
               String.join(".", visited), incomingNestedSchemas.size()));
         }
         for (int i = 0; i < incomingNestedSchemas.size(); ++i) {
