@@ -146,7 +146,7 @@ object CreateHoodieTableCommand {
     val partitionColumnNames = hoodieCatalogTable.partitionSchema.map(_.name)
     // Remove some properties should not be used;append pk, preCombineKey, type to the properties of table
     val newTblProperties =
-      hoodieCatalogTable.catalogProperties.--(needFilterProps) ++ HoodieOptionConfig.extractSqlOptions(properties)
+      hoodieCatalogTable.catalogProperties.--(needFilterProps) + ("provider" -> "hudi") ++  HoodieOptionConfig.extractSqlOptions(properties)
     val newTable = table.copy(
       identifier = newTableIdentifier,
       storage = newStorage,
