@@ -142,18 +142,18 @@ public class KafkaOffsetGen {
       LOG.info("numEvents {}, minPartitions {}, ranges {}", numEvents, minPartitions, ranges);
 
       long totalEvents = totalNewMessages(ranges);
-      long allocedEvents = 0;
+      long allocatedEvents = 0;
       Set<Integer> exhaustedPartitions = new HashSet<>();
       List<OffsetRange> finalRanges = new ArrayList<>();
       // choose the actualNumEvents with min(totalEvents, numEvents)
       long actualNumEvents = Math.min(totalEvents, numEvents);
 
       // keep going until we have events to allocate and partitions still not exhausted.
-      while (allocedEvents < numEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
+      while (allocatedEvents < numEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
         // Allocate the remaining events to non-exhausted partitions, in round robin fashion
         Set<Integer> allocatedPartitionsThisLoop = new HashSet<>(exhaustedPartitions);
         for (int i = 0; i < ranges.length; i++) {
-          long remainingEvents = actualNumEvents - allocedEvents;
+          long remainingEvents = actualNumEvents - allocatedEvents;
           long remainingPartitions = toOffsetMap.size() - allocatedPartitionsThisLoop.size();
           // if need tp split into minPartitions, recalculate the remainingPartitions
           if (needSplitToMinPartitions) {
@@ -176,12 +176,13 @@ public class KafkaOffsetGen {
           if (toOffset == range.untilOffset()) {
             exhaustedPartitions.add(range.partition());
           }
-          allocedEvents += toOffset - range.fromOffset();
-          // We need recompute toOffset if allocedEvents larger than actualNumEvents.
-          if (allocedEvents > actualNumEvents) {
-            long offsetsToAdd = Math.min(eventsPerPartition, (actualNumEvents - allocedEvents));
-            toOffset = Math.min(range.untilOffset(), toOffset + offsetsToAdd);
+          // We need recompute toOffset if we have allocatedEvents are more than actualNumEvents.
+          long totalAllocatedEvents = allocatedEvents + (toOffset - range.fromOffset());
+          if (totalAllocatedEvents > actualNumEvents) {
+            long offsetsToAdd = Math.min(eventsPerPartition, (actualNumEvents - allocatedEvents));
+            toOffset = Math.min(range.untilOffset(), range.fromOffset() + offsetsToAdd);
           }
+          allocatedEvents += toOffset - range.fromOffset();
           OffsetRange thisRange = OffsetRange.create(range.topicPartition(), range.fromOffset(), toOffset);
           finalRanges.add(thisRange);
           ranges[i] = OffsetRange.create(range.topicPartition(), range.fromOffset() + thisRange.count(), range.untilOffset());
