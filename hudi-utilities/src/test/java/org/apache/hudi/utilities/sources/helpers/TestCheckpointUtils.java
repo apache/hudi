@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -266,6 +267,32 @@ public class TestCheckpointUtils {
         throw new IllegalArgumentException("Invalid offset range " + range);
       }
     }
+    OffsetRange[] expectedRanges = new OffsetRange[] {
+        OffsetRange.apply(TEST_TOPIC_NAME, 0, 76888767, 76908767),
+        OffsetRange.apply(TEST_TOPIC_NAME, 0, 76908767, 76928767),
+        OffsetRange.apply(TEST_TOPIC_NAME, 0, 76928767, 76948767),
+        OffsetRange.apply(TEST_TOPIC_NAME, 0, 76948767, 76970879),
+        OffsetRange.apply(TEST_TOPIC_NAME, 0, 76970879, 76992990),
+        OffsetRange.apply(TEST_TOPIC_NAME, 1, 76725043, 76745043),
+        OffsetRange.apply(TEST_TOPIC_NAME, 1, 76745043, 76765043),
+        OffsetRange.apply(TEST_TOPIC_NAME, 1, 76765043, 76768151),
+        OffsetRange.apply(TEST_TOPIC_NAME, 2, 76899767, 76919767),
+        OffsetRange.apply(TEST_TOPIC_NAME, 2, 76919767, 76939767),
+        OffsetRange.apply(TEST_TOPIC_NAME, 2, 76939767, 76961879),
+        OffsetRange.apply(TEST_TOPIC_NAME, 2, 76961879, 76983990),
+        OffsetRange.apply(TEST_TOPIC_NAME, 2, 76983990, 76983990),
+        OffsetRange.apply(TEST_TOPIC_NAME, 3, 76833267, 76853267),
+        OffsetRange.apply(TEST_TOPIC_NAME, 3, 76853267, 76873267),
+        OffsetRange.apply(TEST_TOPIC_NAME, 3, 76873267, 76895379),
+        OffsetRange.apply(TEST_TOPIC_NAME, 3, 76895379, 76917490),
+        OffsetRange.apply(TEST_TOPIC_NAME, 3, 76917490, 76917490),
+        OffsetRange.apply(TEST_TOPIC_NAME, 4, 76952055, 76972055),
+        OffsetRange.apply(TEST_TOPIC_NAME, 4, 76972055, 76992055),
+        OffsetRange.apply(TEST_TOPIC_NAME, 4, 76992055, 77014167),
+        OffsetRange.apply(TEST_TOPIC_NAME, 4, 77014167, 77036278),
+        OffsetRange.apply(TEST_TOPIC_NAME, 4, 77036278, 77036278),
+    };
+    assertArrayEquals(expectedRanges, ranges);
   }
 
   private static Map<TopicPartition, Long> makeOffsetMap(int[] partitions, long[] offsets) {
