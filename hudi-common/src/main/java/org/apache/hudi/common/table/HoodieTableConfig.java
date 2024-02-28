@@ -337,7 +337,7 @@ public class HoodieTableConfig extends HoodieConfig {
     super();
   }
 
-  private static TypedProperties fetchConfigs(FileSystem fs, String metaPath) throws IOException {
+  public static TypedProperties fetchConfigs(FileSystem fs, String metaPath) throws IOException {
     Path cfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
     int readRetryCount = 0;
@@ -351,7 +351,9 @@ public class HoodieTableConfig extends HoodieConfig {
           props.clear();
           props.load(is);
           found = true;
-          ValidationUtils.checkArgument(validateChecksum(props));
+          if (props.containsKey(TABLE_CHECKSUM.key())) {
+            ValidationUtils.checkArgument(HoodieTableConfig.validateChecksum(props));
+          }
           return props;
         } catch (IOException e) {
           LOG.warn(String.format("Could not read properties from %s: %s", path, e));
