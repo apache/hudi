@@ -68,6 +68,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -697,7 +698,7 @@ public class HoodieTableMetadataUtil {
           String partitionPath = deleteFileInfoPair.getLeft();
           String filePath = deleteFileInfoPair.getRight();
 
-          if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+          if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension()) || ExternalFilePathUtil.isExternallyCreatedFile(filePath)) {
             return getColumnStatsRecords(partitionPath, filePath, dataTableMetaClient, columnsToIndex, true).iterator();
           }
           return Collections.emptyListIterator();
