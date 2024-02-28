@@ -36,6 +36,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.exception.HoodieRecordCreationException;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -105,7 +108,11 @@ public class HoodieStreamerUtils {
                   avroRecords.add(Either.left(new HoodieAvroRecord<>(hoodieKey, payload)));
                 } catch (Exception e) {
                   if (!shouldErrorTable) {
-                    throw e;
+                    if (!(e instanceof HoodieKeyException || e instanceof HoodieKeyGeneratorException)) {
+                      throw new HoodieRecordCreationException("Failed to create Hoodie Avro Record", e);
+                    } else {
+                      throw e;
+                    }
                   }
                   avroRecords.add(generateErrorRecord(genRec));
                 }
@@ -136,7 +143,11 @@ public class HoodieStreamerUtils {
                   HoodieInternalRowUtils.getCachedUnsafeProjection(baseStructType, targetStructType).apply(row), targetStructType, false));
             } catch (Exception e) {
               if (!shouldErrorTable) {
-                throw e;
+                if (!(e instanceof HoodieKeyException || e instanceof HoodieKeyGeneratorException)) {
+                  throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e);
+                } else {
+                  throw e;
+                }
               }
               return generateErrorRecord(rec);
             }

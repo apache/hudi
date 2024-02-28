@@ -23,6 +23,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils
+import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.internal.schema.HoodieSchemaException
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -58,9 +59,19 @@ object AvroConversionUtils {
    */
   def createInternalRowToAvroConverter(rootCatalystType: StructType, rootAvroType: Schema, nullable: Boolean): InternalRow => GenericRecord = {
     val serializer = sparkAdapter.createAvroSerializer(rootCatalystType, rootAvroType, nullable)
-    row => serializer
-      .serialize(row)
-      .asInstanceOf[GenericRecord]
+    row => {
+      try {
+        serializer
+          .serialize(row)
+          .asInstanceOf[GenericRecord]
+      } catch {
+        case e: HoodieSchemaException => throw e
+        case e => throw new SchemaCompatibilityException("Failed to convert spark record into avro record", e)
+      }
+
+    }
+
+
   }
 
   /**
