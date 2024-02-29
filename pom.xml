@@ -166,7 +166,7 @@
     <spark32.version>3.2.3</spark32.version>
     <spark33.version>3.3.1</spark33.version>
     <spark34.version>3.4.1</spark34.version>
-    <spark35.version>3.5.0</spark35.version>
+    <spark35.version>3.5.1</spark35.version>
     <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
     <!-- NOTE: Different Spark versions might require different number of shared
                modules being incorporated, hence we're creating multiple placeholders
