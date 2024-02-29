@@ -535,9 +535,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
             )(table.schema.fields)
 
             // Should not include non.hoodie.property
-            assertResult(2)(table.properties.size)
+            assertResult(3)(table.properties.size)
             assertResult("cow")(table.properties("type"))
             assertResult("id,name")(table.properties("primaryKey"))
+            assertResult("hudi")(table.properties("provider"))
           }
         }
       }
