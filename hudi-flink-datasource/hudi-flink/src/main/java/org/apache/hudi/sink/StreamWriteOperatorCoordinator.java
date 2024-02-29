@@ -431,12 +431,13 @@ public class StreamWriteOperatorCoordinator
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
     this.eventBuffer[event.getTaskID()] = event;
-    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
+    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap()) && !this.metaClient
+            .getActiveTimeline().filterInflightsAndRequested().containsInstant(this.instant)) {
       // start to initialize the instant.
       final String instant = Arrays.stream(eventBuffer)
-          .filter(evt -> evt.getWriteStatuses().size() > 0)
-          .findFirst().map(WriteMetadataEvent::getInstantTime)
-          .orElse(WriteMetadataEvent.BOOTSTRAP_INSTANT);
+              .filter(evt -> evt.getWriteStatuses().size() > 0)
+              .findFirst().map(WriteMetadataEvent::getInstantTime)
+              .orElse(WriteMetadataEvent.BOOTSTRAP_INSTANT);
       initInstant(instant);
     }
   }
