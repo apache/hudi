@@ -169,8 +169,10 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointThrows(4, "Timeout(1000ms) while waiting for instant initialize")
         .assertEmptyEvent()
         .subTaskFails(0, 3)
-        // the last checkpoint instant was rolled back by subTaskFails(0, 2)
-        // with EAGER cleaning strategy
+        // the last checkpoint instant can not rolled back by subTaskFails(0, 2)
+        // because last data has been snapshot by checkpoint complete but instant has not been commit
+        // so we need re-commit it
+        .assertEmptyEvent()
         .assertNoEvent()
         .end();
   }
@@ -665,8 +667,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .rollbackLastCompleteInstantToInflight()
         .jobFailover()
         .subTaskFails(0, 1)
-        // the last checkpoint instant was not rolled back by subTaskFails(0, 1)
-        // with LAZY cleaning strategy because clean action could roll back failed writes.
+        // the last checkpoint instant can not rolled back by subTaskFails(0, 1)
+        // because last data has been snapshot by checkpoint complete but instant has not been commit
+        // so we need re-commit it
         .assertNextEvent()
         .end();
   }

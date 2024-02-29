@@ -431,13 +431,22 @@ public class StreamWriteOperatorCoordinator
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
     this.eventBuffer[event.getTaskID()] = event;
-    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap()) && !this.metaClient
-            .getActiveTimeline().filterInflightsAndRequested().containsInstant(this.instant)) {
+    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
       // start to initialize the instant.
       final String instant = Arrays.stream(eventBuffer)
               .filter(evt -> evt.getWriteStatuses().size() > 0)
               .findFirst().map(WriteMetadataEvent::getInstantTime)
               .orElse(WriteMetadataEvent.BOOTSTRAP_INSTANT);
+
+      // if currentInstant is pending && bootstrap event instant is empty
+      // reuse currentInstant, reject bootstrap
+      if (this.metaClient.getActiveTimeline().filterInflightsAndRequested().containsInstant(this.instant) && instant
+              .equals(WriteMetadataEvent.BOOTSTRAP_INSTANT)) {
+        LOG.info("Reuse current pending Instant {}, ignoring empty bootstrap event.", this.instant);
+        reset();
+        return;
+      }
+
       initInstant(instant);
     }
   }
