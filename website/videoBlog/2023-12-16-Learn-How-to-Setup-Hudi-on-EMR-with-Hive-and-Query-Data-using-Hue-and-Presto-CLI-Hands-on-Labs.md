@@ -14,6 +14,7 @@ tags:
 - aws emr
 - presto
 - hue
+- hive metastore
 ---
 
 

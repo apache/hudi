@@ -13,4 +13,5 @@ tags:
 - amazon emr
 - emr serverless
 - hive sql
+- hive metastore
 ---

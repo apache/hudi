@@ -9,6 +9,6 @@ navigate: "https://www.youtube.com/watch?v=7Ts2rbNyco4"
 tags:
 - guide
 - joins
-- spark-sql
+- spark sql
 - apache hudi
 ---

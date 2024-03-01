@@ -9,6 +9,6 @@ navigate: "https://www.youtube.com/watch?v=Ls--9CnweoY"
 tags:
 - guide
 - python
-- incremental-query
+- incremental query
 - apache hudi
 ---

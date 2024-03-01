@@ -8,7 +8,7 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=c6DCJR91rBQ"
 tags:
 - how-to
-- incremental-query
+- incremental query
 - aws glue
 - apache hudi
 ---

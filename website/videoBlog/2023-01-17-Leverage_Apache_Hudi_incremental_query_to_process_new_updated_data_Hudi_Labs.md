@@ -8,7 +8,7 @@ image: /assets/images/video_blogs/2023-01-17-Leverage_Apache_Hudi_incremental_qu
 navigate: "https://youtu.be/4eevYkBClQ4"
 tags:
 - guide
-- incremental-query
+- incremental query
 - aws glue
 - apache hudi
 ---

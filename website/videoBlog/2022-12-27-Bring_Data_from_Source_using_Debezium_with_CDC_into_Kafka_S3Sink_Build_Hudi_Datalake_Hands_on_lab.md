@@ -11,9 +11,10 @@ tags:
 - postgresql
 - mysql
 - debezium
-- incremental-etl
+- incremental etl
 - apache kafka
 - apache hudi
 - aws glue
 - amazon athena
+- postgres
 ---
