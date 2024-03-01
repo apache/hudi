@@ -522,6 +522,11 @@ public class TestWriteBase {
       return this;
     }
 
+    public TestHarness coordinatorFailsAndRenewOne() throws Exception {
+      this.pipeline.coordinatorFailsAndRenewOne();
+      return this;
+    }
+
     public void end() throws Exception {
       this.pipeline.close();
       this.pipeline = null;

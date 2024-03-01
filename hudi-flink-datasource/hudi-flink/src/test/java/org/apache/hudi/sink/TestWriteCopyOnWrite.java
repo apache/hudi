@@ -148,6 +148,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
+  // Only when Job level fails with INSERT operationType can we roll back the unfinished instant.
   @Test
   public void testPartialFailover() throws Exception {
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
@@ -163,18 +164,45 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertNextEvent()
         // if the write task can not fetch any pending instant when starts up(the coordinator restarts),
         // it will send an event to the coordinator
-        .coordinatorFails()
+        .coordinatorFailsAndRenewOne()
         .subTaskFails(0, 2)
         // the subtask can not fetch the instant to write until a new instant is initialized
         .checkpointThrows(4, "Timeout(1000ms) while waiting for instant initialize")
         .assertEmptyEvent()
         .subTaskFails(0, 3)
-        // the last checkpoint instant can not rolled back by subTaskFails(0, 2)
-        // because last data has been snapshot by checkpoint complete but instant has not been commit
-        // so we need re-commit it
-        .assertEmptyEvent()
+        // the last checkpoint instant was rolled back by subTaskFails(0, 2)
+        // with EAGER cleaning strategy
         .assertNoEvent()
         .end();
+  }
+
+  // Task level failed retry, we should reuse the unfinished Instant with INSERT operationType
+  @Test
+  public void testTaskPartialFailover() throws Exception {
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.setString(FlinkOptions.OPERATION, "INSERT");
+    // open the function and ingest data
+    preparePipeline()
+            // triggers subtask failure for multiple times to simulate partial failover, for partial over,
+            // we allow the task to reuse the pending instant for data flushing, no metadata event should be sent
+            .subTaskFails(0, 1)
+            .assertNoEvent()
+            // the subtask reuses the pending instant
+            .checkpoint(3)
+            .assertNextEvent()
+            // if the write task can not fetch any pending instant when starts up(the coordinator restarts),
+            // it will send an event to the coordinator
+            .coordinatorFails()
+            .subTaskFails(0, 2)
+            // the subtask can not fetch the instant to write until a new instant is initialized
+            .checkpointThrows(4, "Timeout(1000ms) while waiting for instant initialize")
+            .assertEmptyEvent()
+            .subTaskFails(0, 3)
+            // the last checkpoint instant can not be rolled back by subTaskFails(0, 2) with INSERT write operationType
+            // because last data has been snapshot by checkpoint complete but instant has not been committed
+            // so we need re-commit it
+            .assertEmptyEvent()
+            .end();
   }
 
   @Test
@@ -667,9 +695,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .rollbackLastCompleteInstantToInflight()
         .jobFailover()
         .subTaskFails(0, 1)
-        // the last checkpoint instant can not rolled back by subTaskFails(0, 1)
-        // because last data has been snapshot by checkpoint complete but instant has not been commit
-        // so we need re-commit it
+        // the last checkpoint instant was not rolled back by subTaskFails(0, 1)
+        // with LAZY cleaning strategy because clean action could roll back failed writes.
         .assertNextEvent()
         .end();
   }
