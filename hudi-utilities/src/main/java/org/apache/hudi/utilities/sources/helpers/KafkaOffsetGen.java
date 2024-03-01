@@ -75,7 +75,7 @@ public class KafkaOffsetGen {
    * kafka checkpoint Pattern.
    * Format: topic_name,partition_num:offset,partition_num:offset,....
    */
-  private final Pattern pattern = Pattern.compile(".*,.*:.*");
+  private static final Pattern PATTERN = Pattern.compile(".*,.*:.*");
 
   public static class CheckpointUtils {
 
@@ -425,8 +425,8 @@ public class KafkaOffsetGen {
     return result.containsKey(topicName);
   }
 
-  private boolean checkTopicCheckpoint(Option<String> lastCheckpointStr) {
-    Matcher matcher = pattern.matcher(lastCheckpointStr.get());
+  public static boolean checkTopicCheckpoint(Option<String> lastCheckpointStr) {
+    Matcher matcher = PATTERN.matcher(lastCheckpointStr.get());
     return matcher.matches();
   }
 
