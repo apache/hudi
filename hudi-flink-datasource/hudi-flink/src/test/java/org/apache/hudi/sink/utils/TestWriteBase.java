@@ -517,11 +517,6 @@ public class TestWriteBase {
      * Used to simulate the use case that the coordinator has not finished a new instant initialization,
      * while the write task fails intermittently.
      */
-    public TestHarness coordinatorFails() throws Exception {
-      this.pipeline.coordinatorFails();
-      return this;
-    }
-
     public TestHarness restartCoordinator() throws Exception {
       this.pipeline.restartCoordinator();
       return this;
