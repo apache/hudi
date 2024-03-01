@@ -193,11 +193,11 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         new RawTripTestPayload(recordStr4).toHoodieRecord());
   }
 
-  private static List<HoodieRecord> getInsertsBatch2() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"005\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
-    String recordStr2 = "{\"_row_key\":\"006\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
-    String recordStr3 = "{\"_row_key\":\"007\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
-    String recordStr4 = "{\"_row_key\":\"008\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
+  private static List<HoodieRecord> getInsertsWithSameKeyInTwoPartitions() throws IOException {
+    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}";
+    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":2}";
+    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":3}";
+    String recordStr4 = "{\"_row_key\":\"003\",\"time\":\"2015-01-31T00:00:04.000Z\",\"number\":4}";
     return Arrays.asList(
         new RawTripTestPayload(recordStr1).toHoodieRecord(),
         new RawTripTestPayload(recordStr2).toHoodieRecord(),
@@ -205,16 +205,34 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         new RawTripTestPayload(recordStr4).toHoodieRecord());
   }
 
-  private static List<HoodieRecord> getUpdates() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
-    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
-    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
-    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
-    return new ArrayList<>(Arrays.asList(
-        new RawTripTestPayload(recordStr1).toHoodieRecord(),
-        new RawTripTestPayload(recordStr2).toHoodieRecord(),
-        new RawTripTestPayload(recordStr3).toHoodieRecord(),
-        new RawTripTestPayload(recordStr4).toHoodieRecord()));
+  @Test
+  public void testRecordIndexForNonGlobalWrites() throws Exception {
+    setUp(IndexType.RECORD_INDEX, true, true);
+    final int totalRecords = 4;
+    List<HoodieRecord> records = getInsertsWithSameKeyInTwoPartitions();
+    JavaRDD<HoodieRecord> writtenRecords = jsc.parallelize(records, 1);
+
+    // Insert totalRecords records
+    String newCommitTime = writeClient.createNewInstantTime();
+    writeClient.startCommitWithTime(newCommitTime);
+    JavaRDD<WriteStatus> writeStatusRdd = writeClient.upsert(writtenRecords, newCommitTime);
+    List<WriteStatus> writeStatuses = writeStatusRdd.collect();
+    assertNoWriteErrors(writeStatuses);
+    String[] fileIdsFromWriteStatuses = writeStatuses.stream().map(WriteStatus::getFileId)
+        .sorted().toArray(String[]::new);
+
+    // Now commit this & update location of records inserted and validate no errors
+    writeClient.commit(newCommitTime, writeStatusRdd);
+    // Now tagLocation for these records, index should tag them correctly
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writtenRecords, hoodieTable);
+    Map<String, String> recordKeyToPartitionPathMap = new HashMap();
+    List<HoodieRecord> hoodieRecords = writtenRecords.collect();
+    hoodieRecords.forEach(entry -> recordKeyToPartitionPathMap.put(entry.getRecordKey(), entry.getPartitionPath()));
+    String[] taggedFileIds = javaRDD.map(record -> record.getCurrentLocation().getFileId()).distinct().collect()
+        .stream().sorted().toArray(String[]::new);
+    assertArrayEquals(taggedFileIds, fileIdsFromWriteStatuses);
   }
 
   @ParameterizedTest

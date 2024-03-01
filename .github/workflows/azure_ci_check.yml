@@ -1,0 +1,80 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: Azure CI
+
+on:
+  issue_comment:
+    types: [ created, edited, deleted ]
+
+permissions:
+  statuses: write
+  pull-requests: read
+  issues: read
+
+jobs:
+  check-azure-ci-and-add-commit-status:
+    if: |
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.login == 'hudi-bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Check PR state
+        id: check_pr_state
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const issueNumber = context.issue.number;
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: issueNumber
+            });
+            
+            // Only check open PRs and a PR that is not a HOTFIX
+            const shouldSkip = (pullRequest.body.includes('HOTFIX: SKIP AZURE CI')
+              || pullRequest.state != 'open');
+            
+            if (!shouldSkip) {
+              const commitHash = pullRequest.head.sha;
+              console.log(`Latest commit hash: ${commitHash}`);
+              // Set the output variable to be used in subsequent step
+              core.setOutput("latest_commit_hash", commitHash);
+            }
+            console.log(`Should skip Azure CI? ${shouldSkip}`);
+            return shouldSkip;
+
+      - name: Check Azure CI report and create commit status to PR
+        if: steps.check_pr_state.outputs.result != 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const latestCommitHash = '${{ steps.check_pr_state.outputs.latest_commit_hash }}'            
+            const issueNumber = context.issue.number;
+            const checkAzureCiAndCreateCommitStatus = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/azure_ci.js`);
+            
+            await checkAzureCiAndCreateCommitStatus({
+              github,
+              context,
+              prNumber: issueNumber,
+              latestCommitHash: latestCommitHash
+            });

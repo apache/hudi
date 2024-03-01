@@ -472,6 +472,29 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     return clusteringMetadata;
   }
 
+  public boolean purgePendingClustering(String clusteringInstant) {
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getHadoopConf().get());
+    HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
+    HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
+    if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
+      table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), true);
+      table.getMetaClient().reloadActiveTimeline();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Delete expired partition by config.
+   *
+   * @param instantTime Instant Time for the action
+   * @return HoodieWriteMetadata
+   */
+  public HoodieWriteMetadata<T> managePartitionTTL(String instantTime) {
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getHadoopConf().get());
+    return table.managePartitionTTL(context, instantTime);
+  }
+
   protected abstract void validateClusteringCommit(HoodieWriteMetadata<O> clusteringMetadata, String clusteringCommitTime, HoodieTable table);
 
   protected abstract HoodieWriteMetadata<O> convertToOutputMetadata(HoodieWriteMetadata<T> writeMetadata);
@@ -570,6 +593,12 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // proceed only if there are no pending clustering
       metadata.addMetadata(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), "true");
       inlineScheduleClustering(extraMetadata);
+    }
+
+    //  Do an inline partition ttl management if enabled
+    if (config.isInlinePartitionTTLEnable()) {
+      String instantTime = createNewInstantTime();
+      table.managePartitionTTL(table.getContext(), instantTime);
     }
   }
 

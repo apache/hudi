@@ -91,6 +91,7 @@ object HoodieProcedures {
       ,(ShowTablePropertiesProcedure.NAME, ShowTablePropertiesProcedure.builder)
       ,(HelpProcedure.NAME, HelpProcedure.builder)
       ,(ArchiveCommitsProcedure.NAME, ArchiveCommitsProcedure.builder)
+      ,(RunTTLProcedure.NAME, RunTTLProcedure.builder)
     )
   }
 }

@@ -259,19 +259,19 @@ public class StreamSync implements Serializable, Closeable {
   public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                     TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
-    this(cfg, sparkSession, schemaProvider, props, new HoodieSparkEngineContext(jssc), fs, conf, onInitializingHoodieWriteClient);
+    this(cfg, sparkSession, props, new HoodieSparkEngineContext(jssc), fs, conf, onInitializingHoodieWriteClient, new DefaultStreamContext(schemaProvider, Option.empty()));
   }
 
-  public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
+  public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession,
                     TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
-                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, StreamContext streamContext) throws IOException {
     this.cfg = cfg;
     this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
     this.fs = fs;
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
-    this.userProvidedSchemaProvider = schemaProvider;
+    this.userProvidedSchemaProvider = streamContext.getSchemaProvider();
     this.processedSchema = new SchemaSet();
     this.autoGenerateRecordKeys = KeyGenUtils.enableAutoGenerateRecordKeys(props);
     this.keyGenClassName = getKeyGeneratorClassName(new TypedProperties(props));
@@ -285,7 +285,7 @@ public class StreamSync implements Serializable, Closeable {
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     refreshTimeline();
-    Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, schemaProvider, metrics);
+    Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
     Supplier<Option<Schema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceSchema());
@@ -414,7 +414,7 @@ public class StreamSync implements Serializable, Closeable {
             || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
           String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
           String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
-          LOG.info("Seeing new schema. Source: {0}, Target: {1}", sourceStr, targetStr);
+          LOG.info("Seeing new schema. Source: {}, Target: {}", sourceStr, targetStr);
           // We need to recreate write client with new schema and register them.
           reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch());
           if (newSourceSchema != null) {
@@ -455,7 +455,7 @@ public class StreamSync implements Serializable, Closeable {
 
   private Option<String> getLastPendingClusteringInstant(Option<HoodieTimeline> commitTimelineOpt) {
     if (commitTimelineOpt.isPresent()) {
-      Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().getLastPendingClusterCommit();
+      Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().getLastPendingClusterInstant();
       return pendingClusteringInstant.isPresent() ? Option.of(pendingClusteringInstant.get().getTimestamp()) : Option.empty();
     }
     return Option.empty();
@@ -865,10 +865,10 @@ public class StreamSync implements Serializable, Closeable {
       writeClient.rollback(instantTime);
       throw new HoodieStreamerWriteException("Commit " + instantTime + " failed and rolled-back !");
     }
-    long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
+    long overallTimeNanos = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
     // Send DeltaStreamer Metrics
-    metrics.updateStreamerMetrics(overallTimeMs);
+    metrics.updateStreamerMetrics(overallTimeNanos);
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
   }
 
@@ -988,13 +988,14 @@ public class StreamSync implements Serializable, Closeable {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
           success = true;
         } catch (HoodieMetaSyncException e) {
-          LOG.error("SyncTool class {0} failed with exception {1}",  impl.trim(), e);
+          LOG.error("SyncTool class {} failed with exception {}", impl.trim(), e);
           failedMetaSyncs.put(impl, e);
         }
-        long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
-        metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
+        long metaSyncTimeNanos = syncContext != null ? syncContext.stop() : 0;
+        metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeNanos);
         if (success) {
-          LOG.info("[MetaSync] SyncTool class {0} completed successfully and took {1} ", impl.trim(), metaSyncTimeMs);
+          long timeMs = metaSyncTimeNanos / 1000000L;
+          LOG.info("[MetaSync] SyncTool class {} completed successfully and took {} s {} ms ", impl.trim(), timeMs / 1000L, timeMs % 1000L);
         }
       }
       if (!failedMetaSyncs.isEmpty()) {

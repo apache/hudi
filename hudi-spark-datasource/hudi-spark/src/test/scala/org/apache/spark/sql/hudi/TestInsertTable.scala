@@ -40,6 +40,58 @@ import java.util.concurrent.CountDownLatch
 
 class TestInsertTable extends HoodieSparkSqlTestBase {
 
+  test("Test table type name incase-sensitive test") {
+    withRecordType()(withTempDir { tmp =>
+      val targetTable = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
+
+      spark.sql(
+        s"""
+           |create table ${targetTable} (
+           |  `id` string,
+           |  `name` string,
+           |  `dt` bigint,
+           |  `day` STRING,
+           |  `hour` INT
+           |) using hudi
+           |tblproperties (
+           |  'primaryKey' = 'id',
+           |  'type' = 'MOR',
+           |  'preCombineField'='dt',
+           |  'hoodie.index.type' = 'BUCKET',
+           |  'hoodie.bucket.index.hash.field' = 'id',
+           |  'hoodie.bucket.index.num.buckets'=512
+           | )
+             partitioned by (`day`,`hour`)
+             location '${tablePath}'
+             """.stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into ${targetTable}
+           |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |merge into ${targetTable} as target
+           |using (
+           |select '2' as id, 'bb' as name, 456 as dt, '2024-02-19' as `day`, 10 as `hour`
+           |) as source
+           |on target.id = source.id
+           |when matched then update set *
+           |when not matched then insert *
+           |""".stripMargin
+      )
+
+      // check result after insert and merge data into target table
+      checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
+        Seq("1", "aa", 123, "2024-02-19", 10),
+        Seq("2", "bb", 456, "2024-02-19", 10)
+      )
+    })
+  }
+
   test("Test Insert Into with values") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName

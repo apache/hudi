@@ -265,6 +265,14 @@ public class SparkRDDWriteClient<T> extends
     return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
   }
 
+  public HoodieWriteResult managePartitionTTL(String instantTime) {
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime));
+    preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.managePartitionTTL(context, instantTime);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+    return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
+  }
+
   @Override
   protected void initMetadataTable(Option<String> instantTime) {
     // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,

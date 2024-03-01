@@ -102,7 +102,7 @@
     <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
     <kafka.version>2.0.0</kafka.version>
     <kafka.spark3.version>2.8.0</kafka.spark3.version>
-    <pulsar.version>2.10.2</pulsar.version>
+    <pulsar.version>3.0.2</pulsar.version>
     <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
     <pulsar.spark.scala11.version>2.4.5</pulsar.spark.scala11.version>
     <pulsar.spark.scala12.version>3.1.1.4</pulsar.spark.scala12.version>
@@ -189,9 +189,9 @@
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.13.0</thrift.version>
     <javalin.version>4.6.7</javalin.version>
-    <jetty.version>9.4.48.v20220622</jetty.version>
+    <jetty.version>9.4.53.v20231009</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
-    <hbase.version>2.4.9</hbase.version>
+    <hbase.version>2.4.13</hbase.version>
     <h2.version>1.4.199</h2.version>
     <awaitility.version>3.1.2</awaitility.version>
     <skipTests>false</skipTests>
@@ -227,6 +227,8 @@
     <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
+    <moto.port>5000</moto.port>
+    <moto.endpoint>http://localhost:${moto.port}</moto.endpoint>
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.8.3</snappy.version>
@@ -474,6 +476,7 @@
               <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
               <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
               <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+              <include>org.apache.hbase.thirdparty:hbase-unsafe</include>
               <include>org.apache.htrace:htrace-core4</include>
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
@@ -29,10 +28,8 @@ import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._
@@ -183,7 +180,10 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
       val recordKey: String = row.getAs("_hoodie_record_key")
       val partitionPath: String = row.getAs("_hoodie_partition_path")
       val fileName: String = row.getAs("_hoodie_file_name")
-      val recordLocation = recordIndexMap.get(recordKey)
+      val recordLocations = recordIndexMap.get(recordKey)
+      assertFalse(recordLocations.isEmpty)
+      // assuming no duplicate keys for now
+      val recordLocation = recordLocations.get(0)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
       if (!writeConfig.inlineClusteringEnabled && !writeConfig.isAsyncClusteringEnabled) {
         // The file id changes after clustering, so only assert it for usual upsert and compaction operations

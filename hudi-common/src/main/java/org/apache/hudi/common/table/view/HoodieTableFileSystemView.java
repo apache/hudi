@@ -115,6 +115,9 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     super.init(metaClient, visibleActiveTimeline);
   }
 
+  /**
+   * Visible for testing
+   */
   public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       FileStatus[] fileStatuses) {
     init(metaClient, visibleActiveTimeline);
@@ -421,7 +424,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   /**
    * Get the latest file slices for a given partition including the inflight ones.
    *
-   * @param partitionPath
+   * @param partitionPath The partition path of interest
    * @return Stream of latest {@link FileSlice} in the partition path.
    */
   public Stream<FileSlice> fetchLatestFileSlicesIncludingInflight(String partitionPath) {

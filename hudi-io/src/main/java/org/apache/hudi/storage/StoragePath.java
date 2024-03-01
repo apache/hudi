@@ -29,24 +29,25 @@ import java.net.URISyntaxException;
 
 /**
  * Names a file or directory on storage.
- * Location strings use slash (`/`) as the directory separator.
+ * Path strings use slash (`/`) as the directory separator.
  * The APIs are mainly based on {@code org.apache.hadoop.fs.Path} class.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
-public class HoodieLocation implements Comparable<HoodieLocation>, Serializable {
+// StoragePath
+public class StoragePath implements Comparable<StoragePath>, Serializable {
   public static final char SEPARATOR_CHAR = '/';
   public static final char COLON_CHAR = ':';
   public static final String SEPARATOR = "" + SEPARATOR_CHAR;
   private final URI uri;
-  private transient volatile HoodieLocation cachedParent;
+  private transient volatile StoragePath cachedParent;
   private transient volatile String cachedName;
   private transient volatile String uriString;
 
-  public HoodieLocation(URI uri) {
+  public StoragePath(URI uri) {
     this.uri = uri.normalize();
   }
 
-  public HoodieLocation(String path) {
+  public StoragePath(String path) {
     try {
       // This part of parsing is compatible with hadoop's Path
       // and required for properly handling encoded path with URI
@@ -82,11 +83,11 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
     }
   }
 
-  public HoodieLocation(String parent, String child) {
-    this(new HoodieLocation(parent), child);
+  public StoragePath(String parent, String child) {
+    this(new StoragePath(parent), child);
   }
 
-  public HoodieLocation(HoodieLocation parent, String child) {
+  public StoragePath(StoragePath parent, String child) {
     URI parentUri = parent.toUri();
     String normalizedChild = normalize(child, false);
 
@@ -108,7 +109,8 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
           parentUri.getAuthority(),
           parentPathWithSeparator,
           null,
-          parentUri.getFragment()).resolve(normalizedChild);
+          parentUri.getFragment())
+          .resolve(new URI(null, null, normalizedChild, null, null));
       this.uri = new URI(
           parentUri.getScheme(),
           parentUri.getAuthority(),
@@ -126,19 +128,19 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
   }
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public HoodieLocation getParent() {
+  public StoragePath getParent() {
     // This value could be overwritten concurrently and that's okay, since
-    // {@code HoodieLocation} is immutable
+    // {@code StoragePath} is immutable
     if (cachedParent == null) {
       String path = uri.getPath();
       int lastSlash = path.lastIndexOf(SEPARATOR_CHAR);
       if (path.isEmpty() || path.equals(SEPARATOR)) {
-        throw new IllegalStateException("Cannot get parent location of a root location");
+        throw new IllegalStateException("Cannot get parent path of a root path");
       }
       String parentPath = lastSlash == -1
           ? "" : path.substring(0, lastSlash == 0 ? 1 : lastSlash);
       try {
-        cachedParent = new HoodieLocation(new URI(
+        cachedParent = new StoragePath(new URI(
             uri.getScheme(), uri.getAuthority(), parentPath, null, uri.getFragment()));
       } catch (URISyntaxException e) {
         throw new IllegalArgumentException(e);
@@ -150,7 +152,7 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getName() {
     // This value could be overwritten concurrently and that's okay, since
-    // {@code HoodieLocation} is immutable
+    // {@code StoragePath} is immutable
     if (cachedName == null) {
       String path = uri.getPath();
       int slash = path.lastIndexOf(SEPARATOR);
@@ -160,9 +162,9 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
   }
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public HoodieLocation getLocationWithoutSchemeAndAuthority() {
+  public StoragePath getPathWithoutSchemeAndAuthority() {
     try {
-      return new HoodieLocation(
+      return new StoragePath(
           new URI(null, null, uri.getPath(), uri.getQuery(), uri.getFragment()));
     } catch (URISyntaxException e) {
       throw new IllegalArgumentException(e);
@@ -186,10 +188,55 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
     return uri;
   }
 
+  /**
+   * Returns a qualified path object.
+   *
+   * @param defaultUri if this path is missing the scheme or authority
+   *                   components, borrow them from this URI.
+   * @return this path if it contains a scheme and authority, or
+   * a new path that includes a path and authority and is fully qualified.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public StoragePath makeQualified(URI defaultUri) {
+    if (!isAbsolute()) {
+      throw new IllegalStateException("Only an absolute path can be made qualified");
+    }
+    StoragePath path = this;
+    URI pathUri = path.toUri();
+
+    String scheme = pathUri.getScheme();
+    String authority = pathUri.getAuthority();
+    String fragment = pathUri.getFragment();
+
+    if (scheme != null && (authority != null || defaultUri.getAuthority() == null)) {
+      return path;
+    }
+
+    if (scheme == null) {
+      scheme = defaultUri.getScheme();
+    }
+
+    if (authority == null) {
+      authority = defaultUri.getAuthority();
+      if (authority == null) {
+        authority = "";
+      }
+    }
+
+    URI newUri;
+    try {
+      newUri = new URI(scheme, authority,
+          normalize(pathUri.getPath(), true), null, fragment);
+    } catch (URISyntaxException e) {
+      throw new IllegalArgumentException(e);
+    }
+    return new StoragePath(newUri);
+  }
+
   @Override
   public String toString() {
     // This value could be overwritten concurrently and that's okay, since
-    // {@code HoodieLocation} is immutable
+    // {@code StoragePath} is immutable
     if (uriString == null) {
       // We can't use uri.toString(), which escapes everything, because we want
       // illegal characters unescaped in the string, for glob processing, etc.
@@ -216,10 +263,10 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
 
   @Override
   public boolean equals(Object o) {
-    if (!(o instanceof HoodieLocation)) {
+    if (!(o instanceof StoragePath)) {
       return false;
     }
-    return this.uri.equals(((HoodieLocation) o).toUri());
+    return this.uri.equals(((StoragePath) o).toUri());
   }
 
   @Override
@@ -228,7 +275,7 @@ public class HoodieLocation implements Comparable<HoodieLocation>, Serializable 
   }
 
   @Override
-  public int compareTo(HoodieLocation o) {
+  public int compareTo(StoragePath o) {
     return this.uri.compareTo(o.uri);
   }
 

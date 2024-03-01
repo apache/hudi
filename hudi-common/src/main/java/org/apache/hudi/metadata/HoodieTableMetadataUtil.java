@@ -68,6 +68,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -82,7 +83,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.AvroTypeException;
@@ -456,6 +457,19 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * Returns all the incremental write partition paths as a set with the given commits metadata.
+   *
+   * @param metadataList The commits metadata
+   * @return the partition path set
+   */
+  public static Set<String> getWritePartitionPaths(List<HoodieCommitMetadata> metadataList) {
+    return metadataList.stream()
+        .map(HoodieCommitMetadata::getWritePartitionPaths)
+        .flatMap(Collection::stream)
+        .collect(Collectors.toSet());
+  }
+
+  /**
    * Convert commit action metadata to bloom filter records.
    *
    * @param context                 - Engine context to use
@@ -684,7 +698,7 @@ public class HoodieTableMetadataUtil {
           String partitionPath = deleteFileInfoPair.getLeft();
           String filePath = deleteFileInfoPair.getRight();
 
-          if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+          if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension()) || ExternalFilePathUtil.isExternallyCreatedFile(filePath)) {
             return getColumnStatsRecords(partitionPath, filePath, dataTableMetaClient, columnsToIndex, true).iterator();
           }
           return Collections.emptyListIterator();
@@ -1640,7 +1654,7 @@ public class HoodieTableMetadataUtil {
    *
    * @param partitionType         Type of the partition for which the file group count is to be estimated.
    * @param recordCount           The number of records expected to be written.
-   * @param averageRecordSize     Average size of each record to be writen.
+   * @param averageRecordSize     Average size of each record to be written.
    * @param minFileGroupCount     Minimum number of file groups to use.
    * @param maxFileGroupCount     Maximum number of file groups to use.
    * @param growthFactor          By what factor are the records (recordCount) expected to grow?
@@ -1912,7 +1926,7 @@ public class HoodieTableMetadataUtil {
     if (partition.isEmpty()) {
       return new Path(basePath, filename);
     } else {
-      return new Path(basePath, partition + HoodieLocation.SEPARATOR + filename);
+      return new Path(basePath, partition + StoragePath.SEPARATOR + filename);
     }
   }
 }

@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -220,11 +221,11 @@ public class ConsistentBucketIndexUtils {
    * @return HoodieConsistentHashingMetadata object
    */
   private static Option<HoodieConsistentHashingMetadata> loadMetadataFromGivenFile(HoodieTable table, FileStatus metaFile) {
-    try {
-      if (metaFile == null) {
-        return Option.empty();
-      }
-      byte[] content = FileIOUtils.readAsByteArray(table.getMetaClient().getFs().open(metaFile.getPath()));
+    if (metaFile == null) {
+      return Option.empty();
+    }
+    try (InputStream is = table.getMetaClient().getFs().open(metaFile.getPath())) {
+      byte[] content = FileIOUtils.readAsByteArray(is);
       return Option.of(HoodieConsistentHashingMetadata.fromBytes(content));
     } catch (FileNotFoundException e) {
       return Option.empty();

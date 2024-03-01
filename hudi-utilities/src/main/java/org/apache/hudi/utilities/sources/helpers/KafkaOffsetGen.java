@@ -132,18 +132,18 @@ public class KafkaOffsetGen {
 
       boolean needSplitToMinPartitions = minPartitions > toOffsetMap.size();
       long totalEvents = totalNewMessages(ranges);
-      long allocedEvents = 0;
+      long allocatedEvents = 0;
       Set<Integer> exhaustedPartitions = new HashSet<>();
       List<OffsetRange> finalRanges = new ArrayList<>();
       // choose the actualNumEvents with min(totalEvents, numEvents)
       long actualNumEvents = Math.min(totalEvents, numEvents);
 
       // keep going until we have events to allocate and partitions still not exhausted.
-      while (allocedEvents < numEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
+      while (allocatedEvents < numEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
         // Allocate the remaining events to non-exhausted partitions, in round robin fashion
         Set<Integer> allocatedPartitionsThisLoop = new HashSet<>(exhaustedPartitions);
         for (int i = 0; i < ranges.length; i++) {
-          long remainingEvents = actualNumEvents - allocedEvents;
+          long remainingEvents = actualNumEvents - allocatedEvents;
           long remainingPartitions = toOffsetMap.size() - allocatedPartitionsThisLoop.size();
           // if need tp split into minPartitions, recalculate the remainingPartitions
           if (needSplitToMinPartitions) {
@@ -166,12 +166,13 @@ public class KafkaOffsetGen {
           if (toOffset == range.untilOffset()) {
             exhaustedPartitions.add(range.partition());
           }
-          allocedEvents += toOffset - range.fromOffset();
-          // We need recompute toOffset if allocedEvents larger than actualNumEvents.
-          if (allocedEvents > actualNumEvents) {
-            long offsetsToAdd = Math.min(eventsPerPartition, (actualNumEvents - allocedEvents));
-            toOffset = Math.min(range.untilOffset(), toOffset + offsetsToAdd);
+          // We need recompute toOffset if we have allocatedEvents are more than actualNumEvents.
+          long totalAllocatedEvents = allocatedEvents + (toOffset - range.fromOffset());
+          if (totalAllocatedEvents > actualNumEvents) {
+            long offsetsToAdd = Math.min(eventsPerPartition, (actualNumEvents - allocatedEvents));
+            toOffset = Math.min(range.untilOffset(), range.fromOffset() + offsetsToAdd);
           }
+          allocatedEvents += toOffset - range.fromOffset();
           OffsetRange thisRange = OffsetRange.create(range.topicPartition(), range.fromOffset(), toOffset);
           finalRanges.add(thisRange);
           ranges[i] = OffsetRange.create(range.topicPartition(), range.fromOffset() + thisRange.count(), range.untilOffset());
@@ -241,7 +242,24 @@ public class KafkaOffsetGen {
   }
 
   public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieIngestionMetrics metrics) {
+    // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
+    long maxEventsToReadFromKafka = getLongWithAltKeys(props, KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE);
 
+    long numEvents;
+    if (sourceLimit == Long.MAX_VALUE) {
+      numEvents = maxEventsToReadFromKafka;
+      LOG.info("SourceLimit not configured, set numEvents to default value : " + maxEventsToReadFromKafka);
+    } else {
+      numEvents = sourceLimit;
+    }
+
+    long minPartitions = getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
+    LOG.info("getNextOffsetRanges set config " + KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key() + " to " + minPartitions);
+
+    return getNextOffsetRanges(lastCheckpointStr, numEvents, minPartitions, metrics);
+  }
+
+  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long numEvents, long minPartitions, HoodieIngestionMetrics metrics) {
     // Obtain current metadata for the topic
     Map<TopicPartition, Long> fromOffsets;
     Map<TopicPartition, Long> toOffsets;
@@ -279,29 +297,9 @@ public class KafkaOffsetGen {
       // Obtain the latest offsets.
       toOffsets = consumer.endOffsets(topicPartitions);
     }
-
-    // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
-    long maxEventsToReadFromKafka = getLongWithAltKeys(props, KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE);
-
-    long numEvents;
-    if (sourceLimit == Long.MAX_VALUE) {
-      numEvents = maxEventsToReadFromKafka;
-      LOG.info("SourceLimit not configured, set numEvents to default value : " + maxEventsToReadFromKafka);
-    } else {
-      numEvents = sourceLimit;
-    }
-
-    // TODO(HUDI-4625) remove
-    if (numEvents < toOffsets.size()) {
-      throw new HoodieException("sourceLimit should not be less than the number of kafka partitions");
-    }
-
-    long minPartitions = getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
-    LOG.info("getNextOffsetRanges set config " + KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key() + " to " + minPartitions);
-
     return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents, minPartitions);
   }
-
+  
   /**
    * Fetch partition infos for given topic.
    *

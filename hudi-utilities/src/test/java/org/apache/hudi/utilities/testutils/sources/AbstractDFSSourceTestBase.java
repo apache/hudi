@@ -60,7 +60,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(true, false, false);
+    UtilitiesTestBase.initTestServices(false, false, false);
   }
 
   @BeforeEach

@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -71,7 +71,7 @@ class TestHoodieWrapperFileSystem {
   public void testCreateImmutableFileInPath() throws IOException {
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(HadoopFSUtils.getFs(basePath, new Configuration()), new NoOpConsistencyGuard());
     String testContent = "test content";
-    Path testFile = new Path(basePath + HoodieLocation.SEPARATOR + "clean.00000001");
+    Path testFile = new Path(basePath + StoragePath.SEPARATOR + "clean.00000001");
 
     // create same commit twice
     fs.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));

@@ -66,6 +66,7 @@ import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
+import org.apache.hudi.utilities.streamer.StreamContext;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -122,6 +123,7 @@ public class UtilHelpers {
   public static final String EXECUTE = "execute";
   public static final String SCHEDULE = "schedule";
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
+  public static final String PURGE_PENDING_INSTANT = "purge_pending_instant";
 
   private static final Logger LOG = LoggerFactory.getLogger(UtilHelpers.class);
 
@@ -149,6 +151,24 @@ public class UtilHelpers {
             new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class},
             cfg, jssc, sparkSession, schemaProvider);
+      }
+    } catch (Throwable e) {
+      throw new IOException("Could not load source class " + sourceClass, e);
+    }
+  }
+
+  public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
+                                    SparkSession sparkSession, HoodieIngestionMetrics metrics, StreamContext streamContext)
+      throws IOException {
+    try {
+      try {
+        return (Source) ReflectionUtils.loadClass(sourceClass,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
+                SparkSession.class,
+                HoodieIngestionMetrics.class, StreamContext.class},
+            cfg, jssc, sparkSession, metrics, streamContext);
+      } catch (HoodieException e) {
+        return createSource(sourceClass, cfg, jssc, sparkSession, streamContext.getSchemaProvider(), metrics);
       }
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);

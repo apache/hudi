@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.HoodieSchemaNotFoundException;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -588,6 +589,6 @@ public class TableSchemaResolver {
   }
 
   private Supplier<Exception> schemaNotFoundError() {
-    return () -> new IllegalArgumentException("No schema found for table at " + metaClient.getBasePathV2().toString());
+    return () -> new HoodieSchemaNotFoundException("No schema found for table at " + metaClient.getBasePathV2().toString());
   }
 }

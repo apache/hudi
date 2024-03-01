@@ -76,8 +76,8 @@ object HoodieSchemaUtils {
                          latestTableSchemaOpt: Option[Schema],
                          internalSchemaOpt: Option[InternalSchema],
                          opts: Map[String, String]): Schema = {
-    val setNullForMissingColumns = opts.getOrDefault(DataSourceWriteOptions.HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS.key(),
-      DataSourceWriteOptions.HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS.defaultValue).toBoolean
+    val setNullForMissingColumns = opts.getOrDefault(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.key(),
+      DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.defaultValue).toBoolean
     val shouldReconcileSchema = opts(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
     val shouldValidateSchemasCompatibility = opts.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
@@ -206,7 +206,7 @@ object HoodieSchemaUtils {
    * TODO support casing reconciliation
    */
   private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
-    reconcileSchemaRequirements(sourceSchema, latestTableSchema, opts)
+    reconcileSchemaRequirements(sourceSchema, latestTableSchema)
   }
 
 

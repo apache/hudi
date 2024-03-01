@@ -39,7 +39,7 @@ import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -217,7 +217,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         //       Otherwise, it has to be present or the record would be considered invalid
         if (bloomFilterRecord == null) {
           checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_BLOOM_FILTER) == null,
-              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, METADATA_TYPE_COLUMN_STATS));
+              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, METADATA_TYPE_BLOOM_FILTER));
         } else {
           bloomFilterMetadata = new HoodieMetadataBloomFilter(
               (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE),
@@ -356,7 +356,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                     final String bloomFilterType,
                                                                                     final ByteBuffer bloomFilter,
                                                                                     final boolean isDeleted) {
-    checkArgument(!baseFileName.contains(HoodieLocation.SEPARATOR)
+    checkArgument(!baseFileName.contains(StoragePath.SEPARATOR)
             && FSUtils.isBaseFile(new Path(baseFileName)),
         "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
     final String bloomFilterIndexKey = getBloomFilterRecordKey(partitionName, baseFileName);

@@ -398,6 +398,11 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   @Override
+  public HoodieWriteMetadata<List<WriteStatus>> managePartitionTTL(HoodieEngineContext context, String instantTime) {
+    throw new HoodieNotSupportedException("Manage partition ttl is not supported yet");
+  }
+
+  @Override
   public HoodieRestoreMetadata restore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
     throw new HoodieNotSupportedException("Savepoint and restore is not supported yet");
   }

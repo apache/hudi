@@ -2697,6 +2697,29 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getWriteConcurrencyMode().isNonBlockingConcurrencyControl();
   }
 
+  /**
+   * TTL configs.
+   */
+  public boolean isInlinePartitionTTLEnable() {
+    return getBoolean(HoodieTTLConfig.INLINE_PARTITION_TTL);
+  }
+
+  public String getPartitionTTLStrategyClassName() {
+    return getString(HoodieTTLConfig.PARTITION_TTL_STRATEGY_CLASS_NAME);
+  }
+
+  public Integer getPartitionTTLStrategyDaysRetain() {
+    return getInt(HoodieTTLConfig.DAYS_RETAIN);
+  }
+
+  public String getPartitionTTLPartitionSelected() {
+    return getString(HoodieTTLConfig.PARTITION_SELECTED);
+  }
+
+  public Integer getPartitionTTLMaxPartitionsToDelete() {
+    return getInt(HoodieTTLConfig.MAX_PARTITION_TO_DELETE);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -2716,6 +2739,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isCallbackConfigSet = false;
     private boolean isPayloadConfigSet = false;
     private boolean isMetadataConfigSet = false;
+
+    private boolean isTTLConfigSet = false;
     private boolean isLockConfigSet = false;
     private boolean isPreCommitValidationConfigSet = false;
     private boolean isMetricsJmxConfigSet = false;
@@ -2995,6 +3020,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withTTLConfig(HoodieTTLConfig ttlConfig) {
+      writeConfig.getProps().putAll(ttlConfig.getProps());
+      isTTLConfigSet = true;
+      return this;
+    }
+
     public Builder withAutoCommit(boolean autoCommit) {
       writeConfig.setValue(AUTO_COMMIT_ENABLE, String.valueOf(autoCommit));
       return this;
@@ -3262,6 +3293,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key());
       writeConfig.setDefaultOnCondition(!isLockConfigSet,
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+      writeConfig.setDefaultOnCondition(!isTTLConfigSet,
+          HoodieTTLConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
     }

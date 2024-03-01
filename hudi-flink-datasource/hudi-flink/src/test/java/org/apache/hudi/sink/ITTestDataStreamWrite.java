@@ -28,7 +28,7 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.catalog.HoodieCatalog;
 import org.apache.hudi.table.catalog.TableOptionProperties;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -441,7 +441,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     // create table dir
     final String dbName = DEFAULT_DATABASE.defaultValue();
     final String tableName = "t1";
-    File testTable = new File(tempFile, dbName + HoodieLocation.SEPARATOR + tableName);
+    File testTable = new File(tempFile, dbName + StoragePath.SEPARATOR + tableName);
     testTable.mkdir();
 
     Configuration conf = TestConfigurations.getDefaultConf(testTable.toURI().toString());
