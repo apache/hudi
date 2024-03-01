@@ -24,7 +24,7 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
@@ -38,7 +38,6 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.CommonOptionUtils._
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
-import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
@@ -1747,50 +1746,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val result = spark.read.format("hudi").load(basePath)
     assertEquals(2, result.count())
     assertEquals(0, result.filter(result("id") === 1).count())
-  }
-
-  /** Test case to verify MAKE_NEW_COLUMNS_NULLABLE config parameter. */
-  @Test
-  def testSchemaEvolutionWithNewColumn(): Unit = {
-    val df1 = spark.sql("select '1' as event_id, '2' as ts, '3' as version, 'foo' as event_date")
-    var hudiOptions = Map[String, String](
-      HoodieWriteConfig.TBL_NAME.key() -> "test_hudi_merger",
-      KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> "event_id",
-      KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "version",
-      DataSourceWriteOptions.OPERATION.key() -> "insert",
-      HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key() -> "ts",
-      HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() -> "org.apache.hudi.keygen.ComplexKeyGenerator",
-      KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key() -> "true",
-      HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
-      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.HoodieSparkRecordMerger"
-    )
-    df1.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(basePath)
-
-    // Try adding a string column. This operation is expected to throw 'schema not compatible' exception since
-    // 'MAKE_NEW_COLUMNS_NULLABLE' parameter is 'false' by default.
-    val df2 = spark.sql("select '2' as event_id, '2' as ts, '3' as version, 'foo' as event_date, 'bar' as add_col")
-    try {
-      (df2.write.format("hudi").options(hudiOptions).mode("append").save(basePath))
-      fail("Option succeeded, but was expected to fail.")
-    } catch {
-      case ex: org.apache.hudi.exception.HoodieInsertException => {
-        assertTrue(ex.getMessage.equals("Failed insert schema compatibility check"))
-      }
-      case ex: Exception => {
-        fail(ex)
-      }
-    }
-
-    // Try adding the string column again. This operation is expected to succeed since 'MAKE_NEW_COLUMNS_NULLABLE'
-    // parameter has been set to 'true'.
-    hudiOptions = hudiOptions + (HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE.key() -> "true")
-    try {
-      (df2.write.format("hudi").options(hudiOptions).mode("append").save(basePath))
-    } catch {
-      case ex: Exception => {
-        fail(ex)
-      }
-    }
   }
 
   def assertLastCommitIsUpsert(): Boolean = {
