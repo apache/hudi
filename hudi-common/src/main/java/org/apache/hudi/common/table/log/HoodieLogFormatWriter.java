@@ -51,9 +51,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final Integer bufferSize;
   private final Short replication;
   private final String rolloverLogWriteToken;
-  private final LogFileCreationCallback fileCreationHook;
+  private final LogFileCreationCallback fileCreationCallback;
   private boolean closed = false;
-  private transient Thread shutdownThread = null;
 
   HoodieLogFormatWriter(
       FileSystem fs,
@@ -62,15 +61,14 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       Short replication,
       Long sizeThreshold,
       String rolloverLogWriteToken,
-      LogFileCreationCallback fileCreationHook) {
+      LogFileCreationCallback fileCreationCallback) {
     this.fs = fs;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
     this.bufferSize = bufferSize;
     this.replication = replication;
     this.rolloverLogWriteToken = rolloverLogWriteToken;
-    this.fileCreationHook = fileCreationHook;
-    addShutDownHook();
+    this.fileCreationCallback = fileCreationCallback;
   }
 
   public FileSystem getFs() {
@@ -225,16 +223,13 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   private void createNewFile() throws IOException {
-    fileCreationHook.preFileCreation(this.logFile);
+    fileCreationCallback.preFileCreation(this.logFile);
     this.output =
         fs.create(this.logFile.getPath(), false, bufferSize, replication, WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
   }
 
   @Override
   public void close() throws IOException {
-    if (null != shutdownThread) {
-      Runtime.getRuntime().removeShutdownHook(shutdownThread);
-    }
     closeStream();
   }
 
@@ -267,25 +262,5 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       return 0;
     }
     return output.getPos();
-  }
-
-  /**
-   * Close the output stream when the JVM exits.
-   */
-  private void addShutDownHook() {
-    shutdownThread = new Thread() {
-      public void run() {
-        try {
-          LOG.warn("running logformatwriter hook");
-          if (output != null) {
-            close();
-          }
-        } catch (Exception e) {
-          LOG.warn("unable to close output stream for log file " + logFile, e);
-          // fail silently for any sort of exception
-        }
-      }
-    };
-    Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 }
