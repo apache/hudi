@@ -59,6 +59,7 @@ import static org.apache.hudi.common.util.ConfigUtils.checkRequiredProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils.checkTopicCheckpoint;
 
 /**
  * Source to read data from Kafka, incrementally.
@@ -68,16 +69,14 @@ public class KafkaOffsetGen {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaOffsetGen.class);
   private static final String METRIC_NAME_KAFKA_DELAY_COUNT = "kafkaDelayCount";
   private static final Comparator<OffsetRange> SORT_BY_PARTITION = Comparator.comparing(OffsetRange::partition);
-
   public static final String KAFKA_CHECKPOINT_TYPE_TIMESTAMP = "timestamp";
 
-  /**
-   * kafka checkpoint Pattern.
-   * Format: topic_name,partition_num:offset,partition_num:offset,....
-   */
-  private final Pattern pattern = Pattern.compile(".*,.*:.*");
-
   public static class CheckpointUtils {
+    /**
+     * kafka checkpoint Pattern.
+     * Format: topic_name,partition_num:offset,partition_num:offset,....
+     */
+    private static final Pattern PATTERN = Pattern.compile(".*,.*:.*");
 
     /**
      * Reconstruct checkpoint from timeline.
@@ -209,6 +208,11 @@ public class KafkaOffsetGen {
 
     public static long totalNewMessages(OffsetRange[] ranges) {
       return Arrays.stream(ranges).mapToLong(OffsetRange::count).sum();
+    }
+
+    public static boolean checkTopicCheckpoint(Option<String> lastCheckpointStr) {
+      Matcher matcher = PATTERN.matcher(lastCheckpointStr.get());
+      return matcher.matches();
     }
   }
 
@@ -423,11 +427,6 @@ public class KafkaOffsetGen {
   public boolean checkTopicExists(KafkaConsumer consumer)  {
     Map<String, List<PartitionInfo>> result = consumer.listTopics();
     return result.containsKey(topicName);
-  }
-
-  private boolean checkTopicCheckpoint(Option<String> lastCheckpointStr) {
-    Matcher matcher = pattern.matcher(lastCheckpointStr.get());
-    return matcher.matches();
   }
 
   public String getTopicName() {
