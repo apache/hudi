@@ -19,15 +19,16 @@
 
 package org.apache.hudi.testutils.providers;
 
+import org.apache.hudi.storage.HoodieStorage;
+
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 
 public interface DFSProvider {
 
   MiniDFSCluster dfsCluster();
 
-  DistributedFileSystem dfs();
+  HoodieStorage hoodieStorage();
 
   Path dfsBasePath();
 

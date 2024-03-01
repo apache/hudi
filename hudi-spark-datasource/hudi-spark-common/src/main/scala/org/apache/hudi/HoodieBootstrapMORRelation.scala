@@ -18,9 +18,10 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -53,7 +54,7 @@ case class HoodieBootstrapMORSplit(dataFile: PartitionedFile, skeletonFile: Opti
  */
 case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
                                       private val userSchema: Option[StructType],
-                                      private val globPaths: Seq[Path],
+                                      private val globPaths: Seq[StoragePath],
                                       override val metaClient: HoodieTableMetaClient,
                                       override val optParams: Map[String, String],
                                       private val prunedDataSchema: Option[StructType] = None)

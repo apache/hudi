@@ -17,16 +17,15 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.Path
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.cli.BootstrapExecutorUtils
 import org.apache.hudi.cli.HDFSParquetImporterUtils.{buildProperties, readConfig}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
-import org.apache.hudi.keygen.constant.KeyGeneratorType
-import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -94,7 +93,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     val configs: util.List[String] = new util.ArrayList[String]
 
     val properties: TypedProperties = if (propsFilePath == null || propsFilePath.isEmpty) buildProperties(configs)
-    else readConfig(jsc.hadoopConfiguration, new Path(propsFilePath), configs).getProps(true)
+    else readConfig(jsc.hadoopConfiguration, new StoragePath(propsFilePath), configs).getProps(true)
 
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key, bootstrapPath)
 

@@ -66,7 +66,7 @@ public class CompactionUtils {
     builder.setPartitionPath(partitionPath);
     builder.setFileId(fileSlice.getFileId());
     builder.setBaseInstantTime(fileSlice.getBaseInstantTime());
-    builder.setDeltaFilePaths(fileSlice.getLogFiles().map(lf -> lf.getPath().getName()).collect(Collectors.toList()));
+    builder.setDeltaFilePaths(fileSlice.getLogFiles().map(lf -> lf.getLocation().getName()).collect(Collectors.toList()));
     if (fileSlice.getBaseFile().isPresent()) {
       builder.setDataFilePath(fileSlice.getBaseFile().get().getFileName());
       builder.setBootstrapFilePath(fileSlice.getBaseFile().get().getBootstrapBaseFile().map(BaseFile::getPath)

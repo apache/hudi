@@ -38,8 +38,9 @@ import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -51,7 +52,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.RowKind;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -153,9 +153,9 @@ public class FormatUtils {
       org.apache.flink.configuration.Configuration flinkConf,
       Configuration hadoopConf) {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
-    FileSystem fs = HadoopFSUtils.getFs(split.getTablePath(), hadoopConf);
+    HoodieStorage storage = HoodieStorageUtils.getHoodieStorage(split.getTablePath(), hadoopConf);
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withHoodieStorage(storage)
         .withBasePath(split.getTablePath())
         .withLogFilePaths(split.getLogPaths().get())
         .withReaderSchema(logSchema)
@@ -196,8 +196,10 @@ public class FormatUtils {
           .collect(Collectors.toList());
       HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
           split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
-      HoodieUnMergedLogRecordScanner.Builder scannerBuilder = HoodieUnMergedLogRecordScanner.newBuilder()
-          .withFileSystem(HadoopFSUtils.getFs(split.getTablePath(), hadoopConf))
+      HoodieUnMergedLogRecordScanner.Builder scannerBuilder =
+          HoodieUnMergedLogRecordScanner.newBuilder()
+              .withHoodieStorage(
+                  HoodieStorageUtils.getHoodieStorage(split.getTablePath(), hadoopConf))
           .withBasePath(split.getTablePath())
           .withLogFilePaths(split.getLogPaths().get())
           .withReaderSchema(logSchema)
@@ -261,7 +263,7 @@ public class FormatUtils {
       Configuration hadoopConf) {
     String basePath = writeConfig.getBasePath();
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(HadoopFSUtils.getFs(basePath, hadoopConf))
+        .withHoodieStorage(HoodieStorageUtils.getHoodieStorage(basePath, hadoopConf))
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)
         .withReaderSchema(logSchema)

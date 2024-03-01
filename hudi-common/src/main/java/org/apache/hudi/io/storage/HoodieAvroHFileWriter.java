@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -76,11 +77,11 @@ public class HoodieAvroHFileWriter
   // This is private in CacheConfig so have been copied here.
   private static final String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
-  public HoodieAvroHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
+  public HoodieAvroHFileWriter(String instantTime, StoragePath location, HoodieHFileConfig hfileConfig, Schema schema,
                                TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
 
-    Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
-    this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
+    Configuration conf = FSUtils.registerFileSystem(location, hfileConfig.getHadoopConf());
+    this.file = HoodieWrapperFileSystem.convertToHoodiePath(location, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.hfileConfig = hfileConfig;
     this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));

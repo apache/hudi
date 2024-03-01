@@ -48,6 +48,10 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
@@ -57,7 +61,6 @@ import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -101,7 +104,7 @@ public class StreamerUtil {
     }
     return readConfig(
         HadoopConfigurations.getHadoopConf(cfg),
-        new Path(cfg.propsFilePath), cfg.configs).getProps();
+        new StoragePath(cfg.propsFilePath), cfg.configs).getProps();
   }
 
   public static TypedProperties buildProperties(List<String> props) {
@@ -131,12 +134,13 @@ public class StreamerUtil {
   /**
    * Read config from properties file (`--props` option) and cmd line (`--hoodie-conf` option).
    */
-  public static DFSPropertiesConfiguration readConfig(org.apache.hadoop.conf.Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
+  public static DFSPropertiesConfiguration readConfig(org.apache.hadoop.conf.Configuration hadoopConfig,
+                                                      StoragePath cfgLocation, List<String> overriddenProps) {
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgLocation);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgPath);
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgLocation);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -364,11 +368,11 @@ public class StreamerUtil {
    * Returns the table config or empty if the table does not exist.
    */
   public static Option<HoodieTableConfig> getTableConfig(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
-    FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
-    Path metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    HoodieStorage storage = HoodieStorageUtils.getHoodieStorage(basePath, hadoopConf);
+    StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     try {
-      if (fs.exists(new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))) {
-        return Option.of(new HoodieTableConfig(fs, metaPath.toString(), null, null));
+      if (storage.exists(new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))) {
+        return Option.of(new HoodieTableConfig(storage, metaPath.toString(), null, null));
       }
     } catch (IOException e) {
       throw new HoodieIOException("Get table config error", e);
@@ -426,21 +430,21 @@ public class StreamerUtil {
    * Returns whether the give file is in valid hoodie format.
    * For example, filtering out the empty or corrupt files.
    */
-  public static boolean isValidFile(FileStatus fileStatus) {
-    final String extension = FSUtils.getFileExtension(fileStatus.getPath().toString());
+  public static boolean isValidFile(StoragePathInfo fileInfo) {
+    final String extension = FSUtils.getFileExtension(fileInfo.getPath().toString());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return fileStatus.getLen() > ParquetFileWriter.MAGIC.length;
+      return fileInfo.getLength() > ParquetFileWriter.MAGIC.length;
     }
 
     if (ORC.getFileExtension().equals(extension)) {
-      return fileStatus.getLen() > OrcFile.MAGIC.length();
+      return fileInfo.getLength() > OrcFile.MAGIC.length();
     }
 
     if (HOODIE_LOG.getFileExtension().equals(extension)) {
-      return fileStatus.getLen() > HoodieLogFormat.MAGIC.length;
+      return fileInfo.getLength() > HoodieLogFormat.MAGIC.length;
     }
 
-    return fileStatus.getLen() > 0;
+    return fileInfo.getLength() > 0;
   }
 
   public static String getLastPendingInstant(HoodieTableMetaClient metaClient) {
@@ -500,9 +504,9 @@ public class StreamerUtil {
     return null;
   }
 
-  public static boolean fileExists(FileSystem fs, Path path) {
+  public static boolean fileExists(HoodieStorage storage, StoragePath path) {
     try {
-      return fs.exists(path);
+      return storage.exists(path);
     } catch (IOException e) {
       throw new HoodieException("Exception while checking file " + path + " existence", e);
     }

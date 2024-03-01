@@ -36,10 +36,9 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
-
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -166,31 +165,37 @@ public class HoodieWriterClientTestHarness extends HoodieCommonTestHarness {
     return builder;
   }
 
-  public void assertPartitionMetadataForRecords(String basePath, List<HoodieRecord> inputRecords, FileSystem fs) throws IOException {
+  public void assertPartitionMetadataForRecords(String basePath, List<HoodieRecord> inputRecords,
+                                                HoodieStorage storage) throws IOException {
     Set<String> partitionPathSet = inputRecords.stream()
         .map(HoodieRecord::getPartitionPath)
         .collect(Collectors.toSet());
-    assertPartitionMetadata(basePath, partitionPathSet.stream().toArray(String[]::new), fs);
+    assertPartitionMetadata(basePath, partitionPathSet.stream().toArray(String[]::new), storage);
   }
 
-  public void assertPartitionMetadataForKeys(String basePath, List<HoodieKey> inputKeys, FileSystem fs) throws IOException {
+  public void assertPartitionMetadataForKeys(String basePath, List<HoodieKey> inputKeys,
+                                             HoodieStorage storage) throws IOException {
     Set<String> partitionPathSet = inputKeys.stream()
         .map(HoodieKey::getPartitionPath)
         .collect(Collectors.toSet());
-    assertPartitionMetadata(basePath, partitionPathSet.stream().toArray(String[]::new), fs);
+    assertPartitionMetadata(basePath, partitionPathSet.stream().toArray(String[]::new), storage);
   }
 
   /**
    * Ensure presence of partition meta-data at known depth.
    *
    * @param partitionPaths Partition paths to check
-   * @param fs File System
+   * @param storage        {@link HoodieStorage} instance.
    * @throws IOException in case of error
    */
-  public static void assertPartitionMetadata(String basePath, String[] partitionPaths, FileSystem fs) throws IOException {
+  public static void assertPartitionMetadata(String basePath, String[] partitionPaths,
+                                             HoodieStorage storage) throws IOException {
     for (String partitionPath : partitionPaths) {
-      assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(fs, new Path(basePath, partitionPath)));
-      HoodiePartitionMetadata pmeta = new HoodiePartitionMetadata(fs, new Path(basePath, partitionPath));
+      assertTrue(
+          HoodiePartitionMetadata.hasPartitionMetadata(
+              storage, new StoragePath(basePath, partitionPath)));
+      HoodiePartitionMetadata pmeta =
+          new HoodiePartitionMetadata(storage, new StoragePath(basePath, partitionPath));
       pmeta.readFromFS();
       assertEquals(HoodieTestDataGenerator.DEFAULT_PARTITION_DEPTH, pmeta.getPartitionDepth());
     }

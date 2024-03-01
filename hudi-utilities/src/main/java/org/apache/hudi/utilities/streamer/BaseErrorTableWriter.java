@@ -24,8 +24,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SparkSession;
 
@@ -47,7 +47,8 @@ public abstract class BaseErrorTableWriter<T extends ErrorEvent> implements Seri
   public static String ERROR_TABLE_CURRUPT_RECORD_COL_NAME = "_corrupt_record";
 
   public BaseErrorTableWriter(HoodieStreamer.Config cfg, SparkSession sparkSession,
-                                   TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs) {
+                              TypedProperties props,
+                              HoodieSparkEngineContext hoodieSparkContext, HoodieStorage storage) {
   }
 
   /**

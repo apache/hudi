@@ -196,7 +196,7 @@ public class HoodieCDCLogger implements Closeable {
         HoodieLogBlock block = new HoodieCDCDataBlock(records, cdcDataBlockHeader, keyField);
         AppendResult result = cdcWriter.appendBlocks(Collections.singletonList(block));
 
-        Path cdcAbsPath = result.logFile().getPath();
+        Path cdcAbsPath = new Path(result.logFile().getLocation().toUri());
         if (!cdcAbsPaths.contains(cdcAbsPath)) {
           cdcAbsPaths.add(cdcAbsPath);
         }
@@ -205,7 +205,7 @@ public class HoodieCDCLogger implements Closeable {
         cdcData.clear();
         numOfCDCRecordsInMemory = new AtomicInteger();
       } catch (Exception e) {
-        throw new HoodieException("Failed to write the cdc data to " + cdcWriter.getLogFile().getPath(), e);
+        throw new HoodieException("Failed to write the cdc data to " + cdcWriter.getLogFile().getLocation(), e);
       }
     }
   }

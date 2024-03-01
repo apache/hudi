@@ -62,7 +62,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieSparkClientT
   public void setUp() throws Exception {
     initSparkContexts("TestBulkInsertInternalPartitionerForRows");
     initPath();
-    initFileSystem();
+    initHoodieStorage();
   }
 
   @AfterEach

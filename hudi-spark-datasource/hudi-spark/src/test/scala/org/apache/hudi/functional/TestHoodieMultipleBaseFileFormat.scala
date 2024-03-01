@@ -19,6 +19,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, SparkDatasetMixin}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -26,10 +27,10 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{DEFAULT_FIRST_P
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, SparkDatasetMixin}
+
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -64,7 +65,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown() = {

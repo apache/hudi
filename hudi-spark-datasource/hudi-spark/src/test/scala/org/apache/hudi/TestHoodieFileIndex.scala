@@ -44,7 +44,6 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory}
@@ -80,7 +79,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
   )
 
-  override def getSparkSessionExtensionsInjector: org.apache.hudi.common.util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: common.util.Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) =>
@@ -657,7 +656,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
           (values.toSeq(Seq(StringType)), files)
       }.unzip
       val partitionPaths = perPartitionFilesSeq.flatten
-        .map(file => extractPartitionPathFromFilePath(file.getPath))
+        .map(file => extractPartitionPathFromFilePath(new StoragePath(file.getPath.toUri)))
         .distinct
         .sorted
       val expectedPartitionPaths = if (testCase._3) {
@@ -677,8 +676,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     })
   }
 
-  private def extractPartitionPathFromFilePath(filePath: Path): String = {
-    val relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePathV2, filePath)
+  private def extractPartitionPathFromFilePath(filePath: StoragePath): String = {
+    val relativeFilePath = FSUtils.getRelativePartitionPathFromLocation(metaClient.getBasePathV2, filePath)
     val names = relativeFilePath.split("/")
     val fileName = names(names.length - 1)
     relativeFilePath.stripSuffix(fileName).stripSuffix("/")

@@ -37,11 +37,10 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
+
 import org.apache.spark.api.java.JavaSparkContext;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
@@ -117,15 +116,15 @@ public class MetadataCommand {
       @ShellOption(value = "--sparkMaster", defaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master
   ) throws Exception {
     HoodieCLI.getTableMetaClient();
-    Path metadataPath = new Path(getMetadataTableBasePath(HoodieCLI.basePath));
+    StoragePath metadataPath = new StoragePath(getMetadataTableBasePath(HoodieCLI.basePath));
     try {
-      FileStatus[] statuses = HoodieCLI.fs.listStatus(metadataPath);
-      if (statuses.length > 0) {
+      List<StoragePathInfo> statuses = HoodieCLI.storage.listDirectEntries(metadataPath);
+      if (statuses.size() > 0) {
         throw new RuntimeException("Metadata directory (" + metadataPath + ") not empty.");
       }
     } catch (FileNotFoundException e) {
       // Metadata directory does not exist yet
-      HoodieCLI.fs.mkdirs(metadataPath);
+      HoodieCLI.storage.createDirectory(metadataPath);
     }
 
     HoodieTimer timer = HoodieTimer.start();
@@ -164,9 +163,9 @@ public class MetadataCommand {
                      @ShellOption(value = {"--readonly"}, defaultValue = "false",
                          help = "Open in read-only mode") final boolean readOnly) throws Exception {
     HoodieCLI.getTableMetaClient();
-    Path metadataPath = new Path(getMetadataTableBasePath(HoodieCLI.basePath));
+    StoragePath metadataPath = new StoragePath(getMetadataTableBasePath(HoodieCLI.basePath));
     try {
-      HoodieCLI.fs.listStatus(metadataPath);
+      HoodieCLI.storage.listDirectEntries(metadataPath);
     } catch (FileNotFoundException e) {
       // Metadata directory does not exist
       throw new RuntimeException("Metadata directory (" + metadataPath + ") does not exist.");
@@ -250,24 +249,27 @@ public class MetadataCommand {
         return "[ERROR] Metadata Table not enabled/initialized\n\n";
       }
 
-      Path partitionPath = new Path(HoodieCLI.basePath);
+      StoragePath partitionPath = new StoragePath(HoodieCLI.basePath);
       if (!StringUtils.isNullOrEmpty(partition)) {
-        partitionPath = new Path(HoodieCLI.basePath, partition);
+        partitionPath = new StoragePath(HoodieCLI.basePath, partition);
       }
 
       HoodieTimer timer = HoodieTimer.start();
-      FileStatus[] statuses = metaReader.getAllFilesInPartition(partitionPath);
+      List<StoragePathInfo> statuses = metaReader.getAllFilesInPartition(partitionPath);
       LOG.debug("Took " + timer.endTimer() + " ms");
 
       final List<Comparable[]> rows = new ArrayList<>();
-      Arrays.stream(statuses).sorted((p1, p2) -> p2.getPath().getName().compareTo(p1.getPath().getName())).forEach(f -> {
-        Comparable[] row = new Comparable[1];
-        row[0] = f;
-        rows.add(row);
-      });
+      statuses.stream()
+          .sorted((p1, p2) -> p2.getPath().getName().compareTo(p1.getPath().getName()))
+          .forEach(f -> {
+            Comparable[] row = new Comparable[1];
+            row[0] = f.toString();
+            rows.add(row);
+          });
 
       TableHeader header = new TableHeader().addTableHeaderField("file path");
-      return HoodiePrintHelper.print(header, new HashMap<>(), "", false, Integer.MAX_VALUE, false, rows);
+      return HoodiePrintHelper.print(header, new HashMap<>(), "", false, Integer.MAX_VALUE, false,
+          rows);
     }
   }
 
@@ -306,12 +308,15 @@ public class MetadataCommand {
 
     final List<Comparable[]> rows = new ArrayList<>();
     for (String partition : allPartitions) {
-      Map<String, FileStatus> fileStatusMap = new HashMap<>();
-      Map<String, FileStatus> metadataFileStatusMap = new HashMap<>();
-      FileStatus[] metadataStatuses = metadataReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
-      Arrays.stream(metadataStatuses).forEach(entry -> metadataFileStatusMap.put(entry.getPath().getName(), entry));
-      FileStatus[] fsStatuses = fsMetaReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
-      Arrays.stream(fsStatuses).forEach(entry -> fileStatusMap.put(entry.getPath().getName(), entry));
+      Map<String, StoragePathInfo> fileStatusMap = new HashMap<>();
+      Map<String, StoragePathInfo> metadataFileStatusMap = new HashMap<>();
+      List<StoragePathInfo> metadataStatuses = metadataReader.getAllFilesInPartition(
+          new StoragePath(HoodieCLI.basePath, partition));
+      metadataStatuses.forEach(entry -> metadataFileStatusMap.put(
+          entry.getPath().getName(), entry));
+      List<StoragePathInfo> fsStatuses =
+          fsMetaReader.getAllFilesInPartition(new StoragePath(HoodieCLI.basePath, partition));
+      fsStatuses.forEach(entry -> fileStatusMap.put(entry.getPath().getName(), entry));
 
       Set<String> allFiles = new HashSet<>();
       allFiles.addAll(fileStatusMap.keySet());
@@ -320,12 +325,12 @@ public class MetadataCommand {
       for (String file : allFiles) {
         Comparable[] row = new Comparable[6];
         row[0] = partition;
-        FileStatus fsFileStatus = fileStatusMap.get(file);
-        FileStatus metaFileStatus = metadataFileStatusMap.get(file);
+        StoragePathInfo fsFileStatus = fileStatusMap.get(file);
+        StoragePathInfo metaFileStatus = metadataFileStatusMap.get(file);
         boolean doesFsFileExists = fsFileStatus != null;
         boolean doesMetadataFileExists = metaFileStatus != null;
-        long fsFileLength = doesFsFileExists ? fsFileStatus.getLen() : 0;
-        long metadataFileLength = doesMetadataFileExists ? metaFileStatus.getLen() : 0;
+        long fsFileLength = doesFsFileExists ? fsFileStatus.getLength() : 0;
+        long metadataFileLength = doesMetadataFileExists ? metaFileStatus.getLength() : 0;
         row[1] = file;
         row[2] = doesFsFileExists;
         row[3] = doesMetadataFileExists;
@@ -333,37 +338,42 @@ public class MetadataCommand {
         row[5] = metadataFileLength;
         if (verbose) { // if verbose print all files
           rows.add(row);
-        } else if ((doesFsFileExists != doesMetadataFileExists) || (fsFileLength != metadataFileLength)) { // if non verbose, print only non matching files
+        } else if ((doesFsFileExists != doesMetadataFileExists)
+            || (fsFileLength != metadataFileLength)) {
+          // if non verbose, print only non matching files
           rows.add(row);
         }
       }
 
-      if (metadataStatuses.length != fsStatuses.length) {
-        LOG.error(" FS and metadata files count not matching for " + partition + ". FS files count " + fsStatuses.length + ", metadata base files count "
-            + metadataStatuses.length);
+      if (metadataStatuses.size() != fsStatuses.size()) {
+        LOG.error(" FS and metadata files count not matching for " + partition
+            + ". FS files count " + fsStatuses.size()
+            + ", metadata base files count " + metadataStatuses.size());
       }
 
-      for (Map.Entry<String, FileStatus> entry : fileStatusMap.entrySet()) {
+      for (Map.Entry<String, StoragePathInfo> entry : fileStatusMap.entrySet()) {
         if (!metadataFileStatusMap.containsKey(entry.getKey())) {
           LOG.error("FS file not found in metadata " + entry.getKey());
         } else {
-          if (entry.getValue().getLen() != metadataFileStatusMap.get(entry.getKey()).getLen()) {
+          if (entry.getValue().getLength()
+              != metadataFileStatusMap.get(entry.getKey()).getLength()) {
             LOG.error(" FS file size mismatch " + entry.getKey() + ", size equality "
-                + (entry.getValue().getLen() == metadataFileStatusMap.get(entry.getKey()).getLen())
-                + ". FS size " + entry.getValue().getLen() + ", metadata size "
-                + metadataFileStatusMap.get(entry.getKey()).getLen());
+                + (entry.getValue().getLength()
+                == metadataFileStatusMap.get(entry.getKey()).getLength())
+                + ". FS size " + entry.getValue().getLength()
+                + ", metadata size " + metadataFileStatusMap.get(entry.getKey()).getLength());
           }
         }
       }
-      for (Map.Entry<String, FileStatus> entry : metadataFileStatusMap.entrySet()) {
+      for (Map.Entry<String, StoragePathInfo> entry : metadataFileStatusMap.entrySet()) {
         if (!fileStatusMap.containsKey(entry.getKey())) {
           LOG.error("Metadata file not found in FS " + entry.getKey());
         } else {
-          if (entry.getValue().getLen() != fileStatusMap.get(entry.getKey()).getLen()) {
+          if (entry.getValue().getLength() != fileStatusMap.get(entry.getKey()).getLength()) {
             LOG.error(" Metadata file size mismatch " + entry.getKey() + ", size equality "
-                + (entry.getValue().getLen() == fileStatusMap.get(entry.getKey()).getLen())
-                + ". Metadata size " + entry.getValue().getLen() + ", FS size "
-                + metadataFileStatusMap.get(entry.getKey()).getLen());
+                + (entry.getValue().getLength() == fileStatusMap.get(entry.getKey()).getLength())
+                + ". Metadata size " + entry.getValue().getLength() + ", FS size "
+                + metadataFileStatusMap.get(entry.getKey()).getLength());
           }
         }
       }

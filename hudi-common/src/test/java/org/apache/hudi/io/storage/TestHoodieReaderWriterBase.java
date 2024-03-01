@@ -25,13 +25,13 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,7 +65,7 @@ public abstract class TestHoodieReaderWriterBase {
   @TempDir
   protected File tempDir;
 
-  protected abstract Path getFilePath();
+  protected abstract StoragePath getFileLocation();
 
   protected abstract HoodieAvroFileWriter createWriter(
       Schema avroSchema, boolean populateMetaFields) throws Exception;
@@ -80,7 +80,7 @@ public abstract class TestHoodieReaderWriterBase {
   @BeforeEach
   @AfterEach
   public void clearTempFile() {
-    File file = new File(getFilePath().toString());
+    File file = new File(getFileLocation().toString());
     if (file.exists()) {
       file.delete();
     }

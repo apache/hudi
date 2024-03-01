@@ -31,7 +31,7 @@ import java.io.Serializable;
  * with simplification based on what Hudi needs.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
-public class StoragePathInfo implements Serializable {
+public class StoragePathInfo implements Serializable, Comparable<StoragePathInfo> {
   private final StoragePath path;
   private final long length;
   private final boolean isDirectory;
@@ -110,6 +110,11 @@ public class StoragePathInfo implements Serializable {
   }
 
   @Override
+  public int compareTo(StoragePathInfo o) {
+    return this.getPath().compareTo(o.getPath());
+  }
+
+  @Override
   public boolean equals(Object o) {
     if (this == o) {
       return true;
@@ -135,6 +140,7 @@ public class StoragePathInfo implements Serializable {
     return "StoragePathInfo{"
         + "path=" + path
         + ", length=" + length
+        + ", blockSize=" + blockSize
         + ", isDirectory=" + isDirectory
         + ", blockReplication=" + blockReplication
         + ", blockSize=" + blockSize
