@@ -20,9 +20,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.functional.TestHoodieMetadataBase;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -40,6 +37,10 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +64,7 @@ public class TestBloomIndexTagWithColStats extends TestHoodieMetadataBase {
   private void init(Properties props) throws Exception {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     initMetaClient(props);
     writeClient = getHoodieWriteClient(makeConfig());
   }

@@ -42,13 +42,13 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
@@ -147,7 +147,7 @@ public abstract class SingleSparkJobExecutionStrategy<T>
       Iterable<HoodieRecord<T>> indexedRecords = () -> {
         try {
           HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType)
-              .getFileReader(writeConfig, getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
+              .getFileReader(writeConfig, getHoodieTable().getHadoopConf(), new StoragePath(clusteringOp.getDataFilePath()));
           Option<BaseKeyGenerator> keyGeneratorOp =
               writeConfig.populateMetaFields() ? Option.empty() : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
           // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific

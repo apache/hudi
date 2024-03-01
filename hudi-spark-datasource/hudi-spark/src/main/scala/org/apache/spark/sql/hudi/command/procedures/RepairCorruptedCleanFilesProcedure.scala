@@ -60,11 +60,11 @@ class RepairCorruptedCleanFilesProcedure extends BaseProcedure with ProcedureBui
       } catch {
         case e: AvroRuntimeException =>
           logWarning("Corruption found. Trying to remove corrupted clean instant file: " + instant)
-          HoodieActiveTimeline.deleteInstantFile(metaClient.getFs, metaClient.getMetaPath, instant)
+          HoodieActiveTimeline.deleteInstantFile(metaClient.getHoodieStorage, metaClient.getMetaPath, instant)
         case ioe: IOException =>
           if (ioe.getMessage.contains("Not an Avro data file")) {
             logWarning("Corruption found. Trying to remove corrupted clean instant file: " + instant)
-            HoodieActiveTimeline.deleteInstantFile(metaClient.getFs, metaClient.getMetaPath, instant)
+            HoodieActiveTimeline.deleteInstantFile(metaClient.getHoodieStorage, metaClient.getMetaPath, instant)
           } else {
             result = false
             throw new HoodieIOException(ioe.getMessage, ioe)

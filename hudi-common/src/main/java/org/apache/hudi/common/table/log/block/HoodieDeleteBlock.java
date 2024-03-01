@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.avro.model.HoodieDeleteRecordList;
-import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.SizeAwareDataInputStream;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.io.BinaryDecoder;

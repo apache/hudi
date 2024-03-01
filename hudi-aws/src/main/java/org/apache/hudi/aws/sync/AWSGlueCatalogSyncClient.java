@@ -18,6 +18,7 @@
 
 package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -98,7 +99,6 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.parquetSchemaToMapSchema;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
-import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 
 /**
  * This class implements all the AWS APIs to enable syncing of a Hudi Table with the
@@ -199,7 +199,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       Table table = getTable(awsGlue, databaseName, tableName);
       StorageDescriptor sd = table.storageDescriptor();
       List<PartitionInput> partitionInputs = partitionsToAdd.stream().map(partition -> {
-        String fullPartitionPath = FSUtils.getPartitionPath(s3aToS3(getBasePath()), partition).toString();
+        String fullPartitionPath = FSUtils.getPartitionPathInPath(s3aToS3(getBasePath()), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(fullPartitionPath));
         return PartitionInput.builder().values(partitionValues).storageDescriptor(partitionSD).build();
@@ -242,7 +242,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       Table table = getTable(awsGlue, databaseName, tableName);
       StorageDescriptor sd = table.storageDescriptor();
       List<BatchUpdatePartitionRequestEntry> updatePartitionEntries = changedPartitions.stream().map(partition -> {
-        String fullPartitionPath = FSUtils.getPartitionPath(s3aToS3(getBasePath()), partition).toString();
+        String fullPartitionPath = FSUtils.getPartitionPathInPath(s3aToS3(getBasePath()), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(fullPartitionPath));
         PartitionInput partitionInput = PartitionInput.builder().values(partitionValues).storageDescriptor(partitionSD).build();

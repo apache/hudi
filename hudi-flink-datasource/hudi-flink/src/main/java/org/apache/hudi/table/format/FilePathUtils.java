@@ -466,6 +466,10 @@ public class FilePathUtils {
     return new org.apache.flink.core.fs.Path(path.toUri());
   }
 
+  public static org.apache.flink.core.fs.Path toFlinkPath(StoragePath path) {
+    return new org.apache.flink.core.fs.Path(path.toUri());
+  }
+
   /**
    * Extracts the partition keys with given configuration.
    *

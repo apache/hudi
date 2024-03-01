@@ -18,10 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.hadoop.fs.CachingPath;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.Serializable;
 import java.util.Objects;
@@ -34,7 +32,7 @@ public class BaseFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private transient FileStatus fileStatus;
+  private transient StoragePathInfo fileStatus;
   private final String fullPath;
   protected final String fileName;
   private long fileLen;
@@ -46,18 +44,18 @@ public class BaseFile implements Serializable {
         dataFile.getFileLen());
   }
 
-  public BaseFile(FileStatus fileStatus) {
+  public BaseFile(StoragePathInfo fileStatus) {
     this(fileStatus,
         fileStatus.getPath().toString(),
         fileStatus.getPath().getName(),
-        fileStatus.getLen());
+        fileStatus.getLength());
   }
 
   public BaseFile(String filePath) {
     this(null, filePath, getFileName(filePath), -1);
   }
 
-  private BaseFile(FileStatus fileStatus, String fullPath, String fileName, long fileLen) {
+  private BaseFile(StoragePathInfo fileStatus, String fullPath, String fileName, long fileLen) {
     this.fileStatus = fileStatus;
     this.fullPath = fullPath;
     this.fileLen = fileLen;
@@ -68,19 +66,27 @@ public class BaseFile implements Serializable {
     return fullPath;
   }
 
+  /*
   public Path getHadoopPath() {
     if (fileStatus != null) {
       return fileStatus.getPath();
     }
 
     return new CachingPath(fullPath);
+  }*/
+
+  public StoragePath getLocation() {
+    if (fileStatus != null) {
+      return fileStatus.getPath();
+    }
+    return new StoragePath(fullPath);
   }
 
   public String getFileName() {
     return fileName;
   }
 
-  public FileStatus getFileStatus() {
+  public StoragePathInfo getFileStatus() {
     return fileStatus;
   }
 
@@ -119,6 +125,6 @@ public class BaseFile implements Serializable {
   }
 
   private static String getFileName(String fullPath) {
-    return new Path(fullPath).getName();
+    return new StoragePath(fullPath).getName();
   }
 }

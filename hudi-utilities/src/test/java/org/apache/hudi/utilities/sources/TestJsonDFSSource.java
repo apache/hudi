@@ -51,6 +51,6 @@ public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
   @Override
   public void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
     UtilitiesTestBase.Helpers.saveStringsToDFS(
-        Helpers.jsonifyRecords(records), fs, path.toString());
+        Helpers.jsonifyRecords(records), storage, path.toString());
   }
 }

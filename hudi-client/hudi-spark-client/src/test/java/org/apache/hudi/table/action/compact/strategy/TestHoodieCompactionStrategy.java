@@ -305,7 +305,7 @@ public class TestHoodieCompactionStrategy {
       slice.setBaseFile(df);
       logFiles.stream().forEach(f -> slice.addLogFile(f));
       operations.add(new HoodieCompactionOperation(df.getCommitTime(),
-          logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList()), df.getPath(), df.getFileId(),
+          logFiles.stream().map(s -> s.getLocation().toString()).collect(Collectors.toList()), df.getPath(), df.getFileId(),
           partitionPath,
           config.getCompactionStrategy().captureMetrics(config, slice),
           df.getBootstrapBaseFile().map(BaseFile::getPath).orElse(null))
@@ -328,7 +328,8 @@ public class TestHoodieCompactionStrategy {
         slice.setBaseFile(df);
         logFiles.stream().forEach(f -> slice.addLogFile(f));
         operations.add(new HoodieCompactionOperation(df.getCommitTime(),
-            logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList()), df.getPath(), df.getFileId(),
+            logFiles.stream().map(s -> s.getLocation().toString()).collect(Collectors.toList()),
+            df.getPath(), df.getFileId(),
             partitionPath,
             config.getCompactionStrategy().captureMetrics(config, slice),
             df.getBootstrapBaseFile().map(BaseFile::getPath).orElse(null))

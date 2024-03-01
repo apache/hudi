@@ -42,7 +42,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieHFileReaderWriterBase
   @Override
   protected HoodieAvroFileReader createReader(
       Configuration conf) throws Exception {
-    return new HoodieNativeAvroHFileReader(conf, getFilePath(), Option.empty());
+    return new HoodieNativeAvroHFileReader(conf, getFileLocation(), Option.empty());
   }
 
   @Override

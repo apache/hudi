@@ -319,7 +319,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
 
     //test reordering column
-    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    datapath =
+        String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
     df = sparkSession.read().json(datapath);
     df = df.drop("rider").withColumn("rider", functions.lit("rider-003"));
 
@@ -327,7 +328,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     deltaStreamer.sync();
 
     metaClient.reloadActiveTimeline();
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+        dsConfig.targetBasePath, metaClient);
     assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
         .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
     assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
@@ -401,7 +403,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+          dsConfig.targetBasePath, metaClient);
       assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
           .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
@@ -482,7 +485,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+          dsConfig.targetBasePath, metaClient);
       assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
           .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
@@ -561,9 +565,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertFalse(targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+          dsConfig.targetBasePath, metaClient);
       assertTrue(latestTableSchemaOpt.get().getField("distance_in_meters").schema().getTypes()
-          .stream().anyMatch(t -> t.getType().equals(Schema.Type.DOUBLE)), latestTableSchemaOpt.get().getField("distance_in_meters").schema().toString());
+              .stream().anyMatch(t -> t.getType().equals(Schema.Type.DOUBLE)),
+          latestTableSchemaOpt.get().getField("distance_in_meters").schema().toString());
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
       assertTrue(targetSchemaSameAsTableSchema);
@@ -639,7 +645,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
 
     // type demotion
-    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    datapath =
+        String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
     df = sparkSession.read().json(datapath);
     Column col = df.col("current_ts");
     Dataset<Row> typeDemotionDf = df.withColumn("current_ts", col.cast(DataTypes.IntegerType));
@@ -647,7 +654,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     deltaStreamer.sync();
 
     metaClient.reloadActiveTimeline();
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+        dsConfig.targetBasePath, metaClient);
     assertTrue(latestTableSchemaOpt.get().getField("current_ts").schema().getTypes()
         .stream().anyMatch(t -> t.getType().equals(Schema.Type.LONG)));
     assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);

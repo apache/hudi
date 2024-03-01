@@ -23,8 +23,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.expression.ArrayData;
-import org.apache.hudi.hadoop.fs.CachingPath;
-import org.apache.hudi.hadoop.fs.SerializablePath;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.StoragePath;
@@ -39,7 +37,7 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
   protected transient HoodieEngineContext engineContext;
 
   protected final SerializableConfiguration hadoopConf;
-  protected final SerializablePath dataBasePath;
+  protected final StoragePath dataBasePath;
 
   // TODO get this from HoodieConfig
   protected final boolean caseSensitive = false;
@@ -47,7 +45,7 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
   public AbstractHoodieTableMetadata(HoodieEngineContext engineContext, SerializableConfiguration conf, String dataBasePath) {
     this.engineContext = engineContext;
     this.hadoopConf = conf;
-    this.dataBasePath = new SerializablePath(new CachingPath(dataBasePath));
+    this.dataBasePath = new StoragePath(dataBasePath);
   }
 
   protected static int getPathPartitionLevel(Types.RecordType partitionFields, String path) {

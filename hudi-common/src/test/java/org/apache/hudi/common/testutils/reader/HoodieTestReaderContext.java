@@ -31,16 +31,16 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieAvroParquetReader;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.List;
@@ -64,20 +64,20 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public FileSystem getFs(String path, Configuration conf) {
-    return HadoopFSUtils.getFs(path, conf);
+  public HoodieStorage getHoodieStorage(String path, Configuration conf) {
+    return HoodieStorageUtils.getHoodieStorage(path, conf);
   }
 
   @Override
   public ClosableIterator<IndexedRecord> getFileRecordIterator(
-      Path filePath,
+      StoragePath filePath,
       long start,
       long length,
       Schema dataSchema,
       Schema requiredSchema,
       Configuration conf
   ) throws IOException {
-    HoodieAvroParquetReader reader = new HoodieAvroParquetReader(conf, filePath);
+    HoodieAvroParquetReader reader = new HoodieAvroParquetReader(conf, new StoragePath(filePath.toUri()));
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }
 

@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql.hudi.catalog
 
-import org.apache.hadoop.fs.Path
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -26,26 +26,29 @@ import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.sql.InsertMode
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
+import org.apache.hudi.storage.StoragePath
+
+import org.apache.hadoop.fs.Path
+import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 import org.apache.spark.sql.HoodieSpark3CatalogUtils.MatchBucketTransform
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
+import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, UpdateColumnComment, UpdateColumnType}
-import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
+import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.HoodieV1OrV2Table
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog.{buildPartitionTransforms, isTablePartitioned}
 import org.apache.spark.sql.hudi.command._
-import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 
 import java.net.URI
 import java.util
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -404,7 +407,7 @@ object HoodieCatalog {
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
     val metadataFileSystemView = FileSystemViewManager.createInMemoryFileSystemView(
       new HoodieSparkEngineContext(spark.sparkContext), metaClient, metadataConfig)
-    val partitions: List[Path] = metadataFileSystemView.getPartitionPaths.asScala.toList
+    val partitions: List[StoragePath] = metadataFileSystemView.getPartitionPaths.asScala.toList
     val transforms = mutable.Set[Transform]()
     partitions.foreach { path =>
       path.toString.split("/").foreach { part =>

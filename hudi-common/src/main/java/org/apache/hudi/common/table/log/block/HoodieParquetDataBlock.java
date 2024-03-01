@@ -31,11 +31,11 @@ import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -153,16 +153,16 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     //       is appropriately carried over
     Configuration inlineConf = FSUtils.buildInlineConf(blockContentLoc.getHadoopConf());
 
-    Path inlineLogFilePath = InLineFSUtils.getInlineFilePath(
-        blockContentLoc.getLogFile().getPath(),
-        blockContentLoc.getLogFile().getPath().toUri().getScheme(),
+    StoragePath inlineLogFileLocation = InLineFSUtils.getInlineFileLocation(
+        blockContentLoc.getLogFile().getLocation(),
+        blockContentLoc.getLogFile().getLocation().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
     Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     ClosableIterator<HoodieRecord<T>> iterator = HoodieFileReaderFactory.getReaderFactory(type)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineConf, inlineLogFilePath, PARQUET, Option.empty())
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineConf, inlineLogFileLocation, PARQUET, Option.empty())
         .getRecordIterator(writerSchema, readerSchema);
     return iterator;
   }
@@ -175,16 +175,20 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     //       is appropriately carried over
     Configuration inlineConf = FSUtils.buildInlineConf(blockContentLoc.getHadoopConf());
 
-    Path inlineLogFilePath = InLineFSUtils.getInlineFilePath(
-        blockContentLoc.getLogFile().getPath(),
-        blockContentLoc.getLogFile().getPath().toUri().getScheme(),
+    StoragePath inlineLogFileLocation = InLineFSUtils.getInlineFileLocation(
+        blockContentLoc.getLogFile().getLocation(),
+        blockContentLoc.getLogFile().getLocation().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    Schema writerSchema =
+        new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     return readerContext.getFileRecordIterator(
-        inlineLogFilePath, 0, blockContentLoc.getBlockSize(), writerSchema, readerSchema, inlineConf);
+        inlineLogFileLocation, 0, blockContentLoc.getBlockSize(),
+        writerSchema,
+        readerSchema,
+        inlineConf);
   }
 
   @Override

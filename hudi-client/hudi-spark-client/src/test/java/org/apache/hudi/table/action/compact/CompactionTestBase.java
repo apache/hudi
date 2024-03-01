@@ -24,6 +24,7 @@ import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -40,16 +41,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
@@ -259,9 +259,11 @@ public class CompactionTestBase extends HoodieClientTestBase {
   }
 
   protected List<HoodieBaseFile> getCurrentLatestBaseFiles(HoodieTable table) throws IOException {
-    FileStatus[] allBaseFiles = HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles();
+    List<StoragePathInfo> allBaseFiles =
+        HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles();
     HoodieTableFileSystemView view =
-        getHoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(), allBaseFiles);
+        getHoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(),
+            allBaseFiles);
     return view.getLatestBaseFiles().collect(Collectors.toList());
   }
 

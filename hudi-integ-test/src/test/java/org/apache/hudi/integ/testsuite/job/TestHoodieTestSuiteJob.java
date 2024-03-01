@@ -108,12 +108,12 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
         + MOR_DAG_SOURCE_PATH, fs, basePath + "/" + MOR_DAG_FILE_NAME);
 
     TypedProperties props = getProperties();
-    UtilitiesTestBase.Helpers.savePropsToDFS(props, fs, basePath + "/test-source"
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, basePath + "/test-source"
         + ".properties");
 
     UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(System.getProperty("user.dir") + "/.."
         + COW_DAG_SPARK_DATASOURCE_NODES_RELATIVE_PATH, fs, basePath + "/" + COW_DAG_FILE_NAME_SPARK_DATASOURCE_NODES);
-    UtilitiesTestBase.Helpers.savePropsToDFS(getProperties(), fs, basePath + "/test-source"
+    UtilitiesTestBase.Helpers.savePropsToDFS(getProperties(), storage, basePath + "/test-source"
         + ".properties");
     UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(System.getProperty("user.dir") + "/.."
         + SPARK_SQL_DAG_SOURCE_PATH, fs, basePath + "/" + SPARK_SQL_DAG_FILE_NAME);
@@ -128,7 +128,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     // Source schema is the target schema of upstream table
     downstreamProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/source.avsc");
     downstreamProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", basePath + "/source.avsc");
-    UtilitiesTestBase.Helpers.savePropsToDFS(downstreamProps, fs,
+    UtilitiesTestBase.Helpers.savePropsToDFS(downstreamProps, storage,
         basePath + "/test-downstream-source.properties");
     // these tests cause a lot of log verbosity from spark, turning it down
     org.apache.log4j.Logger.getLogger("org.apache.spark").setLevel(org.apache.log4j.Level.WARN);
@@ -271,7 +271,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     TypedProperties props = getProperties();
     props.setProperty("hoodie.write.concurrency.mode", "optimistic_concurrency_control");
     props.setProperty("hoodie.failed.writes.cleaner.policy", "LAZY");
-    UtilitiesTestBase.Helpers.savePropsToDFS(props, fs, basePath + "/test-source"
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, basePath + "/test-source"
         + ".properties");
     String inputBasePath = basePath + "/input";
     String outputBasePath = basePath + "/result";

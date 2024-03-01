@@ -127,7 +127,7 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", tableBasePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals(0, HoodieClientTestUtils.read(jsc, tableBasePath, sqlContext, fs, fullPartitionPaths).filter("_hoodie_commit_time = " + latestClusteringInstant.getTimestamp()).count(),
+    assertEquals(0, HoodieClientTestUtils.read(jsc, tableBasePath, sqlContext, storage, fullPartitionPaths).filter("_hoodie_commit_time = " + latestClusteringInstant.getTimestamp()).count(),
         "Must not contain any records w/ clustering instant time");
   }
 

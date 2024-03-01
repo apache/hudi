@@ -35,6 +35,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -254,7 +255,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
                 tableMetaClient,
                 props,
                 HoodieTableQueryType.SNAPSHOT,
-                partitionPaths,
+                partitionPaths.stream().map(e -> new StoragePath(e.toUri())).collect(Collectors.toList()),
                 queryCommitInstant,
                 shouldIncludePendingCommits);
 

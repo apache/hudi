@@ -23,6 +23,9 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -55,21 +58,15 @@ public class FileSystemTestUtils {
     return new Path(InMemoryFileSystem.SCHEME + fileSuffix);
   }
 
-  public static Path getRandomOuterFSPath() {
+  public static StoragePath getRandomOuterFSLocation() {
     String randomFileName = UUID.randomUUID().toString();
     String fileSuffix = COLON + FORWARD_SLASH + TEMP + FORWARD_SLASH + randomFileName;
-    return new Path(FILE_SCHEME + fileSuffix);
+    return new StoragePath(FILE_SCHEME + fileSuffix);
   }
 
-  public static Path getRandomOuterFSPath(String extension) {
-    String randomFileName = UUID.randomUUID().toString();
-    String fileSuffix = COLON + FORWARD_SLASH + TEMP + FORWARD_SLASH + randomFileName;
-    return new Path(FILE_SCHEME + fileSuffix + "." + extension);
-  }
-
-  public static Path getPhantomFile(Path outerPath, long startOffset, long inlineLength) {
+  public static StoragePath getPhantomFile(StoragePath outerLocation, long startOffset, long inlineLength) {
     // Generate phantom inline file
-    return InLineFSUtils.getInlineFilePath(outerPath, FILE_SCHEME, startOffset, inlineLength);
+    return InLineFSUtils.getInlineFileLocation(outerLocation, FILE_SCHEME, startOffset, inlineLength);
   }
 
   public static void deleteFile(File fileToDelete) throws IOException {
@@ -94,6 +91,16 @@ public class FileSystemTestUtils {
       statuses.add(itr.next());
     }
     return statuses;
+  }
+
+  public static List<StoragePathInfo> listRecursive(HoodieStorage storage, StoragePath location)
+      throws IOException {
+    return listFiles(storage, location);
+  }
+
+  public static List<StoragePathInfo> listFiles(HoodieStorage storage, StoragePath location)
+      throws IOException {
+    return storage.listFiles(location);
   }
 
   public static String readLastLineFromResourceFile(String resourceName) throws IOException {

@@ -87,11 +87,11 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
         + fileSlice.getPartitionPath() + " eligible for log compaction.");
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-        .withFileSystem(metaClient.getFs())
+        .withHoodieStorage(metaClient.getHoodieStorage())
         .withBasePath(hoodieTable.getMetaClient().getBasePath())
         .withLogFilePaths(fileSlice.getLogFiles()
             .sorted(HoodieLogFile.getLogFileComparator())
-            .map(file -> file.getPath().toString())
+            .map(file -> file.getLocation().toString())
             .collect(Collectors.toList()))
         .withLatestInstantTime(maxInstantTime)
         .withInstantRange(instantRange)

@@ -46,7 +46,6 @@ import java.util.Random;
 import java.util.UUID;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -66,7 +65,7 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieRowCreateHandle");
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     initTestDataGenerator();
     initMetaClient();
     initTimelineService();

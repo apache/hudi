@@ -18,16 +18,17 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
+
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -38,7 +39,7 @@ import scala.jdk.CollectionConverters.{asScalaIteratorConverter, collectionAsSca
 
 class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
 
-  private var partitionPaths: java.util.List[Path] = null
+  private var partitionPaths: java.util.List[StoragePath] = null
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
@@ -114,7 +115,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     var numFileSlicesWithLogFiles = 0L
     val fsView = getTableFileSystemView(opts)
     getAllPartititonPaths(fsView).asScala.flatMap { partitionPath =>
-      val relativePath = FSUtils.getRelativePartitionPath(metaClient.getBasePathV2, partitionPath)
+      val relativePath = FSUtils.getRelativePartitionPathFromLocation(metaClient.getBasePathV2, partitionPath)
       fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, getLatestMetaClient(false)
         .getActiveTimeline.lastInstant().get().getTimestamp).iterator().asScala.toSeq
     }.foreach(
@@ -132,7 +133,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     }
   }
 
-  private def getAllPartititonPaths(fsView: HoodieTableFileSystemView): java.util.List[Path] = {
+  private def getAllPartititonPaths(fsView: HoodieTableFileSystemView): java.util.List[StoragePath] = {
     if (partitionPaths == null) {
       fsView.loadAllPartitions()
       partitionPaths = fsView.getPartitionPaths

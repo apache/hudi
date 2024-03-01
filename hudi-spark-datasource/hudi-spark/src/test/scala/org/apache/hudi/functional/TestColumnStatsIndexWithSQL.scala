@@ -18,10 +18,12 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
@@ -30,8 +32,7 @@ import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JavaConversions
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
-import org.apache.hudi.common.fs.FSUtils
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, Literal}
 import org.apache.spark.sql.types.StringType
@@ -285,7 +286,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     val fsView = getTableFileSystemView(opts)
     fsView.loadAllPartitions()
     fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
-      val relativePath = FSUtils.getRelativePartitionPath(metaClient.getBasePathV2, partitionPath)
+      val relativePath = FSUtils.getRelativePartitionPathFromLocation(metaClient.getBasePathV2, partitionPath)
       fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, metaClient.reloadActiveTimeline().lastInstant().get().getTimestamp).iterator().asScala.toSeq
     }.foreach(
       slice => totalLatestDataFiles += (if (includeLogFiles) slice.getLogFiles.count() else 0)

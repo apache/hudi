@@ -139,7 +139,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
             case Some(fileSlice) if !isCount =>
               if (requiredSchema.isEmpty && !fileSlice.getLogFiles.findAny().isPresent) {
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
-                baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen))
+                baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getLocation, 0, hoodieBaseFile.getFileLen))
               } else {
                 val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(
                   readerMaps)

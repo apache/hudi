@@ -35,7 +35,6 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -154,13 +153,14 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     HoodieTestDataGenerator.createSavepointFile(tablePath, savepoint, jsc.hadoopConfiguration());
 
     // re-bootstrap metadata table
-    Path metadataTableBasePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(HoodieCLI.basePath));
+    StoragePath metadataTableBasePath =
+        new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(HoodieCLI.basePath));
     // then bootstrap metadata table at instant 104
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
     SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc)).close();
 
-    assertTrue(HoodieCLI.fs.exists(metadataTableBasePath));
+    assertTrue(HoodieCLI.storage.exists(metadataTableBasePath));
 
     // roll back to savepoint
     Object result = shell.evaluate(() ->

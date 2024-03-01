@@ -107,7 +107,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
   @Test
   public void testSqlFileBasedSourceAvroFormat() throws IOException {
     UtilitiesTestBase.Helpers.copyToDFS(
-        "streamer-config/sql-file-based-source.sql", fs,
+        "streamer-config/sql-file-based-source.sql", storage,
         UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
 
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
@@ -134,7 +134,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
   @Test
   public void testSqlFileBasedSourceRowFormat() throws IOException {
     UtilitiesTestBase.Helpers.copyToDFS(
-        "streamer-config/sql-file-based-source.sql", fs,
+        "streamer-config/sql-file-based-source.sql", storage,
         UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
 
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
@@ -156,7 +156,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
   @Test
   public void testSqlFileBasedSourceMoreRecordsThanSourceLimit() throws IOException {
     UtilitiesTestBase.Helpers.copyToDFS(
-        "streamer-config/sql-file-based-source.sql", fs,
+        "streamer-config/sql-file-based-source.sql", storage,
         UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
 
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
@@ -177,7 +177,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
   @Test
   public void testSqlFileBasedSourceInvalidTable() throws IOException {
     UtilitiesTestBase.Helpers.copyToDFS(
-        "streamer-config/sql-file-based-source-invalid-table.sql", fs,
+        "streamer-config/sql-file-based-source-invalid-table.sql", storage,
         UtilitiesTestBase.basePath + "/sql-file-based-source-invalid-table.sql");
 
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source-invalid-table.sql");
@@ -192,7 +192,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
   @Test
   public void shouldSetCheckpointForSqlFileBasedSourceWithEpochCheckpoint() throws IOException {
     UtilitiesTestBase.Helpers.copyToDFS(
-        "streamer-config/sql-file-based-source.sql", fs,
+        "streamer-config/sql-file-based-source.sql", storage,
         UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
 
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");

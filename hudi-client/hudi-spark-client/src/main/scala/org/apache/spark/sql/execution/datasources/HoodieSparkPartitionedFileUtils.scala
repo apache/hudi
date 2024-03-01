@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources
 
+import org.apache.hudi.storage.StoragePath
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.catalyst.InternalRow
 
@@ -27,9 +28,10 @@ import org.apache.spark.sql.catalyst.InternalRow
  * Before Spark 3.4.0,
  * ```
  * case class PartitionedFile(
- *   partitionValues: InternalRow,
+ * partitionValues: InternalRow,
  *   filePath: String,
  *   start: Long,
+ *
  *   @transient locations: Array[String] = Array.empty)
  * ```,
  * Since Spark 3.4.0, the filePath is switch to [[SparkPath]] for type safety:
@@ -51,7 +53,7 @@ trait HoodieSparkPartitionedFileUtils extends Serializable {
    * @param partitionedFile Spark [[PartitionedFile]] instance.
    * @return Hadoop [[Path]] instance.
    */
-  def getPathFromPartitionedFile(partitionedFile: PartitionedFile): Path
+  def getPathFromPartitionedFile(partitionedFile: PartitionedFile): StoragePath
 
   /**
    * Gets the [[String]] path from Spark [[PartitionedFile]] instance.
@@ -65,13 +67,13 @@ trait HoodieSparkPartitionedFileUtils extends Serializable {
    * Creates a new [[PartitionedFile]] instance.
    *
    * @param partitionValues value of partition columns to be prepended to each row.
-   * @param filePath        URI of the file to read.
+   * @param location        URI of the file to read.
    * @param start           the beginning offset (in bytes) of the block.
    * @param length          number of bytes to read.
    * @return a new [[PartitionedFile]] instance.
    */
   def createPartitionedFile(partitionValues: InternalRow,
-                            filePath: Path,
+                            location: StoragePath,
                             start: Long,
                             length: Long): PartitionedFile
 

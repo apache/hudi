@@ -39,9 +39,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -51,7 +51,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -218,10 +217,11 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
               String.format("%s/%s", hoodieTable.getMetaClient().getBasePathV2(), partitionPath))
           .collect(Collectors.toList());
 
-      FileStatus[] allFiles =
-          hoodieTable.getMetadataTable().getAllFilesInPartitions(fullPartitionPaths).values().stream()
-              .flatMap(Arrays::stream)
-              .toArray(FileStatus[]::new);
+      List<StoragePathInfo> allFiles =
+          hoodieTable.getMetadataTable().getAllFilesInPartitions(fullPartitionPaths).values()
+              .stream()
+              .flatMap(e -> e.stream())
+              .collect(Collectors.toList());
 
       return new HoodieTableFileSystemView(hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline(), allFiles);
     } catch (IOException e) {
