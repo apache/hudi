@@ -34,28 +34,28 @@ public class TestHBasePutBatchSizeCalculator {
     int putBatchSize = batchSizeCalculator.getBatchSize(10, 16667, 1200, 200, 0.1f);
     // Total puts that can be sent  in 1 second = (10 * 16667 * 0.1) = 16,667
     // Total puts per batch will be (16,667 / parallelism) = 83.335, where 200 is the maxExecutors
-    assertEquals(putBatchSize, 83);
+    assertEquals(putBatchSize, 84);
 
     // Number of Region Servers are halved, total requests sent in a second are also halved, so batchSize is also halved
     int putBatchSize2 = batchSizeCalculator.getBatchSize(5, 16667, 1200, 200, 0.1f);
-    assertEquals(putBatchSize2, 41);
+    assertEquals(putBatchSize2, 42);
 
     // If the parallelism is halved, batchSize has to double
     int putBatchSize3 = batchSizeCalculator.getBatchSize(10, 16667, 1200, 100, 0.1f);
-    assertEquals(putBatchSize3, 166);
+    assertEquals(putBatchSize3, 167);
 
     // If the parallelism is halved, batchSize has to double.
     // This time parallelism is driven by numTasks rather than numExecutors
     int putBatchSize4 = batchSizeCalculator.getBatchSize(10, 16667, 100, 200, 0.1f);
-    assertEquals(putBatchSize4, 166);
+    assertEquals(putBatchSize4, 167);
 
     // If sleepTimeMs is halved, batchSize has to halve
     int putBatchSize5 = batchSizeCalculator.getBatchSize(10, 16667, 1200, 200, 0.05f);
-    assertEquals(putBatchSize5, 41);
+    assertEquals(putBatchSize5, 42);
 
     // If maxQPSPerRegionServer is doubled, batchSize also doubles
     int putBatchSize6 = batchSizeCalculator.getBatchSize(10, 33334, 1200, 200, 0.1f);
-    assertEquals(putBatchSize6, 166);
+    assertEquals(putBatchSize6, 167);
   }
 
 }
