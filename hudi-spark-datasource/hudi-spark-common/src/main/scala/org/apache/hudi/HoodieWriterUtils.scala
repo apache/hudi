@@ -83,7 +83,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(ASYNC_CLUSTERING_ENABLE)
     hoodieConfig.setDefaultValue(ENABLE_ROW_WRITER)
     hoodieConfig.setDefaultValue(RECONCILE_SCHEMA)
-    hoodieConfig.setDefaultValue(MAKE_NEW_COLUMNS_NULLABLE)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
