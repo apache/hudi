@@ -177,7 +177,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpoint(4)
         .assertNextEvent()
         .subTaskFails(0, 4)
-        // the last checkpoint instant can not be rolled back by subTaskFails(0, 2) with INSERT write operationType
+        // the last checkpoint instant can not be rolled back by subTaskFails(0, 4) with INSERT write operationType
         // because last data has been snapshot by checkpoint complete but instant has not been committed
         // so we need re-commit it
         .assertEmptyEvent()
