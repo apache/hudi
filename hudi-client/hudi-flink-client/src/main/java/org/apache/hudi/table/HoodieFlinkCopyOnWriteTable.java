@@ -378,7 +378,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   @Override
-  public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex) {
+  public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex, List<String> partitionPaths) {
     throw new HoodieNotSupportedException("Metadata indexing is not supported for a Flink table yet.");
   }
 

@@ -328,11 +328,11 @@ public class HoodieTableMetadataUtil {
    *
    * @param basePath      - base path of the dataset
    * @param context       - instance of {@link HoodieEngineContext}
-   * @param partitionType - {@link MetadataPartitionType} of the partition to delete
+   * @param partitionPath - Partition path of the partition to delete
    */
-  public static void deleteMetadataPartition(String basePath, HoodieEngineContext context, MetadataPartitionType partitionType) {
+  public static void deleteMetadataPartition(String basePath, HoodieEngineContext context, String partitionPath) {
     HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(context.getHadoopConf().get()).build();
-    deleteMetadataTablePartition(dataMetaClient, context, partitionType, false);
+    deleteMetadataTablePartition(dataMetaClient, context, partitionPath, false);
   }
 
   /**
@@ -341,13 +341,13 @@ public class HoodieTableMetadataUtil {
    * @param basePath base path of the dataset
    * @param context  instance of {@link HoodieEngineContext}.
    */
-  public static boolean metadataPartitionExists(String basePath, HoodieEngineContext context, MetadataPartitionType partitionType) {
+  public static boolean metadataPartitionExists(String basePath, HoodieEngineContext context, String partitionPath) {
     final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
     FileSystem fs = HadoopFSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
     try {
-      return fs.exists(new Path(metadataTablePath, partitionType.getPartitionPath()));
+      return fs.exists(new Path(metadataTablePath, partitionPath));
     } catch (Exception e) {
-      throw new HoodieIOException(String.format("Failed to check metadata partition %s exists.", partitionType.getPartitionPath()));
+      throw new HoodieIOException(String.format("Failed to check metadata partition %s exists.", partitionPath));
     }
   }
 
@@ -1500,41 +1500,41 @@ public class HoodieTableMetadataUtil {
    * @param context        instance of {@code HoodieEngineContext}.
    * @param backup         Whether metadata table should be backed up before deletion. If true, the table is backed up to the
    *                       directory with name metadata_<current_timestamp>.
-   * @param partitionType  The partition to delete
+   * @param partitionPath  The partition to delete
    * @return The backup directory if backup was requested, null otherwise
    */
   public static String deleteMetadataTablePartition(HoodieTableMetaClient dataMetaClient, HoodieEngineContext context,
-                                                    MetadataPartitionType partitionType, boolean backup) {
-    if (partitionType.equals(MetadataPartitionType.FILES)) {
+                                                    String partitionPath, boolean backup) {
+    if (partitionPath.equals(MetadataPartitionType.FILES.getPartitionPath())) {
       return deleteMetadataTable(dataMetaClient, context, backup);
     }
 
-    final Path metadataTablePartitionPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePath()), partitionType.getPartitionPath());
+    final Path metadataTablePartitionPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePath()), partitionPath);
     FileSystem fs = HadoopFSUtils.getFs(metadataTablePartitionPath.toString(), context.getHadoopConf().get());
-    dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, false);
+    dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, false);
     try {
       if (!fs.exists(metadataTablePartitionPath)) {
         return null;
       }
     } catch (FileNotFoundException e) {
       // Ignoring exception as metadata table already does not exist
-      LOG.debug("Metadata table partition " + partitionType + " not found at path " + metadataTablePartitionPath);
+      LOG.debug("Metadata table partition " + partitionPath + " not found at path " + metadataTablePartitionPath);
       return null;
     } catch (Exception e) {
-      throw new HoodieMetadataException(String.format("Failed to check existence of MDT partition %s at path %s: ", partitionType, metadataTablePartitionPath), e);
+      throw new HoodieMetadataException(String.format("Failed to check existence of MDT partition %s at path %s: ", partitionPath, metadataTablePartitionPath), e);
     }
 
     if (backup) {
       final Path metadataPartitionBackupPath = new Path(metadataTablePartitionPath.getParent().getParent(),
-          String.format(".metadata_%s_%s", partitionType.getPartitionPath(), dataMetaClient.createNewInstantTime(false)));
-      LOG.info(String.format("Backing up MDT partition %s to %s before deletion", partitionType, metadataPartitionBackupPath));
+          String.format(".metadata_%s_%s", partitionPath, dataMetaClient.createNewInstantTime(false)));
+      LOG.info(String.format("Backing up MDT partition %s to %s before deletion", partitionPath, metadataPartitionBackupPath));
       try {
         if (fs.rename(metadataTablePartitionPath, metadataPartitionBackupPath)) {
           return metadataPartitionBackupPath.toString();
         }
       } catch (Exception e) {
         // If rename fails, we will try to delete the table instead
-        LOG.error(String.format("Failed to backup MDT partition %s using rename", partitionType), e);
+        LOG.error(String.format("Failed to backup MDT partition %s using rename", partitionPath), e);
       }
     } else {
       LOG.info("Deleting metadata table partition from " + metadataTablePartitionPath);

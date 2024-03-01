@@ -202,8 +202,9 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           var resolvedLogicalPlan = analyzer.execute(logicalPlan)
           assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table, databaseName, tableName)
 
-          val createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
+          var createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
           logicalPlan = sqlParser.parsePlan(createIndexSql)
+
           resolvedLogicalPlan = analyzer.execute(logicalPlan)
           assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table, databaseName, tableName)
           assertResult("idx_datestr")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
@@ -211,14 +212,29 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
 
           spark.sql(createIndexSql)
-          val metaClient = HoodieTableMetaClient.builder()
+          var metaClient = HoodieTableMetaClient.builder()
             .setBasePath(basePath)
             .setConf(spark.sessionState.newHadoopConf())
             .build()
           assertTrue(metaClient.getFunctionalIndexMetadata.isPresent)
-          val functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+          var functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
           assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
           assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+
+          // Verify one can create more than one functional index
+          createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(func='identity')"
+          spark.sql(createIndexSql)
+          metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(spark.sessionState.newHadoopConf())
+            .build()
+          functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+          assertEquals(2, functionalIndexMetadata.getIndexDefinitions.size())
+          assertEquals("func_index_name_lower", functionalIndexMetadata.getIndexDefinitions.get("func_index_name_lower").getIndexName)
+
+          // Ensure that both the indexes are tracked correctly in metadata partition config
+          val mdtPartitions = metaClient.getTableConfig.getMetadataPartitions
+          assert(mdtPartitions.contains("func_index_name_lower") && mdtPartitions.contains("func_index_idx_datestr"))
         }
       }
     }

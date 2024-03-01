@@ -82,7 +82,9 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
       throw new HoodieFunctionalIndexException("Index already exists: " + indexName);
     }
 
-    if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent() || !metaClient.getFunctionalIndexMetadata().isPresent()) {
+    if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent()
+        || !metaClient.getFunctionalIndexMetadata().isPresent()
+        || !metaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().containsKey(indexName)) {
       LOG.info("Index definition is not present. Registering the index first");
       register(metaClient, indexName, indexType, columns, options);
     }
@@ -94,7 +96,7 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
         sparkSession, metaClient.getBasePathV2().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, functionalIndexDefinition)), toScalaOption(Option.empty()))) {
       // generate index plan
-      Option<String> indexInstantTime = doSchedule(writeClient, metaClient);
+      Option<String> indexInstantTime = doSchedule(writeClient, metaClient, indexName);
       if (indexInstantTime.isPresent()) {
         // build index
         writeClient.index(indexInstantTime.get());
@@ -104,13 +106,13 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     }
   }
 
-  private static Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client, HoodieTableMetaClient metaClient) {
+  private static Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client, HoodieTableMetaClient metaClient, String indexName) {
     List<MetadataPartitionType> partitionTypes = Collections.singletonList(MetadataPartitionType.FUNCTIONAL_INDEX);
     checkArgument(partitionTypes.size() == 1, "Currently, only one index type can be scheduled at a time.");
     if (metaClient.getTableConfig().getMetadataPartitions().isEmpty()) {
       throw new HoodieException("Metadata table is not yet initialized. Initialize FILES partition before any other partition " + Arrays.toString(partitionTypes.toArray()));
     }
-    return client.scheduleIndexing(partitionTypes);
+    return client.scheduleIndexing(partitionTypes, Collections.singletonList(indexName));
   }
 
   private static boolean indexExists(HoodieTableMetaClient metaClient, String indexName) {
