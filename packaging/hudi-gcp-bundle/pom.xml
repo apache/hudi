@@ -39,7 +39,7 @@
       <dependency>
         <groupId>com.google.cloud</groupId>
         <artifactId>libraries-bom</artifactId>
-        <version>25.1.0</version>
+        <version>${gcp-libraries-bom.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
