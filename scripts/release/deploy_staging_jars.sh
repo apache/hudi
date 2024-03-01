@@ -36,42 +36,51 @@ if [ "$#" -gt "1" ]; then
   exit 1
 fi
 
-BUNDLE_MODULES=$(find -s packaging -name 'hudi-*-bundle' -type d)
-BUNDLE_MODULES_EXCLUDED="-${BUNDLE_MODULES//$'\n'/,-}"
-BUNDLE_MODULES_EXCLUDED="-packaging/hudi-aws-bundle,-packaging/hudi-datahub-sync-bundle,-packaging/hudi-flink-bundle,-packaging/hudi-gcp-bundle,-packaging/hudi-integ-test-bundle,-packaging/hudi-kafka-connect-bundle"
-
 declare -a ALL_VERSION_OPTS=(
-# upload all module jars and bundle jars
-"-Dscala-2.11 -Dspark2.4 -pl $BUNDLE_MODULES_EXCLUDED"
-"-Dscala-2.12 -Dspark2.4 -pl $BUNDLE_MODULES_EXCLUDED"
-"-Dscala-2.12 -Dspark3.3 -pl $BUNDLE_MODULES_EXCLUDED"
-"-Dscala-2.12 -Dspark3.2 -pl $BUNDLE_MODULES_EXCLUDED"
-"-Dscala-2.12 -Dspark3.1"  # this profile goes last in this section to ensure bundles use avro 1.8
-
-# spark bundles
-"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-spark-bundle -am"
+# Upload Spark specific modules and bundle jars
+# For Spark 2.4, Scala 2.11:
+# hudi-spark-common_2.11
+# hudi-spark_2.11
+# hudi-spark2_2.11
+# hudi-utilities_2.11
+# hudi-spark2.4-bundle_2.11
+# hudi-utilities-bundle_2.11
+# hudi-utilities-slim-bundle_2.11
+"-Dscala-2.11 -Dspark2.4 -pl hudi-spark-datasource/hudi-spark-common,hudi-spark-datasource/hudi-spark2,hudi-spark-datasource/hudi-spark,hudi-utilities,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am"
+# For Spark 2.4, Scala 2.12:
+# hudi-spark2.4-bundle_2.12
 "-Dscala-2.12 -Dspark2.4 -pl packaging/hudi-spark-bundle -am"
-"-Dscala-2.12 -Dspark3.3 -pl packaging/hudi-spark-bundle -am"
-"-Dscala-2.12 -Dspark3.2 -pl packaging/hudi-spark-bundle -am"
-"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-spark-bundle -am"
+# For Spark 3.2, Scala 2.12:
+# hudi-spark3.2.x_2.12
+# hudi-spark3.2plus-common
+# hudi-spark3.2-bundle_2.12
+"-Dscala-2.12 -Dspark3.2 -pl hudi-spark-datasource/hudi-spark3.2.x,hudi-spark-datasource/hudi-spark3.2plus-common,packaging/hudi-spark-bundle -am"
+# For Spark 3.1, Scala 2.12:
+# All other modules and bundles using avro 1.8
+# hudi-spark-common_2.12
+# hudi-spark_2.12
+# hudi-spark3_2.12
+# hudi-utilities_2.12
+# hudi-spark3.1-bundle_2.12
+# hudi-utilities-bundle_2.12
+# hudi-utilities-slim-bundle_2.12
+# all other non versioned bundles like hudi-common, hudi-examples, etc.
+"-Dscala-2.12 -Dspark3.1"
+# For Spark 3.3, Scala 2.12:
+# hudi-spark3.3.x_2.12
+# hudi-spark3.3-bundle_2.12
+"-Dscala-2.12 -Dspark3.3 -pl hudi-spark-datasource/hudi-spark3.3.x,packaging/hudi-spark-bundle -am"
 
-# spark bundles (legacy) (not overwriting previous uploads as these jar names are unique)
+# Upload legacy Spark bundles (not overwriting previous uploads as these jar names are unique)
 "-Dscala-2.11 -Dspark2 -pl packaging/hudi-spark-bundle -am" # for legacy bundle name hudi-spark-bundle_2.11
 "-Dscala-2.12 -Dspark2 -pl packaging/hudi-spark-bundle -am" # for legacy bundle name hudi-spark-bundle_2.12
 "-Dscala-2.12 -Dspark3 -pl packaging/hudi-spark-bundle -am" # for legacy bundle name hudi-spark3-bundle_2.12
 
-# utilities bundles (legacy) (overwriting previous uploads)
-"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-utilities-bundle -am" # hudi-utilities-bundle_2.11 is for spark 2.4 only
-"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-utilities-bundle -am" # hudi-utilities-bundle_2.12 is for spark 3.1 only
-
-# utilities slim bundles
-"-Dscala-2.11 -Dspark2.4 -pl packaging/hudi-utilities-slim-bundle -am" # hudi-utilities-slim-bundle_2.11
-"-Dscala-2.12 -Dspark3.1 -pl packaging/hudi-utilities-slim-bundle -am" # hudi-utilities-slim-bundle_2.12
-
-# flink bundles (overwriting previous uploads)
+# Upload Flink bundles (overwriting previous uploads)
 "-Dscala-2.12 -Dflink1.13 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle -am"
 "-Dscala-2.12 -Dflink1.14 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle -am"
 "-Dscala-2.12 -Dflink1.15 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle -am"
+"-Dscala-2.12 -Dflink1.16 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle -am"
 )
 printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 
@@ -102,24 +111,14 @@ elif [ "$#" == "1" ]; then
 fi
 
 COMMON_OPTIONS="-DdeployArtifacts=true -DskipTests -DretryFailedDeploymentCount=10"
-
 for v in "${ALL_VERSION_OPTS[@]}"
 do
   # TODO: consider cleaning all modules by listing directories instead of specifying profile
-  if [[ "$v" == *"$BUNDLE_MODULES_EXCLUDED" ]]; then
-    # When deploying jars with bundle exclusions, we still need to build the bundles,
-    # by removing "-pl -packaging/hudi-aws-bundle...", otherwise the build fails.
-    v1=${v%${BUNDLE_MODULES_EXCLUDED}}
-    echo "Cleaning everything before any deployment"
-    $MVN clean $COMMON_OPTIONS ${v1%-pl }
-    echo "Building with options ${v1%-pl }"
-    $MVN install $COMMON_OPTIONS ${v1%-pl }
-  else
-    echo "Cleaning everything before any deployment"
-    $MVN clean $COMMON_OPTIONS ${v}
-    echo "Building with options ${v}"
-    $MVN install $COMMON_OPTIONS ${v}
-  fi
+  echo "Cleaning everything before any deployment"
+  $MVN clean $COMMON_OPTIONS ${v}
+  echo "Building with options ${v}"
+  $MVN install $COMMON_OPTIONS ${v}
+
   echo "Deploying to repository.apache.org with version options ${v%-am}"
   # remove `-am` option to only deploy intended modules
   $MVN deploy $COMMON_OPTIONS ${v%-am}
