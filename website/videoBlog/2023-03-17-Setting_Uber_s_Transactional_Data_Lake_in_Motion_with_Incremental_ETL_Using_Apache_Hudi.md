@@ -8,7 +8,7 @@ image: /assets/images/blog/hudi-lakehouse-architecture-uber.png
 navigate: "https://www.youtube.com/watch?v=PvlO_s1pOLQ"
 tags:
 - guide
-- incremental-etl
+- incremental etl
 - incremental-processing
 - medallion architecture
 - data lake

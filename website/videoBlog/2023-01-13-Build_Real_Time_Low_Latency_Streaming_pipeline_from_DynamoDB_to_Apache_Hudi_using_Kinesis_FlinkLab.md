@@ -9,7 +9,7 @@ navigate: "https://youtu.be/571RlIqDN58"
 tags:
 - guide
 - streaming ingestion
-- real-time-datalake
+- real time datalake
 - merge on read
 - mor
 - amazon dynamodb
