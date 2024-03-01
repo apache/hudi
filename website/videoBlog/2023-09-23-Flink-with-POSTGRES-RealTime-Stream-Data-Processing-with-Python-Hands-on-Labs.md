@@ -12,6 +12,7 @@ tags:
 - beginner
 - apache flink
 - postgresql
+- postgres
 - python
 - cdc
 
