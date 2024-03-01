@@ -152,7 +152,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
   }
 
-  public void coordinatorFailsAndRenewOne() throws Exception {
+  public void restartCoordinator() throws Exception {
     this.coordinator.close();
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.coordinator.start();

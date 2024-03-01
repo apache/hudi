@@ -86,7 +86,7 @@ public interface TestFunctionWrapper<I> {
    * Triggers Job level fail, so the coordinator need re-create a new instance.
    * @throws Exception
    */
-  default void coordinatorFailsAndRenewOne() throws Exception {
+  default void restartCoordinator() throws Exception {
     throw new UnsupportedOperationException();
   }
 

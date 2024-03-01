@@ -522,8 +522,8 @@ public class TestWriteBase {
       return this;
     }
 
-    public TestHarness coordinatorFailsAndRenewOne() throws Exception {
-      this.pipeline.coordinatorFailsAndRenewOne();
+    public TestHarness restartCoordinator() throws Exception {
+      this.pipeline.restartCoordinator();
       return this;
     }
 
