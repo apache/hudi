@@ -2,11 +2,65 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/videos</id>
     <title>Apache Hudi Blog</title>
-    <updated>2024-01-21T00:00:00.000Z</updated>
+    <updated>2024-02-18T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/videos"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Build Incremental ETL pipeline with Hudi and Airflow and MinIO]]></title>
+        <id>/2024/02/18/Build-Incremental-ETL-pipeline-with-Hudi-and-Airflow-and-MinIO</id>
+        <link href="https://hudi.apache.org/videos/2024/02/18/Build-Incremental-ETL-pipeline-with-Hudi-and-Airflow-and-MinIO"/>
+        <updated>2024-02-18T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn How to Integerate Hudi Spark job with Airflow and MinIO | Hands on Labs]]></title>
+        <id>/2024/02/17/Learn-How-to-Integerate-Hudi-Spark-job-with-Airflow-and-MinIO-Hands-on-Labs</id>
+        <link href="https://hudi.apache.org/videos/2024/02/17/Learn-How-to-Integerate-Hudi-Spark-job-with-Airflow-and-MinIO-Hands-on-Labs"/>
+        <updated>2024-02-17T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Data Ingestion to Visualization: Hudi + MinIO + StarRocks + HiveMetaStore + Apache SuperSet Hands on Guide]]></title>
+        <id>/2024/02/10/Data-Ingestion-to-Visualization-Hudi-MinIO-StarRocks-HiveMetaStore-Apache-SuperSet-Hands-on-Guide</id>
+        <link href="https://hudi.apache.org/videos/2024/02/10/Data-Ingestion-to-Visualization-Hudi-MinIO-StarRocks-HiveMetaStore-Apache-SuperSet-Hands-on-Guide"/>
+        <updated>2024-02-10T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Building an Open Source Data Lake House with Hudi, Postgres Hive Metastore, Minio, and StarRocks]]></title>
+        <id>/2024/02/07/Building-an-Open-Source-Data-Lake-House-with-Hudip-Postgres-Hive-Metastore-Minio-and-StarRocks</id>
+        <link href="https://hudi.apache.org/videos/2024/02/07/Building-an-Open-Source-Data-Lake-House-with-Hudip-Postgres-Hive-Metastore-Minio-and-StarRocks"/>
+        <updated>2024-02-07T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi Table Services | Export Services | HoodieSnapshotExporter | Hands on labs]]></title>
+        <id>/2024/02/03/Apache-Hudi-Table-Services-Export-Services-HoodieSnapshotExporter-Hands-on-labs</id>
+        <link href="https://hudi.apache.org/videos/2024/02/03/Apache-Hudi-Table-Services-Export-Services-HoodieSnapshotExporter-Hands-on-labs"/>
+        <updated>2024-02-03T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi Table Services | Offline Compaction | HoodieCompactor | Hands on labs]]></title>
+        <id>/2024/02/03/Apache-Hudi-Table-Services-Offline-Compaction-HoodieCompactor-Hands-on-labs</id>
+        <link href="https://hudi.apache.org/videos/2024/02/03/Apache-Hudi-Table-Services-Offline-Compaction-HoodieCompactor-Hands-on-labs"/>
+        <updated>2024-02-03T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Learn How to Move Data From MongoDB to Apache Hudi Using PySpark]]></title>
         <id>/2024/01/21/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark</id>

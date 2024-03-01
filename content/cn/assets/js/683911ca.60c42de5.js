@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[25139],{31908:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/batch-etl","name":"batch etl","count":1,"permalink":"/cn/videos/tags/batch-etl"}')}}]);
