@@ -1645,7 +1645,7 @@ call repair_corrupted_clean_files(table => 'test_hudi_table');
 
 ### repair_deduplicate
 
-Repair deduplicate records for a hudi table.
+Repair deduplicate records for a hudi table. The job dedupliates the data in the duplicated_partition_path and writes it into repaired_output_path. In the end of the job, the data in repaired_output_path is copied into the original path (duplicated_partition_path).
 
 **Input**
 
@@ -1666,12 +1666,12 @@ Repair deduplicate records for a hudi table.
 **Example**
 
 ```
-call repair_deduplicate(table => 'test_hudi_table', duplicated_partition_path => 'dt=2021-05-03', repaired_output_path => 'dt=2021-05-04');
+call repair_deduplicate(table => 'test_hudi_table', duplicated_partition_path => 'dt=2021-05-03', repaired_output_path => '/tmp/repair_path/');
 ```
 
 | result                                       | 
 |----------------------------------------------|
-| Reduplicated files placed in: dt=2021-05-04. | 
+| Reduplicated files placed in: /tmp/repair_path/. | 
 
 ### repair_migrate_partition_meta
 
