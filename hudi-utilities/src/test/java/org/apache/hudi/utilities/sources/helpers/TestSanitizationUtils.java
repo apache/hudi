@@ -22,7 +22,6 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.utilities.deltastreamer.TestSourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
 
 import org.apache.avro.Schema;
