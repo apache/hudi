@@ -66,15 +66,13 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
 
     FileSystemViewStorageConfig storageConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
 
     try {
       timelineService = new TimelineService(localEngineContext, new Configuration(),
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
           FileSystem.get(new Configuration()),
-          FileSystemViewManager.createViewManager(
-              localEngineContext, metadataConfig, storageConf, HoodieCommonConfig.newBuilder().build()));
+          FileSystemViewManager.createViewManager(localEngineContext, storageConf, HoodieCommonConfig.newBuilder().build(), null));
       timelineService.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);

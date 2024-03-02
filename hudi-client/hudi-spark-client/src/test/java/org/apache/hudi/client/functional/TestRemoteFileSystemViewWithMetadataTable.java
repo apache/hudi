@@ -116,7 +116,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           FileSystem.get(new Configuration()),
           FileSystemViewManager.createViewManager(
-              context, config.getMetadataConfig(), config.getViewStorageConfig(),
+              context, config.getViewStorageConfig(),
               config.getCommonConfig(),
               metaClient -> new HoodieBackedTestDelayedTableMetadata(
                   context, config.getMetadataConfig(), metaClient.getBasePathV2().toString(), true)));

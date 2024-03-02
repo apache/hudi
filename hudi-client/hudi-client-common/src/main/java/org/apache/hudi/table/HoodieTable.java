@@ -121,20 +121,19 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * @param <O> Type of outputs
  */
 public abstract class HoodieTable<T, I, K, O> implements Serializable {
-
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTable.class);
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieIndex<?, ?> index;
-  private SerializableConfiguration hadoopConfiguration;
+  private final SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
   private final HoodieTableMetadata metadata;
   private final HoodieStorageLayout storageLayout;
   private final boolean isMetadataTable;
 
-  private transient FileSystemViewManager viewManager;
-  protected final transient HoodieEngineContext context;
+  private final FileSystemViewManager viewManager;
+  protected final HoodieEngineContext context;
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
@@ -146,7 +145,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         .build();
     this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath());
 
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> metadata);
+    this.viewManager = FileSystemViewManager.createViewManager(context, config.getViewStorageConfig(), config.getCommonConfig(), unused -> metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.storageLayout = getStorageLayout(config);
@@ -163,11 +162,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return HoodieLayoutFactory.createLayout(config);
   }
 
-  private synchronized FileSystemViewManager getViewManager() {
-    if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> metadata);
-    }
-    return viewManager;
+  public HoodieTableMetadata getMetadata() {
+    return metadata;
   }
 
   /**
@@ -177,8 +173,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param records  hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
-  public abstract HoodieWriteMetadata<O> upsert(HoodieEngineContext context, String instantTime,
-      I records);
+  public abstract HoodieWriteMetadata<O> upsert(HoodieEngineContext context, String instantTime, I records);
 
   /**
    * Insert a batch of new records into Hoodie table at the supplied instantTime.
@@ -187,8 +182,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param records  hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
-  public abstract HoodieWriteMetadata<O> insert(HoodieEngineContext context, String instantTime,
-      I records);
+  public abstract HoodieWriteMetadata<O> insert(HoodieEngineContext context, String instantTime, I records);
 
   /**
    * Bulk Insert a batch of new records into Hoodie table at the supplied instantTime.
@@ -267,7 +261,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> bulkInsertPrepped(HoodieEngineContext context, String instantTime,
-      I preppedRecords,  Option<BulkInsertPartitioner> bulkInsertPartitioner);
+      I preppedRecords, Option<BulkInsertPartitioner> bulkInsertPartitioner);
 
   /**
    * Replaces all the existing records and inserts the specified new records into Hoodie table at the supplied instantTime,
@@ -321,21 +315,21 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Get the base file only view of the file system for this table.
    */
   public BaseFileOnlyView getBaseFileOnlyView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return viewManager.getFileSystemView(metaClient);
   }
 
   /**
    * Get the full view of the file system for this table.
    */
   public SliceView getSliceView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return viewManager.getFileSystemView(metaClient);
   }
 
   /**
    * Get complete view of the file system for this table with ability to force sync.
    */
   public SyncableFileSystemView getHoodieView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return viewManager.getFileSystemView(metaClient);
   }
 
   /**
