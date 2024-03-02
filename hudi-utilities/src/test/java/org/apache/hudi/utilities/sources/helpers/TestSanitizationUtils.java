@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateProperFormattedSchema;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithConfiguredReplacement;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithDefaultReplacement;
@@ -61,9 +62,7 @@ public class TestSanitizationUtils {
   public static void start() {
     spark = SparkSession
         .builder()
-        .master("local[*]")
-        .appName(TestSourceFormatAdapter.class.getName())
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .config(getSparkConfForTest(TestSanitizationUtils.class.getName()))
         .getOrCreate();
     jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
   }

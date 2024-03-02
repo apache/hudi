@@ -38,7 +38,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -243,7 +243,9 @@ class TestHoodieSparkSqlWriter {
   @Test
   def testThrowExceptionInvalidSerializer(): Unit = {
     spark.stop()
-    val session = SparkSession.builder().appName("hoodie_test").master("local").getOrCreate()
+    val session = SparkSession.builder()
+      .config(getSparkConfForTest("hoodie_test"))
+      .getOrCreate()
     try {
       val sqlContext = session.sqlContext
       val options = Map("path" -> "hoodie/test/path", HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_tbl")
