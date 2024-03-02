@@ -437,6 +437,18 @@ public class StreamWriteOperatorCoordinator
           .filter(evt -> evt.getWriteStatuses().size() > 0)
           .findFirst().map(WriteMetadataEvent::getInstantTime)
           .orElse(WriteMetadataEvent.BOOTSTRAP_INSTANT);
+
+      // if currentInstant is pending && bootstrap event instant is empty
+      // reuse currentInstant, reject bootstrap
+      if (this.metaClient.reloadActiveTimeline().filterInflightsAndRequested().containsInstant(this.instant)
+              && instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT)
+              && this.tableState.operationType == WriteOperationType.INSERT) {
+        LOG.warn("Reuse current pending Instant {} with {} operationType, "
+                + "ignoring empty bootstrap event.", this.instant, WriteOperationType.INSERT.value());
+        reset();
+        return;
+      }
+
       initInstant(instant);
     }
   }
