@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieFunctionalIndexException;
@@ -49,6 +48,9 @@ import scala.collection.JavaConverters;
 
 import static org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap;
 import static org.apache.hudi.HoodieConversionUtils.toScalaOption;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexClient {
@@ -122,11 +124,25 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
   private static Map<String, String> buildWriteConfig(HoodieTableMetaClient metaClient, HoodieFunctionalIndexDefinition indexDefinition) {
     Map<String, String> writeConfig = new HashMap<>();
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
-      if (!writeConfig.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
-        writeConfig.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
-        writeConfig.putAll(JavaConverters.mapAsJavaMapConverter(HoodieCLIUtils.getLockOptions(metaClient.getBasePathV2().toString())).asJava());
-      }
+      writeConfig.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+      writeConfig.putAll(JavaConverters.mapAsJavaMapConverter(HoodieCLIUtils.getLockOptions(metaClient.getBasePathV2().toString())).asJava());
+
+      // [HUDI-7472] Ensure write-config contains the existing MDT partition to prevent those from getting deleted
+      metaClient.getTableConfig().getMetadataPartitions().forEach(partitionPath -> {
+        if (partitionPath.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
+          writeConfig.put(RECORD_INDEX_ENABLE_PROP.key(), "true");
+        }
+
+        if (partitionPath.equals(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath())) {
+          writeConfig.put(ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), "true");
+        }
+
+        if (partitionPath.equals(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
+          writeConfig.put(ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+        }
+      });
     }
+
     HoodieFunctionalIndexConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> writeConfig.put(key.toString(), value.toString()));
     return writeConfig;
   }
