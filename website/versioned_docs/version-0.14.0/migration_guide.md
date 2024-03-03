@@ -77,7 +77,7 @@ For huge tables, this could be as simple as :
 ```java
 for partition in [list of partitions in source table] {
         val inputDF = spark.read.format("any_input_format").load("partition_path")
-        inputDF.write.format("org.apache.hudi").option()....save("basePath")
+        inputDF.write.format("hudi").option()....save("basePath")
 }
 ```  
 

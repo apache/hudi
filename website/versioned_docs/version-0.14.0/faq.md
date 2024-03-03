@@ -243,9 +243,9 @@ Hudi configuration options covering the datasource and low level Hudi write clie
 *   For Spark DataSource, you can use the "options" API of DataFrameWriter to pass in these configs.
 
 ```scala
-inputDF.write().format("org.apache.hudi")
+inputDF.write().format("hudi")
   .options(clientOpts) // any of the Hudi client opts can be passed in as well
-  .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
+  .option(RECORDKEY_FIELD.key(), "_row_key")
   ...
 ```
 
@@ -495,13 +495,13 @@ You can bulk import portion of that data to a new hudi table. For example, if yo
 
 ```scala
 spark.read.parquet("your_data_set/path/to/month")
-     .write.format("org.apache.hudi")
+     .write.format("hudi")
      .option("hoodie.datasource.write.operation", "bulk_insert")
      .option("hoodie.datasource.write.storage.type", "storage_type") // COPY_ON_WRITE or MERGE_ON_READ
-     .option(RECORDKEY_FIELD_OPT_KEY, "<your key>").
-     .option(PARTITIONPATH_FIELD_OPT_KEY, "<your_partition>")
+     .option(RECORDKEY_FIELD.key(), "<your key>")
+     .option(PARTITIONPATH_FIELD.key(), "<your_partition>")
      ...
-     .mode(SaveMode.Append)
+     .mode(Append)
      .save(basePath);
 ```
 
@@ -509,12 +509,12 @@ Once you have the initial copy, you can simply run upsert operations on this by 
 
 ```scala
 spark.read.parquet("your_data_set/path/to/month").limit(n) // Limit n records
-     .write.format("org.apache.hudi")
+     .write.format("hudi")
      .option("hoodie.datasource.write.operation", "upsert")
-     .option(RECORDKEY_FIELD_OPT_KEY, "<your key>").
-     .option(PARTITIONPATH_FIELD_OPT_KEY, "<your_partition>")
+     .option(RECORDKEY_FIELD.key(), "<your key>")
+     .option(PARTITIONPATH_FIELD.key(), "<your_partition>")
      ...
-     .mode(SaveMode.Append)
+     .mode(Append)
      .save(basePath);
 ```
 
@@ -562,12 +562,12 @@ Example how schema reconciliation works with Spark:
 
 ```scala
 hudi_options = {
-    'hoodie.table.name': "test_recon1",
-    'hoodie.datasource.write.recordkey.field': 'uuid',
-    'hoodie.datasource.write.table.name': "test_recon1",
-    'hoodie.datasource.write.precombine.field': 'ts',
-    'hoodie.upsert.shuffle.parallelism': 2,
-    'hoodie.insert.shuffle.parallelism': 2,
+    "hoodie.table.name": "test_recon1",
+    "hoodie.datasource.write.recordkey.field": "uuid",
+    "hoodie.datasource.write.table.name": "test_recon1",
+    "hoodie.datasource.write.precombine.field": "ts",
+    "hoodie.upsert.shuffle.parallelism": 2,
+    "hoodie.insert.shuffle.parallelism": 2,
     "hoodie.datasource.write.hive_style_partitioning":"true",
     "hoodie.datasource.write.reconcile.schema": "true",
     "hoodie.datasource.hive_sync.jdbcurl":"thrift://localhost:9083",

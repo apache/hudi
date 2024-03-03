@@ -140,16 +140,20 @@ As described in [Writing Data](/docs/writing_data#spark-datasource-writer), you 
 
 Here is an example invocation using spark datasource
 
-```java
+```scala
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.config.HoodieWriteConfig._
+import org.apache.spark.sql.SaveMode._
+
 inputDF.write()
-       .format("org.apache.hudi")
-       .options(clientOpts) // any of the Hudi client opts can be passed in as well
-       .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-       .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-       .option(HoodieWriteConfig.TABLE_NAME, tableName)
-       .mode(SaveMode.Append)
-       .save(basePath);
+        .format("hudi")
+        .options(clientOpts) // any of the Hudi client opts can be passed in as well
+        .option(RECORDKEY_FIELD.key(), "_row_key")
+        .option(PARTITIONPATH_FIELD.key(), "partition")
+        .option(PRECOMBINE_FIELD.key(), "timestamp")
+        .option(TBL_NAME.key(), tableName)
+        .mode(Append)
+        .save(basePath);
 ```
  
 ## Upgrading 
@@ -205,10 +209,10 @@ val inserts = convertToStringList(dataGen.generateInserts(100)).toList
 val insertDf = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 insertDf.write.format("hudi").
         options(getQuickstartWriteConfigs).
-        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-        option(TABLE_NAME, tableName).
+        option(PRECOMBINE_FIELD.key(), "ts").
+        option(RECORDKEY_FIELD.key(), "uuid").
+        option(PARTITIONPATH_FIELD.key(), "partitionpath").
+        option(TBL_NAME.key(), tableName).
         option(OPERATION.key(), INSERT_OPERATION_OPT_VAL).
         mode(Append).
         save(basePath)

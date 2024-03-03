@@ -211,30 +211,30 @@ val tableName = "hudi_cow"
 val basePath = "/user/hive/warehouse/hudi_cow"
 
 val schema = StructType(Array(
-StructField("rowId", StringType,true),
-StructField("partitionId", StringType,true),
-StructField("preComb", LongType,true),
-StructField("name", StringType,true),
-StructField("versionId", StringType,true),
-StructField("toBeDeletedStr", StringType,true),
-StructField("intToLong", IntegerType,true),
-StructField("longToInt", LongType,true)
+  StructField("rowId", StringType,true),
+  StructField("partitionId", StringType,true),
+  StructField("preComb", LongType,true),
+  StructField("name", StringType,true),
+  StructField("versionId", StringType,true),
+  StructField("toBeDeletedStr", StringType,true),
+  StructField("intToLong", IntegerType,true),
+  StructField("longToInt", LongType,true)
 ))
 
-val data0 = Seq(Row("row_1", "2021/01/01",0L,"bob","v_0","toBeDel0",0,1000000L), 
-               Row("row_2", "2021/01/01",0L,"john","v_0","toBeDel0",0,1000000L), 
-               Row("row_3", "2021/01/02",0L,"tom","v_0","toBeDel0",0,1000000L))
+val data0 = Seq(Row("row_1", "2021/01/01",0L,"bob","v_0","toBeDel0",0,1000000L),
+  Row("row_2", "2021/01/01",0L,"john","v_0","toBeDel0",0,1000000L),
+  Row("row_3", "2021/01/02",0L,"tom","v_0","toBeDel0",0,1000000L))
 
 var dfFromData0 = spark.createDataFrame(data0,schema)
 
 dfFromData0.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "preComb").
-  option(RECORDKEY_FIELD_OPT_KEY, "rowId").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionId").
-  option(TABLE_NAME, tableName).
-  option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL).
-  option(OPERATION_OPT_KEY, "upsert").
+  option(PRECOMBINE_FIELD.key(), "preComb").
+  option(RECORDKEY_FIELD.key(), "rowId").
+  option(PARTITIONPATH_FIELD.key(), "partitionId").
+  option(TBL_NAME.key(), tableName).
+  option(TABLE_TYPE.key(), "COPY_ON_WRITE").
+  option(OPERATION.key(), "upsert").
   option("hoodie.index.type","SIMPLE").
   option("hoodie.datasource.write.hive_style_partitioning","true").
   option("hoodie.datasource.hive_sync.jdbcurl","jdbc:hive2://hiveserver:10000/").

@@ -98,15 +98,17 @@ backwards compatibility and not breaking existing pipelines, this config is set 
 Unless Hive sync is enabled, the dataset written by Hudi using one of the methods above can simply be queries via the Spark datasource like any other source.
 
 ```scala
+import org.apache.hudi.DataSourceReadOptions._
+
 val hudiSnapshotQueryDF = spark
-     .read()
-     .format("hudi")
-     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
-     .load(basePath) 
+  .read()
+  .format("hudi")
+  .option(QUERY_TYPE.key(), QUERY_TYPE_SNAPSHOT_OPT_VAL)
+  .load(basePath)
 val hudiIncQueryDF = spark.read().format("hudi")
-     .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(), DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
-     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), <beginInstantTime>)
-     .load(basePath);
+  .option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL)
+  .option(BEGIN_INSTANTTIME.key(), <beginInstantTime>)
+    .load(basePath);
 ```
 
 if Hive Sync is enabled in the [deltastreamer](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/docker/demo/sparksql-incremental.commands#L50) tool or [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncenable), the dataset is available in Hive as a couple of tables, that can now be read using HiveQL, Presto or SparkSQL. See [here](https://hudi.apache.org/docs/querying_data/) for more.

@@ -126,27 +126,27 @@ regular ingestion.
 Compactions are scheduled and executed asynchronously inside the
 streaming job.Here is an example snippet in java
 
-```properties
-import org.apache.hudi.DataSourceWriteOptions;
+```java
 import org.apache.hudi.HoodieDataSourceHelpers;
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
-
-import org.apache.spark.sql.streaming.OutputMode;
+import org.apache.hudi.DataSourceWriteOptions._;
+import org.apache.hudi.config.HoodieCompactionConfig._;
+import org.apache.hudi.config.HoodieWriteConfig._;
+import org.apache.spark.sql.streaming.OutputMode._;
 import org.apache.spark.sql.streaming.ProcessingTime;
 
 
- DataStreamWriter<Row> writer = streamingInput.writeStream().format("org.apache.hudi")
-        .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), operationType)
-        .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(), tableType)
-        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, "10")
-        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "true")
-        .option(HoodieWriteConfig.TABLE_NAME, tableName).option("checkpointLocation", checkpointLocation)
-        .outputMode(OutputMode.Append());
- writer.trigger(new ProcessingTime(30000)).start(tablePath);
+DataStreamWriter<Row> writer = streamingInput.writeStream().format("hudi")
+        .option(OPERATION.key(), operationType)
+        .option(TABLE_TYPE.key(), tableType)
+        .option(RECORDKEY_FIELD.key(), "_row_key")
+        .option(PARTITIONPATH_FIELD.key(), "partition")
+        .option(PRECOMBINE_FIELD.key(), "timestamp")
+        .option(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "10")
+        .option(ASYNC_COMPACT_ENABLE.key(), "true")
+        .option(TBL_NAME.key(), tableName)
+        .option("checkpointLocation", checkpointLocation)
+        .outputMode(Append);
+writer.trigger(new ProcessingTime(30000)).start(tablePath);
 ```
 
 ##### Hudi Streamer Continuous Mode

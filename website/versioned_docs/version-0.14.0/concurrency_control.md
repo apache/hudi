@@ -195,20 +195,24 @@ The `hudi-spark` module offers the DataSource API to write (and read) a Spark Da
 
 Following is an example of how to use optimistic_concurrency_control via spark datasource
 
-```java
+```scala
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.config.HoodieWriteConfig._
+import org.apache.spark.sql.SaveMode._
+
 inputDF.write.format("hudi")
-       .options(getQuickstartWriteConfigs)
-       .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
-       .option("hoodie.cleaner.policy.failed.writes", "LAZY")
-       .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
-       .option("hoodie.write.lock.zookeeper.url", "zookeeper")
-       .option("hoodie.write.lock.zookeeper.port", "2181")
-       .option("hoodie.write.lock.zookeeper.base_path", "/test")
-       .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
-       .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
-       .option(TABLE_NAME, tableName)
-       .mode(Overwrite)
-       .save(basePath)
+        .options(getQuickstartWriteConfigs)
+        .option(PRECOMBINE_FIELD.key(), "ts")
+        .option("hoodie.cleaner.policy.failed.writes", "LAZY")
+        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
+        .option("hoodie.write.lock.zookeeper.url", "zookeeper")
+        .option("hoodie.write.lock.zookeeper.port", "2181")
+        .option("hoodie.write.lock.zookeeper.base_path", "/test")
+        .option(RECORDKEY_FIELD.key(), "uuid")
+        .option(PARTITIONPATH_FIELD.key(), "partitionpath")
+        .option(TBL_NAME.key(), tableName)
+        .mode(Overwrite)
+        .save(basePath)
 ```
 
 ## Multi Writing via Hudi Streamer

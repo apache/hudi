@@ -88,16 +88,20 @@ Options useful for reading tables via `read.format.option(...)`
 ### Write Options {#Write-Options}
 You can pass down any of the WriteClient level configs directly using `options()` or `option(k,v)` methods.
 
-```java
+```scala
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieWriteConfig._
+import org.apache.spark.sql.SaveMode._
+
 inputDF.write()
-.format("org.apache.hudi")
-.options(clientOpts) // any of the Hudi client opts can be passed in as well
-.option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-.option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-.option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-.option(HoodieWriteConfig.TABLE_NAME, tableName)
-.mode(SaveMode.Append)
-.save(basePath);
+    .format("hudi")
+    .options(clientOpts) // any of the Hudi client opts can be passed in as well
+    .option(RECORDKEY_FIELD.key(), "_row_key")
+    .option(PARTITIONPATH_FIELD.key(), "partition")
+    .option(PRECOMBINE_FIELD.key(), "timestamp")
+    .option(TBL_NAME.key(), tableName)
+    .mode(Append)
+    .save(basePath);
 ```
 
 Options useful for writing tables via `write.format.option(...)`

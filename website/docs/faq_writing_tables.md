@@ -87,9 +87,9 @@ Hudi configuration options covering the datasource and low level Hudi write clie
 *   For Spark DataSource, you can use the "options" API of DataFrameWriter to pass in these configs.
 
 ```scala
-inputDF.write().format("org.apache.hudi")
+inputDF.write().format("hudi")
   .options(clientOpts) // any of the Hudi client opts can be passed in as well
-  .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
+  .option(RECORDKEY_FIELD.key(), "_row_key")
   ...
 ```
 

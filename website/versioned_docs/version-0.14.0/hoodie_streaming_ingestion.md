@@ -405,6 +405,9 @@ values={[
 // spark-shell
 // prepare to stream write to new table
 import org.apache.spark.sql.streaming.Trigger
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieWriteConfig._
+import org.apache.spark.sql.SaveMode._
 
 val streamingTableName = "hudi_trips_cow_streaming"
 val baseStreamingPath = "file:///tmp/hudi_trips_cow_streaming"
@@ -417,16 +420,16 @@ val df = spark.readStream.
 
 // write stream to new hudi table
 df.writeStream.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, streamingTableName).
-  outputMode("append").
-  option("path", baseStreamingPath).
-  option("checkpointLocation", checkpointLocation).
-  trigger(Trigger.Once()).
-  start()
+        options(getQuickstartWriteConfigs).
+        option(PRECOMBINE_FIELD.key(), "ts").
+        option(RECORDKEY_FIELD.key(), "uuid").
+        option(PARTITIONPATH_FIELD.key(), "partitionpath").
+        option(TBL_NAME.key(), streamingTableName).
+        outputMode("append").
+        option("path", baseStreamingPath).
+        option("checkpointLocation", checkpointLocation).
+        trigger(Trigger.Once()).
+        start()
 
 ```
 
@@ -492,21 +495,21 @@ values={[
 // spark-shell
 // reload data
 df.write.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
-  mode(Overwrite).
-  save(basePath)
+        options(getQuickstartWriteConfigs).
+        option(PRECOMBINE_FIELD.key(), "ts").
+        option(RECORDKEY_FIELD.key(), "uuid").
+        option(PARTITIONPATH_FIELD.key(), "partitionpath").
+        option(TBL_NAME.key(), tableName).
+        mode(Overwrite).
+        save(basePath)
 
 // read stream and output results to console
 spark.readStream.
-  format("hudi").
-  load(basePath).
-  writeStream.
-  format("console").
-  start()
+        format("hudi").
+        load(basePath).
+        writeStream.
+        format("console").
+        start()
 
 // read stream to streaming df
 val df = spark.readStream.
