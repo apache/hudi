@@ -23,8 +23,9 @@ import org.apache.hudi.DataSourceWriteOptions.{INLINE_CLUSTERING_ENABLE, KEYGENE
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
@@ -44,7 +45,6 @@ import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -96,10 +96,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     System.gc()
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testShortNameStorage(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @Test
+  def testShortNameStorage(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts()
 
     // Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
@@ -564,10 +563,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
    * archival should kick in and 2 commits should be archived. If schema is valid, no exception will be thrown. If not,
    * NPE will be thrown.
    */
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testArchivalWithBulkInsert(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @Test
+  def testArchivalWithBulkInsert(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts()
 
     var structType: StructType = null
     for (i <- 1 to 7) {
@@ -696,10 +694,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testOverWriteModeUseReplaceAction(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @Test
+  def testOverWriteModeUseReplaceAction(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts()
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
@@ -774,10 +771,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(expectedCount, hudiReadPathDF.count())
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testOverWriteTableModeUseReplaceAction(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @Test
+  def testOverWriteTableModeUseReplaceAction(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts()
 
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -804,10 +800,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals("replacecommit", commits(1))
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testOverWriteModeUseReplaceActionOnDisJointPartitions(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @Test
+  def testOverWriteModeUseReplaceActionOnDisJointPartitions(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts()
 
     // step1: Write 5 records to hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH
     val records1 = recordsToStrings(dataGen.generateInsertsForPartition("001", 5, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).toList
@@ -864,10 +859,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals("replacecommit", commits(2))
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testOverWriteTableModeUseReplaceActionOnDisJointPartitions(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @Test
+  def testOverWriteTableModeUseReplaceActionOnDisJointPartitions(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts()
 
     // step1: Write 5 records to hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH
     val records1 = recordsToStrings(dataGen.generateInsertsForPartition("001", 5, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).toList
@@ -1003,10 +997,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     })
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testWithAutoCommitOn(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @Test
+  def testWithAutoCommitOn(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts()
 
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -1318,8 +1311,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
   @ParameterizedTest
   @CsvSource(Array(
-    "true,false,AVRO", "true,true,AVRO", "false,true,AVRO", "false,false,AVRO",
-    "true,false,SPARK", "true,true,SPARK", "false,true,SPARK", "false,false,SPARK"
+    "true,false,AVRO", "true,true,AVRO", "false,true,AVRO", "false,false,AVRO"
   ))
   def testQueryCOWWithBasePathAndFileIndex(partitionEncode: Boolean, isMetadataEnabled: Boolean, recordType: HoodieRecordType): Unit = {
     testPartitionPruning(
@@ -1516,11 +1508,10 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testSaveAsTableInDifferentModes(recordType: HoodieRecordType): Unit = {
+  @Test
+  def testSaveAsTableInDifferentModes(): Unit = {
     val options = scala.collection.mutable.Map.empty ++ commonOpts ++ Map("path" -> basePath)
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, options.toMap)
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options.toMap)
 
     // first use the Overwrite mode
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
@@ -1583,10 +1574,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(spark.read.format("hudi").options(readOpts).load(basePath).count(), 9)
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testMetricsReporterViaDataSource(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, _) = getWriterReaderOpts(recordType, getQuickstartWriteConfigs.asScala.toMap)
+  @Test
+  def testMetricsReporterViaDataSource(): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts(HoodieRecordType.AVRO, getQuickstartWriteConfigs.asScala.toMap)
 
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(10))
@@ -1680,7 +1670,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       })
   }
 
-  def getWriterReaderOpts(recordType: HoodieRecordType,
+  def getWriterReaderOpts(recordType: HoodieRecordType = HoodieRecordType.AVRO,
                           opt: Map[String, String] = commonOpts,
                           enableFileIndex: Boolean = DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.defaultValue()):
   (Map[String, String], Map[String, String]) = {

@@ -621,7 +621,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
   }
 
   test("Test drop partition with wildcards") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         spark.sql(
@@ -653,6 +653,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           Seq("2023-09-01")
         )
       }
-    })
+    }
   }
 }

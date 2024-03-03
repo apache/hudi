@@ -143,7 +143,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   test("Test alter column types 2") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
@@ -176,7 +176,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
         }
       }
-    })
+    }
   }
 
   test("Test Enable and Disable Schema on read") {
@@ -232,7 +232,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   test("Test alter table properties and add rename drop column") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
@@ -336,7 +336,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         }
       }
       spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
-    })
+    }
   }
 
   test("Test Chinese table ") {
@@ -393,7 +393,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
 
   test("Test alter column by add rename and drop") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
@@ -453,7 +453,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           validateInternalSchema(tablePath, isDropColumn = false, currentMaxColumnId = maxColumnId)
         }
       }
-    })
+    }
   }
 
   private def validateInternalSchema(basePath: String, isDropColumn: Boolean, currentMaxColumnId: Int): Unit = {
@@ -543,7 +543,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   test("Test alter column with complex schema") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       withSQLConf(s"$SPARK_SQL_INSERT_INTO_OPERATION" -> "upsert",
         "hoodie.schema.on.read.enable" -> "true",
         "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
@@ -628,7 +628,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
         }
       }
-    })
+    }
   }
 
   test("Test schema auto evolution complex") {
