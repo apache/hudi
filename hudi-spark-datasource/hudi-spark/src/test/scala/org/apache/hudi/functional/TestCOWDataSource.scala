@@ -1508,7 +1508,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-  @ParameterizedTest
+  @Test
   def testSaveAsTableInDifferentModes(): Unit = {
     val options = scala.collection.mutable.Map.empty ++ commonOpts ++ Map("path" -> basePath)
     val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options.toMap)
