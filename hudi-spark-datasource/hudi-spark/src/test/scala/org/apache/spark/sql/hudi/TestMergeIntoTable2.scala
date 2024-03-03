@@ -142,7 +142,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   }
 
   test("Test Merge Into CTAS Table") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       spark.sql(
@@ -174,7 +174,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name from $tableName")(
         Seq(1, "a1_1")
       )
-    })
+    }
   }
 
   test("Test Merge With Complex Data Type") {
@@ -242,7 +242,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   }
 
   test("Test column name matching for insert * and update set *") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
@@ -326,11 +326,11 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 102.0, 1000, "2021-05-05"),
         Seq(4, "a4", 100.0, 1000, "2021-05-06")
       )
-    })
+    }
   }
 
   test("Test MergeInto For Source Table With Column Aliases") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
@@ -370,7 +370,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 10.0, 1000)
         )
       }
-    })
+    }
   }
 
   /* TODO [HUDI-6472]
@@ -556,7 +556,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 */
 
   test("Test only insert when source table contains history") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
@@ -598,7 +598,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 1.0, 10, "2022-08-18"),
         Seq(2, "a2", 10.0, 100, "2022-08-18")
       )
-    })
+    }
   }
 
   test("Test only insert when source table contains history and target table has multiple keys") {
@@ -649,7 +649,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   }
 
   test("Test Merge Into For Source Table With Different Column Order") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       val tableName = generateTableName
       // Create a mor partitioned table.
       spark.sql(
@@ -683,7 +683,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id,name,price,dt from $tableName")(
         Seq(1, "a1", 10, "2021-03-21")
       )
-    })
+    }
   }
 
   test("Test Merge into with String cast to Double") {

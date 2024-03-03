@@ -130,7 +130,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   test("Test MergeInto with more than once update actions for spark >= 3.1.x") {
 
     if (HoodieSparkUtils.gteqSpark3_1) {
-      withRecordType()(withTempDir { tmp =>
+      withTempDir { tmp =>
         val targetTable = generateTableName
         spark.sql(
           s"""
@@ -179,7 +179,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         checkAnswer(s"select id, name, data, country, ts from $targetTable")(
           Seq(1, "lb", 5, "shu", 1646643196L)
         )
-      })
+      }
     }
   }
 
@@ -469,7 +469,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto for MOR table ") {
-    withRecordType()(withTempDir {tmp =>
+    withTempDir {tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create a mor partitioned table.
@@ -597,11 +597,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       checkAnswer(s"select id,name,price,dt from $tableName order by id")(
         Seq(1, "a1", 12, "2021-03-21")
       )
-    })
+    }
   }
 
   test("Test MergeInto with insert only") {
-    withRecordType()(withTempDir {tmp =>
+    withTempDir {tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       // Create a partitioned mor table
       val tableName = generateTableName
@@ -652,7 +652,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         Seq(1, "a1", 10, "2021-03-21"),
         Seq(2, "a2", 10, "2021-03-20")
       )
-    })
+    }
   }
 
   test("Test MergeInto For PreCombineField") {
@@ -730,7 +730,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto with preCombine field expression") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       Seq("cow", "mor").foreach { tableType =>
         val tableName1 = generateTableName
@@ -808,11 +808,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(1, "a1", 24, "2021-03-21", 1002)
         )
       }
-    })
+    }
   }
 
   test("Test MergeInto with primaryKey expression") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName1 = generateTableName
       spark.sql(
@@ -908,7 +908,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       checkAnswer(s"select id,name,price,v,dt from $tableName1 order by id")(
         Seq(1, "a1", 10, 1000, "2021-03-21")
       )
-    })
+    }
   }
 
   test("Test MergeInto with combination of delete update insert") {
@@ -1082,7 +1082,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test Different Type of PreCombineField") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       val typeAndValue = Seq(
         ("string", "'1000'"),
@@ -1138,7 +1138,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(1, "a1", 20.0)
         )
       }
-    })
+    }
   }
 
   test("Test MergeInto For MOR With Compaction On") {
