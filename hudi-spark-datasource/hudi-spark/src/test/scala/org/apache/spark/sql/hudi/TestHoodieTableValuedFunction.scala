@@ -450,6 +450,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |""".stripMargin
           )
 
+          spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
           spark.sql(
             s"""
                | insert into $tableName
