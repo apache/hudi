@@ -211,7 +211,7 @@ dfFromData1.write.format("hudi").
    option(RECORDKEY_FIELD.key, "rowId").
    option(PARTITIONPATH_FIELD.key, "partitionId").
    option("hoodie.index.type","SIMPLE").
-   option(TABLE_NAME.key, tableName).
+   option(TBL_NAME.key, tableName).
    mode(Overwrite).
    save(basePath)
 
