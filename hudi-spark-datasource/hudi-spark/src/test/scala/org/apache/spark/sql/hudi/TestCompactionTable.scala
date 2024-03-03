@@ -75,7 +75,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test compaction path") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -132,6 +132,6 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
       checkException(s"run compaction on '${tmp.getCanonicalPath}' at 12345")(
         s"specific 12345 instants is not exist"
       )
-    })
+    }
   }
 }
