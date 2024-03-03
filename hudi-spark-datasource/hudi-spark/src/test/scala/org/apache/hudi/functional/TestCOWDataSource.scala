@@ -487,6 +487,27 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(snapshotDF2.count(), (validRecordsFromBatch1 + validRecordsFromBatch2))
   }
 
+  @Test
+  def bulkInsertCompositeKeys(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val inputDf1 = inputDF.withColumn("new_col",lit("value1"))
+    val inputDf2 = inputDF.withColumn("new_col", lit(null).cast("String") )
+
+    inputDf1.union(inputDf2).write.format("hudi")
+        .options(writeOpts)
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "_row_key,new_col")
+        .option(DataSourceWriteOptions.OPERATION.key(),"bulk_insert")
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+
+    assertEquals(200, spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count())
+  }
+
   /**
    * This tests the case that query by with a specified partition condition on hudi table which is
    * different between the value of the partition field and the actual partition path,
