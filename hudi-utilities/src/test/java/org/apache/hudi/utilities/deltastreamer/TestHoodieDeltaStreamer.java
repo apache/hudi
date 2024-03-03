@@ -1246,7 +1246,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // trigger a scheduleAndExecute clustering job
     // when retryFailedClustering true => will rollback and re-execute failed clustering plan with same instant timestamp.
     // when retryFailedClustering false => will make and execute a new clustering plan with new instant timestamp.
-    HoodieClusteringJob scheduleAndExecute = initialHoodieClusteringJob(tableBasePath, null, false, "scheduleAndExecute", retryLastFailedClusteringJob, recordType);
+    HoodieClusteringJob scheduleAndExecute = initialHoodieClusteringJob(tableBasePath, null, false, "scheduleAndExecute", retryLastFailedClusteringJob, HoodieRecordType.AVRO);
     scheduleAndExecute.cluster(0);
 
     String completeClusteringTimeStamp = meta.getActiveTimeline().reload().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
@@ -1658,7 +1658,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient mClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(tableBasePath).setLoadActiveTimelineOnLoad(true).build();
     HoodieInstant lastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     HoodieDeltaStreamer.Config cfg2 = TestHelpers.makeDropAllConfig(tableBasePath, WriteOperationType.UPSERT);
-    addRecordMerger(recordType, cfg2.configs);
+    addRecordMerger(HoodieRecordType.AVRO, cfg2.configs);
     cfg2.filterDupes = false;
     cfg2.sourceLimit = 2000;
     cfg2.operation = WriteOperationType.UPSERT;
