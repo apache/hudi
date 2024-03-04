@@ -28,6 +28,8 @@ import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.streamer.SourceProfile;
+import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -38,8 +40,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -52,26 +54,28 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Generic tests for all {@link KafkaSource} to ensure all implementations properly handle offsets, fetch limits, failure modes, etc.
  */
 abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
   protected static final String TEST_TOPIC_PREFIX = "hoodie_test_";
-  protected static KafkaTestUtils testUtils;
 
   protected final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
+  protected final Option<SourceProfileSupplier> sourceProfile = Option.of(mock(SourceProfileSupplier.class));
 
   protected SchemaProvider schemaProvider;
+  protected KafkaTestUtils testUtils;
 
-  @BeforeAll
-  public static void initClass() {
+  @BeforeEach
+  public void initClass() {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterAll
-  public static void cleanupClass() {
+  @AfterEach
+  public void cleanupClass() {
     testUtils.teardown();
   }
 
@@ -276,5 +280,52 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
         "Some data may have been lost because they are not available in Kafka any more;"
             + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed.",
         t.getMessage());
+  }
+
+  @Test
+  public void testKafkaSourceWithOffsetsFromSourceProfile() {
+    // topic setup.
+    final String topic = TEST_TOPIC_PREFIX + "testKafkaSourceWithOffsetRanges";
+    testUtils.createTopic(topic, 2);
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+
+    when(sourceProfile.get().getSourceProfile()).thenReturn(new TestSourceProfile(Long.MAX_VALUE, 4, 500));
+    SourceFormatAdapter kafkaSource = createSource(props);
+
+    // Test for empty data.
+    assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
+
+    // Publish messages and assert source has picked up all messages in offsetRanges supplied by input batch profile.
+    sendMessagesToKafka(topic, 1000, 2);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
+    assertEquals(500, fetch1.getBatch().get().count());
+  }
+
+  static class TestSourceProfile implements SourceProfile<Long> {
+
+    private final long maxSourceBytes;
+    private final int sourcePartitions;
+    private final long numEvents;
+
+    public TestSourceProfile(long maxSourceBytes, int sourcePartitions, long numEvents) {
+      this.maxSourceBytes = maxSourceBytes;
+      this.sourcePartitions = sourcePartitions;
+      this.numEvents = numEvents;
+    }
+
+    @Override
+    public long getMaxSourceBytes() {
+      return maxSourceBytes;
+    }
+
+    @Override
+    public int getSourcePartitions() {
+      return sourcePartitions;
+    }
+
+    @Override
+    public Long getSourceSpecificContext() {
+      return numEvents;
+    }
   }
 }

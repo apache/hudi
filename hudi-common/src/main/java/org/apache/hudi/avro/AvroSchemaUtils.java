@@ -64,7 +64,7 @@ public class AvroSchemaUtils {
   /**
    * Establishes whether {@code newSchema} is compatible w/ {@code prevSchema}, as
    * defined by Avro's {@link AvroSchemaCompatibility}.
-   * From avro's compatability standpoint, prevSchema is writer schema and new schema is reader schema.
+   * From avro's compatibility standpoint, prevSchema is writer schema and new schema is reader schema.
    * {@code newSchema} is considered compatible to {@code prevSchema}, iff data written using {@code prevSchema}
    * could be read by {@code newSchema}
    *

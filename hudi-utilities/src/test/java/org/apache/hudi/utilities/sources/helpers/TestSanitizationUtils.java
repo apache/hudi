@@ -22,7 +22,6 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.utilities.deltastreamer.TestSourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
 
 import org.apache.avro.Schema;
@@ -45,6 +44,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateProperFormattedSchema;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithConfiguredReplacement;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithDefaultReplacement;
@@ -61,9 +61,7 @@ public class TestSanitizationUtils {
   public static void start() {
     spark = SparkSession
         .builder()
-        .master("local[*]")
-        .appName(TestSourceFormatAdapter.class.getName())
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .config(getSparkConfForTest(TestSanitizationUtils.class.getName()))
         .getOrCreate();
     jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
   }

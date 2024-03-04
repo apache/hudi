@@ -233,8 +233,8 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test ignoring case for Update Table") {
-    withRecordType()(withTempDir { tmp =>
-      Seq("cow", "mor").foreach {tableType =>
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         // create table
         spark.sql(
@@ -270,7 +270,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 40.0, 1000)
         )
       }
-    })
+    }
   }
 
   test("Test decimal type") {

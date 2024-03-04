@@ -385,7 +385,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     val metadataConfig = HoodieMetadataConfig.newBuilder.build
     val engineContext = new HoodieLocalEngineContext(hadoopConf)
     val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
-      engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
+      engineContext, FileSystemViewStorageConfig.newBuilder.build,
       HoodieCommonConfig.newBuilder.build,
       new SerializableFunctionUnchecked[HoodieTableMetaClient, HoodieTableMetadata] {
         override def apply(v1: HoodieTableMetaClient): HoodieTableMetadata = {

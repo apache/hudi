@@ -58,7 +58,7 @@ import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
 import org.apache.hudi.hadoop.fs.SerializablePath;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -102,18 +102,18 @@ public class HoodieTableMetaClient implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableMetaClient.class);
   public static final String METAFOLDER_NAME = ".hoodie";
-  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + HoodieLocation.SEPARATOR + ".temp";
-  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + HoodieLocation.SEPARATOR + ".aux";
-  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + HoodieLocation.SEPARATOR + ".bootstrap";
-  public static final String SAMPLE_WRITES_FOLDER_PATH = AUXILIARYFOLDER_NAME + HoodieLocation.SEPARATOR + ".sample_writes";
-  public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + HoodieLocation.SEPARATOR + ".heartbeat";
-  public static final String METADATA_TABLE_FOLDER_PATH = METAFOLDER_NAME + HoodieLocation.SEPARATOR + "metadata";
+  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".temp";
+  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".aux";
+  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + ".bootstrap";
+  public static final String SAMPLE_WRITES_FOLDER_PATH = AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + ".sample_writes";
+  public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".heartbeat";
+  public static final String METADATA_TABLE_FOLDER_PATH = METAFOLDER_NAME + StoragePath.SEPARATOR + "metadata";
   public static final String HASHING_METADATA_FOLDER_NAME =
-      ".bucket_index" + HoodieLocation.SEPARATOR + "consistent_hashing_metadata";
+      ".bucket_index" + StoragePath.SEPARATOR + "consistent_hashing_metadata";
   public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
-      + HoodieLocation.SEPARATOR + ".partitions";
+      + StoragePath.SEPARATOR + ".partitions";
   public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH =
-      BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + HoodieLocation.SEPARATOR + ".fileids";
+      BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + StoragePath.SEPARATOR + ".fileids";
 
   public static final String SCHEMA_FOLDER_NAME = ".schema";
 
@@ -324,7 +324,7 @@ public class HoodieTableMetaClient implements Serializable {
    * @return Temp Folder path
    */
   public String getTempFolderPath() {
-    return basePath + HoodieLocation.SEPARATOR + TEMPFOLDER_NAME;
+    return basePath + StoragePath.SEPARATOR + TEMPFOLDER_NAME;
   }
 
   /**
@@ -334,35 +334,35 @@ public class HoodieTableMetaClient implements Serializable {
    * @return
    */
   public String getMarkerFolderPath(String instantTs) {
-    return String.format("%s%s%s", getTempFolderPath(), HoodieLocation.SEPARATOR, instantTs);
+    return String.format("%s%s%s", getTempFolderPath(), StoragePath.SEPARATOR, instantTs);
   }
 
   /**
    * @return Auxiliary Meta path
    */
   public String getMetaAuxiliaryPath() {
-    return basePath + HoodieLocation.SEPARATOR + AUXILIARYFOLDER_NAME;
+    return basePath + StoragePath.SEPARATOR + AUXILIARYFOLDER_NAME;
   }
 
   /**
    * @return Heartbeat folder path.
    */
   public static String getHeartbeatFolderPath(String basePath) {
-    return String.format("%s%s%s", basePath, HoodieLocation.SEPARATOR, HEARTBEAT_FOLDER_NAME);
+    return String.format("%s%s%s", basePath, StoragePath.SEPARATOR, HEARTBEAT_FOLDER_NAME);
   }
 
   /**
    * @return Bootstrap Index By Partition Folder
    */
   public String getBootstrapIndexByPartitionFolderPath() {
-    return basePath + HoodieLocation.SEPARATOR + BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH;
+    return basePath + StoragePath.SEPARATOR + BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH;
   }
 
   /**
    * @return Bootstrap Index By Hudi File Id Folder
    */
   public String getBootstrapIndexByFileIdFolderNameFolderPath() {
-    return basePath + HoodieLocation.SEPARATOR + BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH;
+    return basePath + StoragePath.SEPARATOR + BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH;
   }
 
   /**
@@ -370,7 +370,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getArchivePath() {
     String archiveFolder = tableConfig.getArchivelogFolder();
-    return getMetaPath() + HoodieLocation.SEPARATOR + archiveFolder;
+    return getMetaPath() + StoragePath.SEPARATOR + archiveFolder;
   }
 
   /**
@@ -636,11 +636,11 @@ public class HoodieTableMetaClient implements Serializable {
       fs.mkdirs(auxiliaryFolder);
     }
 
-    initializeBootstrapDirsIfNotExists(hadoopConf, basePath, fs);
+    initializeBootstrapDirsIfNotExists(basePath, fs);
     HoodieTableConfig.create(fs, metaPathDir, props);
   }
 
-  public static void initializeBootstrapDirsIfNotExists(Configuration hadoopConf, String basePath, FileSystem fs) throws IOException {
+  public static void initializeBootstrapDirsIfNotExists(String basePath, FileSystem fs) throws IOException {
 
     // Create bootstrap index by partition folder if it does not exist
     final Path bootstrap_index_folder_by_partition =
@@ -801,7 +801,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public void initializeBootstrapDirsIfNotExists() throws IOException {
-    initializeBootstrapDirsIfNotExists(getHadoopConf(), basePath.toString(), getFs());
+    initializeBootstrapDirsIfNotExists(basePath.toString(), getFs());
   }
 
   private static HoodieTableMetaClient newMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,

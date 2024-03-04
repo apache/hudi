@@ -97,7 +97,8 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     assignUpdates(profile);
     assignInserts(profile, context);
 
-    LOG.info("Total Buckets: " + totalBuckets);
+    LOG.info("Total Buckets: {}, bucketInfoMap size: {}, partitionPathToInsertBucketInfos size: {}, updateLocationToBucket size: {}",
+        totalBuckets, bucketInfoMap.size(), partitionPathToInsertBucketInfos.size(), updateLocationToBucket.size());
     if (LOG.isDebugEnabled()) {
       LOG.debug("Buckets info => " + bucketInfoMap + ", \n"
               + "Partition to insert buckets => " + partitionPathToInsertBucketInfos + ", \n"
@@ -189,6 +190,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
         this.smallFiles.addAll(smallFiles);
 
+        LOG.info("For partitionPath : " + partitionPath + " Total Small Files => " + smallFiles.size());
         LOG.debug("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
 
         long totalUnassignedInserts = pStat.getNumInserts();
@@ -230,7 +232,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
           }
 
           int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
-          LOG.debug("After small file assignment: unassignedInserts => " + totalUnassignedInserts
+          LOG.info("After small file assignment: unassignedInserts => " + totalUnassignedInserts
               + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => " + insertRecordsPerBucket);
           for (int b = 0; b < insertBuckets; b++) {
             bucketNumbers.add(totalBuckets);
@@ -258,7 +260,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
           currentCumulativeWeight += bkt.weight;
           insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, currentCumulativeWeight));
         }
-        LOG.debug("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
+        LOG.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);
       }
       if (profile.hasOutputWorkLoadStats()) {

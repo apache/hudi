@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
 import org.apache.hadoop.conf.Configuration;
@@ -88,7 +88,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
       // and the markers from the requests pending processing.
       currentInstantAllMarkers.addAll(markerHandler.getAllMarkers(markerDir));
       currentInstantAllMarkers.addAll(pendingMarkers);
-      Path tempPath = new Path(basePath + HoodieLocation.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
+      Path tempPath = new Path(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
 
       List<Path> instants = MarkerUtils.getAllMarkerDir(tempPath, fs);
 

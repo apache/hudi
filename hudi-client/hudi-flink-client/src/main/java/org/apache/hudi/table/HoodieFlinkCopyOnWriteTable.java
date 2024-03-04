@@ -378,7 +378,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   @Override
-  public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex) {
+  public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex, List<String> partitionPaths) {
     throw new HoodieNotSupportedException("Metadata indexing is not supported for a Flink table yet.");
   }
 
@@ -395,6 +395,11 @@ public class HoodieFlinkCopyOnWriteTable<T>
   @Override
   public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
     throw new HoodieNotSupportedException("Restore is not supported yet");
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> managePartitionTTL(HoodieEngineContext context, String instantTime) {
+    throw new HoodieNotSupportedException("Manage partition ttl is not supported yet");
   }
 
   @Override

@@ -39,7 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.storage.HoodieLocation
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 
@@ -816,9 +816,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     if (hiveStylePartitioning) {
       partitionNames.zip(partitionValues).map {
         case (name, value) => s"$name=$value"
-      }.mkString(HoodieLocation.SEPARATOR)
+      }.mkString(StoragePath.SEPARATOR)
     } else {
-      partitionValues.mkString(HoodieLocation.SEPARATOR)
+      partitionValues.mkString(StoragePath.SEPARATOR)
     }
   }
 }

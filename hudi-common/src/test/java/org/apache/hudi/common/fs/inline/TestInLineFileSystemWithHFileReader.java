@@ -20,7 +20,9 @@
 package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
+import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.hfile.Key;
@@ -28,7 +30,6 @@ import org.apache.hudi.io.hfile.KeyValue;
 import org.apache.hudi.io.hfile.UTF8StringKey;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -51,8 +52,9 @@ public class TestInLineFileSystemWithHFileReader extends TestInLineFileSystemHFi
                                       Path inlinePath,
                                       int maxRows) throws IOException {
     long fileSize = inlineFileSystem.getFileStatus(inlinePath).getLen();
-    try (FSDataInputStream fin = inlineFileSystem.open(inlinePath)) {
-      try (HFileReader reader = new HFileReaderImpl(fin, fileSize)) {
+    try (SeekableDataInputStream stream =
+             new HadoopSeekableDataInputStream(inlineFileSystem.open(inlinePath))) {
+      try (HFileReader reader = new HFileReaderImpl(stream, fileSize)) {
         // Align scanner at start of the file.
         reader.seekTo();
         readAllRecords(reader, maxRows);

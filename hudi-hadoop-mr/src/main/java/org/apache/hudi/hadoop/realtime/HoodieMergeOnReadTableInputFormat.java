@@ -53,6 +53,7 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.SplitLocationInfo;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -192,7 +193,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     // build fileGroup from fsView
     Path basePath = new Path(tableMetaClient.getBasePath());
     // filter affectedPartition by inputPaths
-    List<String> affectedPartition = HoodieInputFormatUtils.getWritePartitionPaths(metadataList).stream()
+    List<String> affectedPartition = HoodieTableMetadataUtil.getWritePartitionPaths(metadataList).stream()
         .filter(k -> k.isEmpty() ? inputPaths.contains(basePath) : inputPaths.contains(new Path(basePath, k))).collect(Collectors.toList());
     if (affectedPartition.isEmpty()) {
       return result;
