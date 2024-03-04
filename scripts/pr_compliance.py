@@ -402,7 +402,7 @@ def make_default_validator(body, debug=False):
         "### Documentation Update",
         {"_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
         "",
-        "- _The config description must be updated if new configs are added or the default value of the configs are changed_",
+        "- _The config description must be updated if new configs are added or the default value of the configs are changed. If not, put \"N/A\"._",
         "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
         "  ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
         "  changes to the website._"})
@@ -479,7 +479,7 @@ def test_body():
         "",
         "_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
         "",
-        "- _The config description must be updated if new configs are added or the default value of the configs are changed_",
+        "- _The config description must be updated if new configs are added or the default value of the configs are changed. If not, put \"N/A\"._",
         "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
         "  ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
         "  changes to the website._",
