@@ -52,7 +52,10 @@ but there can be a 30 - 60 minute wait time before new partitions are created. T
 same table path prefix could result in these request limits being hit for the table prefix, specially as workloads
 scale, and there are several thousands of files being written/updated concurrently. This hurts performance due to
 re-trying of failed requests affecting throughput, and result in occasional failures if the retries are not able to
-succeed either and continue to be throttled.
+succeed either and continue to be throttled. Note an exception would be non-partitioned tables 
+reside directly under S3 buckets (using S3 buckets as their table paths), and those tables would be free
+from the throttling problem. However, this exception cannot invalidate the necessity of addressing the throttling 
+problem for partitioned tables.
 
 The traditional storage layout also tightly couples the partitions as folders under the table path. However,
 some users want flexibility to be able to distribute files/partitions under multiple different paths across cloud stores,
@@ -224,8 +227,8 @@ This flow can be concluded in the chart below.
 ![](read_flow.png)
 
 #### Considerations
-- Path conversion happens on the fly when reading/writing files. This saves Hudi from storing physical locations
-but it also means extra performance burden, even though it may be negligible.
+- Path conversion happens on the fly when reading/writing files. This saves Hudi from storing physical locations,
+and adds the cost of hashing, but the performance burden should be negligible.
 - Since table path and data path will most likely have different top-level folders/authorities,
 `HoodieWrapperFileSystem` should maintain at least two `FileSystem` objects: one to access table path and another
 to access storage path. `HoodieWrapperFileSystem` should intelligently tell if it needs
