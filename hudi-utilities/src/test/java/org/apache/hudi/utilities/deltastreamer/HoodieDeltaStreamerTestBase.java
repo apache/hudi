@@ -135,17 +135,21 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   Map<String, String> hudiOpts = new HashMap<>();
   public KafkaTestUtils testUtils;
 
-  @BeforeEach
-  protected void prepareTestSetup() throws IOException {
+  @BeforeAll
+  protected static void setupDFSFiles() throws IOException {
     PARQUET_SOURCE_ROOT = basePath + "/parquetFiles";
     ORC_SOURCE_ROOT = basePath + "/orcFiles";
     JSON_KAFKA_SOURCE_ROOT = basePath + "/jsonKafkaFiles";
+    prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
+    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
+  }
+
+  @BeforeEach
+  protected void prepareTestSetup() throws IOException {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
     topicName = "topic" + testNum;
     prepareInitialConfigs(fs, basePath, testUtils.brokerAddress());
-    prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
-    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
   }
 
   protected static void prepareInitialConfigs(FileSystem dfs, String dfsBasePath, String brokerAddress) throws IOException {
