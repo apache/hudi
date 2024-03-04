@@ -1953,10 +1953,10 @@ public class HoodieTableMetadataUtil {
     LOG.debug(String.format("Indexing %d columns for partition stats index", columnsToIndex.size()));
     // Create records for MDT
     int parallelism = Math.max(Math.min(partitionInfoList.size(), recordsGenerationParams.getPartitionStatsIndexParallelism()), 1);
-    return engineContext.parallelize(partitionInfoList, parallelism).flatMap(partitionFiles -> {
-      final String partitionName = partitionFiles.getRelativePath();
+    return engineContext.parallelize(partitionInfoList, parallelism).flatMap(partitionInfo -> {
+      final String partitionName = partitionInfo.getRelativePath();
       // Step 1: Collect Column Metadata for Each File (Your existing code does this)
-      List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionFiles.getFileNameToSizeMap().keySet().stream()
+      List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getFileNameToSizeMap().keySet().stream()
           .map(fileName -> getFileStatsRangeMetadata(partitionName, partitionName + "/" + fileName, dataTableMetaClient, columnsToIndex, false))
           .collect(toList());
       // Step 2: Flatten and Group by Column Name

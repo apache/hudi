@@ -135,9 +135,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val snapshot0 = spark.read.format("org.apache.hudi").options(hudiOpts).load(basePath)
+    val snapshot0 = spark.read.format("org.apache.hudi").options(hudiOpts).load(basePath).where("partition > '2015/03/16'")
     snapshot0.cache()
-    assertEquals(100, snapshot0.count())
+    assertTrue(checkPartitionFilters(snapshot0.queryExecution.executedPlan.toString, "partition.* > 2015/03/16"))
+    assertEquals(67, snapshot0.count())
   }
 
   def verifyQueryPredicate(hudiOpts: Map[String, String]): Unit = {

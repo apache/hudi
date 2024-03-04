@@ -28,7 +28,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{ActionType, HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
@@ -43,6 +43,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
+import scala.util.matching.Regex
 
 /**
  * Common test setup and validation methods for partition stats index testing.
@@ -64,8 +65,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     RECORDKEY_FIELD.key -> "_row_key",
     PARTITIONPATH_FIELD.key -> "partition,trip_type",
     HIVE_STYLE_PARTITIONING.key -> "true",
-    PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    PRECOMBINE_FIELD.key -> "timestamp"
   ) ++ metadataOpts
   var mergedDfList: List[DataFrame] = List.empty
 
@@ -257,5 +257,20 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     val nonMatchingRecords = dropMetaFields(readDf).drop("tip_history")
       .join(prevDf, prevDf.columns, "leftanti")
     assertEquals(0, nonMatchingRecords.count())
+  }
+
+  def checkPartitionFilters(sparkPlan: String, partitionFilter: String): Boolean = {
+    val partitionFilterPattern: Regex = """PartitionFilters: \[(.*?)\]""".r
+    val tsPattern: Regex = (partitionFilter).r
+
+    val partitionFilterMatch = partitionFilterPattern.findFirstMatchIn(sparkPlan)
+
+    partitionFilterMatch match {
+      case Some(m) =>
+        val filters = m.group(1)
+        tsPattern.findFirstIn(filters).isDefined
+      case None =>
+        false
+    }
   }
 }

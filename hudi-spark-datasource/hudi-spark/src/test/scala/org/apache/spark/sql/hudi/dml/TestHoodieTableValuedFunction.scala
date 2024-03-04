@@ -676,15 +676,15 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
             s"select * from hudi_metadata('$identifier') where type=3"
           )
           assert(result4DF.count() == 3)
-          checkAnswer(spark.sql(s"select ColumnStatsMetadata.minValue from hudi_metadata('$identifier') where type=3").collect())(
-            Seq(Seq(null, Seq(1000), null, null, null, null, null, null, null, null, null)),
-            Seq(Seq(null, Seq(2000), null, null, null, null, null, null, null, null, null)),
-            Seq(Seq(null, Seq(3000), null, null, null, null, null, null, null, null, null))
+          checkAnswer(spark.sql(s"select ColumnStatsMetadata.minValue.member1.value from hudi_metadata('$identifier') where type=3").collect())(
+            Seq(1000),
+            Seq(2000),
+            Seq(3000)
           )
-          checkAnswer(spark.sql(s"select ColumnStatsMetadata.maxValue from hudi_metadata('$identifier') where type=3").collect())(
-            Seq(Seq(null, Seq(2000), null, null, null, null, null, null, null, null, null)),
-            Seq(Seq(null, Seq(3000), null, null, null, null, null, null, null, null, null)),
-            Seq(Seq(null, Seq(4000), null, null, null, null, null, null, null, null, null))
+          checkAnswer(spark.sql(s"select ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$identifier') where type=3").collect())(
+            Seq(2000),
+            Seq(3000),
+            Seq(4000)
           )
         }
       }
