@@ -411,7 +411,7 @@ public class AvroSchemaUtils {
     if (!allowProjection) {
       List<Schema.Field> missingFields = findMissingFields(tableSchema, writerSchema, dropPartitionColNames);
       if (!missingFields.isEmpty()) {
-        throw new MissingSchemaFieldException(missingFields.stream().map(Schema.Field::name).collect(Collectors.toList()));
+        throw new MissingSchemaFieldException(missingFields.stream().map(Schema.Field::name).collect(Collectors.toList()), writerSchema, tableSchema);
       }
     }
 
@@ -421,7 +421,7 @@ public class AvroSchemaUtils {
       AvroSchemaCompatibility.SchemaPairCompatibility result =
           AvroSchemaCompatibility.checkReaderWriterCompatibility(writerSchema, tableSchema, true);
       if (result.getType() != AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE) {
-        throw new SchemaBackwardsCompatibilityException(result);
+        throw new SchemaBackwardsCompatibilityException(result, writerSchema, tableSchema);
       }
     }
   }
@@ -441,14 +441,14 @@ public class AvroSchemaUtils {
     List<String> missingFields = new ArrayList<>();
     findAnyMissingFields(incomingSchema, tableSchema, new ArrayDeque<>(), missingFields);
     if (!missingFields.isEmpty()) {
-      throw new MissingSchemaFieldException(missingFields);
+      throw new MissingSchemaFieldException(missingFields, incomingSchema, tableSchema);
     }
 
     //make sure that the table schema can be read using the incoming schema
     AvroSchemaCompatibility.SchemaPairCompatibility result =
         AvroSchemaCompatibility.checkReaderWriterCompatibility(incomingSchema, tableSchema, false);
     if (result.getType() != AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE) {
-      throw new SchemaBackwardsCompatibilityException(result);
+      throw new SchemaBackwardsCompatibilityException(result, incomingSchema, tableSchema);
     }
   }
 
@@ -460,6 +460,19 @@ public class AvroSchemaUtils {
                                            Schema latestTableSchema,
                                            Deque<String> visited,
                                            List<String> missingFields) {
+    findAnyMissingFieldsRec(incomingSchema, latestTableSchema, visited,
+        missingFields, incomingSchema, latestTableSchema);
+  }
+
+  /**
+   * We want to pass the full schemas so that the error message has the entire schema to print from
+   */
+  private static void findAnyMissingFieldsRec(Schema incomingSchema,
+                                              Schema latestTableSchema,
+                                              Deque<String> visited,
+                                              List<String> missingFields,
+                                              Schema fullIncomingSchema,
+                                              Schema fullTableSchema) {
     if (incomingSchema.getType() == latestTableSchema.getType()) {
       if (incomingSchema.getType() == Schema.Type.RECORD) {
         visited.addLast(latestTableSchema.getName());
@@ -469,34 +482,44 @@ public class AvroSchemaUtils {
           if (sourceField == null) {
             missingFields.add(String.join(".", visited));
           } else {
-            findAnyMissingFields(sourceField.schema(), targetField.schema(), visited, missingFields);
+            findAnyMissingFieldsRec(sourceField.schema(), targetField.schema(), visited,
+                missingFields, fullIncomingSchema, fullTableSchema);
           }
           visited.removeLast();
         }
         visited.removeLast();
       } else if (incomingSchema.getType() == Schema.Type.ARRAY) {
         visited.addLast("element");
-        findAnyMissingFields(incomingSchema.getElementType(), latestTableSchema.getElementType(), visited, missingFields);
+        findAnyMissingFieldsRec(incomingSchema.getElementType(), latestTableSchema.getElementType(),
+            visited, missingFields, fullIncomingSchema, fullTableSchema);
         visited.removeLast();
       } else if (incomingSchema.getType() == Schema.Type.MAP) {
         visited.addLast("value");
-        findAnyMissingFields(incomingSchema.getValueType(), latestTableSchema.getValueType(), visited, missingFields);
+        findAnyMissingFieldsRec(incomingSchema.getValueType(), latestTableSchema.getValueType(),
+            visited, missingFields, fullIncomingSchema, fullTableSchema);
         visited.removeLast();
       } else if (incomingSchema.getType() == Schema.Type.UNION) {
         List<Schema> incomingNestedSchemas = incomingSchema.getTypes();
         List<Schema> latestTableNestedSchemas = latestTableSchema.getTypes();
         if (incomingNestedSchemas.size() != latestTableNestedSchemas.size()) {
-          throw new InvalidUnionTypeException(String.format("Incoming batch field '%s' has union with %d types, while the table schema has %d types",
-              String.join(".", visited), incomingNestedSchemas.size(), latestTableNestedSchemas.size()));
+          throw new InvalidUnionTypeException(createSchemaErrorString(
+              String.format("Incoming batch field '%s' has union with %d types, while the table schema has %d types",
+              String.join(".", visited), incomingNestedSchemas.size(), latestTableNestedSchemas.size()), fullIncomingSchema, fullTableSchema));
         }
         if (incomingNestedSchemas.size() > 2) {
-          throw new InvalidUnionTypeException(String.format("Union for incoming batch field '%s' should not have more than 2 types but has %d",
-              String.join(".", visited), incomingNestedSchemas.size()));
+          throw new InvalidUnionTypeException(createSchemaErrorString(
+              String.format("Union for incoming batch field '%s' should not have more than 2 types but has %d",
+              String.join(".", visited), incomingNestedSchemas.size()), fullIncomingSchema, fullTableSchema));
         }
         for (int i = 0; i < incomingNestedSchemas.size(); ++i) {
-          findAnyMissingFields(incomingNestedSchemas.get(i), latestTableNestedSchemas.get(i), visited, missingFields);
+          findAnyMissingFieldsRec(incomingNestedSchemas.get(i), latestTableNestedSchemas.get(i), visited,
+              missingFields, fullIncomingSchema, fullTableSchema);
         }
       }
     }
+  }
+
+  public static String createSchemaErrorString(String errorMessage, Schema writerSchema, Schema tableSchema) {
+    return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
   }
 }

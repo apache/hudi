@@ -176,7 +176,7 @@ public class TestHoodieSchemaUtils {
               () -> deduceWriterSchema(startSchema, endSchema));
           String errorMessage = String.format("Schema validation backwards compatibility check failed with the following issues: "
               + "{TYPE_MISMATCH: reader type '%s' not compatible with writer type '%s' for field 'rec.testField'}", typeNames[i], typeNames[j]);
-          assertEquals(errorMessage, t.getMessage());
+          assertTrue(t.getMessage().startsWith(errorMessage));
         }
       }
     }

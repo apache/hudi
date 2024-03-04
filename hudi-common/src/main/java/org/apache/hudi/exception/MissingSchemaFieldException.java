@@ -18,6 +18,10 @@
 
 package org.apache.hudi.exception;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
+
+import org.apache.avro.Schema;
+
 import java.util.List;
 
 /**
@@ -25,12 +29,13 @@ import java.util.List;
  */
 public class MissingSchemaFieldException extends SchemaCompatibilityException {
 
-  public MissingSchemaFieldException(List<String> missingFields) {
-    super(constructExceptionMessage(missingFields));
+  public MissingSchemaFieldException(List<String> missingFields, Schema writerSchema, Schema tableSchema) {
+    super(constructExceptionMessage(missingFields, writerSchema, tableSchema));
   }
 
-  private static String constructExceptionMessage(List<String> missingFields) {
-    return "Schema validation failed due to missing field. Fields missing from incoming schema: {"
-        + String.join(", ", missingFields) + "}";
+  private static String constructExceptionMessage(List<String> missingFields, Schema writerSchema, Schema tableSchema) {
+    return AvroSchemaUtils.createSchemaErrorString(
+        "Schema validation failed due to missing field. Fields missing from incoming schema: {"
+        + String.join(", ", missingFields) + "}", writerSchema, tableSchema);
   }
 }

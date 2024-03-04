@@ -20,6 +20,9 @@
 package org.apache.hudi.exception;
 
 import org.apache.hudi.avro.AvroSchemaCompatibility;
+import org.apache.hudi.avro.AvroSchemaUtils;
+
+import org.apache.avro.Schema;
 
 import java.util.stream.Collectors;
 
@@ -29,14 +32,14 @@ import java.util.stream.Collectors;
  */
 public class SchemaBackwardsCompatibilityException extends SchemaCompatibilityException {
 
-  public SchemaBackwardsCompatibilityException(AvroSchemaCompatibility.SchemaPairCompatibility compatibility) {
-    super(constructExceptionMessage(compatibility));
+  public SchemaBackwardsCompatibilityException(AvroSchemaCompatibility.SchemaPairCompatibility compatibility, Schema writerSchema, Schema tableSchema) {
+    super(constructExceptionMessage(compatibility, writerSchema, tableSchema));
   }
 
-  private static String constructExceptionMessage(AvroSchemaCompatibility.SchemaPairCompatibility compatibility) {
-    return "Schema validation backwards compatibility check failed with the following issues: {"
+  private static String constructExceptionMessage(AvroSchemaCompatibility.SchemaPairCompatibility compatibility, Schema writerSchema, Schema tableSchema) {
+    return AvroSchemaUtils.createSchemaErrorString("Schema validation backwards compatibility check failed with the following issues: {"
         + compatibility.getResult().getIncompatibilities().stream()
             .map(incompatibility -> incompatibility.getType().name() + ": " + incompatibility.getMessage())
-            .collect(Collectors.joining(", ")) + "}";
+            .collect(Collectors.joining(", ")) + "}", writerSchema, tableSchema);
   }
 }
