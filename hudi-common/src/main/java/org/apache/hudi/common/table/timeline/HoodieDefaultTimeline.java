@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.slf4j.Logger;
@@ -35,6 +36,7 @@ import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -75,15 +77,23 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   public void setInstants(List<HoodieInstant> instants) {
     this.instants = instants;
-    final MessageDigest md;
-    try {
-      md = MessageDigest.getInstance(HASHING_ALGORITHM);
-      this.instants.forEach(i -> md
-          .update(getUTF8Bytes(StringUtils.joinUsingDelim("_", i.getTimestamp(), i.getAction(), i.getState().name()))));
-    } catch (NoSuchAlgorithmException nse) {
-      throw new HoodieException(nse);
+    this.timelineHash = computeTimelineHash(this.instants);
+    clearState();
+  }
+
+  public void appendInstants(List<HoodieInstant> newInstants) {
+    if (newInstants.isEmpty()) {
+      // the new instants is empty, nothing to do.
+      return;
     }
-    this.timelineHash = StringUtils.toHexString(md.digest());
+    if (this.instants.isEmpty()) {
+      // the existing instants is empty, set up the new ones directly.
+      setInstants(newInstants);
+      return;
+    }
+    this.instants = mergeInstants(newInstants, this.instants);
+    this.timelineHash = computeTimelineHash(this.instants);
+    clearState();
   }
 
   /**
@@ -567,6 +577,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return Option.fromJavaOptional(instants.stream().findFirst());
   }
 
+  private void clearState() {
+    instantTimeSet = null;
+    firstNonSavepointCommit = null;
+  }
+
   /**
    * Merge this timeline with the given timeline.
    */
@@ -580,5 +595,43 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
       }
     };
     return new HoodieDefaultTimeline(instantStream, details);
+  }
+
+  /**
+   * Computes the timeline hash and returns.
+   */
+  private String computeTimelineHash(List<HoodieInstant> instants) {
+    final MessageDigest md;
+    try {
+      md = MessageDigest.getInstance(HASHING_ALGORITHM);
+      instants.forEach(i -> md
+          .update(getUTF8Bytes(StringUtils.joinUsingDelim("_", i.getTimestamp(), i.getAction(), i.getState().name()))));
+    } catch (NoSuchAlgorithmException nse) {
+      throw new HoodieException(nse);
+    }
+    return StringUtils.toHexString(md.digest());
+  }
+
+  /**
+   * Merges the given instant list into one and keep the sequence.
+   */
+  private static List<HoodieInstant> mergeInstants(List<HoodieInstant> instants1, List<HoodieInstant> instants2) {
+    ValidationUtils.checkArgument(!instants1.isEmpty() && !instants2.isEmpty(), "The instants to merge can not be empty");
+    // some optimizations are based on the assumption all the instant lists are already sorted.
+    // skip when one list contains all the instants of the other one.
+    final List<HoodieInstant> merged;
+    if (HoodieTimeline.compareTimestamps(instants1.get(instants1.size() - 1).getTimestamp(), LESSER_THAN_OR_EQUALS, instants2.get(0).getTimestamp())) {
+      merged = new ArrayList<>(instants1);
+      merged.addAll(instants2);
+    } else if (HoodieTimeline.compareTimestamps(instants2.get(instants2.size() - 1).getTimestamp(), LESSER_THAN_OR_EQUALS, instants1.get(0).getTimestamp())) {
+      merged = new ArrayList<>(instants2);
+      merged.addAll(instants1);
+    } else {
+      merged = new ArrayList<>(instants1);
+      merged.addAll(instants2);
+      // sort the instants explicitly
+      Collections.sort(merged);
+    }
+    return merged;
   }
 }

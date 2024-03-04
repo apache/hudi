@@ -20,6 +20,7 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -72,19 +73,27 @@ public class LSMTimelineWriter {
   public static final long MAX_FILE_SIZE_IN_BYTES = 1024 * 1024 * 1000;
 
   private final HoodieWriteConfig config;
-  private final HoodieTable<?, ?, ?, ?> table;
+  private final TaskContextSupplier taskContextSupplier;
   private final HoodieTableMetaClient metaClient;
 
   private HoodieWriteConfig writeConfig;
 
   private LSMTimelineWriter(HoodieWriteConfig config, HoodieTable<?, ?, ?, ?> table) {
+    this(config, table.getTaskContextSupplier(), table.getMetaClient());
+  }
+
+  private LSMTimelineWriter(HoodieWriteConfig config, TaskContextSupplier taskContextSupplier, HoodieTableMetaClient metaClient) {
     this.config = config;
-    this.table = table;
-    this.metaClient = table.getMetaClient();
+    this.taskContextSupplier = taskContextSupplier;
+    this.metaClient = metaClient;
   }
 
   public static LSMTimelineWriter getInstance(HoodieWriteConfig config, HoodieTable<?, ?, ?, ?> table) {
     return new LSMTimelineWriter(config, table);
+  }
+
+  public static LSMTimelineWriter getInstance(HoodieWriteConfig config, TaskContextSupplier taskContextSupplier, HoodieTableMetaClient metaClient) {
+    return new LSMTimelineWriter(config, taskContextSupplier, metaClient);
   }
 
   /**
@@ -366,7 +375,7 @@ public class LSMTimelineWriter {
   private HoodieFileWriter openWriter(Path filePath) {
     try {
       return HoodieFileWriterFactory.getFileWriter("", filePath, metaClient.getHadoopConf(), getOrCreateWriterConfig(),
-          HoodieLSMTimelineInstant.getClassSchema(), table.getTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO);
+          HoodieLSMTimelineInstant.getClassSchema(), taskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize archiving writer", e);
     }
