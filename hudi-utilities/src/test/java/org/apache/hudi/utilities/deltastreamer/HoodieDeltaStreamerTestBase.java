@@ -135,14 +135,6 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   Map<String, String> hudiOpts = new HashMap<>();
   public KafkaTestUtils testUtils;
 
-  @BeforeEach
-  protected void prepareTestSetup() throws IOException {
-    testUtils = new KafkaTestUtils();
-    testUtils.setup();
-    topicName = "topic" + testNum;
-    prepareBrokerConfigs(fs, basePath, testUtils.brokerAddress());
-  }
-
   protected static void prepareInitialConfigs(FileSystem dfs, String dfsBasePath) throws IOException {
     // prepare the configs.
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/base.properties", dfs, dfsBasePath + "/base.properties");
@@ -250,7 +242,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   }
 
   @AfterAll
-  public static void tearDown() throws IOException {
+  public static void tearDown() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
@@ -262,9 +254,13 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   }
 
   @BeforeEach
-  public void setupTest() {
+  public void setupTest() throws IOException {
     TestDataSource.returnEmptyBatch = false;
     hudiOpts = new HashMap<>();
+    testUtils = new KafkaTestUtils();
+    testUtils.setup();
+    topicName = "topic" + testNum;
+    prepareBrokerConfigs(fs, basePath, testUtils.brokerAddress());
   }
 
   protected static void populateInvalidTableConfigFilePathProps(TypedProperties props, String dfsBasePath) {
