@@ -328,7 +328,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
       // if metatable is enable, then commit to data table after committing to metadata table.
-      if (config.getMetadataConfig().enabled()) {
+      if (!config.getDisableCommitMetadataTable()) {
         writeTableMetadata(table, compactionCommitTime, metadata, context.emptyHoodieData());
       }
       LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);

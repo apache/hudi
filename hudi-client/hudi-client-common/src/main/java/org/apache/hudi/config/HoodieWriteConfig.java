@@ -648,6 +648,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "
           + "Once enabled, all the changes of a record are persisted to the delta log directly without merge");
 
+  public static final ConfigProperty<Boolean> DISPABLE_WRITE_TO_METADATA = ConfigProperty
+          .key("hoodie.disable.write.to.metadata.table")
+          .defaultValue(false)
+          .markAdvanced()
+          .sinceVersion("0.14.1")
+          .withDocumentation("if the config set to true would stop write data to metadata table neither mdt enable or mdt dir exists "
+                  + "default is false");
+
   public static final ConfigProperty<String> FILEID_PREFIX_PROVIDER_CLASS = ConfigProperty
       .key("hoodie.fileid.prefix.provider.class")
       .defaultValue(RandomFileIdPrefixProvider.class.getName())
@@ -1213,6 +1221,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public String getBasePath() {
     return getString(BASE_PATH);
+  }
+
+  public Boolean getDisableCommitMetadataTable() {
+    return getBoolean(DISPABLE_WRITE_TO_METADATA);
   }
 
   public HoodieFileFormat getBaseFileFormat() {
