@@ -18,6 +18,7 @@
 package org.apache.spark.execution.datasources
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 import org.apache.spark.sql.SparkSession
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -31,9 +32,7 @@ class TestHoodieInMemoryFileIndex {
   @Test
   def testCreateInMemoryIndex(@TempDir tempDir: File): Unit = {
     val spark = SparkSession.builder
-      .appName("Hoodie Datasource test")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config(getSparkConfForTest("Hoodie Datasource test"))
       .getOrCreate
 
     val folders: Seq[Path] = Seq(
