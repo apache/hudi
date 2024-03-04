@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option
 import org.apache.hudi.hive.HiveSyncConfigHolder._
 import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.hive.testutils.HiveTestUtil
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -186,7 +187,9 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
                | options (
                |  primaryKey ='id',
                |  type = '$tableType',
-               |  preCombineField = 'ts'
+               |  preCombineField = 'ts',
+               |  hoodie.metadata.record.index.enable = 'true',
+               |  hoodie.datasource.write.recordkey.field = 'id'
                | )
                | partitioned by(ts)
                | location '$basePath'
@@ -194,6 +197,13 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+
+          var metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(spark.sessionState.newHadoopConf())
+            .build()
+
+          assert(metaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
 
           val sqlParser: ParserInterface = spark.sessionState.sqlParser
           val analyzer: Analyzer = spark.sessionState.analyzer
@@ -212,7 +222,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
 
           spark.sql(createIndexSql)
-          var metaClient = HoodieTableMetaClient.builder()
+          metaClient = HoodieTableMetaClient.builder()
             .setBasePath(basePath)
             .setConf(spark.sessionState.newHadoopConf())
             .build()
@@ -235,6 +245,9 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           // Ensure that both the indexes are tracked correctly in metadata partition config
           val mdtPartitions = metaClient.getTableConfig.getMetadataPartitions
           assert(mdtPartitions.contains("func_index_name_lower") && mdtPartitions.contains("func_index_idx_datestr"))
+
+          // [HUDI-7472] After creating functional index, the existing MDT partitions should still be available
+          assert(metaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
         }
       }
     }
