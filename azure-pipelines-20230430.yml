@@ -240,6 +240,8 @@ stages:
         displayName: UT FT other modules
         timeoutInMinutes: '240'
         steps:
+          - script: |
+              ls -l $(Build.ArtifactStagingDirectory)
           - task: Docker@2
             displayName: "login to docker hub"
             inputs:
@@ -260,7 +262,7 @@ stages:
               repository: 'apachehudi/hudi-ci-bundle-validation-base'
               command: 'run'
               arguments: >
-                -v $(Build.ArtifactStagingDirectory)/hudi-docker:/hudi
+                -v $(Build.ArtifactStagingDirectory):/hudi
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
                 /bin/bash -c "pwd
                 && mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
