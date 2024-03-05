@@ -57,3 +57,8 @@ b254a252b [AUDIT-656] Upgrade hudi-internal to release-v1.2.2 (#544)
 ---[2024-02-25 17:00:55] [release-v1.3.1] ---
 27c362e0f [HUDI-7416] Add interface for StreamProfile to be used in StreamSync for reading and writing data (#570)
 54daa91db [ENG-6283] Upgrade to version release-v1.3.0 (#569)
+
+---[2024-03-05 11:03:30] [release-v1.3.3] Adding release tag for hudi-internal release-v1.3.3---
+203be9da0 [HUDI-7479] SQL confs don't propagate to spark row writer properly (#579)
+84ebd5f01 [HUDI-7413] Fix schema exception types and error messages thrown with schema exceptions (#578)
+586b88d6c [HUDI-7462] Refactor checkTopicCheckpoint in KafkaOffsetGen for reusability (#576)
