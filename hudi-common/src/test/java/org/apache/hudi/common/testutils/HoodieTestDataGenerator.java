@@ -96,7 +96,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * as the files may be written by Spark 2.x or legacy versions of Hive, which uses a legacy hybrid calendar that is different from Spark 3.0+s Proleptic Gregorian calendar.
    * See more details in SPARK-31404.
    */
-  public static boolean MAKE_DATES_AMBIGUOUS = false;
+  private boolean makeDatesAmbiguous = false;
 
   // based on examination of sample file, the schema produces the following per record size
   public static final int BYTES_PER_RECORD = (int) (1.2 * 1024);
@@ -213,6 +213,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   @Deprecated
   public HoodieTestDataGenerator() {
     this(DEFAULT_PARTITION_PATHS);
+  }
+
+  public HoodieTestDataGenerator(boolean makeDatesAmbiguous) {
+    this();
+    this.makeDatesAmbiguous = makeDatesAmbiguous;
   }
 
   @Deprecated
@@ -399,7 +404,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("nation", ByteBuffer.wrap(bytes));
     long randomMillis = genRandomTimeMillis(rand);
     Instant instant = Instant.ofEpochMilli(randomMillis);
-    rec.put("current_date", MAKE_DATES_AMBIGUOUS ? -1000000 :
+    rec.put("current_date", makeDatesAmbiguous ? -1000000 :
         (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
     rec.put("current_ts", randomMillis);
 
