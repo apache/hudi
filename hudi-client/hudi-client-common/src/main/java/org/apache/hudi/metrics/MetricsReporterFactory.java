@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
+import org.apache.hudi.metrics.m3.M3MetricsReporter;
 import org.apache.hudi.metrics.prometheus.PrometheusReporter;
 import org.apache.hudi.metrics.prometheus.PushGatewayMetricsReporter;
 
@@ -88,6 +89,9 @@ public class MetricsReporterFactory {
         break;
       case CLOUDWATCH:
         reporter = new CloudWatchMetricsReporter(config, registry);
+        break;
+      case M3:
+        reporter = new M3MetricsReporter(config, registry);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");
