@@ -427,8 +427,7 @@ PARTITIONED BY (`city`)
 WITH (
   'connector' = 'hudi',
   'path' = 'file:///tmp/hudi_table',
-  'table.type' = 'MERGE_ON_READ',
-  'changelog.enabled' = 'true',  -- this option enable the change log enabled
+  'table.type' = 'COPY_ON_WRITE',
   'cdc.enabled' = 'true' -- this option enable the cdc log enabled
 );
 -- insert data using values

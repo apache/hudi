@@ -399,13 +399,7 @@ WITH (
 
 -- Then query the table in stream mode
 select * from t1;
-``` 
-
-
-:::info Key requirements
-The bundle jar with **hive profile** is needed for streaming query, by default the officially released flink bundle is built **without**
-**hive profile**, the jar needs to be built manually, see [Build Flink Bundle Jar](/docs/syncing_metastore#install) for more details.
-:::
+```
 
 ## Change Data Capture Query
 
@@ -427,8 +421,7 @@ PARTITIONED BY (`city`)
 WITH (
   'connector' = 'hudi',
   'path' = 'file:///tmp/hudi_table',
-  'table.type' = 'MERGE_ON_READ',
-  'changelog.enabled' = 'true',  -- this option enable the change log enabled
+  'table.type' = 'COPY_ON_WRITE',
   'cdc.enabled' = 'true' -- this option enable the cdc log enabled
 );
 -- insert data using values
