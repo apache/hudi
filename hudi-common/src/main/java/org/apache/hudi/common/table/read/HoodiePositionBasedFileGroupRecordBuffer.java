@@ -78,7 +78,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
 
   @Override
   public BufferType getBufferType() {
-    return BufferType.POSITION_BASED;
+    return BufferType.POSITION_BASED_MERGE;
   }
 
   @Override

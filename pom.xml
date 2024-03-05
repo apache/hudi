@@ -130,6 +130,7 @@
     <orc.flink.version>1.5.6</orc.flink.version>
     <roaringbitmap.version>0.9.47</roaringbitmap.version>
     <airlift.version>0.25</airlift.version>
+    <tally.version>0.13.0</tally.version>
     <prometheus.version>0.8.0</prometheus.version>
     <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
     <aws.sdk.httpcore.version>4.4.13</aws.sdk.httpcore.version>
@@ -166,7 +167,7 @@
     <spark32.version>3.2.3</spark32.version>
     <spark33.version>3.3.1</spark33.version>
     <spark34.version>3.4.1</spark34.version>
-    <spark35.version>3.5.0</spark35.version>
+    <spark35.version>3.5.1</spark35.version>
     <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
     <!-- NOTE: Different Spark versions might require different number of shared
                modules being incorporated, hence we're creating multiple placeholders
@@ -224,6 +225,7 @@
     <zookeeper.version>3.5.7</zookeeper.version>
     <openjdk.jol.version>0.16</openjdk.jol.version>
     <google.cloud.pubsub.version>1.120.0</google.cloud.pubsub.version>
+    <gcp-libraries-bom.version>26.15.0</gcp-libraries-bom.version>
     <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
@@ -1109,7 +1111,6 @@
         <artifactId>metrics-jmx</artifactId>
         <version>${metrics.version}</version>
       </dependency>
-
       <dependency>
         <groupId>io.prometheus</groupId>
         <artifactId>simpleclient</artifactId>
@@ -1129,6 +1130,16 @@
         <groupId>io.prometheus</groupId>
         <artifactId>simpleclient_pushgateway</artifactId>
         <version>${prometheus.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.uber.m3</groupId>
+        <artifactId>tally-m3</artifactId>
+        <version>${tally.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.uber.m3</groupId>
+        <artifactId>tally-core</artifactId>
+        <version>${tally.version}</version>
       </dependency>
 
       <dependency>

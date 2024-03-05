@@ -247,7 +247,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
 
   test("Test pkless multiple source match") {
     for (withPrecombine <- Seq(true, false)) {
-      withRecordType()(withTempDir { tmp =>
+      withTempDir { tmp =>
         spark.sql("set hoodie.payload.combined.schema.validate = true")
         val tableName = generateTableName
 
@@ -292,13 +292,13 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
             Seq(1, "a1", 30.0, 100)
           )
         }
-      })
+      }
     }
 
   }
 
   test("Test MergeInto Basic pkless") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
       val tableName = generateTableName
@@ -385,6 +385,6 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
        """.stripMargin)
       val cnt = spark.sql(s"select * from $tableName where id = 1").count()
       assertResult(0)(cnt)
-    })
+    }
   }
 }

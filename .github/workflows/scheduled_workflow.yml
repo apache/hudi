@@ -24,7 +24,7 @@ on:
 
 permissions:
   statuses: write
-  pull-requests: read
+  pull-requests: write
   issues: read
 
 jobs:
@@ -46,7 +46,7 @@ jobs:
           script: |
             // Cron schedule may not be reliable so giving buffer time to avoid missing recent PRs
             const since = new Date(new Date().getTime() - (900 * 1000)).toISOString();
-            const query = `repo:${context.repo.owner}/${context.repo.repo} type:pr state:open base:master updated:>=${since}`;
+            const query = `repo:${context.repo.owner}/${context.repo.repo} type:pr state:open updated:>=${since}`;
             const openPrs = await github.paginate(github.rest.search.issuesAndPullRequests, {
               q: query,
               sort: 'updated',
@@ -54,6 +54,7 @@ jobs:
               per_page: 100
             });
             
+            const { labelDocsPr, labelPrWithSize } = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/labeler.js`);
             const checkAzureCiAndCreateCommitStatus = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/azure_ci.js`);
             
             console.log(`Number of PRs to process: ${openPrs.length}`);
@@ -61,12 +62,36 @@ jobs:
             for (const pr of openPrs) {
               console.log(`*** Processing PR: ${pr.title}, URL: ${pr.html_url}`);
             
-              if (!pr.body.includes('HOTFIX: SKIP AZURE CI')) {
-                const { data: pullRequest } = await github.rest.pulls.get({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: pr.number
+              const { data: pullRequest } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number
+              });
+            
+              const targetBase = pullRequest.base.ref;
+              console.log(`Target base branch: ${targetBase}`);
+            
+              // Label docs PR (targeting "asf-site" branch)
+              if (targetBase === 'asf-site') {
+                await labelDocsPr({
+                  github,
+                  context,
+                  prNumber: pr.number
                 });
+              }
+            
+              // Label PR size
+              await labelPrWithSize({
+                github,
+                context,
+                prNumber: pr.number,
+                prData: pullRequest
+              });
+            
+              // Check Azure CI and create commit status (targeting "master", "release*", or "branch-0.x" branch)
+              const targetBaseRegex = /^(master|release.*|branch-0\.x)$/;
+              if (targetBaseRegex.test(targetBase)
+                && !pr.body.includes('HOTFIX: SKIP AZURE CI')) {
                 const latestCommitHash = pullRequest.head.sha;
             
                 // Create commit status based on Azure CI report to PR

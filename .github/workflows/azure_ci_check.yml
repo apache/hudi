@@ -42,7 +42,7 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            const issueNumber = github.event.issue.number;
+            const issueNumber = context.issue.number;
             const { data: pullRequest } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -69,7 +69,7 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             const latestCommitHash = '${{ steps.check_pr_state.outputs.latest_commit_hash }}'            
-            const issueNumber = github.event.issue.number;
+            const issueNumber = context.issue.number;
             const checkAzureCiAndCreateCommitStatus = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/azure_ci.js`);
             
             await checkAzureCiAndCreateCommitStatus({

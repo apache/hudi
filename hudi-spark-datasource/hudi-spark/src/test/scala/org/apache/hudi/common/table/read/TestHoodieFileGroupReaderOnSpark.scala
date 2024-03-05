@@ -49,7 +49,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   def setup() {
     val sparkConf = new SparkConf
     sparkConf.set("spark.app.name", getClass.getName)
-    sparkConf.set("spark.master", "local[*]")
+    sparkConf.set("spark.master", "local[8]")
     sparkConf.set("spark.default.parallelism", "4")
     sparkConf.set("spark.sql.shuffle.partitions", "4")
     sparkConf.set("spark.driver.maxResultSize", "2g")

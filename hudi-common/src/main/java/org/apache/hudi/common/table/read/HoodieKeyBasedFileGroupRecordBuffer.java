@@ -69,7 +69,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
   @Override
   public BufferType getBufferType() {
-    return BufferType.KEY_BASED;
+    return BufferType.KEY_BASED_MERGE;
   }
 
   @Override

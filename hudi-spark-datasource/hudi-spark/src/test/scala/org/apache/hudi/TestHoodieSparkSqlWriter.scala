@@ -243,10 +243,15 @@ class TestHoodieSparkSqlWriter {
   @Test
   def testThrowExceptionInvalidSerializer(): Unit = {
     spark.stop()
-    val session = SparkSession.builder().appName("hoodie_test").master("local").getOrCreate()
+    val session = SparkSession.builder()
+      // Here we intentionally remove the "spark.serializer" config to test failure
+      .config(getSparkConfForTest("hoodie_test").remove("spark.serializer"))
+      .getOrCreate()
     try {
       val sqlContext = session.sqlContext
-      val options = Map("path" -> "hoodie/test/path", HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_tbl")
+      val options = Map(
+        "path" -> (tempPath.toUri.toString + "/testThrowExceptionInvalidSerializer/basePath"),
+        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_tbl")
       val e = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.ErrorIfExists, options,
         session.emptyDataFrame))
       assert(e.getMessage.contains("spark.serializer"))

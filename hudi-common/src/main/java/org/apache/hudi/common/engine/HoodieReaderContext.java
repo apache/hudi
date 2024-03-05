@@ -234,4 +234,10 @@ public abstract class HoodieReaderContext<T> {
     return false;
   }
 
+  /**
+   * Constructs engine specific delete record.
+   */
+  public T constructRawDeleteRecord(Map<String, Object> metadata) {
+    return null;
+  }
 }

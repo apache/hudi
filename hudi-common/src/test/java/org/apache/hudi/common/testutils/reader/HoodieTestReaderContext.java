@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.testutils.reader;
 
+import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -208,6 +209,14 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       }
       return outputRecord;
     };
+  }
+
+  @Override
+  public IndexedRecord constructRawDeleteRecord(Map<String, Object> metadata) {
+    return new HoodieDeleteRecord(
+        (String) metadata.get(INTERNAL_META_RECORD_KEY),
+        (String) metadata.get(INTERNAL_META_PARTITION_PATH),
+        metadata.get(INTERNAL_META_ORDERING_FIELD));
   }
 
   private Object getFieldValueFromIndexedRecord(
