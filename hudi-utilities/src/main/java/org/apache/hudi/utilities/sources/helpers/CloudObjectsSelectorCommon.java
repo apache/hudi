@@ -200,7 +200,7 @@ public class CloudObjectsSelectorCommon {
 
     // Match files with a given extension, or use the fileFormat as the default.
     getPropVal(props, CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
-        .map(val -> filter.append(SPACE_DELIMTER).append(String.format(" and %s like '%%%s'", objectKey, val)));
+        .map(val -> filter.append(SPACE_DELIMTER).append(String.format("and %s like '%%%s'", objectKey, val)));
 
     return filter.toString();
   }
