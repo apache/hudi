@@ -133,7 +133,7 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
-  void testIllegalPromotions() {
+  void testIllegalPromotionsBetweenPrimitives() {
     Schema.Type[] promotionTypes = new Schema.Type[]{Schema.Type.INT, Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.BYTES};
     Map<Schema.Type, Schema> schemaMap = new HashMap<>();
     for (Schema.Type type : promotionTypes) {
@@ -155,6 +155,29 @@ public class TestHoodieSchemaUtils {
           promotionTypes[i].getName().toUpperCase());
       for (String fieldName : fieldNames) {
         assertTrue(t.getMessage().contains(String.format(baseString, fieldName)));
+      }
+    }
+  }
+
+  @Test
+  void testIllegalPromotionsBetweenComplexFields() {
+    String[] typeNames = new String[]{"INT", "ARRAY", "MAP", "RECORD"};
+    Schema[] fieldTypes = new Schema[]{createRecord("rec", createPrimitiveField("testField", Schema.Type.INT)),
+        createRecord("rec", createArrayField("testField", Schema.Type.INT)),
+        createRecord("rec", createMapField("testField", Schema.Type.INT)),
+        createRecord("rec", createNestedField("testField", Schema.Type.INT))};
+
+    for (int i = 0; i < fieldTypes.length; i++) {
+      for (int j = 0; j < fieldTypes.length; j++) {
+        if (i != j) {
+          Schema startSchema = fieldTypes[i];
+          Schema endSchema = fieldTypes[j];
+          Throwable t = assertThrows(SchemaBackwardsCompatibilityException.class,
+              () -> deduceWriterSchema(startSchema, endSchema));
+          String errorMessage = String.format("Schema validation backwards compatibility check failed with the following issues: "
+              + "{TYPE_MISMATCH: reader type '%s' not compatible with writer type '%s' for field 'rec.testField'}", typeNames[i], typeNames[j]);
+          assertTrue(t.getMessage().startsWith(errorMessage));
+        }
       }
     }
   }
@@ -233,7 +256,7 @@ public class TestHoodieSchemaUtils {
   }
 
   private static Schema.Field createNestedField(String name, Schema schema) {
-    return new Schema.Field(name, createRecord(name, new Schema.Field("nested", schema)));
+    return new Schema.Field(name, createRecord(name, new Schema.Field("nested", schema, null, null)), null, null);
   }
 
   private static Schema.Field createArrayField(String name, Schema.Type type) {
@@ -241,7 +264,7 @@ public class TestHoodieSchemaUtils {
   }
 
   private static Schema.Field createArrayField(String name, Schema schema) {
-    return new Schema.Field(name, Schema.createArray(schema));
+    return new Schema.Field(name, Schema.createArray(schema), null, null);
   }
 
   private static Schema.Field createMapField(String name, Schema.Type type) {
@@ -249,11 +272,11 @@ public class TestHoodieSchemaUtils {
   }
 
   private static Schema.Field createMapField(String name, Schema schema) {
-    return new Schema.Field(name, Schema.createMap(schema));
+    return new Schema.Field(name, Schema.createMap(schema), null, null);
   }
 
   private static Schema.Field createPrimitiveField(String name, Schema.Type type) {
-    return new Schema.Field(name, Schema.create(type));
+    return new Schema.Field(name, Schema.create(type), null, null);
   }
   
   private static Schema createRecord(String name, Schema.Field... fields) {

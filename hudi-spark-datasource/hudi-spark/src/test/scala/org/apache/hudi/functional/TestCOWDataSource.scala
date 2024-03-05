@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path, PathFilter}
 import org.apache.hudi.DataSourceWriteOptions.{INLINE_CLUSTERING_ENABLE, KEYGENERATOR_CLASS_NAME}
@@ -36,7 +37,7 @@ import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityException}
 import org.apache.hudi.functional.CommonOptionUtils._
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.hive.HiveSyncConfigHolder
@@ -1770,8 +1771,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       (df2.write.format("hudi").options(hudiOptions).mode("append").save(basePath))
       fail("Option succeeded, but was expected to fail.")
     } catch {
-      case ex: org.apache.hudi.exception.HoodieInsertException => {
-        assertTrue(ex.getMessage.equals("Failed insert schema compatibility check"))
+      case ex: SchemaBackwardsCompatibilityException => {
+        assertTrue(ex.getMessage.contains(SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE.name()))
       }
       case ex: Exception => {
         fail(ex)

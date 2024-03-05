@@ -284,7 +284,7 @@ public class AvroSchemaCompatibility {
       return result;
     }
 
-    private static String getLocationName(final Deque<LocationInfo> locations) {
+    private static String getLocationName(final Deque<LocationInfo> locations, Type readerType) {
       StringBuilder sb = new StringBuilder();
       Iterator<LocationInfo> locationInfoIterator = locations.iterator();
       boolean addDot = false;
@@ -296,10 +296,18 @@ public class AvroSchemaCompatibility {
         }
         LocationInfo next = locationInfoIterator.next();
         sb.append(next.name);
+        //we check the reader type if we are at the last location. This is because
+        //if the type is array/map, that means the problem is that the field type
+        //of the writer is not array/map. If the type is something else, the problem
+        //is between the array element/map value of the reader and writer schemas
         if (next.type.equals(Type.MAP)) {
-          sb.append(".value");
+          if (locationInfoIterator.hasNext() || !readerType.equals(Type.MAP)) {
+            sb.append(".value");
+          }
         } else if (next.type.equals(Type.ARRAY)) {
-          sb.append(".element");
+          if (locationInfoIterator.hasNext() || !readerType.equals(Type.ARRAY)) {
+            sb.append(".element");
+          }
         }
       }
       return sb.toString();
@@ -357,7 +365,7 @@ public class AvroSchemaCompatibility {
             for (final Schema writerBranch : writer.getTypes()) {
               SchemaCompatibilityResult compatibility = getCompatibility(reader, writerBranch, locations);
               if (compatibility.getCompatibility() == SchemaCompatibilityType.INCOMPATIBLE) {
-                String message = String.format("reader union lacking writer type: %s for field: '%s'", writerBranch.getType(), getLocationName(locations));
+                String message = String.format("reader union lacking writer type: %s for field: '%s'", writerBranch.getType(), getLocationName(locations, reader.getType()));
                 result = result.mergedWith(SchemaCompatibilityResult.incompatible(
                     SchemaIncompatibilityType.MISSING_UNION_BRANCH, reader, writer, message, asList(locations)));
               }
@@ -429,7 +437,7 @@ public class AvroSchemaCompatibility {
             }
             // No branch in the reader union has been found compatible with the writer
             // schema:
-            String message = String.format("reader union lacking writer type: %s for field: '%s'", writer.getType(), getLocationName(locations));
+            String message = String.format("reader union lacking writer type: %s for field: '%s'", writer.getType(), getLocationName(locations, reader.getType()));
             return result.mergedWith(SchemaCompatibilityResult
                 .incompatible(SchemaIncompatibilityType.MISSING_UNION_BRANCH, reader, writer, message, asList(locations)));
           }
@@ -455,7 +463,7 @@ public class AvroSchemaCompatibility {
           // reader field must have a default value.
           if (defaultValueAccessor.getDefaultValue(readerField) == null) {
             // reader field has no default value
-            String message = String.format("Field '%s.%s' has no default value", getLocationName(locations), readerField.name());
+            String message = String.format("Field '%s.%s' has no default value", getLocationName(locations, readerField.schema().getType()), readerField.name());
             result = result.mergedWith(
                 SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE,
                     reader, writer, message, asList(locations)));
@@ -505,7 +513,7 @@ public class AvroSchemaCompatibility {
       final Set<String> symbols = new TreeSet<>(writer.getEnumSymbols());
       symbols.removeAll(reader.getEnumSymbols());
       if (!symbols.isEmpty()) {
-        String message = String.format("Field '%s' missing enum symbols: %s", getLocationName(locations), symbols);
+        String message = String.format("Field '%s' missing enum symbols: %s", getLocationName(locations, reader.getType()), symbols);
         result = SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.MISSING_ENUM_SYMBOLS, reader,
             writer, message, asList(locations));
       }
@@ -518,7 +526,7 @@ public class AvroSchemaCompatibility {
       int actual = reader.getFixedSize();
       int expected = writer.getFixedSize();
       if (actual != expected) {
-        String message = String.format("Fixed size field '%s' expected: %d, found: %d", getLocationName(locations), expected, actual);
+        String message = String.format("Fixed size field '%s' expected: %d, found: %d", getLocationName(locations, reader.getType()), expected, actual);
         result = SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.FIXED_SIZE_MISMATCH, reader, writer,
             message, asList(locations));
       }
@@ -545,7 +553,7 @@ public class AvroSchemaCompatibility {
     private SchemaCompatibilityResult typeMismatch(final Schema reader, final Schema writer,
                                                    final Deque<LocationInfo> locations) {
       String message = String.format("reader type '%s' not compatible with writer type '%s' for field '%s'", reader.getType(),
-          writer.getType(), getLocationName(locations));
+          writer.getType(), getLocationName(locations, reader.getType()));
       return SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.TYPE_MISMATCH, reader, writer, message,
           asList(locations));
     }
@@ -572,7 +580,7 @@ public class AvroSchemaCompatibility {
   }
 
   /**
-   * Identifies the type of a schema compatibility result.
+   * Identifies the type of schema compatibility result.
    */
   public enum SchemaCompatibilityType {
     COMPATIBLE, INCOMPATIBLE,
@@ -909,7 +917,7 @@ public class AvroSchemaCompatibility {
     private final Schema mWriter;
 
     /**
-     * Human readable description of this result.
+     * Human-readable description of this result.
      */
     private final String mDescription;
 
@@ -966,9 +974,9 @@ public class AvroSchemaCompatibility {
     }
 
     /**
-     * Gets a human readable description of this validation result.
+     * Gets a human-readable description of this validation result.
      *
-     * @return a human readable description of this validation result.
+     * @return a human-readable description of this validation result.
      */
     public String getDescription() {
       return mDescription;
