@@ -21,10 +21,10 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO_WRITES}
-import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaCompatible, isValidEvolutionOf}
+import org.apache.hudi.avro.AvroSchemaUtils.{checkSchemaCompatible, checkValidEvolution, isCompatibleProjectionOf, isSchemaCompatible}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
-import org.apache.hudi.common.config.HoodieConfig
+import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -78,7 +78,8 @@ object HoodieSchemaUtils {
                          opts: Map[String, String]): Schema = {
     val setNullForMissingColumns = opts.getOrDefault(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.key(),
       DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.defaultValue).toBoolean
-    val shouldReconcileSchema = opts(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
+    val shouldReconcileSchema = opts.getOrDefault(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
+      DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
     val shouldValidateSchemasCompatibility = opts.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
 
@@ -167,32 +168,27 @@ object HoodieSchemaUtils {
                 } else {
                   canonicalizedSourceSchema
                 }
-                if (isValidEvolutionOf(reconciledSchema, latestTableSchema)) {
-                  reconciledSchema
-                } else {
-                  log.error(
-                    s"""Incoming batch schema is not compatible with the table's one.
-                       |Incoming schema ${sourceSchema.toString(true)}
-                       |Incoming schema (canonicalized) ${reconciledSchema.toString(true)}
-                       |Table's schema ${latestTableSchema.toString(true)}
-                       |""".stripMargin)
-                  throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
-                }
+                checkValidEvolution(reconciledSchema, latestTableSchema)
+                reconciledSchema
               }
-            } else if (isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema, allowAutoEvolutionColumnDrop)) {
-              canonicalizedSourceSchema
             } else {
-              log.error(
-                s"""Incoming batch schema is not compatible with the table's one.
-                   |Incoming schema ${sourceSchema.toString(true)}
-                   |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
-                   |Table's schema ${latestTableSchema.toString(true)}
-                   |""".stripMargin)
-              throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+              checkSchemaCompatible(latestTableSchema, canonicalizedSourceSchema, true,
+                allowAutoEvolutionColumnDrop, java.util.Collections.emptySet())
+              canonicalizedSourceSchema
             }
           }
         }
     }
+  }
+
+  def deduceWriterSchema(sourceSchema: Schema,
+                         latestTableSchemaOpt: org.apache.hudi.common.util.Option[Schema],
+                         internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
+                         props: TypedProperties): Schema = {
+    deduceWriterSchema(sourceSchema,
+      HoodieConversionUtils.toScalaOption(latestTableSchemaOpt),
+      HoodieConversionUtils.toScalaOption(internalSchemaOpt),
+      HoodieConversionUtils.fromProperties(props))
   }
 
   /**

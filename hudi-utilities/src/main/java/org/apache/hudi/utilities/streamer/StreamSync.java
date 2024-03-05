@@ -668,10 +668,9 @@ public class StreamSync implements Serializable, Closeable {
             new HoodieConfig(HoodieStreamer.Config.getProps(fs, cfg)), metaClient));
     // Deduce proper target (writer's) schema for the input dataset, reconciling its
     // schema w/ the table's one
-    Schema targetSchema = HoodieSparkSqlWriter.deduceWriterSchema(
-          HoodieAvroUtils.removeMetadataFields(incomingSchema),
-          HoodieConversionUtils.toScalaOption(latestTableSchemaOpt),
-          HoodieConversionUtils.toScalaOption(internalSchemaOpt), props);
+    Schema targetSchema = HoodieSchemaUtils.deduceWriterSchema(
+        HoodieAvroUtils.removeMetadataFields(incomingSchema),
+          latestTableSchemaOpt, internalSchemaOpt, props);
 
     // Override schema provider with the reconciled target schema
     return new DelegatingSchemaProvider(props, hoodieSparkContext.jsc(), sourceSchemaProvider,
