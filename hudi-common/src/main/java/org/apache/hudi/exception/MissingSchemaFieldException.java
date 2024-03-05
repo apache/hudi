@@ -18,16 +18,24 @@
 
 package org.apache.hudi.exception;
 
-/**
- * Exception for incompatible schema.
- */
-public class HoodieIncompatibleSchemaException extends RuntimeException {
+import org.apache.hudi.avro.AvroSchemaUtils;
 
-  public HoodieIncompatibleSchemaException(String msg, Throwable e) {
-    super(msg, e);
+import org.apache.avro.Schema;
+
+import java.util.List;
+
+/**
+ * Thrown when the schema of the incoming data is missing fields that are in the table schema.
+ */
+public class MissingSchemaFieldException extends SchemaCompatibilityException {
+
+  public MissingSchemaFieldException(List<String> missingFields, Schema writerSchema, Schema tableSchema) {
+    super(constructExceptionMessage(missingFields, writerSchema, tableSchema));
   }
 
-  public HoodieIncompatibleSchemaException(String msg) {
-    super(msg);
+  private static String constructExceptionMessage(List<String> missingFields, Schema writerSchema, Schema tableSchema) {
+    return AvroSchemaUtils.createSchemaErrorString(
+        "Schema validation failed due to missing field. Fields missing from incoming schema: {"
+        + String.join(", ", missingFields) + "}", writerSchema, tableSchema);
   }
 }
