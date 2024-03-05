@@ -1406,20 +1406,34 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Test
   public void testBulkInsertRowWriterContinuousModeWithAsyncClustering() throws Exception {
     testBulkInsertRowWriterContinuousMode(false, null, false,
-        getTableServicesConfigs(2000, "false", "", "", "true", "3"));
+        getTableServicesConfigs(2000, "false", "", "", "true", "3"), false);
   }
 
   @Test
   public void testBulkInsertRowWriterContinuousModeWithInlineClustering() throws Exception {
     testBulkInsertRowWriterContinuousMode(false, null, false,
-        getTableServicesConfigs(2000, "false", "true", "3", "false", ""));
+        getTableServicesConfigs(2000, "false", "true", "3", "false", ""), false);
   }
 
-  private void testBulkInsertRowWriterContinuousMode(Boolean useSchemaProvider, List<String> transformerClassNames, boolean testEmptyBatch, List<String> customConfigs) throws Exception {
+  @Test
+  public void testBulkInsertRowWriterContinuousModeWithInlineClusteringAmbiguousDates() throws Exception {
+    sparkSession.sqlContext().setConf("spark.sql.parquet.datetimeRebaseModeInWrite", "LEGACY");
+    sparkSession.sqlContext().setConf("spark.sql.avro.datetimeRebaseModeInWrite", "LEGACY");
+    sparkSession.sqlContext().setConf("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY");
+    sparkSession.sqlContext().setConf("spark.sql.parquet.datetimeRebaseModeInRead", "LEGACY");
+    sparkSession.sqlContext().setConf("spark.sql.avro.datetimeRebaseModeInRead", "LEGACY");
+    sparkSession.sqlContext().setConf("spark.sql.parquet.int96RebaseModeInRead", "LEGACY");
+    testBulkInsertRowWriterContinuousMode(false, null, false,
+        getTableServicesConfigs(2000, "false", "true", "3",
+            "false", ""), true);
+  }
+
+  private void testBulkInsertRowWriterContinuousMode(Boolean useSchemaProvider, List<String> transformerClassNames,
+                                                     boolean testEmptyBatch, List<String> customConfigs, boolean makeDatesAmbiguous) throws Exception {
     PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
     int parquetRecordsCount = 100;
     boolean hasTransformer = transformerClassNames != null && !transformerClassNames.isEmpty();
-    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null, makeDatesAmbiguous);
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "partition_path", testEmptyBatch ? "1" : "");
 
@@ -1429,7 +1443,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         int counter = 2;
         while (counter < 100) { // lets keep going. if the test times out, we will cancel the future within finally. So, safe to generate 100 batches.
           LOG.info("Generating data for batch " + counter);
-          prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, Integer.toString(counter) + ".parquet", false, null, null);
+          prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, Integer.toString(counter) + ".parquet", false, null, null, makeDatesAmbiguous);
           counter++;
           Thread.sleep(2000);
         }

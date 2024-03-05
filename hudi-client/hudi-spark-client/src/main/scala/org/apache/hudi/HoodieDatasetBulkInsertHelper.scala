@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.HoodieSparkUtils.injectSQLConf
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
@@ -40,6 +41,7 @@ import org.apache.spark.sql.HoodieUnsafeUtils.getNumPartitions
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
@@ -81,7 +83,7 @@ object HoodieDatasetBulkInsertHelper
         "Key-generator class name is required")
 
       val prependedRdd: RDD[InternalRow] =
-        df.queryExecution.toRdd.mapPartitions { iter =>
+        injectSQLConf(df.queryExecution.toRdd.mapPartitions { iter =>
           val typedProps = new TypedProperties(config.getProps)
           if (autoGenerateRecordKeys) {
             typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()))
@@ -107,7 +109,7 @@ object HoodieDatasetBulkInsertHelper
             // TODO use mutable row, avoid re-allocating
             new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
           }
-        }
+        }, SQLConf.get)
 
       val dedupedRdd = if (config.shouldCombineBeforeInsert) {
         dedupeRows(prependedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config))
@@ -144,7 +146,7 @@ object HoodieDatasetBulkInsertHelper
                  arePartitionRecordsSorted: Boolean,
                  shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
     val schema = dataset.schema
-    val writeStatuses = dataset.queryExecution.toRdd.mapPartitions(iter => {
+    val writeStatuses = injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
       val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
       val taskPartitionId = taskContextSupplier.getPartitionIdSupplier.get
       val taskId = taskContextSupplier.getStageIdSupplier.get.toLong
@@ -189,7 +191,7 @@ object HoodieDatasetBulkInsertHelper
       }
 
       writer.getWriteStatuses.asScala.iterator
-    }).collect()
+    }), SQLConf.get).collect()
     table.getContext.parallelize(writeStatuses.toList.asJava)
   }
 
