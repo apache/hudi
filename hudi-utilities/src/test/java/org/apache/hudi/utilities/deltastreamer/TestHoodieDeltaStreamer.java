@@ -1415,6 +1415,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         getTableServicesConfigs(2000, "false", "true", "3", "false", ""));
   }
 
+  @Test
+  public void testBulkInsertRowWriterContinuousModeWithInlineClusteringAmbiguousDates() throws Exception {
+    sparkSession.sqlContext().setConf("spark.sql.parquet.datetimeRebaseModeInWrite", "LEGACY");
+    sparkSession.sqlContext().setConf("spark.sql.avro.datetimeRebaseModeInWrite", "LEGACY");
+    sparkSession.sqlContext().setConf("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY");
+    sparkSession.sqlContext().setConf("spark.sql.parquet.datetimeRebaseModeInRead", "LEGACY");
+    sparkSession.sqlContext().setConf("spark.sql.avro.datetimeRebaseModeInRead", "LEGACY");
+    sparkSession.sqlContext().setConf("spark.sql.parquet.int96RebaseModeInRead", "LEGACY");
+    HoodieTestDataGenerator.MAKE_DATES_AMBIGUOUS = true;
+    testBulkInsertRowWriterContinuousMode(false, null, false,
+        getTableServicesConfigs(2000, "false", "true", "3", "false", ""));
+  }
+
   private void testBulkInsertRowWriterContinuousMode(Boolean useSchemaProvider, List<String> transformerClassNames, boolean testEmptyBatch, List<String> customConfigs) throws Exception {
     PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
     int parquetRecordsCount = 100;
