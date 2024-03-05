@@ -84,6 +84,7 @@ public class CloudObjectsSelectorCommon {
   public static final String S3_BUCKET_NAME = "s3.bucket.name";
   public static final String GCS_OBJECT_KEY = "name";
   public static final String GCS_OBJECT_SIZE = "size";
+  private static final String SPACE_DELIMTER = " ";
 
   /**
    * Return a function that extracts filepaths from a list of Rows.
@@ -188,18 +189,18 @@ public class CloudObjectsSelectorCommon {
 
     StringBuilder filter = new StringBuilder(String.format("%s > 0", objectSizeKey));
     if (selectRelativePathPrefix.isPresent()) {
-      filter.append(String.format("and %s like '%s%%'", objectKey, selectRelativePathPrefix.get()));
+      filter.append(SPACE_DELIMTER).append(String.format("and %s like '%s%%'", objectKey, selectRelativePathPrefix.get()));
     }
     if (ignoreRelativePathPrefix.isPresent()) {
-      filter.append(String.format("and %s not like '%s%%'", objectKey, ignoreRelativePathPrefix.get()));
+      filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%s%%'", objectKey, ignoreRelativePathPrefix.get()));
     }
     if (ignoreRelativePathSubStr.isPresent()) {
-      filter.append(String.format("and %s not like '%%%s%%'", objectKey, ignoreRelativePathSubStr.get()));
+      filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%%%s%%'", objectKey, ignoreRelativePathSubStr.get()));
     }
 
     // Match files with a given extension, or use the fileFormat as the default.
     getPropVal(props, CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
-        .map(val -> filter.append(String.format(" and %s like '%%%s'", objectKey, val)));
+        .map(val -> filter.append(SPACE_DELIMTER).append(String.format(" and %s like '%%%s'", objectKey, val)));
 
     return filter.toString();
   }
