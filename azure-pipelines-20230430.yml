@@ -242,6 +242,7 @@ stages:
         steps:
           - script: |
               ls -l $(Build.ArtifactStagingDirectory)
+            displayName: "List working directory"
           - task: Docker@2
             displayName: "login to docker hub"
             inputs:
