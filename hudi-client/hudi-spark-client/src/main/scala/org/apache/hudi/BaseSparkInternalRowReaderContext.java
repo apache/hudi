@@ -38,10 +38,14 @@ import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
+import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+
+import scala.Function1;
 
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
@@ -140,5 +144,14 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to) {
     UnsafeProjection projection = HoodieInternalRowUtils.generateUnsafeProjectionAlias(getCachedSchema(from), getCachedSchema(to));
     return projection::apply;
+  }
+
+  @Override
+  public UnaryOperator<InternalRow> projectRecordUnsafe(Schema from, Schema to, Map<String, String> renamedColumns) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(from);
+    StructType newStructType = HoodieInternalRowUtils.getCachedSchema(to);
+    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renamedColumns);
+    return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 }

@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -68,7 +69,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract String getBasePath();
 
-  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema);
+  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema, Configuration hadoopConf);
 
   public abstract void commitToTable(List<String> recordList, String operation,
                                      Map<String, String> writeConfigs);
@@ -169,13 +170,15 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     assertEquals(containsBaseFile, fileSlice.getBaseFile().isPresent());
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        getHoodieReaderContext(tablePath, avroSchema),
+        getHoodieReaderContext(tablePath, avroSchema, hadoopConf),
         hadoopConf,
         tablePath,
         metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
         fileSlice,
         avroSchema,
         avroSchema,
+        Option.empty(),
+        metaClient,
         props,
         metaClient.getTableConfig(),
         0,

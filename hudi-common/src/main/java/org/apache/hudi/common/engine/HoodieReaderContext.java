@@ -79,7 +79,7 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf) throws IOException;
+      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf, boolean isMerge) throws IOException;
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
@@ -199,7 +199,10 @@ public abstract class HoodieReaderContext<T> {
    * @param dataFileIterator iterator over data files that were bootstrapped into the hudi table
    * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
    */
-  public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator, ClosableIterator<T> dataFileIterator);
+  public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator,
+                                                            Schema skeletonRequiredSchema,
+                                                            ClosableIterator<T> dataFileIterator,
+                                                            Schema dataRequiredSchema);
 
   /**
    * Creates a function that will reorder records of schema "from" to schema of "to"
@@ -211,6 +214,10 @@ public abstract class HoodieReaderContext<T> {
    */
   public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
 
+  public UnaryOperator<T> projectRecordUnsafe(Schema from, Schema to, Map<String, String> renamedColumns) {
+    throw new UnsupportedOperationException("Schema on read is not supported for this reader.");
+  }
+
   /**
    * Extracts the record position value from the record itself.
    *
@@ -218,6 +225,13 @@ public abstract class HoodieReaderContext<T> {
    */
   public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
     return providedPositionIfNeeded;
+  }
+
+  /**
+   * returns true if record position should be used for merging
+   */
+  public boolean shouldUseRecordPositionMerging() {
+    return false;
   }
 
   /**
