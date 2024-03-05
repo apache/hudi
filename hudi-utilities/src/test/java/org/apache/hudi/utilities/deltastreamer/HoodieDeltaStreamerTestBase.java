@@ -316,9 +316,14 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   }
 
   protected static HoodieTestDataGenerator prepareParquetDFSFiles(int numRecords, String baseParquetPath, String fileName, boolean useCustomSchema,
-                                                                        String schemaStr, Schema schema) throws IOException {
+                                                                  String schemaStr, Schema schema) throws IOException {
+    return prepareParquetDFSFiles(numRecords, baseParquetPath, fileName, useCustomSchema, schemaStr, schema, false);
+  }
+
+  protected static HoodieTestDataGenerator prepareParquetDFSFiles(int numRecords, String baseParquetPath, String fileName, boolean useCustomSchema,
+                                                                        String schemaStr, Schema schema, boolean makeDatesAmbiguous) throws IOException {
     String path = baseParquetPath + "/" + fileName;
-    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(makeDatesAmbiguous);
     if (useCustomSchema) {
       Helpers.saveParquetToDFS(Helpers.toGenericRecords(
           dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
