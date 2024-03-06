@@ -2450,47 +2450,45 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test query with Foldable Propagation expression") {
-    withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
-      Seq("cow").foreach { tableType =>
-        val tableName = generateTableName
-        // Create table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
-             | tblproperties (
-             |  primaryKey ='id',
-             |  preCombineField = 'ts'
-             | )
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  preCombineField = 'ts'
+           | )
        """.stripMargin)
 
-        val tableNameA = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableNameA (
-             |  ID int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using parquet
-             | location '${tmp.getCanonicalPath}/$tableNameA'
-            """.stripMargin)
+      val tableNameA = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableNameA (
+           |  ID int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using parquet
+           | location '${tmp.getCanonicalPath}/$tableNameA'
+        """.stripMargin)
 
-        assertDoesNotThrow(
-          new Executable {
-            override def execute(): Unit = {
-              spark.sql(s"insert into table $tableName select 1 as ID, name, price, ts from $tableNameA order by ID")
-                .queryExecution.optimizedPlan
-            }
+      assertDoesNotThrow(
+        new Executable {
+          override def execute(): Unit = {
+            spark.sql(s"insert into table $tableName select 1 as ID, name, price, ts from $tableNameA order by ID")
+              .queryExecution.optimizedPlan
           }
-        )
-      }
-    })
+        }
+      )
+    }
   }
 
   test("Test various data types as partition fields") {
