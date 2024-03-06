@@ -987,10 +987,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param partitionTypes - list of {@link MetadataPartitionType} which needs to be indexed
    * @return instant time for the requested INDEX action
    */
-  public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes) {
+  public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes, List<String> partitionPaths) {
     String instantTime = createNewInstantTime();
     Option<HoodieIndexPlan> indexPlan = createTable(config, hadoopConf)
-        .scheduleIndexing(context, instantTime, partitionTypes);
+        .scheduleIndexing(context, instantTime, partitionTypes, partitionPaths);
     return indexPlan.isPresent() ? Option.of(instantTime) : Option.empty();
   }
 

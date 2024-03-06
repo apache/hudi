@@ -1098,7 +1098,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Transition the second init commit for record_index partition to inflight in MDT
     deleteMetaFile(metaClient.getFs(), mdtBasePath, mdtInitCommit2, DELTA_COMMIT_EXTENSION);
     metaClient.getTableConfig().setMetadataPartitionState(
-        metaClient, MetadataPartitionType.RECORD_INDEX, false);
+        metaClient, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), false);
     metaClient.getTableConfig().setMetadataPartitionsInflight(
         metaClient, MetadataPartitionType.RECORD_INDEX);
     timeline = metaClient.getActiveTimeline().reload();

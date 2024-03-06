@@ -87,6 +87,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
   private ObjectMapper mapper = new ObjectMapper();
 
   private static final String MY_BUCKET = "some-bucket";
+  private static final String IGNORE_FILE_EXTENSION = ".ignore";
 
   private Option<SchemaProvider> schemaProvider;
   @Mock
@@ -308,11 +309,14 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     }
 
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
-    // Add file paths and sizes to the list
+    // Add file paths and sizes to the list.
+    // Check with a couple of invalid file extensions to ensure they are filtered out.
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file1%s", extension), 100L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file2%s", IGNORE_FILE_EXTENSION), 800L, "1"));
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file3%s", extension), 200L, "1"));
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file2%s", extension), 150L, "1"));
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file4%s", extension), 50L, "2"));
+    filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file4%s", IGNORE_FILE_EXTENSION), 200L, "2"));
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file5%s", extension), 150L, "2"));
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);

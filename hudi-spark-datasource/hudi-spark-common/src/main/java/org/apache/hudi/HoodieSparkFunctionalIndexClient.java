@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieFunctionalIndexException;
@@ -49,6 +48,9 @@ import scala.collection.JavaConverters;
 
 import static org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap;
 import static org.apache.hudi.HoodieConversionUtils.toScalaOption;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexClient {
@@ -82,7 +84,9 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
       throw new HoodieFunctionalIndexException("Index already exists: " + indexName);
     }
 
-    if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent() || !metaClient.getFunctionalIndexMetadata().isPresent()) {
+    if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent()
+        || !metaClient.getFunctionalIndexMetadata().isPresent()
+        || !metaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().containsKey(indexName)) {
       LOG.info("Index definition is not present. Registering the index first");
       register(metaClient, indexName, indexType, columns, options);
     }
@@ -94,7 +98,7 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
         sparkSession, metaClient.getBasePathV2().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, functionalIndexDefinition)), toScalaOption(Option.empty()))) {
       // generate index plan
-      Option<String> indexInstantTime = doSchedule(writeClient, metaClient);
+      Option<String> indexInstantTime = doSchedule(writeClient, metaClient, indexName);
       if (indexInstantTime.isPresent()) {
         // build index
         writeClient.index(indexInstantTime.get());
@@ -104,13 +108,13 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     }
   }
 
-  private static Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client, HoodieTableMetaClient metaClient) {
+  private static Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client, HoodieTableMetaClient metaClient, String indexName) {
     List<MetadataPartitionType> partitionTypes = Collections.singletonList(MetadataPartitionType.FUNCTIONAL_INDEX);
     checkArgument(partitionTypes.size() == 1, "Currently, only one index type can be scheduled at a time.");
     if (metaClient.getTableConfig().getMetadataPartitions().isEmpty()) {
       throw new HoodieException("Metadata table is not yet initialized. Initialize FILES partition before any other partition " + Arrays.toString(partitionTypes.toArray()));
     }
-    return client.scheduleIndexing(partitionTypes);
+    return client.scheduleIndexing(partitionTypes, Collections.singletonList(indexName));
   }
 
   private static boolean indexExists(HoodieTableMetaClient metaClient, String indexName) {
@@ -120,11 +124,25 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
   private static Map<String, String> buildWriteConfig(HoodieTableMetaClient metaClient, HoodieFunctionalIndexDefinition indexDefinition) {
     Map<String, String> writeConfig = new HashMap<>();
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
-      if (!writeConfig.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
-        writeConfig.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
-        writeConfig.putAll(JavaConverters.mapAsJavaMapConverter(HoodieCLIUtils.getLockOptions(metaClient.getBasePathV2().toString())).asJava());
-      }
+      writeConfig.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+      writeConfig.putAll(JavaConverters.mapAsJavaMapConverter(HoodieCLIUtils.getLockOptions(metaClient.getBasePathV2().toString())).asJava());
+
+      // [HUDI-7472] Ensure write-config contains the existing MDT partition to prevent those from getting deleted
+      metaClient.getTableConfig().getMetadataPartitions().forEach(partitionPath -> {
+        if (partitionPath.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
+          writeConfig.put(RECORD_INDEX_ENABLE_PROP.key(), "true");
+        }
+
+        if (partitionPath.equals(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath())) {
+          writeConfig.put(ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), "true");
+        }
+
+        if (partitionPath.equals(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
+          writeConfig.put(ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+        }
+      });
     }
+
     HoodieFunctionalIndexConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> writeConfig.put(key.toString(), value.toString()));
     return writeConfig;
   }

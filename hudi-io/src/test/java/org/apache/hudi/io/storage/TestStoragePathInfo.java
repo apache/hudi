@@ -41,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class TestStoragePathInfo {
   private static final Logger LOG = LoggerFactory.getLogger(TestStoragePathInfo.class);
   private static final long LENGTH = 100;
+  private static final short BLOCK_REPLICATION = 1;
+  private static final long BLOCK_SIZE = 1000000L;
   private static final long MODIFICATION_TIME = System.currentTimeMillis();
   private static final String PATH1 = "/abc/xyz1";
   private static final String PATH2 = "/abc/xyz2";
@@ -49,15 +51,15 @@ public class TestStoragePathInfo {
 
   @Test
   public void testConstructor() {
-    StoragePathInfo pathInfo = new StoragePathInfo(STORAGE_PATH1, LENGTH, false, MODIFICATION_TIME);
+    StoragePathInfo pathInfo = new StoragePathInfo(STORAGE_PATH1, LENGTH, false, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME);
     validateAccessors(pathInfo, PATH1, LENGTH, false, MODIFICATION_TIME);
-    pathInfo = new StoragePathInfo(STORAGE_PATH2, -1, true, MODIFICATION_TIME + 2L);
+    pathInfo = new StoragePathInfo(STORAGE_PATH2, -1, true, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME + 2L);
     validateAccessors(pathInfo, PATH2, -1, true, MODIFICATION_TIME + 2L);
   }
 
   @Test
   public void testSerializability() throws IOException, ClassNotFoundException {
-    StoragePathInfo pathInfo = new StoragePathInfo(STORAGE_PATH1, LENGTH, false, MODIFICATION_TIME);
+    StoragePathInfo pathInfo = new StoragePathInfo(STORAGE_PATH1, LENGTH, false, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME);
     try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
          ObjectOutputStream oos = new ObjectOutputStream(baos)) {
       oos.writeObject(pathInfo);
@@ -72,18 +74,18 @@ public class TestStoragePathInfo {
   @Test
   public void testEquals() {
     StoragePathInfo pathInfo1 = new StoragePathInfo(
-        new StoragePath(PATH1), LENGTH, false, MODIFICATION_TIME);
+        new StoragePath(PATH1), LENGTH, false, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME);
     StoragePathInfo pathInfo2 = new StoragePathInfo(
-        new StoragePath(PATH1), LENGTH + 2, false, MODIFICATION_TIME + 2L);
+        new StoragePath(PATH1), LENGTH + 2, false, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME + 2L);
     assertEquals(pathInfo1, pathInfo2);
   }
 
   @Test
   public void testNotEquals() {
     StoragePathInfo pathInfo1 = new StoragePathInfo(
-        STORAGE_PATH1, LENGTH, false, MODIFICATION_TIME);
+        STORAGE_PATH1, LENGTH, false, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME);
     StoragePathInfo pathInfo2 = new StoragePathInfo(
-        STORAGE_PATH2, LENGTH, false, MODIFICATION_TIME + 2L);
+        STORAGE_PATH2, LENGTH, false, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME + 2L);
     assertFalse(pathInfo1.equals(pathInfo2));
     assertFalse(pathInfo2.equals(pathInfo1));
   }

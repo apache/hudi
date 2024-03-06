@@ -130,7 +130,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     }, SQLConf.get)
   }
 
-  private def injectSQLConf[T: ClassTag](rdd: RDD[T], conf: SQLConf): RDD[T] =
+  def injectSQLConf[T: ClassTag](rdd: RDD[T], conf: SQLConf): RDD[T] =
     new SQLConfInjectingRDD(rdd, conf)
 
   def safeCreateRDD(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,

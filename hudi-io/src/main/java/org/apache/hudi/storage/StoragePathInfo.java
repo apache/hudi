@@ -35,15 +35,21 @@ public class StoragePathInfo implements Serializable {
   private final StoragePath path;
   private final long length;
   private final boolean isDirectory;
+  private final short blockReplication;
+  private final long blockSize;
   private final long modificationTime;
 
   public StoragePathInfo(StoragePath path,
                          long length,
                          boolean isDirectory,
+                         short blockReplication,
+                         long blockSize,
                          long modificationTime) {
     this.path = path;
     this.length = length;
     this.isDirectory = isDirectory;
+    this.blockReplication = blockReplication;
+    this.blockSize = blockSize;
     this.modificationTime = modificationTime;
   }
 
@@ -77,6 +83,22 @@ public class StoragePathInfo implements Serializable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public boolean isDirectory() {
     return isDirectory;
+  }
+
+  /**
+   * @return the block replication if applied.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public short getBlockReplication() {
+    return blockReplication;
+  }
+
+  /**
+   * @return the block size in bytes if applied.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public long getBlockSize() {
+    return blockSize;
   }
 
   /**
@@ -114,6 +136,8 @@ public class StoragePathInfo implements Serializable {
         + "path=" + path
         + ", length=" + length
         + ", isDirectory=" + isDirectory
+        + ", blockReplication=" + blockReplication
+        + ", blockSize=" + blockSize
         + ", modificationTime=" + modificationTime
         + '}';
   }
