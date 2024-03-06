@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
 
