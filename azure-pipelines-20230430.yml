@@ -132,8 +132,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL)
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
             displayName: UT common flink client/spark-client
@@ -141,8 +140,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
@@ -168,8 +166,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB2_MODULES) -am
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
             displayName: FT client/spark-client & hudi-spark-datasource/hudi-spark
@@ -194,8 +191,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3_MODULES) -am
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
             displayName: Java UT spark-datasource
@@ -220,8 +216,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB4_MODULES) -am
-              publishJUnitResults: true
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
             displayName: Scala UT spark-datasource
