@@ -19,31 +19,12 @@
 
 package org.apache.hudi.gcp.bigquery;
 
+import com.google.cloud.bigquery.*;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
-import com.google.cloud.bigquery.BigQuery;
-import com.google.cloud.bigquery.BigQueryException;
-import com.google.cloud.bigquery.BigQueryOptions;
-import com.google.cloud.bigquery.CsvOptions;
-import com.google.cloud.bigquery.Dataset;
-import com.google.cloud.bigquery.DatasetId;
-import com.google.cloud.bigquery.ExternalTableDefinition;
-import com.google.cloud.bigquery.Field;
-import com.google.cloud.bigquery.FormatOptions;
-import com.google.cloud.bigquery.HivePartitioningOptions;
-import com.google.cloud.bigquery.Job;
-import com.google.cloud.bigquery.JobId;
-import com.google.cloud.bigquery.JobInfo;
-import com.google.cloud.bigquery.QueryJobConfiguration;
-import com.google.cloud.bigquery.Schema;
-import com.google.cloud.bigquery.StandardSQLTypeName;
-import com.google.cloud.bigquery.Table;
-import com.google.cloud.bigquery.TableId;
-import com.google.cloud.bigquery.TableInfo;
-import com.google.cloud.bigquery.ViewDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
