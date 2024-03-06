@@ -46,6 +46,10 @@ find "$SOURCE" -type f -name "TEST-*.xml" | while IFS= read -r file; do
     destination_path="$DEST$relative_path"
     destination_dir=$(dirname "$destination_path")
 
+    if [[ "$relative_path" == *"scripts/ci"* ]]; then
+        continue # Skip this file
+    fi
+
     # Create the destination directory if it doesn't exist
     mkdir -p "$destination_dir"
 
