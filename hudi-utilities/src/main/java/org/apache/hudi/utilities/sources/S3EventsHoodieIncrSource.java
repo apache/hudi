@@ -23,13 +23,13 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectIncrCheckpoint;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
@@ -50,15 +50,11 @@ import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX;
-import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX;
-import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_SUBSTRING;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_INCR_ENABLE_EXISTS_CHECK;
-import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_KEY_PREFIX;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMissingCheckpointStrategy;
@@ -87,18 +83,9 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     @Deprecated
     static final Boolean DEFAULT_ENABLE_EXISTS_CHECK = S3_INCR_ENABLE_EXISTS_CHECK.defaultValue();
 
-    // control whether to filter the s3 objects starting with this prefix
-    @Deprecated
-    static final String S3_KEY_PREFIX = S3EventsHoodieIncrSourceConfig.S3_KEY_PREFIX.key();
     @Deprecated
     static final String S3_FS_PREFIX = S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.key();
 
-    // control whether to ignore the s3 objects starting with this prefix
-    @Deprecated
-    static final String S3_IGNORE_KEY_PREFIX = S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX.key();
-    // control whether to ignore the s3 objects with this substring
-    @Deprecated
-    static final String S3_IGNORE_KEY_SUBSTRING = S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_SUBSTRING.key();
     /**
      * {@link #SPARK_DATASOURCE_OPTIONS} is json string, passed to the reader while loading dataset.
      * Example Hudi Streamer conf
@@ -107,10 +94,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     @Deprecated
     public static final String SPARK_DATASOURCE_OPTIONS = S3EventsHoodieIncrSourceConfig.SPARK_DATASOURCE_OPTIONS.key();
   }
-
-  public static final String S3_OBJECT_KEY = "s3.object.key";
-  public static final String S3_OBJECT_SIZE = "s3.object.size";
-  public static final String S3_BUCKET_NAME = "s3.bucket.name";
 
   public S3EventsHoodieIncrSource(
       TypedProperties props,
@@ -140,27 +123,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     this.snapshotLoadQuerySplitter = SnapshotLoadQuerySplitter.getInstance(props);
   }
 
-  public static String generateFilter(TypedProperties props) {
-    String fileFormat = CloudDataFetcher.getFileFormat(props);
-    String filter = S3_OBJECT_SIZE + " > 0";
-    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, S3_KEY_PREFIX, true))) {
-      filter = filter + " and " + S3_OBJECT_KEY + " like '" + getStringWithAltKeys(props, S3_KEY_PREFIX) + "%'";
-    }
-    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, S3_IGNORE_KEY_PREFIX, true))) {
-      filter = filter + " and " + S3_OBJECT_KEY + " not like '" + getStringWithAltKeys(props, S3_IGNORE_KEY_PREFIX) + "%'";
-    }
-    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, S3_IGNORE_KEY_SUBSTRING, true))) {
-      filter = filter + " and " + S3_OBJECT_KEY + " not like '%" + getStringWithAltKeys(props, S3_IGNORE_KEY_SUBSTRING) + "%'";
-    }
-    // Match files with a given extension, or use the fileFormat as the fallback incase the config is not set.
-    if (!StringUtils.isNullOrEmpty(getStringWithAltKeys(props, CLOUD_DATAFILE_EXTENSION, true))) {
-      filter = filter + " and " + S3_OBJECT_KEY + " like '%" + getStringWithAltKeys(props, CLOUD_DATAFILE_EXTENSION) + "'";
-    } else {
-      filter = filter + " and " + S3_OBJECT_KEY + " like '%" + fileFormat + "%'";
-    }
-    return filter;
-  }
-
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCheckpoint, long sourceLimit) {
     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint = CloudObjectIncrCheckpoint.fromString(lastCheckpoint);
@@ -171,7 +133,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             Option.of(cloudObjectIncrCheckpoint.getCommit()),
             missingCheckpointStrategy, handlingMode,
             HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-            S3_OBJECT_KEY, S3_OBJECT_SIZE, true,
+            CloudObjectsSelectorCommon.S3_OBJECT_KEY,
+            CloudObjectsSelectorCommon.S3_OBJECT_SIZE, true,
             Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
     LOG.info("Querying S3 with:" + cloudObjectIncrCheckpoint + ", queryInfo:" + queryInfo);
 
@@ -181,7 +144,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     }
     Pair<QueryInfo, Dataset<Row>> queryInfoDatasetPair = queryRunner.run(queryInfo, snapshotLoadQuerySplitter);
     queryInfo = queryInfoDatasetPair.getLeft();
-    Dataset<Row> filteredSourceData = queryInfoDatasetPair.getRight().filter(generateFilter(props));
+    Dataset<Row> filteredSourceData = queryInfoDatasetPair.getRight().filter(
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props));
 
     LOG.info("Adjusting end checkpoint:" + queryInfo.getEndInstant() + " based on sourceLimit :" + sourceLimit);
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =
@@ -199,7 +163,9 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     // Create S3 paths
     SerializableConfiguration serializableHadoopConf = new SerializableConfiguration(sparkContext.hadoopConfiguration());
     List<CloudObjectMetadata> cloudObjectMetadata = checkPointAndDataset.getRight().get()
-        .select(S3_BUCKET_NAME, S3_OBJECT_KEY, S3_OBJECT_SIZE)
+        .select(CloudObjectsSelectorCommon.S3_BUCKET_NAME,
+                CloudObjectsSelectorCommon.S3_OBJECT_KEY,
+                CloudObjectsSelectorCommon.S3_OBJECT_SIZE)
         .distinct()
         .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, serializableHadoopConf, checkIfFileExists), Encoders.kryo(CloudObjectMetadata.class))
         .collectAsList();
