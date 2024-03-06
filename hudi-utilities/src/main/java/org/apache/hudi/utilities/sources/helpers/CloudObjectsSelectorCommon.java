@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -56,9 +57,16 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.PATH_BASED_PARTITION_FIELDS;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SOURCE_MAX_BYTES_PER_PARTITION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SPARK_DATASOURCE_READER_COMMA_SEPARATED_PATH_FORMAT;
+import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX;
+import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_SUBSTRING;
+import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_KEY_PREFIX;
 import static org.apache.spark.sql.functions.input_file_name;
 import static org.apache.spark.sql.functions.split;
 
@@ -70,6 +78,13 @@ import static org.apache.spark.sql.functions.split;
 public class CloudObjectsSelectorCommon {
 
   private static final Logger LOG = LoggerFactory.getLogger(CloudObjectsSelectorCommon.class);
+
+  public static final String S3_OBJECT_KEY = "s3.object.key";
+  public static final String S3_OBJECT_SIZE = "s3.object.size";
+  public static final String S3_BUCKET_NAME = "s3.bucket.name";
+  public static final String GCS_OBJECT_KEY = "name";
+  public static final String GCS_OBJECT_SIZE = "size";
+  private static final String SPACE_DELIMTER = " ";
 
   /**
    * Return a function that extracts filepaths from a list of Rows.
@@ -149,6 +164,45 @@ public class CloudObjectsSelectorCommon {
       LOG.error(errMsg, ioe);
       throw new HoodieIOException(errMsg, ioe);
     }
+  }
+
+  public static String generateFilter(Type type,
+                                      TypedProperties props) {
+    String fileFormat = CloudDataFetcher.getFileFormat(props);
+    Option<String> selectRelativePathPrefix = getPropVal(props, SELECT_RELATIVE_PATH_PREFIX);
+    Option<String> ignoreRelativePathPrefix = getPropVal(props, IGNORE_RELATIVE_PATH_PREFIX);
+    Option<String> ignoreRelativePathSubStr = getPropVal(props, IGNORE_RELATIVE_PATH_SUBSTR);
+
+    String objectKey;
+    String objectSizeKey;
+    // This is for backwards compatibility of configs for s3.
+    if (type.equals(Type.S3)) {
+      objectKey = S3_OBJECT_KEY;
+      objectSizeKey = S3_OBJECT_SIZE;
+      selectRelativePathPrefix = selectRelativePathPrefix.or(() -> getPropVal(props, S3_KEY_PREFIX));
+      ignoreRelativePathPrefix = ignoreRelativePathPrefix.or(() -> getPropVal(props, S3_IGNORE_KEY_PREFIX));
+      ignoreRelativePathSubStr = ignoreRelativePathSubStr.or(() -> getPropVal(props, S3_IGNORE_KEY_SUBSTRING));
+    } else {
+      objectKey = GCS_OBJECT_KEY;
+      objectSizeKey = GCS_OBJECT_SIZE;
+    }
+
+    StringBuilder filter = new StringBuilder(String.format("%s > 0", objectSizeKey));
+    if (selectRelativePathPrefix.isPresent()) {
+      filter.append(SPACE_DELIMTER).append(String.format("and %s like '%s%%'", objectKey, selectRelativePathPrefix.get()));
+    }
+    if (ignoreRelativePathPrefix.isPresent()) {
+      filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%s%%'", objectKey, ignoreRelativePathPrefix.get()));
+    }
+    if (ignoreRelativePathSubStr.isPresent()) {
+      filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%%%s%%'", objectKey, ignoreRelativePathSubStr.get()));
+    }
+
+    // Match files with a given extension, or use the fileFormat as the default.
+    getPropVal(props, CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
+        .map(val -> filter.append(SPACE_DELIMTER).append(String.format("and %s like '%%%s'", objectKey, val)));
+
+    return filter.toString();
   }
 
   public static Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,
@@ -232,5 +286,19 @@ public class CloudObjectsSelectorCommon {
 
   public static Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata, TypedProperties props, String fileFormat) {
     return loadAsDataset(spark, cloudObjectMetadata, props, fileFormat, Option.empty());
+  }
+
+  private static Option<String> getPropVal(TypedProperties props, ConfigProperty<String> configProperty) {
+    String value = getStringWithAltKeys(props, configProperty, true);
+    if (!StringUtils.isNullOrEmpty(value)) {
+      return Option.of(value);
+    }
+
+    return Option.empty();
+  }
+
+  public enum Type {
+    S3,
+    GCS
   }
 }

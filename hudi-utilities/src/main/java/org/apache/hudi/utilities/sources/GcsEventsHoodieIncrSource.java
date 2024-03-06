@@ -27,6 +27,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectIncrCheckpoint;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
@@ -114,10 +115,6 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   private final Option<SchemaProvider> schemaProvider;
   private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
 
-
-  public static final String GCS_OBJECT_KEY = "name";
-  public static final String GCS_OBJECT_SIZE = "size";
-
   private static final Logger LOG = LoggerFactory.getLogger(GcsEventsHoodieIncrSource.class);
 
   public GcsEventsHoodieIncrSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
@@ -161,7 +158,8 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
         sparkContext, srcPath, numInstantsPerFetch,
         Option.of(cloudObjectIncrCheckpoint.getCommit()),
         missingCheckpointStrategy, handlingMode, HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-        GCS_OBJECT_KEY, GCS_OBJECT_SIZE, true,
+        CloudObjectsSelectorCommon.GCS_OBJECT_KEY,
+        CloudObjectsSelectorCommon.GCS_OBJECT_SIZE, true,
         Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
     LOG.info("Querying GCS with:" + cloudObjectIncrCheckpoint + " and queryInfo:" + queryInfo);
 
