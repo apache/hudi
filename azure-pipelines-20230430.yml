@@ -261,6 +261,7 @@ stages:
                 && mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB5_UT_MODULES)
                 && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB5_UT_MODULES)
+                && chmod -R 774 /hudi
                 && echo 'All surefire report files:'
                 && find . -type f -name \"TEST-*.xml\""
           - task: PublishTestResults@2
