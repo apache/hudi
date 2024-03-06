@@ -241,7 +241,10 @@ stages:
         timeoutInMinutes: '240'
         steps:
           - script: |
-              ls -l $(Build.ArtifactStagingDirectory)
+              echo $(Build.ArtifactStagingDirectory)
+              echo $(Agent.BuildDirectory)
+              echo $(Build.SourcesDirectory)
+              echo $(System.DefaultWorkingDirectory)
             displayName: "List working directory"
           - task: Docker@2
             displayName: "login to docker hub"
