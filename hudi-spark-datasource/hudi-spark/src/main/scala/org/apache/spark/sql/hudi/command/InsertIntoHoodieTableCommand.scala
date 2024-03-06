@@ -95,7 +95,9 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
     val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions, staticOverwritePartitionPathOpt)
 
-    val alignedQuery = alignQueryOutput(query, catalogTable, partitionSpec, sparkSession.sessionState.conf)
+    val optimizer = sparkSession.sessionState.optimizer
+    val optimizerPlan = optimizer.execute(query)
+    val alignedQuery = alignQueryOutput(optimizerPlan, catalogTable, partitionSpec, sparkSession.sessionState.conf)
 
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, Dataset.ofRows(sparkSession, alignedQuery))
 

@@ -23,7 +23,6 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec}
-import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logcal.{HoodieFileSystemViewTableValuedFunction, HoodieFileSystemViewTableValuedFunctionOptionsParser, HoodieMetadataTableValuedFunction, HoodieQuery, HoodieTableChanges, HoodieTableChangesOptionsParser, HoodieTimelineTableValuedFunction, HoodieTimelineTableValuedFunctionOptionsParser}
@@ -54,6 +53,10 @@ import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, 
  */
 case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
   with SparkAdapterSupport with ProvidesHoodieConfig {
+
+  def resolveExpressionByPlanChildren(e: Expression, q: LogicalPlan): Expression = {
+    spark.sessionState.analyzer.resolveExpressionByPlanChildren(e, q)
+  }
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     case TimeTravelRelation(ResolvesToHudiTable(table), timestamp, version) =>

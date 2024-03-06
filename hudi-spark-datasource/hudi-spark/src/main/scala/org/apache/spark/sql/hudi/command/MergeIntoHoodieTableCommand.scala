@@ -346,12 +346,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       Project(incomingDataCols, joinData)
     }
 
-    val projectedJoinOutput = projectedJoinPlan.output
+    val optimizer = sparkSession.sessionState.optimizer
+    val projectedJoinOptimizerPlan = optimizer.execute(projectedJoinPlan)
+    val projectedJoinOptimizerOutput = projectedJoinOptimizerPlan.output
 
     val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
 
     val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
-      case (keyAttr, _) => projectedJoinOutput.exists(attr => resolver(keyAttr.name, attr.name))
+      case (keyAttr, _) => projectedJoinOptimizerOutput.exists(attr => resolver(keyAttr.name, attr.name))
     }
 
     // This is to handle the situation where condition is something like "s0.s_id = t0.id" so In the source table
@@ -363,7 +365,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       them according to aforementioned heuristic) to meet Hudi's requirements
     val additionalColumns: Seq[NamedExpression] =
       missingAttributesMap.flatMap {
-        case (keyAttr, sourceExpression) if !projectedJoinOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
+        case (keyAttr, sourceExpression) if !projectedJoinOptimizerOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
           Seq(Alias(sourceExpression, keyAttr.name)())
 
         case _ => Seq()
@@ -372,17 +374,23 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // In case when we're not adding new columns we need to make sure that the casing of the key attributes'
     // matches to that one of the target table. This is necessary b/c unlike Spark, Avro is case-sensitive
     // and therefore would fail downstream if case of corresponding columns don't match
+    val partitionColumns = hoodieCatalogTable.tableConfig.getPartitionFieldProp.split(",").toSeq
     val existingAttributes = existingAttributesMap.map(_._1)
-    val adjustedSourceTableOutput = projectedJoinOutput.map { attr =>
+    val adjustedSourceTableOutput = projectedJoinOptimizerOutput.map { attr =>
       existingAttributes.find(keyAttr => resolver(keyAttr.name, attr.name)) match {
         // To align the casing we just rename the attribute to match that one of the
         // target table
         case Some(keyAttr) => attr.withName(keyAttr.name)
-        case _ => attr
+        // additional check for partition columns because they are not required,
+        // but we still care about casing because of keygenerator
+        case _ => partitionColumns.find(colName => resolver(colName, attr.name)) match {
+          case Some(colName) => attr.withName(colName)
+          case _ => attr
+        }
       }
     }
 
-    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, projectedJoinPlan)
+    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, projectedJoinOptimizerPlan)
 
     Dataset.ofRows(sparkSession, amendedPlan)
   }
