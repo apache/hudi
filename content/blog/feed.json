@@ -5,6 +5,39 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration",
+            "content_html": "<div url=\"https://medium.com/leboncoin-tech-blog/how-a-poc-became-a-production-ready-hudi-data-lakehouse-through-close-team-collaboration-c7f33eb746a8\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration",
+            "title": "How a POC became a production-ready Hudi data lakehouse through close team collaboration",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-02-12T00:00:00.000Z",
+            "author": {
+                "name": "Xiaoxiao Rey and Hussein Awala"
+            }
+        },
+        {
+            "id": "/2024/02/04/Apache-Hudi-Managing-Partition-on-a-petabyte-scale-table",
+            "content_html": "<div url=\"https://medium.com/@krishnaiitd/partitioning-apache-hudi-data-lake-table-ffd0ac28aad4\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2024/02/04/Apache-Hudi-Managing-Partition-on-a-petabyte-scale-table",
+            "title": "Apache Hudi: Managing Partition on a petabyte-scale table",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-02-04T00:00:00.000Z",
+            "author": {
+                "name": "Krishna Prasad"
+            }
+        },
+        {
+            "id": "/2024/01/30/Leverage-Partition-Paths-of-your-data-lake-tables-to-Optimize-Data-Retrieval-Costs-on-the-cloud",
+            "content_html": "<div url=\"https://medium.com/@krishnaiitd/leverage-partition-paths-of-your-data-lake-tables-to-optimize-data-retrieval-costs-on-the-cloud-6f4cced24398\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2024/01/30/Leverage-Partition-Paths-of-your-data-lake-tables-to-Optimize-Data-Retrieval-Costs-on-the-cloud",
+            "title": "Leverage Partition Paths of your data lake tables to Optimize Data Retrieval Costs on the cloud",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-01-30T00:00:00.000Z",
+            "author": {
+                "name": "Krishna Prasad"
+            }
+        },
+        {
             "id": "/2024/01/24/Use-Amazon-Athena-with-Spark-SQL-for-your-open-source-transactional-table-formats",
             "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/use-amazon-athena-with-spark-sql-for-your-open-source-transactional-table-formats/\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/blog/2024/01/24/Use-Amazon-Athena-with-Spark-SQL-for-your-open-source-transactional-table-formats",
@@ -13,6 +46,61 @@
             "date_modified": "2024-01-24T00:00:00.000Z",
             "author": {
                 "name": "Pathik Shah, Raj Devnath"
+            }
+        },
+        {
+            "id": "/2024/01/20/Data-Engineering-Bootstrapping-Data-lake-with-Apache-Hudi",
+            "content_html": "<div url=\"https://medium.com/@krishnaiitd/data-engineering-bootstrapping-data-lake-with-apache-hudi-b3323dff65fa\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2024/01/20/Data-Engineering-Bootstrapping-Data-lake-with-Apache-Hudi",
+            "title": "Data Engineering: Bootstrapping Data lake with Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-01-20T00:00:00.000Z",
+            "author": {
+                "name": "Krishna Prasad"
+            }
+        },
+        {
+            "id": "/2024/01/20/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark",
+            "content_html": "<div url=\"https://www.linkedin.com/pulse/learn-how-move-data-from-mongodb-apache-hudi-using-pyspark-shah-cq3pe/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2024/01/20/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark",
+            "title": "Learn How to Move Data From MongoDB to Apache Hudi Using PySpark",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-01-20T00:00:00.000Z",
+            "author": {
+                "name": "Soumil Shah"
+            }
+        },
+        {
+            "id": "/2024/01/18/Deleting-Items-from-Apache-Hudi-using-Delta-Streamer-in-UPSERT-Mode-with-Kafka-Avro-Messages",
+            "content_html": "<div url=\"https://www.linkedin.com/pulse/deleting-items-from-apache-hudi-using-delta-streamer-upsert-shah-sxlce/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2024/01/18/Deleting-Items-from-Apache-Hudi-using-Delta-Streamer-in-UPSERT-Mode-with-Kafka-Avro-Messages",
+            "title": "Deleting Items from Apache Hudi using Delta Streamer in UPSERT Mode with Kafka Avro Messages",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-01-18T00:00:00.000Z",
+            "author": {
+                "name": "Soumil Shah"
+            }
+        },
+        {
+            "id": "/2024/01/17/Enforce-fine-grained-access-control-on-Open-Table-Formats-via-Amazon-EMR-integrated-with-AWS-Lake-Formation",
+            "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/enforce-fine-grained-access-control-on-open-table-formats-via-amazon-emr-integrated-with-aws-lake-formation/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2024/01/17/Enforce-fine-grained-access-control-on-Open-Table-Formats-via-Amazon-EMR-integrated-with-AWS-Lake-Formation",
+            "title": "Enforce fine-grained access control on Open Table Formats via Amazon EMR integrated with AWS Lake Formation",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-01-17T00:00:00.000Z",
+            "author": {
+                "name": "Raymond Lai, Aditya Shah, Bin Wang, and Melody Yang"
+            }
+        },
+        {
+            "id": "/2024/01/11/In-House-Data-Lake-with-CDC-Processing-Hudi-Docker",
+            "content_html": "<div url=\"https://medium.com/@rhlkmr089/in-house-data-lake-with-cdc-processing-hudi-docker-878cee483ca0\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2024/01/11/In-House-Data-Lake-with-CDC-Processing-Hudi-Docker",
+            "title": "In-House Data Lake with CDC Processing, Hudi, Docker",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-01-11T00:00:00.000Z",
+            "author": {
+                "name": "Rahul"
             }
         },
         {

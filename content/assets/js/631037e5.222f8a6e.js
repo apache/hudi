@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[72065],{81748:l=>{l.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/blog","name":"blog","count":84,"permalink":"/blog/tags/blog"}')}}]);

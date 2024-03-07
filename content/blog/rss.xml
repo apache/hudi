@@ -4,9 +4,33 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 24 Jan 2024 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Mon, 12 Feb 2024 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[How a POC became a production-ready Hudi data lakehouse through close team collaboration]]></title>
+            <link>https://hudi.apache.org/blog/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration</link>
+            <guid>/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration</guid>
+            <pubDate>Mon, 12 Feb 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/leboncoin-tech-blog/how-a-poc-became-a-production-ready-hudi-data-lakehouse-through-close-team-collaboration-c7f33eb746a8">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi: Managing Partition on a petabyte-scale table]]></title>
+            <link>https://hudi.apache.org/blog/2024/02/04/Apache-Hudi-Managing-Partition-on-a-petabyte-scale-table</link>
+            <guid>/2024/02/04/Apache-Hudi-Managing-Partition-on-a-petabyte-scale-table</guid>
+            <pubDate>Sun, 04 Feb 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@krishnaiitd/partitioning-apache-hudi-data-lake-table-ffd0ac28aad4">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Leverage Partition Paths of your data lake tables to Optimize Data Retrieval Costs on the cloud]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/30/Leverage-Partition-Paths-of-your-data-lake-tables-to-Optimize-Data-Retrieval-Costs-on-the-cloud</link>
+            <guid>/2024/01/30/Leverage-Partition-Paths-of-your-data-lake-tables-to-Optimize-Data-Retrieval-Costs-on-the-cloud</guid>
+            <pubDate>Tue, 30 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@krishnaiitd/leverage-partition-paths-of-your-data-lake-tables-to-optimize-data-retrieval-costs-on-the-cloud-6f4cced24398">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Use Amazon Athena with Spark SQL for your open-source transactional table formats]]></title>
             <link>https://hudi.apache.org/blog/2024/01/24/Use-Amazon-Athena-with-Spark-SQL-for-your-open-source-transactional-table-formats</link>
@@ -14,6 +38,46 @@
             <pubDate>Wed, 24 Jan 2024 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/use-amazon-athena-with-spark-sql-for-your-open-source-transactional-table-formats/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Data Engineering: Bootstrapping Data lake with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/20/Data-Engineering-Bootstrapping-Data-lake-with-Apache-Hudi</link>
+            <guid>/2024/01/20/Data-Engineering-Bootstrapping-Data-lake-with-Apache-Hudi</guid>
+            <pubDate>Sat, 20 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@krishnaiitd/data-engineering-bootstrapping-data-lake-with-apache-hudi-b3323dff65fa">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Move Data From MongoDB to Apache Hudi Using PySpark]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/20/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark</link>
+            <guid>/2024/01/20/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark</guid>
+            <pubDate>Sat, 20 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/learn-how-move-data-from-mongodb-apache-hudi-using-pyspark-shah-cq3pe/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Deleting Items from Apache Hudi using Delta Streamer in UPSERT Mode with Kafka Avro Messages]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/18/Deleting-Items-from-Apache-Hudi-using-Delta-Streamer-in-UPSERT-Mode-with-Kafka-Avro-Messages</link>
+            <guid>/2024/01/18/Deleting-Items-from-Apache-Hudi-using-Delta-Streamer-in-UPSERT-Mode-with-Kafka-Avro-Messages</guid>
+            <pubDate>Thu, 18 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/deleting-items-from-apache-hudi-using-delta-streamer-upsert-shah-sxlce/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Enforce fine-grained access control on Open Table Formats via Amazon EMR integrated with AWS Lake Formation]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/17/Enforce-fine-grained-access-control-on-Open-Table-Formats-via-Amazon-EMR-integrated-with-AWS-Lake-Formation</link>
+            <guid>/2024/01/17/Enforce-fine-grained-access-control-on-Open-Table-Formats-via-Amazon-EMR-integrated-with-AWS-Lake-Formation</guid>
+            <pubDate>Wed, 17 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/enforce-fine-grained-access-control-on-open-table-formats-via-amazon-emr-integrated-with-aws-lake-formation/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[In-House Data Lake with CDC Processing, Hudi, Docker]]></title>
+            <link>https://hudi.apache.org/blog/2024/01/11/In-House-Data-Lake-with-CDC-Processing-Hudi-Docker</link>
+            <guid>/2024/01/11/In-House-Data-Lake-with-CDC-Processing-Hudi-Docker</guid>
+            <pubDate>Thu, 11 Jan 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@rhlkmr089/in-house-data-lake-with-cdc-processing-hudi-docker-878cee483ca0">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Introduction to Apache Hudi]]></title>

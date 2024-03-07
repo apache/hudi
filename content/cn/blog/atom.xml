@@ -2,11 +2,44 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2024-01-24T00:00:00.000Z</updated>
+    <updated>2024-02-12T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[How a POC became a production-ready Hudi data lakehouse through close team collaboration]]></title>
+        <id>/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration"/>
+        <updated>2024-02-12T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/leboncoin-tech-blog/how-a-poc-became-a-production-ready-hudi-data-lakehouse-through-close-team-collaboration-c7f33eb746a8">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Xiaoxiao Rey and Hussein Awala</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi: Managing Partition on a petabyte-scale table]]></title>
+        <id>/2024/02/04/Apache-Hudi-Managing-Partition-on-a-petabyte-scale-table</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/02/04/Apache-Hudi-Managing-Partition-on-a-petabyte-scale-table"/>
+        <updated>2024-02-04T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@krishnaiitd/partitioning-apache-hudi-data-lake-table-ffd0ac28aad4">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Krishna Prasad</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Leverage Partition Paths of your data lake tables to Optimize Data Retrieval Costs on the cloud]]></title>
+        <id>/2024/01/30/Leverage-Partition-Paths-of-your-data-lake-tables-to-Optimize-Data-Retrieval-Costs-on-the-cloud</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/30/Leverage-Partition-Paths-of-your-data-lake-tables-to-Optimize-Data-Retrieval-Costs-on-the-cloud"/>
+        <updated>2024-01-30T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@krishnaiitd/leverage-partition-paths-of-your-data-lake-tables-to-optimize-data-retrieval-costs-on-the-cloud-6f4cced24398">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Krishna Prasad</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Use Amazon Athena with Spark SQL for your open-source transactional table formats]]></title>
         <id>/2024/01/24/Use-Amazon-Athena-with-Spark-SQL-for-your-open-source-transactional-table-formats</id>
@@ -16,6 +49,61 @@
         <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/use-amazon-athena-with-spark-sql-for-your-open-source-transactional-table-formats/">Redirecting... please wait!! </div>]]></content>
         <author>
             <name>Pathik Shah, Raj Devnath</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Data Engineering: Bootstrapping Data lake with Apache Hudi]]></title>
+        <id>/2024/01/20/Data-Engineering-Bootstrapping-Data-lake-with-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/20/Data-Engineering-Bootstrapping-Data-lake-with-Apache-Hudi"/>
+        <updated>2024-01-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@krishnaiitd/data-engineering-bootstrapping-data-lake-with-apache-hudi-b3323dff65fa">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Krishna Prasad</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn How to Move Data From MongoDB to Apache Hudi Using PySpark]]></title>
+        <id>/2024/01/20/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/20/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark"/>
+        <updated>2024-01-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/learn-how-move-data-from-mongodb-apache-hudi-using-pyspark-shah-cq3pe/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Deleting Items from Apache Hudi using Delta Streamer in UPSERT Mode with Kafka Avro Messages]]></title>
+        <id>/2024/01/18/Deleting-Items-from-Apache-Hudi-using-Delta-Streamer-in-UPSERT-Mode-with-Kafka-Avro-Messages</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/18/Deleting-Items-from-Apache-Hudi-using-Delta-Streamer-in-UPSERT-Mode-with-Kafka-Avro-Messages"/>
+        <updated>2024-01-18T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/deleting-items-from-apache-hudi-using-delta-streamer-upsert-shah-sxlce/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Enforce fine-grained access control on Open Table Formats via Amazon EMR integrated with AWS Lake Formation]]></title>
+        <id>/2024/01/17/Enforce-fine-grained-access-control-on-Open-Table-Formats-via-Amazon-EMR-integrated-with-AWS-Lake-Formation</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/17/Enforce-fine-grained-access-control-on-Open-Table-Formats-via-Amazon-EMR-integrated-with-AWS-Lake-Formation"/>
+        <updated>2024-01-17T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/enforce-fine-grained-access-control-on-open-table-formats-via-amazon-emr-integrated-with-aws-lake-formation/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Raymond Lai, Aditya Shah, Bin Wang, and Melody Yang</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[In-House Data Lake with CDC Processing, Hudi, Docker]]></title>
+        <id>/2024/01/11/In-House-Data-Lake-with-CDC-Processing-Hudi-Docker</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/01/11/In-House-Data-Lake-with-CDC-Processing-Hudi-Docker"/>
+        <updated>2024-01-11T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@rhlkmr089/in-house-data-lake-with-cdc-processing-hudi-docker-878cee483ca0">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Rahul</name>
         </author>
     </entry>
     <entry>
