@@ -206,7 +206,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   private static Stream<Arguments> rollbackFailedCommitsParams() {
     return Stream.of(
         Arguments.of(HoodieFailedWritesCleaningPolicy.LAZY, true),
-        Arguments.of(HoodieFailedWritesCleaningPolicy.LAZY, false),
         Arguments.of(HoodieFailedWritesCleaningPolicy.NEVER, true),
         Arguments.of(HoodieFailedWritesCleaningPolicy.NEVER, false)
     );
@@ -242,10 +241,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Auto Commit behavior for HoodieWriteClient insertPrepped API.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testAutoCommitOnInsertPrepped(boolean populateMetaFields) throws Exception {
-    testAutoCommit(SparkRDDWriteClient::insertPreppedRecords, true, populateMetaFields);
+  @Test
+  public void testAutoCommitOnInsertPrepped() throws Exception {
+    testAutoCommit(SparkRDDWriteClient::insertPreppedRecords, true, true);
   }
 
   /**
@@ -278,11 +276,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Auto Commit behavior for HoodieWriteClient bulk-insert prepped API.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testAutoCommitOnBulkInsertPrepped(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testAutoCommitOnBulkInsertPrepped() throws Exception {
     testAutoCommit((writeClient, recordRDD, instantTime) -> writeClient.bulkInsertPreppedRecords(recordRDD, instantTime,
-        Option.empty()), true, populateMetaFields);
+        Option.empty()), true, true);
   }
 
   /**
@@ -442,10 +439,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test De-duplication behavior for HoodieWriteClient upsert API.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testDeduplicationOnUpsert(boolean populateMetaFields) throws Exception {
-    testDeduplication(SparkRDDWriteClient::upsert, populateMetaFields);
+  @Test
+  public void testDeduplicationOnUpsert() throws Exception {
+    testDeduplication(SparkRDDWriteClient::upsert, true);
   }
 
   /**
@@ -600,11 +596,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test UpsertPrepped API.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testUpsertsPrepped(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testUpsertsPrepped() throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withRollbackUsingMarkers(true);
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
     testUpsertsInternal(cfgBuilder.build(), SparkRDDWriteClient::upsertPreppedRecords, true);
   }
 
@@ -839,11 +834,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test InsertPrepped API for HoodieConcatHandle.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testInsertsPreppedWithHoodieConcatHandle(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testInsertsPreppedWithHoodieConcatHandle() throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
     testHoodieConcatHandle(cfgBuilder.build(), true);
   }
 
@@ -997,11 +991,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Tests deletion of records.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testDeletes(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testDeletes() throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY);
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
     SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
     /**
      * Write 1 (inserts and deletes) Write actual 200 insert records and ignore 100 delete records
@@ -1022,7 +1015,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime,
         // unused as genFn uses hard-coded number of inserts/updates/deletes
         -1, recordGenFunction, SparkRDDWriteClient::upsert, true, 200, 200, 1, false,
-        populateMetaFields);
+        true);
 
     /**
      * Write 2 (deletes+writes).
@@ -1040,7 +1033,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     };
     writeBatch(client, newCommitTime, prevCommitTime, Option.empty(), initCommitTime, 100, recordGenFunction,
         SparkRDDWriteClient::upsert, true, 50, 150, 2, false,
-        populateMetaFields);
+        true);
   }
 
   /**
@@ -1049,11 +1042,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    *
    * @throws Exception
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testDeletesForInsertsInSameBatch(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testDeletesForInsertsInSameBatch() throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY);
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
     SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
     /**
      * Write 200 inserts and issue deletes to a subset(50) of inserts.
@@ -1074,7 +1066,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime,
         -1, recordGenFunction, SparkRDDWriteClient::upsert, true, 150, 150, 1, false,
-        populateMetaFields);
+        true);
   }
 
   private void assertPartitionPathRecordKeys(List<Pair<String, String>> expectedPartitionPathRecKeyPairs, String[] fullPartitionPaths) {
@@ -1903,19 +1895,17 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test scenario of writing fewer file groups than existing number of file groups in partition.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testInsertOverwritePartitionHandlingWithFewerRecords(boolean populateMetaFields) throws Exception {
-    verifyInsertOverwritePartitionHandling(3000, 1000, populateMetaFields);
+  @Test
+  public void testInsertOverwritePartitionHandlingWithFewerRecords() throws Exception {
+    verifyInsertOverwritePartitionHandling(3000, 1000, true);
   }
 
   /**
    * Test scenario of writing similar number file groups in partition.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testInsertOverwritePartitionHandlingWithSimilarNumberOfRecords(boolean populateMetaFields) throws Exception {
-    verifyInsertOverwritePartitionHandling(3000, 3000, populateMetaFields);
+  @Test
+  public void testInsertOverwritePartitionHandlingWithSimilarNumberOfRecords() throws Exception {
+    verifyInsertOverwritePartitionHandling(3000, 3000, true);
   }
 
   /**
@@ -1968,19 +1958,17 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test scenario of writing similar number file groups in partition.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void verifyDeletePartitionsHandlingWithSimilarNumberOfRecords(boolean populateMetaFields) throws Exception {
-    verifyDeletePartitionsHandling(3000, 3000, 3000, populateMetaFields);
+  @Test
+  public void verifyDeletePartitionsHandlingWithSimilarNumberOfRecords() throws Exception {
+    verifyDeletePartitionsHandling(3000, 3000, 3000, true);
   }
 
   /**
    * Test scenario of writing more file groups for first partition than second and third partition.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void verifyDeletePartitionsHandlingHandlingWithFewerRecordsSecondThirdPartition(boolean populateMetaFields) throws Exception {
-    verifyDeletePartitionsHandling(3000, 1000, 1000, populateMetaFields);
+  @Test
+  public void verifyDeletePartitionsHandlingHandlingWithFewerRecordsSecondThirdPartition() throws Exception {
+    verifyDeletePartitionsHandling(3000, 1000, 1000, true);
   }
 
   private Set<String> insertPartitionRecordsWithCommit(SparkRDDWriteClient client, int recordsCount, String commitTime1, String partitionPath) throws IOException {
@@ -2222,13 +2210,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test to ensure commit metadata points to valid files.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testCommitWritesRelativePaths(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testCommitWritesRelativePaths() throws Exception {
 
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());) {
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
       HoodieSparkTable table = HoodieSparkTable.create(cfgBuilder.build(), context, metaClient);
 
@@ -2403,9 +2390,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("rollbackAfterConsistencyCheckFailureParams")
-  public void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean enableOptimisticConsistencyGuard, boolean populateMetCols) throws Exception {
-    testRollbackAfterConsistencyCheckFailureUsingFileList(false, enableOptimisticConsistencyGuard, populateMetCols);
+  @ValueSource(booleans = {true, false})
+  public void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean enableOptimisticConsistencyGuard) throws Exception {
+    testRollbackAfterConsistencyCheckFailureUsingFileList(false, enableOptimisticConsistencyGuard, true);
   }
 
   @ParameterizedTest
@@ -2496,9 +2483,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testRollbackFailedCommitsToggleCleaningPolicy(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testRollbackFailedCommitsToggleCleaningPolicy() throws Exception {
+    boolean populateMetaFields = true;
     HoodieTestUtils.init(hadoopConf, basePath);
     HoodieFailedWritesCleaningPolicy cleaningPolicy = EAGER;
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
@@ -2665,12 +2652,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     return Pair.of(markerFilePath.get(), result);
   }
 
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testMultiOperationsPerCommit(boolean populateMetaFields) throws IOException {
+  @Test
+  public void testMultiOperationsPerCommit() throws IOException {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false)
         .withAllowMultiWriteOnSameInstant(true);
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     String firstInstantTime = "0000";
