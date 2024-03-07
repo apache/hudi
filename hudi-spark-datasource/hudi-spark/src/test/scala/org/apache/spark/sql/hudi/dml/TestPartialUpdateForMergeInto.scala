@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils.{getDefaultHadoopConf, getLogFileListFromFileSlice}
-import org.apache.hudi.config.HoodieIndexConfig.INDEX_TYPE
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -116,6 +115,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     }
   }
 
+  /* HUDI-7487: disabled due to flakiness
   test("Test MERGE INTO with inserts only on MOR table when partial updates are enabled") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -171,6 +171,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         false)
     }
   }
+  */
 
   def testPartialUpdate(tableType: String,
                         logDataBlockFormat: String): Unit = {
