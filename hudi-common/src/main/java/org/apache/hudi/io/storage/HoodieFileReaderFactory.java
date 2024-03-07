@@ -84,11 +84,9 @@ public class HoodieFileReaderFactory {
                                         Option<Schema> schemaOption) throws IOException {
     switch (format) {
       case PARQUET:
-        return this.newParquetFileReader(conf, path);
+        return newParquetFileReader(conf, path);
       case HFILE:
-        boolean useNativeHFileReader =
-            hoodieConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER);
-        return newHFileFileReader(useNativeHFileReader, conf, path, schemaOption);
+        return newHFileFileReader(hoodieConfig, conf, path, schemaOption);
       case ORC:
         return newOrcFileReader(conf, path);
       default:
@@ -96,15 +94,13 @@ public class HoodieFileReaderFactory {
     }
   }
 
-  public HoodieFileReader getContentReader(HoodieConfig config,
+  public HoodieFileReader getContentReader(HoodieConfig hoodieConfig,
                                            Configuration conf, Path path, HoodieFileFormat format,
                                            FileSystem fs, byte[] content,
                                            Option<Schema> schemaOption) throws IOException {
     switch (format) {
       case HFILE:
-        boolean useNativeHFileReader =
-            config.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER);
-        return newHFileFileReader(useNativeHFileReader, conf, path, fs, content, schemaOption);
+        return newHFileFileReader(hoodieConfig, conf, path, fs, content, schemaOption);
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
@@ -114,13 +110,13 @@ public class HoodieFileReaderFactory {
     throw new UnsupportedOperationException();
   }
 
-  protected HoodieFileReader newHFileFileReader(boolean useNativeHFileReader,
+  protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
                                                 Configuration conf, Path path,
                                                 Option<Schema> schemaOption) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  protected HoodieFileReader newHFileFileReader(boolean useNativeHFileReader,
+  protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
                                                 Configuration conf, Path path,
                                                 FileSystem fs,
                                                 byte[] content, Option<Schema> schemaOption)
@@ -137,5 +133,9 @@ public class HoodieFileReaderFactory {
                                                  Option<String[]> partitionFields,
                                                  Object[] partitionValues) {
     throw new UnsupportedOperationException();
+  }
+
+  protected static boolean isUseNativeHFileReaderEnabled(HoodieConfig hoodieConfig) {
+    return hoodieConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER);
   }
 }
