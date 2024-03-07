@@ -39,6 +39,7 @@ setting sync tool class. A few BigQuery-specific configurations are required.
 | `hoodie.gcp.bigquery.sync.dataset_location`  | Region info of the dataset; same as the GCS bucket that stores the Hudi table                                   |
 | `hoodie.gcp.bigquery.sync.source_uri`        | A wildcard path pattern pointing to the first level partition; partition key can be specified or auto-inferred. Only required for partitioned tables |
 | `hoodie.gcp.bigquery.sync.source_uri_prefix` | The common prefix of the `source_uri`, usually it's the path to the Hudi table, trailing slash does not matter. |
+| `hoodie.gcp.bigquery.sync.base_path`         | The usual basepath config for Hudi table.                                                                       |
 | `hoodie.gcp.bigquery.sync.use_bq_manifest_file` | Set to true to enable the manifest based sync                                                                |
 | `hoodie.gcp.bigquery.sync.require_partition_filter` | Introduced in Hudi version 0.14.1, this configuration accepts a BOOLEAN value, with the default being false. When enabled (set to true), you must create a partition filter (a WHERE clause) for all queries, targeting the partitioning column of a partitioned table. Queries lacking such a filter will result in an error.        |
 
