@@ -32,8 +32,8 @@ import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_S
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
