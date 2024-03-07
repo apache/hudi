@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
@@ -149,53 +150,53 @@ object HoodieDatasetBulkInsertHelper
                  arePartitionRecordsSorted: Boolean,
                  shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
     val schema = dataset.schema
-    val writeStatuses = injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
-      val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
-      val taskPartitionId = taskContextSupplier.getPartitionIdSupplier.get
-      val taskId = taskContextSupplier.getStageIdSupplier.get.toLong
-      val taskEpochId = taskContextSupplier.getAttemptIdSupplier.get
+    HoodieJavaRDD.of(
+      injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
+        val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
+        val taskPartitionId = taskContextSupplier.getPartitionIdSupplier.get
+        val taskId = taskContextSupplier.getStageIdSupplier.get.toLong
+        val taskEpochId = taskContextSupplier.getAttemptIdSupplier.get
 
-      val writer = writeConfig.getIndexType match {
-        case HoodieIndex.IndexType.BUCKET if writeConfig.getBucketIndexEngineType
-          == BucketIndexEngineType.CONSISTENT_HASHING =>
-          new ConsistentBucketBulkInsertDataInternalWriterHelper(
-            table,
-            writeConfig,
-            instantTime,
-            taskPartitionId,
-            taskId,
-            taskEpochId,
-            schema,
-            writeConfig.populateMetaFields,
-            arePartitionRecordsSorted,
-            shouldPreserveHoodieMetadata)
-        case _ =>
-          new BulkInsertDataInternalWriterHelper(
-            table,
-            writeConfig,
-            instantTime,
-            taskPartitionId,
-            taskId,
-            taskEpochId,
-            schema,
-            writeConfig.populateMetaFields,
-            arePartitionRecordsSorted,
-            shouldPreserveHoodieMetadata)
-      }
+        val writer = writeConfig.getIndexType match {
+          case HoodieIndex.IndexType.BUCKET if writeConfig.getBucketIndexEngineType
+            == BucketIndexEngineType.CONSISTENT_HASHING =>
+            new ConsistentBucketBulkInsertDataInternalWriterHelper(
+              table,
+              writeConfig,
+              instantTime,
+              taskPartitionId,
+              taskId,
+              taskEpochId,
+              schema,
+              writeConfig.populateMetaFields,
+              arePartitionRecordsSorted,
+              shouldPreserveHoodieMetadata)
+          case _ =>
+            new BulkInsertDataInternalWriterHelper(
+              table,
+              writeConfig,
+              instantTime,
+              taskPartitionId,
+              taskId,
+              taskEpochId,
+              schema,
+              writeConfig.populateMetaFields,
+              arePartitionRecordsSorted,
+              shouldPreserveHoodieMetadata)
+        }
 
-      try {
-        iter.foreach(writer.write)
-      } catch {
-        case t: Throwable =>
-          writer.abort()
-          throw t
-      } finally {
-        writer.close()
-      }
+        try {
+          iter.foreach(writer.write)
+        } catch {
+          case t: Throwable =>
+            writer.abort()
+            throw t
+        } finally {
+          writer.close()
+        }
 
-      writer.getWriteStatuses.asScala.iterator
-    }), SQLConf.get).collect()
-    table.getContext.parallelize(writeStatuses.toList.asJava)
+        writer.getWriteStatuses.asScala.iterator
+      }), SQLConf.get).toJavaRDD())
   }
 
   private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean, targetParallelism: Int): RDD[InternalRow] = {
