@@ -48,6 +48,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
@@ -537,6 +538,17 @@ public class StreamerUtil {
         throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
                 + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
       }
+    }
+  }
+
+  /**
+   * Validate keygen generator.
+   */
+  public static void checkKeygenGenerator(boolean isComplexHoodieKey, Configuration conf) {
+    if (isComplexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
+      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+      LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
+          FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
     }
   }
 }

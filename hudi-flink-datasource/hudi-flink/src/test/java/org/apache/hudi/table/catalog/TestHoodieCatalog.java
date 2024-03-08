@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
@@ -35,6 +36,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
+import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.api.DataTypes;
@@ -107,6 +109,13 @@ public class TestHoodieCatalog {
           CREATE_COLUMNS,
           Collections.emptyList(),
           CONSTRAINTS);
+
+  private static final UniqueConstraint MULTI_KEY_CONSTRAINTS = UniqueConstraint.primaryKey("uuid", Arrays.asList("uuid", "name"));
+  private static final ResolvedSchema CREATE_MULTI_KEY_TABLE_SCHEMA =
+      new ResolvedSchema(
+          CREATE_COLUMNS,
+          Collections.emptyList(),
+          MULTI_KEY_CONSTRAINTS);
 
   private static final List<Column> EXPECTED_TABLE_COLUMNS =
       CREATE_COLUMNS.stream()
@@ -257,6 +266,40 @@ public class TestHoodieCatalog {
         StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, tablePath), new org.apache.hadoop.conf.Configuration());
     String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
+
+    // validate single key and multiple partition for partitioned table
+    ObjectPath singleKeyMultiplePartitionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb_skmp" + System.currentTimeMillis());
+    final ResolvedCatalogTable singleKeyMultiplePartitionTable = new ResolvedCatalogTable(
+        CatalogTable.of(
+            Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
+            "test",
+            Lists.newArrayList("par1,par2"),
+            EXPECTED_OPTIONS),
+        CREATE_TABLE_SCHEMA
+    );
+
+    catalog.createTable(singleKeyMultiplePartitionPath, singleKeyMultiplePartitionTable, false);
+    metaClient =
+        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath), new org.apache.hadoop.conf.Configuration());
+    keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
+    assertEquals(keyGeneratorClassName, ComplexAvroKeyGenerator.class.getName());
+
+    // validate multiple key and single partition for partitioned table
+    ObjectPath multipleKeySinglePartitionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb_mksp" + System.currentTimeMillis());
+    final ResolvedCatalogTable multipleKeySinglePartitionTable = new ResolvedCatalogTable(
+        CatalogTable.of(
+            Schema.newBuilder().fromResolvedSchema(CREATE_MULTI_KEY_TABLE_SCHEMA).build(),
+            "test",
+            Lists.newArrayList("par1"),
+            EXPECTED_OPTIONS),
+        CREATE_TABLE_SCHEMA
+    );
+
+    catalog.createTable(multipleKeySinglePartitionPath, multipleKeySinglePartitionTable, false);
+    metaClient =
+        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath), new org.apache.hadoop.conf.Configuration());
+    keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
+    assertEquals(keyGeneratorClassName, ComplexAvroKeyGenerator.class.getName());
 
     // validate key generator for non partitioned table
     ObjectPath nonPartitionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb");
