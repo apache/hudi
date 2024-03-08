@@ -36,7 +36,7 @@ import java.util.TimeZone
  * value of static {@link HoodieInstantTimeGenerator.lastInstantTime} in the heap,
  * which will be greater than instant time for {@link HoodieTimelineTimeZone.UTC}.
  */
-class TestHoodieSparkSqlWriterUtc extends TestHoodieSparkSqlWriter {
+class TestHoodieSparkSqlWriterUtc extends HoodieSparkWriterTestBase {
   /*
    * Test case for instant is generated with commit timezone when TIMELINE_TIMEZONE set to UTC
    * related to HUDI-5978

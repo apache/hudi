@@ -28,19 +28,16 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
 import org.apache.spark.sql
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.{Dataset, Row}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.scalatest.Inspectors.forAll
 
 import java.io.File
-
 import scala.collection.JavaConversions._
 
 @SparkSQLCoreFlow
