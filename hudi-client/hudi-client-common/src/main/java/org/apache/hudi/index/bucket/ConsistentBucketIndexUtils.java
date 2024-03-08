@@ -218,6 +218,7 @@ public class ConsistentBucketIndexUtils {
       if (!fs.exists(fullPath)) {
         throw e;
       }
+      LOG.warn("Failed to create marker but " + fullPath + " exists", e);
     }
   }
 
