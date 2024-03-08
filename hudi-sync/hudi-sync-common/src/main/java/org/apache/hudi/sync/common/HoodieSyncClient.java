@@ -92,10 +92,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
    * Going through archive timeline is a costly operation, and it should be avoided unless some start time is given.
    */
   public Set<String> getDroppedPartitionsSince(Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
-    HoodieTimeline timeline = lastCommitTimeSynced.isPresent()
-        ? TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced)
-        : metaClient.getActiveTimeline();
-    return new HashSet<>(TimelineUtils.getDroppedPartitions(timeline));
+    return new HashSet<>(TimelineUtils.getDroppedPartitions(metaClient, lastCommitTimeSynced, lastCommitCompletionTimeSynced));
   }
 
   @Override
