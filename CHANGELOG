@@ -62,3 +62,9 @@ b254a252b [AUDIT-656] Upgrade hudi-internal to release-v1.2.2 (#544)
 203be9da0 [HUDI-7479] SQL confs don't propagate to spark row writer properly (#579)
 84ebd5f01 [HUDI-7413] Fix schema exception types and error messages thrown with schema exceptions (#578)
 586b88d6c [HUDI-7462] Refactor checkTopicCheckpoint in KafkaOffsetGen for reusability (#576)
+
+---[2024-03-08 16:47:33] [release-v1.4.0] Adding release tag for hudi-internal release-v1.4.0---
+7b456a81482 [HUDI-7491] Fixing handling null values of extra metadata in clean commit metadata (#584)
+0f669701dab [HUDI-7491] Fixing handling null values of extra metadata in clean commit metadata (#583)
+35ae9c45aa4 [HUDI-7418] Create a common method for filtering in S3 and GCS sources and add tests for filtering out extensions (#581)
+ccda484b4e9 [AUDIT-682] Upgrade to version release-v1.3.3 (#580)
