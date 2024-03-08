@@ -234,8 +234,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   }
 
   private List<String> getPartitionsFromDeletedSavepoint(HoodieCleanMetadata cleanMetadata) {
-    List<String> savepointedTimestampsFromLastClean = Arrays.stream(cleanMetadata.getExtraMetadata()
-            .getOrDefault(SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","))
+    List<String> savepointedTimestampsFromLastClean = cleanMetadata.getExtraMetadata() == null ? Collections.emptyList()
+        : Arrays.stream(cleanMetadata.getExtraMetadata().getOrDefault(SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","))
         .filter(partition -> !StringUtils.isNullOrEmpty(partition)).collect(Collectors.toList());
     if (savepointedTimestampsFromLastClean.isEmpty()) {
       return Collections.emptyList();
