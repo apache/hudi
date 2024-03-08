@@ -42,18 +42,18 @@ For this we need to enable the following config
 | Demote datatype for a nested field                              | No  | No  |                                                                                                                                                                                                                                                                                               |
 | Demote datatype for a complex type (value of map or array)      | No  | No  |                                                                                                                                                                                                                                                                                               |
 
-###Type Promotions
+### Type Promotions
 
-The incoming schema will automatically have types promoted to match the table schema
+This chart shows what the table schema will be when an incoming column type has changed (X means that it is not allowed):
 
-| Incoming Schema \ Table Schema  | int   | long  | float  | double | string  | bytes   |
-|---------------------------------|-------|-------|--------|--------|---------|---------|
-| int                             |   Y   |   Y   |    Y   |    Y   |    Y    |   N     |
-| long                            |   N   |   Y   |    Y   |    Y   |    Y    |   N     | 
-| float                           |   N   |   N   |    Y   |    Y   |    Y    |   N     |  
-| double                          |   N   |   N   |    N   |    Y   |    Y    |   N     |  
-| string                          |   N   |   N   |    N   |    N   |    Y    |   Y     | 
-| bytes                           |   N   |   N   |    N   |    N   |    Y    |   Y     |
+| Incoming Schema &#8595; \ Table Schema &#8594; | int    | long   | float  | double | string | bytes |
+|------------------------------------------------|--------|--------|--------|--------|--------|-------|
+| int                                            | int    | long   | float  | double | string | X     |
+| long                                           | long   | long   | float  | double | string | X     | 
+| float                                          | float  | float  | float  | double | string | X     |  
+| double                                         | double | double | double | double | string | X     |  
+| string                                         | string | string | string | string | string | bytes | 
+| bytes                                          | X      | X      | X      | X      | string | bytes |
 
 ## Schema Evolution on read
 
