@@ -160,11 +160,6 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   }
 
   /**
-   * The schema of data fields not including hoodie meta fields
-   */
-  lazy val dataSchemaWithoutMetaFields: StructType = removeMetaFields(dataSchema)
-
-  /**
    * The schema of partition fields
    */
   lazy val partitionSchema: StructType = StructType(tableSchema.filter(f => partitionFields.contains(f.name)))
@@ -173,7 +168,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
    * All the partition paths, excludes lazily deleted partitions.
    */
   def getPartitionPaths: Seq[String] = {
-    val droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient.getActiveTimeline)
+    val droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty())
 
     getAllPartitionPaths(spark, table)
       .filter(!droppedPartitions.contains(_))

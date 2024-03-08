@@ -158,7 +158,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
 
       HoodieInstant cleanInstant = new HoodieInstant(true, CLEAN_ACTION, ts);
       activeTimeline.createNewInstant(cleanInstant);
-      activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, ts));
+      activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, ts, false));
     }
 
     metaClient.reloadActiveTimeline();
@@ -197,7 +197,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
 
       HoodieInstant cleanInstant = new HoodieInstant(true, CLEAN_ACTION, ts);
       activeTimeline.createNewInstant(cleanInstant);
-      activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(partitionPath, ts));
+      activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(partitionPath, ts, false));
     }
 
     metaClient.reloadActiveTimeline();
@@ -553,7 +553,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     return getUTF8Bytes(commit.toJsonString());
   }
 
-  private Option<byte[]> getCleanMetadata(String partition, String time) throws IOException {
+  private Option<byte[]> getCleanMetadata(String partition, String time, boolean isPartitionDeleted) throws IOException {
     Map<String, HoodieCleanPartitionMetadata> partitionToFilesCleaned = new HashMap<>();
     List<String> filesDeleted = new ArrayList<>();
     filesDeleted.add("file-" + partition + "-" + time + "1");
@@ -564,6 +564,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .setFailedDeleteFiles(Collections.emptyList())
         .setDeletePathPatterns(Collections.emptyList())
         .setSuccessDeleteFiles(filesDeleted)
+        .setIsPartitionDeleted(isPartitionDeleted)
         .build();
     partitionToFilesCleaned.putIfAbsent(partition, partitionMetadata);
     HoodieCleanMetadata cleanMetadata = HoodieCleanMetadata.newBuilder()
@@ -610,5 +611,44 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       default:
         fail("should cover all handling mode.");
     }
+  }
+
+  @Test
+  public void testGetDroppedPartitions() throws Exception {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    assertTrue(activeCommitTimeline.empty());
+
+    String olderPartition = "p1"; // older partitions that will be deleted by clean commit
+    // first insert to the older partition
+    HoodieInstant instant1 = new HoodieInstant(true, COMMIT_ACTION, "00001");
+    activeTimeline.createNewInstant(instant1);
+    activeTimeline.saveAsComplete(instant1, Option.of(getCommitMetadata(basePath, olderPartition, "00001", 2, Collections.emptyMap())));
+
+    metaClient.reloadActiveTimeline();
+    List<String> droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, Option.empty(), Option.empty());
+    // no dropped partitions
+    assertEquals(0, droppedPartitions.size());
+
+    // another commit inserts to new partition
+    HoodieInstant instant2 = new HoodieInstant(true, COMMIT_ACTION, "00002");
+    activeTimeline.createNewInstant(instant2);
+    activeTimeline.saveAsComplete(instant2, Option.of(getCommitMetadata(basePath, "p2", "00002", 2, Collections.emptyMap())));
+
+    metaClient.reloadActiveTimeline();
+    droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, Option.empty(), Option.empty());
+    // no dropped partitions
+    assertEquals(0, droppedPartitions.size());
+
+    // clean commit deletes older partition
+    HoodieInstant cleanInstant = new HoodieInstant(true, CLEAN_ACTION, "00003");
+    activeTimeline.createNewInstant(cleanInstant);
+    activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, "00003", true));
+
+    metaClient.reloadActiveTimeline();
+    droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, Option.empty(), Option.empty());
+    // older partition is in the list dropped partitions
+    assertEquals(1, droppedPartitions.size());
+    assertEquals(olderPartition, droppedPartitions.get(0));
   }
 }
