@@ -82,6 +82,25 @@ public class HoodieMetadataWriteUtils {
     String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
 
     final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
+    // Borrow the cleaner policy from the main table and adjust the cleaner policy based on the main table's cleaner policy
+    HoodieCleaningPolicy dataTableCleaningPolicy = writeConfig.getCleanerPolicy();
+    HoodieCleanConfig.Builder cleanConfigBuilder = HoodieCleanConfig.newBuilder()
+        .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
+        .withAutoClean(false)
+        .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
+        .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
+        .withCleanerPolicy(dataTableCleaningPolicy);
+
+    if (HoodieCleaningPolicy.KEEP_LATEST_COMMITS.equals(dataTableCleaningPolicy)) {
+      int retainCommits = (int) Math.max(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED, writeConfig.getCleanerCommitsRetained() * 1.2);
+      cleanConfigBuilder.retainCommits(retainCommits);
+    } else if (HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.equals(dataTableCleaningPolicy)) {
+      int retainFileVersions = (int) Math.ceil(writeConfig.getCleanerFileVersionsRetained() * 1.2);
+      cleanConfigBuilder.retainFileVersions(retainFileVersions);
+    } else if (HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS.equals(dataTableCleaningPolicy)) {
+      int numHoursRetained = (int) Math.ceil(writeConfig.getCleanerHoursRetained() * 1.2);
+      cleanConfigBuilder.cleanerNumHoursRetained(numHoursRetained);
+    }
 
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
@@ -105,14 +124,7 @@ public class HoodieMetadataWriteUtils {
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
         // we will trigger cleaning manually, to control the instant times
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
-            .withAutoClean(false)
-            .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
-            .retainCommits(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED)
-            .build())
+        .withCleanConfig(cleanConfigBuilder.build())
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .archiveCommitsWith(
