@@ -47,14 +47,14 @@ type promotions eg., 'long' to 'int'.
 
 This chart shows what the table schema will be when an incoming column type has changed (X means that it is not allowed):
 
-| Incoming Schema \ Table Schema | int    | long   | float  | double | string | bytes |
-|--------------------------------|--------|--------|--------|--------|--------|-------|
-| int                            | int    | long   | float  | double | string | X     |
-| long                           | long   | long   | float  | double | string | X     | 
-| float                          | float  | float  | float  | double | string | X     |  
-| double                         | double | double | double | double | string | X     |  
-| string                         | string | string | string | string | string | bytes | 
-| bytes                          | X      | X      | X      | X      | string | bytes |
+| Incoming Schema &#8595; \ Table Schema &#8594; | int    | long   | float  | double | string | bytes |
+|------------------------------------------------|--------|--------|--------|--------|--------|-------|
+| int                                            | int    | long   | float  | double | string | X     |
+| long                                           | long   | long   | float  | double | string | X     | 
+| float                                          | float  | float  | float  | double | string | X     |  
+| double                                         | double | double | double | double | string | X     |  
+| string                                         | string | string | string | string | string | bytes | 
+| bytes                                          | X      | X      | X      | X      | string | bytes |
 
 ## Schema Evolution on read
 
