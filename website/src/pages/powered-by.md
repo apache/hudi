@@ -49,6 +49,12 @@ uses Apache Hudi to power their Exabyte scale TikTok #ForYouPage realtime recomm
 ### EMIS Health 
 [EMIS Health](https://www.emishealth.com/) is the largest provider of Primary Care IT software in the UK with datasets including more than 500Bn healthcare records. HUDI is used to manage their analytics dataset in production and keeping them up-to-date with their upstream source. Presto is being used to query the data written in HUDI format.
 
+### Forethought AI
+[Forethought AI](https://forethought.ai/) is the Leading Generative AI for Customer Support Automation. It unlocks efficiency with the generative AI automation platform that lowers support costs while providing top-tier service in every customer interaction.
+
+### Funding Circle
+[Funding Circle](https://www.fundingcircle.com/us/) helps people invest in equipment or inventory, consolidate debt, grow their business, or pay business expenses by providing loans.
+
 ### GE Aviation
 [GE Aviation built cloud-native data pipelines at enterprise scale using Apache Hudi in AWS platform](https://aws.amazon.com/blogs/big-data/how-ge-aviation-built-cloud-native-data-pipelines-at-enterprise-scale-using-the-aws-platform/)
 
@@ -61,6 +67,9 @@ Apache Hudi is integrated in the digital platform to meet the real-time update n
 
 ### Halodoc
 [Lake House Architecture at Halodoc: Data Platform 2.0](https://blogs.halodoc.io/lake-house-architecture-halodoc-data-platform-2-0/)
+
+### Jobtarget
+[Jobtarget](https://www.jobtarget.com/) is a company dedicated to helping job seekers and employers connect. This focus has allowed us to earn the opportunity to serve thousands of companies and millions of job seekers each month.
 
 ### Kyligence 
 [Kyligence](https://kyligence.io/zh/) is the leading Big Data analytics platform company. We’ve built end to end solutions for various Global Fortune 500 companies in US and China. We adopted Apache Hudi in our Cloud solution on AWS in 2019. With the help of Hudi, we are able to process upserts and deletes easily and we use incremental views to build efficient data pipelines in AWS. The Hudi datasets can also be integrated to Kyligence Cloud directly for high concurrent OLAP access.
