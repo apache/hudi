@@ -282,7 +282,7 @@ public class TestHoodieCatalog {
     metaClient =
         StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath), new org.apache.hadoop.conf.Configuration());
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
-    assertEquals(keyGeneratorClassName, ComplexAvroKeyGenerator.class.getName());
+    assertThat(keyGeneratorClassName, is(ComplexAvroKeyGenerator.class.getName()));
 
     // validate multiple key and single partition for partitioned table
     ObjectPath multipleKeySinglePartitionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb_mksp" + System.currentTimeMillis());
@@ -299,7 +299,7 @@ public class TestHoodieCatalog {
     metaClient =
         StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath), new org.apache.hadoop.conf.Configuration());
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
-    assertEquals(keyGeneratorClassName, ComplexAvroKeyGenerator.class.getName());
+    assertThat(keyGeneratorClassName, is(ComplexAvroKeyGenerator.class.getName()));
 
     // validate key generator for non partitioned table
     ObjectPath nonPartitionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb");

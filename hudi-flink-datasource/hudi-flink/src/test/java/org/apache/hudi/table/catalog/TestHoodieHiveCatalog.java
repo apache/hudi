@@ -233,7 +233,7 @@ public class TestHoodieHiveCatalog {
 
     HoodieTableMetaClient singleKeyMultiPartitionTableMetaClient =
         StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(singleKeyMultiPartitionPath, singleKeyMultiPartitionTable), createHiveConf());
-    assertEquals(singleKeyMultiPartitionTableMetaClient.getTableConfig().getKeyGeneratorClassName(), ComplexAvroKeyGenerator.class.getName());
+    assertThat(singleKeyMultiPartitionTableMetaClient.getTableConfig().getKeyGeneratorClassName(), is(ComplexAvroKeyGenerator.class.getName()));
 
     // validate multiple key and single partition for partitioned table
     ObjectPath multiKeySinglePartitionPath = new ObjectPath("default", "tb_mksp_" + System.currentTimeMillis());
@@ -245,7 +245,7 @@ public class TestHoodieHiveCatalog {
 
     HoodieTableMetaClient multiKeySinglePartitionTableMetaClient =
         StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(multiKeySinglePartitionPath, multiKeySinglePartitionTable), createHiveConf());
-    assertEquals(multiKeySinglePartitionTableMetaClient.getTableConfig().getKeyGeneratorClassName(), ComplexAvroKeyGenerator.class.getName());
+    assertThat(multiKeySinglePartitionTableMetaClient.getTableConfig().getKeyGeneratorClassName(), is(ComplexAvroKeyGenerator.class.getName()));
 
     // validate key generator for non partitioned table
     ObjectPath nonPartitionPath = new ObjectPath("default", "tb_" + tableType);
