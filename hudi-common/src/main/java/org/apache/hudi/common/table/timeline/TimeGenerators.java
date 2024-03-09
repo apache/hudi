@@ -29,7 +29,7 @@ import org.apache.hadoop.conf.Configuration;
 import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 
 /**
- * Holds all different {@link TimeGenerator} implementations, use {@link HoodieCommonConfig.BASE_PATH}
+ * Holds all different {@link TimeGenerator} implementations, use {@link org.apache.hudi.common.config.HoodieCommonConfig#BASE_PATH}
  * to cache the existing instances.
  */
 public class TimeGenerators {
