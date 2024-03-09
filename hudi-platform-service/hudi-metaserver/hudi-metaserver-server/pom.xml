@@ -32,7 +32,7 @@
         <main.basedir>${project.parent.basedir}</main.basedir>
         <mybatis.version>3.4.6</mybatis.version>
         <HikariCP.version>4.0.3</HikariCP.version>
-        <mysql-connector-java.version>8.0.22</mysql-connector-java.version>
+        <mysql-connector-java.version>8.0.28</mysql-connector-java.version>
     </properties>
 
     <dependencies>
