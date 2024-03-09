@@ -236,12 +236,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
   }
 
   private Long parsedToSeconds(String time) {
-    long timestamp;
-    try {
-      timestamp = HoodieActiveTimeline.parseDateFromInstantTime(time).getTime() / 1000;
-    } catch (ParseException e) {
-      throw new HoodieCompactionException(e.getMessage(), e);
-    }
-    return timestamp;
+    return HoodieActiveTimeline.parseDateFromInstantTimeSafely(time).orElseThrow(() -> new HoodieCompactionException("Failed to parse timestamp " + time))
+            .getTime() / 1000;
   }
 }
