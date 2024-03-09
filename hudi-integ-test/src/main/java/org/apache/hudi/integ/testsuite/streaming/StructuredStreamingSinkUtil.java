@@ -19,16 +19,15 @@
 
 package org.apache.hudi.integ.testsuite.streaming;
 
-import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.exception.HoodieException;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -54,7 +53,7 @@ import java.util.Map;
  */
 public class StructuredStreamingSinkUtil implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(StructuredStreamingSinkUtil.class);
+  private static final Logger LOG = LoggerFactory.getLogger(StructuredStreamingSinkUtil.class);
 
   private transient JavaSparkContext jsc;
   private SparkSession sparkSession;
@@ -130,7 +129,7 @@ public class StructuredStreamingSinkUtil implements Serializable {
 
   public void run() {
     try {
-      LOG.info(cfg);
+      LOG.info(cfg.toString());
       StructuredStreamingSinkTestWriter.triggerStreaming(sparkSession, cfg.tableType, cfg.sourcePath, cfg.targetPath, cfg.checkpointPath,
           cfg.tableName, cfg.partitionField, cfg.recordKeyField, cfg.preCombineField);
       StructuredStreamingSinkTestWriter.waitUntilCondition(1000 * 60 * 10, 1000 * 30);
@@ -156,12 +155,14 @@ public class StructuredStreamingSinkUtil implements Serializable {
     sparkConf.set("spark.ui.port", "8090");
     sparkConf.setIfMissing("spark.driver.maxResultSize", "2g");
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    sparkConf.set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar");
+    sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
     sparkConf.set("spark.hadoop.mapred.output.compress", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
     additionalConfigs.forEach(sparkConf::set);
-    return SparkRDDWriteClient.registerClasses(sparkConf);
+    return sparkConf;
   }
 }

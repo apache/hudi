@@ -23,8 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig.FAIL_ON_TIMELINE_ARCHIVING_ENABLE
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.streaming.StreamingQueryListener.{QueryProgressEvent, QueryStartedEvent, QueryTerminatedEvent}
-import org.apache.spark.sql.streaming.{OutputMode, ProcessingTime, StreamingQueryListener}
-
+import org.apache.spark.sql.streaming.{OutputMode, StreamingQueryListener, Trigger}
 import org.apache.log4j.LogManager
 
 object StructuredStreamingSinkTestWriter {
@@ -100,6 +99,6 @@ object StructuredStreamingSinkTestWriter {
       option("checkpointLocation", hudiCheckpointPath).
       outputMode(OutputMode.Append());
 
-    writer.trigger(new ProcessingTime(30000)).start(hudiPath);
+    writer.trigger(Trigger.ProcessingTime(30000)).start(hudiPath);
   }
 }
