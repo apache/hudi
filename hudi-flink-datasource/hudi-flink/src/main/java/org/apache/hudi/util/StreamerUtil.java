@@ -69,7 +69,6 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -380,34 +379,30 @@ public class StreamerUtil {
    * Returns the median instant time between the given two instant time.
    */
   public static Option<String> medianInstantTime(String highVal, String lowVal) {
-    try {
-      long high = HoodieActiveTimeline.parseDateFromInstantTime(highVal).getTime();
-      long low = HoodieActiveTimeline.parseDateFromInstantTime(lowVal).getTime();
-      ValidationUtils.checkArgument(high > low,
-          "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
-      long median = low + (high - low) / 2;
-      final String instantTime = HoodieActiveTimeline.formatDate(new Date(median));
-      if (HoodieTimeline.compareTimestamps(lowVal, HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime)
-          || HoodieTimeline.compareTimestamps(highVal, HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime)) {
-        return Option.empty();
-      }
-      return Option.of(instantTime);
-    } catch (ParseException e) {
-      throw new HoodieException("Get median instant time with interval [" + lowVal + ", " + highVal + "] error", e);
+    long high = HoodieActiveTimeline.parseDateFromInstantTimeSafely(highVal)
+            .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + highVal + "] error")).getTime();
+    long low = HoodieActiveTimeline.parseDateFromInstantTimeSafely(lowVal)
+            .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + lowVal + "] error")).getTime();
+    ValidationUtils.checkArgument(high > low,
+            "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
+    long median = low + (high - low) / 2;
+    final String instantTime = HoodieActiveTimeline.formatDate(new Date(median));
+    if (HoodieTimeline.compareTimestamps(lowVal, HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime)
+            || HoodieTimeline.compareTimestamps(highVal, HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime)) {
+      return Option.empty();
     }
+    return Option.of(instantTime);
   }
 
   /**
    * Returns the time interval in seconds between the given instant time.
    */
   public static long instantTimeDiffSeconds(String newInstantTime, String oldInstantTime) {
-    try {
-      long newTimestamp = HoodieActiveTimeline.parseDateFromInstantTime(newInstantTime).getTime();
-      long oldTimestamp = HoodieActiveTimeline.parseDateFromInstantTime(oldInstantTime).getTime();
-      return (newTimestamp - oldTimestamp) / 1000;
-    } catch (ParseException e) {
-      throw new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error", e);
-    }
+    long newTimestamp = HoodieActiveTimeline.parseDateFromInstantTimeSafely(newInstantTime)
+            .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error")).getTime();
+    long oldTimestamp = HoodieActiveTimeline.parseDateFromInstantTimeSafely(oldInstantTime)
+            .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error")).getTime();
+    return (newTimestamp - oldTimestamp) / 1000;
   }
 
   public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
