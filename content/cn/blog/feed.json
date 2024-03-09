@@ -5,6 +5,28 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2024/03/05/Apache-Hudi-From-Zero-To-One-blog-9",
+            "content_html": "<div url=\"https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-910?r=2fl10k&amp;utm_campaign=post&amp;utm_medium=web\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/03/05/Apache-Hudi-From-Zero-To-One-blog-9",
+            "title": "Apache Hudi: From Zero To One (9/10)",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-03-05T00:00:00.000Z",
+            "author": {
+                "name": "Shiyan Xu"
+            }
+        },
+        {
+            "id": "/2024/02/27/Building-Data-Lakes-on-AWS-with-Kafka-Connect-Debezium-Apicurio-Registry-and-Apache-Hudi",
+            "content_html": "<div url=\"https://medium.com/itnext/building-data-lakes-on-aws-with-kafka-connect-debezium-apicurio-registry-and-apache-hudi-b4da0268dce\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/02/27/Building-Data-Lakes-on-AWS-with-Kafka-Connect-Debezium-Apicurio-Registry-and-Apache-Hudi",
+            "title": "Building Data Lakes on AWS with Kafka Connect, Debezium, Apicurio Registry, and Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-02-27T00:00:00.000Z",
+            "author": {
+                "name": "Gary A. Stafford"
+            }
+        },
+        {
             "id": "/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration",
             "content_html": "<div url=\"https://medium.com/leboncoin-tech-blog/how-a-poc-became-a-production-ready-hudi-data-lakehouse-through-close-team-collaboration-c7f33eb746a8\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/cn/blog/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration",
@@ -13,6 +35,17 @@
             "date_modified": "2024-02-12T00:00:00.000Z",
             "author": {
                 "name": "Xiaoxiao Rey and Hussein Awala"
+            }
+        },
+        {
+            "id": "/2024/02/06/Building-an-Open-Source-Data-Lake-House-with-Hudi-Postgres-Hive-Metastore-Minio-and-StarRocks",
+            "content_html": "<div url=\"https://www.linkedin.com/pulse/building-open-source-data-lake-house-hudi-postgres-hive-soumil-shah-wwyye/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/02/06/Building-an-Open-Source-Data-Lake-House-with-Hudi-Postgres-Hive-Metastore-Minio-and-StarRocks",
+            "title": "Building an Open Source Data Lake House with Hudi, Postgres Hive Metastore, Minio, and StarRocks",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-02-06T00:00:00.000Z",
+            "author": {
+                "name": "Soumil Shah"
             }
         },
         {

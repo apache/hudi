@@ -2,11 +2,33 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2024-02-12T00:00:00.000Z</updated>
+    <updated>2024-03-05T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi: From Zero To One (9/10)]]></title>
+        <id>/2024/03/05/Apache-Hudi-From-Zero-To-One-blog-9</id>
+        <link href="https://hudi.apache.org/blog/2024/03/05/Apache-Hudi-From-Zero-To-One-blog-9"/>
+        <updated>2024-03-05T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-910?r=2fl10k&amp;utm_campaign=post&amp;utm_medium=web">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Shiyan Xu</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Building Data Lakes on AWS with Kafka Connect, Debezium, Apicurio Registry, and Apache Hudi]]></title>
+        <id>/2024/02/27/Building-Data-Lakes-on-AWS-with-Kafka-Connect-Debezium-Apicurio-Registry-and-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2024/02/27/Building-Data-Lakes-on-AWS-with-Kafka-Connect-Debezium-Apicurio-Registry-and-Apache-Hudi"/>
+        <updated>2024-02-27T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/itnext/building-data-lakes-on-aws-with-kafka-connect-debezium-apicurio-registry-and-apache-hudi-b4da0268dce">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Gary A. Stafford</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[How a POC became a production-ready Hudi data lakehouse through close team collaboration]]></title>
         <id>/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration</id>
@@ -16,6 +38,17 @@
         <content type="html"><![CDATA[<div url="https://medium.com/leboncoin-tech-blog/how-a-poc-became-a-production-ready-hudi-data-lakehouse-through-close-team-collaboration-c7f33eb746a8">Redirecting... please wait!! </div>]]></content>
         <author>
             <name>Xiaoxiao Rey and Hussein Awala</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Building an Open Source Data Lake House with Hudi, Postgres Hive Metastore, Minio, and StarRocks]]></title>
+        <id>/2024/02/06/Building-an-Open-Source-Data-Lake-House-with-Hudi-Postgres-Hive-Metastore-Minio-and-StarRocks</id>
+        <link href="https://hudi.apache.org/blog/2024/02/06/Building-an-Open-Source-Data-Lake-House-with-Hudi-Postgres-Hive-Metastore-Minio-and-StarRocks"/>
+        <updated>2024-02-06T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/building-open-source-data-lake-house-hudi-postgres-hive-soumil-shah-wwyye/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
         </author>
     </entry>
     <entry>

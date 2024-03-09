@@ -4,9 +4,25 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Mon, 12 Feb 2024 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Tue, 05 Mar 2024 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Apache Hudi: From Zero To One (9/10)]]></title>
+            <link>https://hudi.apache.org/blog/2024/03/05/Apache-Hudi-From-Zero-To-One-blog-9</link>
+            <guid>/2024/03/05/Apache-Hudi-From-Zero-To-One-blog-9</guid>
+            <pubDate>Tue, 05 Mar 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-910?r=2fl10k&amp;utm_campaign=post&amp;utm_medium=web">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Building Data Lakes on AWS with Kafka Connect, Debezium, Apicurio Registry, and Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2024/02/27/Building-Data-Lakes-on-AWS-with-Kafka-Connect-Debezium-Apicurio-Registry-and-Apache-Hudi</link>
+            <guid>/2024/02/27/Building-Data-Lakes-on-AWS-with-Kafka-Connect-Debezium-Apicurio-Registry-and-Apache-Hudi</guid>
+            <pubDate>Tue, 27 Feb 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/itnext/building-data-lakes-on-aws-with-kafka-connect-debezium-apicurio-registry-and-apache-hudi-b4da0268dce">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[How a POC became a production-ready Hudi data lakehouse through close team collaboration]]></title>
             <link>https://hudi.apache.org/blog/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration</link>
@@ -14,6 +30,14 @@
             <pubDate>Mon, 12 Feb 2024 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://medium.com/leboncoin-tech-blog/how-a-poc-became-a-production-ready-hudi-data-lakehouse-through-close-team-collaboration-c7f33eb746a8">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Building an Open Source Data Lake House with Hudi, Postgres Hive Metastore, Minio, and StarRocks]]></title>
+            <link>https://hudi.apache.org/blog/2024/02/06/Building-an-Open-Source-Data-Lake-House-with-Hudi-Postgres-Hive-Metastore-Minio-and-StarRocks</link>
+            <guid>/2024/02/06/Building-an-Open-Source-Data-Lake-House-with-Hudi-Postgres-Hive-Metastore-Minio-and-StarRocks</guid>
+            <pubDate>Tue, 06 Feb 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/building-open-source-data-lake-house-hudi-postgres-hive-soumil-shah-wwyye/">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Apache Hudi: Managing Partition on a petabyte-scale table]]></title>
