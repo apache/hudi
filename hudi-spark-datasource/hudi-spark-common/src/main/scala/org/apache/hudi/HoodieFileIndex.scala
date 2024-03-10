@@ -63,7 +63,7 @@ import scala.util.{Failure, Success, Try}
  * who's directory level is 3).We can still read it as a partitioned table. We will mapping the
  * partition path (e.g. 2021/03/10) to the only partition column (e.g. "dt").
  *
- * 3、Else the the partition columns size is not equal to the partition directory level and the
+ * 3、Else the partition columns size is not equal to the partition directory level and the
  * size is great than "1" (e.g. partition column is "dt,hh", the partition path is "2021/03/10/12")
  * , we read it as a Non-Partitioned table because we cannot know how to mapping the partition
  * path with the partition columns in this case.
