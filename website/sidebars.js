@@ -84,7 +84,7 @@ module.exports = {
                         'syncing_datahub',
                         'syncing_metastore',
                         'gcp_bigquery',
-                        'syncing_onetable'
+                        'syncing_xtable'
                     ],
                 }
             ],

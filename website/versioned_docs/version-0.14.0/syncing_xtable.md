@@ -43,7 +43,7 @@ java -jar path/to/bundled-xtable.jar --datasetConfig path/to/my_config.yaml
 If you want to use XTable with Hudi Streamer to sync each commit into other table formats, you have to
 
 1. Add the [extensions jar](https://github.com/apache/incubator-xtable/tree/main/hudi-support/extensions) `hudi-extensions-0.1.0-SNAPSHOT-bundled.jar` to your class path.
-2. Add `io.onetable.hudi.sync.OneTableSyncTool` to your list of sync classes
+2. Add `org.apache.xtable.hudi.sync.OneTableSyncTool` to your list of sync classes
 3. Set the following configurations based on your preferences:
 
    ```
