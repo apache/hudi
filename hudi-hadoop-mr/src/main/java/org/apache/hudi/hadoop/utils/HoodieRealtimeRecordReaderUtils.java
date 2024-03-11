@@ -311,6 +311,38 @@ public class HoodieRealtimeRecordReaderUtils {
     return HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hoodieConfig, conf, path);
   }
 
+  /**
+   * Construct a Hive ordered schema from the writer schema and the hive columns string.
+   *
+   * @param writerSchema     Writer schema from commit metadata including partition field
+   * @param schemaFieldsMap  Map of field names to fields
+   * @param hiveColumnString Hive columns string
+   * @return
+   */
+  public static Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Schema.Field> schemaFieldsMap, String hiveColumnString) {
+    String[] hiveColumns = hiveColumnString.isEmpty() ? new String[0] : hiveColumnString.split(",");
+    LOG.info("Hive Columns : " + hiveColumnString);
+    List<Schema.Field> hiveSchemaFields = new ArrayList<>();
+
+    for (String columnName : hiveColumns) {
+      Schema.Field field = schemaFieldsMap.get(columnName.toLowerCase());
+
+      if (field != null) {
+        hiveSchemaFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
+      } else {
+        // Hive has some extra virtual columns like BLOCK__OFFSET__INSIDE__FILE which do not exist in table schema.
+        // They will get skipped as they won't be found in the original schema.
+        LOG.debug("Skipping Hive Column => " + columnName);
+      }
+    }
+
+    Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
+        writerSchema.isError());
+    hiveSchema.setFields(hiveSchemaFields);
+    LOG.debug("HIVE Schema is :" + hiveSchema.toString(true));
+    return hiveSchema;
+  }
+
   private static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {
     List<Schema.Field> newFields = new ArrayList<>();
     for (String newField : newFieldNames) {
