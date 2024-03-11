@@ -186,7 +186,7 @@ public class RequestHandler {
     }
 
     // As a safety check, even if hash is same, ensure instant is present
-    return !localTimeline.containsOrBeforeTimelineStarts(lastKnownInstantFromClient);
+    return !localTimeline.isValidInstant(lastKnownInstantFromClient);
   }
 
   /**

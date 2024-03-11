@@ -187,9 +187,9 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     if (hollowCommitHandling == USE_TRANSITION_TIME) super.timeline.lastInstant().get.getCompletionTime
     else super.timeline.lastInstant().get.getTimestamp)
 
-  protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
+  protected def startInstantArchived: Boolean = super.timeline.isArchived(startTimestamp)
 
-  protected def endInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(endTimestamp)
+  protected def endInstantArchived: Boolean = super.timeline.isArchived(endTimestamp)
 
   // Fallback to full table scan if any of the following conditions matches:
   //   1. the start commit is archived

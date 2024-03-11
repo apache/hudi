@@ -476,7 +476,7 @@ public class TestCleanPlanner {
     when(timeline.lastInstant()).thenReturn(Option.of(new HoodieInstant(HoodieInstant.State.COMPLETED, "COMMIT", baseFileCommitTimes.get(baseFileCommitTimes.size() - 1))));
     HoodieFileGroup group = new HoodieFileGroup(fileGroupId, timeline);
     for (String baseFileCommitTime : baseFileCommitTimes) {
-      when(timeline.containsOrBeforeTimelineStarts(baseFileCommitTime)).thenReturn(true);
+      when(timeline.isValidInstant(baseFileCommitTime)).thenReturn(true);
       HoodieBaseFile baseFile = new HoodieBaseFile(String.format("file:///tmp/base/%s_1-0-1_%s.parquet", fileGroup, baseFileCommitTime));
       group.addBaseFile(baseFile);
     }
@@ -541,7 +541,7 @@ public class TestCleanPlanner {
 
     HoodieDefaultTimeline commitsTimeline = mock(HoodieDefaultTimeline.class);
     when(activeTimeline.getCommitsTimeline()).thenReturn(commitsTimeline);
-    when(commitsTimeline.isBeforeTimelineStarts(earliestCommitToRetain)).thenReturn(false);
+    when(commitsTimeline.isArchived(earliestCommitToRetain)).thenReturn(false);
 
     when(hoodieTable.isPartitioned()).thenReturn(true);
     when(hoodieTable.isMetadataTable()).thenReturn(false);

@@ -167,12 +167,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieTimeline getContiguousCompletedWriteTimeline() {
-    Option<HoodieInstant> earliestPending = getWriteTimeline().filterInflightsAndRequested().firstInstant();
+    HoodieDefaultTimeline writeTimeline = getWriteTimeline();
+    Option<HoodieInstant> earliestPending = writeTimeline.filterInflightsAndRequested().firstInstant();
     if (earliestPending.isPresent()) {
-      return getWriteTimeline().filterCompletedInstants()
+      return writeTimeline.filterCompletedInstants()
           .filter(instant -> compareTimestamps(instant.getTimestamp(), LESSER_THAN, earliestPending.get().getTimestamp()));
     }
-    return getWriteTimeline().filterCompletedInstants();
+    return writeTimeline.filterCompletedInstants();
   }
 
   @Override
@@ -463,8 +464,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public boolean containsOrBeforeTimelineStarts(String instant) {
-    return containsInstant(instant) || isBeforeTimelineStarts(instant);
+  public boolean isValidInstant(String instant) {
+    return containsInstant(instant) || isArchived(instant);
   }
 
   @Override
@@ -494,13 +495,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public boolean isBeforeTimelineStarts(String instant) {
-    Option<HoodieInstant> firstNonSavepointCommit = getFirstNonSavepointCommit();
+  public boolean isArchived(String instant) {
+    Option<HoodieInstant> firstNonSavepointCommit = getFirstNonSavepointActiveCommit();
     return firstNonSavepointCommit.isPresent()
         && compareTimestamps(instant, LESSER_THAN, firstNonSavepointCommit.get().getTimestamp());
   }
 
-  public Option<HoodieInstant> getFirstNonSavepointCommit() {
+  public Option<HoodieInstant> getFirstNonSavepointActiveCommit() {
     if (this.firstNonSavepointCommit == null) {
       synchronized (this) {
         if (this.firstNonSavepointCommit == null) {
@@ -562,7 +563,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   /**
    * Returns the first non savepoint commit on the timeline.
    */
-  private static Option<HoodieInstant> findFirstNonSavepointCommit(List<HoodieInstant> instants) {
+  protected Option<HoodieInstant> findFirstNonSavepointCommit(List<HoodieInstant> instants) {
     Set<String> savepointTimestamps = instants.stream()
         .filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION))
         .map(HoodieInstant::getTimestamp)
@@ -615,7 +616,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   /**
    * Merges the given instant list into one and keep the sequence.
    */
-  private static List<HoodieInstant> mergeInstants(List<HoodieInstant> instants1, List<HoodieInstant> instants2) {
+  protected static List<HoodieInstant> mergeInstants(List<HoodieInstant> instants1, List<HoodieInstant> instants2) {
     ValidationUtils.checkArgument(!instants1.isEmpty() && !instants2.isEmpty(), "The instants to merge can not be empty");
     // some optimizations are based on the assumption all the instant lists are already sorted.
     // skip when one list contains all the instants of the other one.
