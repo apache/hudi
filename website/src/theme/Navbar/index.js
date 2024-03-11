@@ -250,6 +250,7 @@ function Navbar() {
       })}>
       <div className="navbar__inner">
         <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8f594acf-9b77-44fb-9475-3e82ead1910c" width={0} height={0} alt=""/>
+        <img referrerpolicy="no-referrer-when-downgrade" src="https://analytics.apache.org/matomo.php?idsite=47&amp;rec=1" width={0} height={0} alt="" />
         <div className="navbar__items">
           {(items?.length > 0 || activeDocPlugin) && (
             <button
