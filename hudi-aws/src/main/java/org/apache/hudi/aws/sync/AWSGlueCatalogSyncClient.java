@@ -728,7 +728,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       try {
         HashMap<String, String> propertyMap = new HashMap<>();
         propertyMap.put(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
-        propertyMap.put(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionSynced.get());
+        if (lastCommitCompletionSynced.isPresent()) {
+          propertyMap.put(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionSynced.get());
+        }
         updateTableParameters(awsGlue, databaseName, tableName, propertyMap, skipTableArchive);
       } catch (Exception e) {
         throw new HoodieGlueSyncException("Fail to update last sync commit time for " + tableId(databaseName, tableName), e);
