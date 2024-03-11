@@ -21,8 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Tag
 
 import scala.collection.JavaConverters._
@@ -53,7 +52,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
       )
 
       assertResult(WriteOperationType.BULK_INSERT) {
-        getLastCommitMetadata(spark, tablePath).getOperationType
+        HoodieSparkSqlTestBase.getLastCommitMetadata(spark, tablePath).getOperationType
       }
       checkAnswer(s"select id, name, price, ts, cast(dt as string) from $tableName")(
         Seq(1, "a1", 10, 1000, "2021-05-06")

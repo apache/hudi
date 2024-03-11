@@ -42,7 +42,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
   extends ColumnStatsIndexSupport(spark, tableSchema, metadataConfig, metaClient, allowCaching) {
 
   override def isIndexAvailable: Boolean = {
-    checkState(metadataConfig.enabled && metadataConfig.isPartitionStatsIndexEnabled, "Metadata Table support has to be enabled")
+    checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
     metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS)
   }
 
