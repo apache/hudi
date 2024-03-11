@@ -226,7 +226,6 @@ public class TestHoodieHiveCatalog {
 
     // validate single key and multiple partition for partitioned table
     ObjectPath singleKeyMultiPartitionPath = new ObjectPath("default", "tb_skmp_" + System.currentTimeMillis());
-
     CatalogTable singleKeyMultiPartitionTable =
         new CatalogTableImpl(singleKeyMultiPartitionTableSchema, multiPartitions, options, "hudi table");
     hoodieCatalog.createTable(singleKeyMultiPartitionPath, singleKeyMultiPartitionTable, false);
