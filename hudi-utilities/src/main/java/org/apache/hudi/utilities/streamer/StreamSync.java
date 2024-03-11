@@ -517,6 +517,7 @@ public class StreamSync implements Serializable, Closeable {
       throw new UnsupportedOperationException("Spark record only support parquet log.");
     }
 
+    hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Fetching next batch: " + cfg.targetTableName);
     InputBatch inputBatch = fetchNextBatchFromSource(resumeCheckpointStr, metaClient);
     final String checkpointStr = inputBatch.getCheckpointForNextBatch();
     final SchemaProvider schemaProvider = inputBatch.getSchemaProvider();
@@ -531,7 +532,7 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     // handle empty batch with change in checkpoint
-    hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Checking if input is empty");
+    hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Checking if input is empty: " + cfg.targetTableName);
 
 
     if (useRowWriter) { // no additional processing required for row writer.
