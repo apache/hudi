@@ -11,8 +11,6 @@ of people and organizations from all around the globe. The following is a small 
 contributed to the Apache Hudi community! [Join us on slack](https://join.slack.com/t/apache-hudi/shared_invite/zt-20r833rxh-627NWYDUyR8jRtMa2mZ~gg), 
 or come to one of our [virtual community events](https://hudi.apache.org/community/syncs).
 
-<img src="/assets/images/powers/hudi-logo-page.png" alt="drawing"/>
-
 ### 37 Interactive Entertainment
 [37 Interactive Entertainment](https://www.37wan.net/) is a global Top20 listed game company, and a leading company on A-shares market of China.
 Apache Hudi is integrated into our Data Middle Platform offering real-time data warehouse and solving the problem of frequent changes of data.
