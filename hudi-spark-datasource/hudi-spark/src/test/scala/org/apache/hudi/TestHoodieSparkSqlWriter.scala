@@ -30,9 +30,9 @@ import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
+import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -72,7 +72,7 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
     if (enableOCCConfigs) {
       fooTableModifier = fooTableModifier
         .updated("hoodie.write.concurrency.mode","optimistic_concurrency_control")
-        .updated("hoodie.cleaner.policy.failed.writes","LAZY")
+        .updated("hoodie.clean.failed.writes.policy","LAZY")
         .updated("hoodie.write.lock.provider","org.apache.hudi.client.transaction.lock.InProcessLockProvider")
     }
 

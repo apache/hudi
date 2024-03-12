@@ -29,15 +29,13 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodiePreCommitValidatorConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieUpsertException, HoodieValidationException}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
 import org.apache.spark.SparkConf
-import org.apache.spark.sql._
+import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
@@ -256,7 +254,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .options(commonOpts)
       .option("hoodie.keep.min.commits", "2")
       .option("hoodie.keep.max.commits", "3")
-      .option("hoodie.cleaner.commits.retained", "1")
+      .option("hoodie.clean.commits.retained", "1")
       .option("hoodie.metadata.enable", "false")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
@@ -392,7 +390,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .options(commonOpts)
       .option("hoodie.keep.min.commits", "2")
       .option("hoodie.keep.max.commits", "3")
-      .option("hoodie.cleaner.commits.retained", "1")
+      .option("hoodie.clean.commits.retained", "1")
       .option("hoodie.metadata.enable", "false")
       .option(DataSourceWriteOptions.OPERATION.key, writeOperation)
       .mode(SaveMode.Append)

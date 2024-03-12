@@ -136,8 +136,8 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
              |   primaryKey = 'id',
              |   type = 'cow',
              |   preCombineField = 'ts',
-             |   hoodie.cleaner.policy = 'KEEP_LATEST_COMMITS',
-             |   hoodie.cleaner.commits.retained = '2'
+             |   hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
+             |   hoodie.clean.commits.retained = '2'
              | )
              |""".stripMargin)
 
@@ -186,8 +186,8 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
 
         val result1 = spark.sql(
           s"""call run_clean(table => '$tableName', options => "
-             | hoodie.cleaner.policy=KEEP_LATEST_COMMITS,
-             | hoodie.cleaner.commits.retained=2
+             | hoodie.clean.policy=KEEP_LATEST_COMMITS,
+             | hoodie.clean.commits.retained=2
              |")""".stripMargin)
           .collect()
           .map(row => Seq(row.getString(0), row.getLong(1), row.getInt(2), row.getString(3), row.getString(4), row.getInt(5)))

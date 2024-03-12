@@ -17,14 +17,13 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieTimeGeneratorConfig}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.SparkException
@@ -78,7 +77,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
       inputDF.write.format("org.apache.hudi")
         .options(commonOpts)
         .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
-        .option("hoodie.cleaner.commits.retained", "3")
+        .option("hoodie.clean.commits.retained", "3")
         .option("hoodie.keep.min.commits", "4")
         .option("hoodie.keep.max.commits", "7")
         .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)

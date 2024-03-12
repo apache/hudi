@@ -28,9 +28,9 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, ScalaAssertionSupport}
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageCompleted}
-import org.apache.spark.sql._
+import org.apache.spark.sql.{SaveMode, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -133,7 +133,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
     structType = inputDF.schema
     inputDF.write.format("hudi")
       .options(commonOpts)
-      .option("hoodie.cleaner.commits.retained", "0")
+      .option("hoodie.clean.commits.retained", "0")
       .option("hoodie.parquet.small.file.limit", "0")
       .option("hoodie.clustering.inline", "true")
       .option("hoodie.clustering.inline.max.commits", "2")
