@@ -81,6 +81,9 @@ Apache Hudi is integrated in the digital platform to meet the real-time update n
 ### NerdWallet
 [NerdWallet uses AWS and Apache Hudi to build a serverless, real-time analytics platform](https://aws.amazon.com/blogs/big-data/how-nerdwallet-uses-aws-and-apache-hudi-to-build-a-serverless-real-time-analytics-platform/)
 
+### Notion
+[Notion](https://www.notion.so/) is the connected workspace where modern teams create and share docs, take notes, manage their projects and time, and organize knowledge — with AI integrated throughout. Notion uses Apache Hudi to power their core analytics datasets and AI features.
+
 ### Penn Interactive
 The interactive arm of [Penn Entertainment](https://www.pennentertainment.com/), encompassing Penn Interactive and theScore, is a major player in online and retail sports betting markets in the U.S. and Canada, as well as the sports media sector.Apache Hudi's efficient processing helps them to keep  Spark resources reasonable while running hundreds of streaming jobs 24/7.
 
