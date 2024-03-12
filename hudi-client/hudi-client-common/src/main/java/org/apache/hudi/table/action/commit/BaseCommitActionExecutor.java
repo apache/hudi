@@ -237,6 +237,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       Iterator<HoodieRecord<T>> recordItr) throws IOException;
 
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> executeClustering(HoodieClusteringPlan clusteringPlan) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Clustering records for " + config.getTableName());
     HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
     // Mark instant as clustering inflight
     table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
