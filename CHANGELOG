@@ -68,3 +68,9 @@ b254a252b [AUDIT-656] Upgrade hudi-internal to release-v1.2.2 (#544)
 0f669701dab [HUDI-7491] Fixing handling null values of extra metadata in clean commit metadata (#583)
 35ae9c45aa4 [HUDI-7418] Create a common method for filtering in S3 and GCS sources and add tests for filtering out extensions (#581)
 ccda484b4e9 [AUDIT-682] Upgrade to version release-v1.3.3 (#580)
+
+---[2024-03-11 17:50:08] [release-v1.5.0] ---
+0823c1f83d7 [HUDI-7489] Avoid collecting WriteStatus to driver in row writer code path (#582)
+9d564fe3990 [MINOR] additional job contexts for ease of debugging (#587)
+11fc9eb4a17 [HUDI-7460] Relaxing compaction scheduling when there are pending delta commits (#549)
+80481436585 [AUDIT-685] Upgrade to version release-v1.4.0 (#585)
