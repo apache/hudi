@@ -137,6 +137,16 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq("1", "aa", 123, "2024-02-19", 10),
       )
 
+      spark.sql(
+        s"""
+           |insert into ${targetTable}
+           |select '1' as id, 'cc' as name, 124 as ts, '2024-02-19' as `day`, 10 as `hour`
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, ts, day, hour from $targetTable limit 10")(
+        Seq("1", "cc", 124, "2024-02-19", 10),
+      )
+
     })
   }
 
