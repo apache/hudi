@@ -480,6 +480,21 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation(BulkInsertSortMode.class);
 
+  public static final ConfigProperty<String> INSERT_SORT_MODE = ConfigProperty
+      .key("hoodie.insert.sort.mode")
+      .defaultValue(BulkInsertSortMode.NONE.name())
+      .withValidValues(BulkInsertSortMode.NONE.name(), BulkInsertSortMode.GLOBAL_SORT.name())
+      .markAdvanced()
+      .withDocumentation("Determines whether the insert operation should sort the input records. The sorting mode for insert operation can be NONE"
+          + " or GLOBAL_SORT (among all input records in a batch)");
+
+  public static final ConfigProperty<String> INSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS = ConfigProperty
+      .key("hoodie.insert.user.defined.partitioner.sort.columns")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Columns to sort the data by when hoodie.insert.sort is set to true. If not specified, record-key is used for sorting."
+          + "For example 'column1,column2'. Sorting is always done by prefixing the sort column with partition path");
+
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server")
       .defaultValue("true")

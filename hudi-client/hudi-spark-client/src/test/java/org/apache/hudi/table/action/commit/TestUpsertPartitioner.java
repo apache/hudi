@@ -56,6 +56,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -474,6 +475,73 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath)
         ),
         partitioner.getBucketInfos());
+  }
+
+  @Test
+  public void testUpsertSortPartitioner() throws Exception {
+    // One single Hudi partition
+    final String testPartitionPath = "2016/09/26";
+
+    // Build the config
+    // 1. Anything smaller than 1000 files is considered a small file
+    // 2. A file can only hold a maximum of 1000 records
+    // 3. Inserts are split into buckets of 100 records (after filling the existing small file)
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1000 * 1024)
+            .insertSplitSize(100).autoTuneInsertSplits(false).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1000 * 1024).parquetMaxFileSize(1000 * 1024).orcMaxFileSize(1000 * 1024).build())
+        .build();
+
+    FileCreateUtils.createCommit(basePath, "001");
+
+    // Create a base file of roughly 800 record size
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "001", "file1", 800 * 1024);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+
+    // Generate 500 insert records and sort it
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
+    List<HoodieRecord> records = dataGenerator.generateInserts("001", 500);
+    Comparator<HoodieRecord> comparator = Comparator.comparing(r -> r.getKey().getPartitionPath());
+    records.sort(comparator);
+
+    // Build the workload profile
+    WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(records)));
+    UpsertPartitioner partitioner = new UpsertSortPartitioner(profile, context, table, config);
+
+    // A total of 4 buckets (or spark partitions are generated).
+    // The first 200 records are assigned to the existing small file. This is a UPDATE bucket
+    // Next 300 records are assigned to 3 buckets (of new files), each containing 100 records. These are INSERT buckets
+    assertEquals(4, partitioner.numPartitions(), "Should have 4 partitions");
+    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+        "Bucket 0 is UPDATE");
+    for (int bucket = 1; bucket < 4; bucket++) {
+      assertEquals(BucketType.INSERT, partitioner.getBucketInfo(bucket).bucketType,
+          "Bucket " + bucket + " is INSERT");
+    }
+
+    // Totally 4 buckets are creates by the partitioner
+    List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
+    assertEquals(4, insertBuckets.size(), "Total of 4 insert buckets");
+
+    // Expected weight of each bucket: b1 = 200/500 = 0.4, {b2-to-b4} = 100/500 = 0.2
+    Double[] weights = { 0.4, 0.2, 0.2, 0.2};
+    Double[] cumulativeWeights = { 0.4, 0.6, 0.8, 1.0};
+    assertInsertBuckets(weights, cumulativeWeights, insertBuckets);
+
+    // First 200 records are mapped to bucket 0. Subsequent buckets have 100 (contiguous) records each
+    assertPartitionNumber(records, 0, 200, 0, partitioner);
+    assertPartitionNumber(records, 200, 300, 1, partitioner);
+    assertPartitionNumber(records, 300, 400, 2, partitioner);
+    assertPartitionNumber(records, 400, 500, 3, partitioner);
+  }
+
+  private void assertPartitionNumber(List<HoodieRecord> records, int start, int end, int expectedPartition, UpsertPartitioner partitioner) {
+    for (int recordIndex = start; recordIndex < end; recordIndex++) {
+      int actualPartition = partitioner.getPartition(new Tuple2<>(records.get(recordIndex).getKey(), (long) recordIndex));
+      assertEquals(actualPartition, expectedPartition);
+    }
   }
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {

@@ -1233,6 +1233,39 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     assert(exc.getMessage.contains("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table."))
   }
 
+  @Test
+  def testInsertDatasetWithSort(): Unit = {
+    val fooTableModifier = commonTableModifier
+      .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false")
+      .updated(HoodieWriteConfig.INSERT_SORT_MODE.key(), "GLOBAL_SORT")
+      .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key(), "false")
+
+    // generate the inserts
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val records = DataSourceTestUtils.generateRandomRows(100)
+    val recordsSeq = convertRowListToSeq(records)
+    val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+    // write to Hudi
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier - DataSourceWriteOptions.PRECOMBINE_FIELD.key, df)
+
+    // collect all partition paths to issue read of parquet files
+    val partitions = Seq(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
+      HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
+    // Check the entire dataset has all records still
+    val fullPartitionPaths = new Array[String](3)
+    for (i <- fullPartitionPaths.indices) {
+      fullPartitionPaths(i) = String.format("%s/%s/*", tempBasePath, partitions(i))
+    }
+
+    // fetch all records from parquet files generated from write to hudi
+    val actualDf = spark.sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
+    // remove metadata columns so that expected and actual DFs can be compared as is
+    val trimmedDf = dropMetaFields(actualDf)
+    assert(df.except(trimmedDf).count() == 0)
+  }
+
   private def fetchActualSchema(): Schema = {
     val tableMetaClient = HoodieTableMetaClient.builder()
       .setConf(spark.sparkContext.hadoopConfiguration)
