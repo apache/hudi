@@ -26,8 +26,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
+import org.apache.hudi.utilities.streamer.StreamContext;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -40,6 +41,11 @@ public abstract class RowSource extends Source<Dataset<Row>> {
   public RowSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider, SourceType.ROW);
+  }
+  
+  public RowSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+                   StreamContext streamContext) {
+    super(props, sparkContext, sparkSession, SourceType.ROW, streamContext);
   }
 
   protected abstract Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit);
