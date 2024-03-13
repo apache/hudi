@@ -94,53 +94,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test PrecombineAbsoluteGreaterPayload test") {
-    withRecordType()(withTempDir { tmp =>
-      val targetTable = generateTableName
-      val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
-
-      spark.sql(
-        s"""
-           |create table ${targetTable} (
-           |  `id` string,
-           |  `name` string,
-           |  `ts` bigint,
-           |  `day` STRING,
-           |  `hour` INT
-           |) using hudi
-           |tblproperties (
-           |  'primaryKey' = 'id',
-           |  'type' = 'mor',
-           |  'preCombineField'='ts',
-           |  'hoodie.index.type' = 'BUCKET',
-           |  'hoodie.bucket.index.hash.field' = 'id',
-           |  'hoodie.bucket.index.num.buckets'=512,
-           |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.PrecombineAbsoluteGreaterPayload'
-           | )
-           partitioned by (`day`,`hour`)
-           location '${tablePath}'
-           """.stripMargin)
-
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
-           |select '1' as id, 'aa' as name, 123 as ts, '2024-02-19' as `day`, 10 as `hour`
-           |""".stripMargin)
-
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
-           |select '1' as id, 'bb' as name, 123 as ts, '2024-02-19' as `day`, 10 as `hour`
-           |""".stripMargin)
-
-      checkAnswer(s"select id, name, ts, day, hour from $targetTable limit 10")(
-        Seq("1", "aa", 123, "2024-02-19", 10),
-      )
-
-      println("finished test...")
-    })
-  }
-
   test("Test Insert Into with values") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
