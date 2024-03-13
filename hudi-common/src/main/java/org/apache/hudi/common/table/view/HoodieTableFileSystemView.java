@@ -428,6 +428,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    * @return Stream of latest {@link FileSlice} in the partition path.
    */
   public Stream<FileSlice> fetchLatestFileSlicesIncludingInflight(String partitionPath) {
+    ensurePartitionLoadedCorrectly(partitionPath);
     return fetchAllStoredFileGroups(partitionPath)
         .map(HoodieFileGroup::getLatestFileSlicesIncludingInflight)
         .filter(Option::isPresent)
