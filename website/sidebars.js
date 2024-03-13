@@ -38,19 +38,30 @@ module.exports = {
         },
         {
             type: 'category',
-            label: 'How To',
+            label: 'Ingestion',
             items: [
-                {
-                    type: 'category',
-                    label: 'SQL',
-                    items: [
-                        'sql_ddl',
-                        'sql_dml',
-                        'sql_queries',
-                    ],
-                },
-                'writing_data',
-                'hoodie_streaming_ingestion',
+                'ingestion_spark',
+                'ingestion_flink',
+                'ingestion_kafka_connect',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Writing Tables',
+            items: [
+                'sql_ddl',
+                'sql_dml',
+                'writing_tables_batch_writes',
+                'writing_tables_streaming_writes',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Reading Tables',
+            items: [
+                'sql_queries',
+                'reading_tables_batch_reads',
+                'reading_tables_streaming_reads',
             ],
         },
         {
