@@ -136,7 +136,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name, ts, day, hour from $targetTable limit 10")(
         Seq("1", "aa", 123, "2024-02-19", 10),
       )
-      
+
     })
   }
 
