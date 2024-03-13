@@ -574,12 +574,12 @@ public class StreamSync implements Serializable, Closeable {
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null
           && this.userProvidedSchemaProvider.getTargetSchema() != InputBatch.NULL_SCHEMA) {
+        // Let's deduce the schema provider for writer side first!
+        schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetSchema(), this.userProvidedSchemaProvider, metaClient);
         if (useRowWriter) {
-          inputBatchForWriter = new InputBatch(transformed, checkpointStr, this.userProvidedSchemaProvider);
+          inputBatchForWriter = new InputBatch(transformed, checkpointStr, schemaProvider);
         } else {
           // non row writer path
-          // Let's deduce the schema provider for writer side first!
-          schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetSchema(), this.userProvidedSchemaProvider, metaClient);
           SchemaProvider finalSchemaProvider = schemaProvider;
           // If the target schema is specified through Avro schema,
           // pass in the schema for the Row-to-Avro conversion
@@ -607,11 +607,10 @@ public class StreamSync implements Serializable, Closeable {
       } else {
         // Deduce proper target (writer's) schema for the input dataset, reconciling its
         // schema w/ the table's one
-        Option<Schema> incomingSchemaOpt = transformed.map(df ->
-            AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), getAvroRecordQualifiedName(cfg.targetTableName)));
-
-        schemaProvider = incomingSchemaOpt.map(incomingSchema -> getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient))
-            .orElseGet(dataAndCheckpoint::getSchemaProvider);
+        Schema incomingSchema = transformed.map(df ->
+                AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), getAvroRecordQualifiedName(cfg.targetTableName)))
+            .orElseGet(dataAndCheckpoint.getSchemaProvider()::getTargetSchema);
+        schemaProvider = getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient);
 
         if (useRowWriter) {
           inputBatchForWriter = new InputBatch(transformed, checkpointStr, schemaProvider);
