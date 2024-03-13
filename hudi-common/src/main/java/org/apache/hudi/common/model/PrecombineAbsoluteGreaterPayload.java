@@ -48,7 +48,7 @@ public class PrecombineAbsoluteGreaterPayload extends DefaultHoodieRecordPayload
      */
     String orderField = ConfigUtils.getOrderingField(properties);
     if (orderField == null) {
-        return true;
+      return true;
     }
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
             KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
