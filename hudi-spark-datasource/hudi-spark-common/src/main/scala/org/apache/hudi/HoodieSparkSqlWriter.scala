@@ -479,9 +479,6 @@ class HoodieSparkSqlWriterInternal {
             }
             instantTime = client.createNewInstantTime()
             // Convert to RDD[HoodieRecord]
-            try {
-
-            }
             val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
               HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
                 avroRecordNamespace, writerSchema, processedDataSchema, operation, instantTime, preppedSparkSqlWrites,
