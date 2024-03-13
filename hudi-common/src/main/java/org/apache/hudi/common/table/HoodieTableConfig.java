@@ -74,6 +74,7 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
 
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
@@ -737,11 +738,12 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Checks if metadata table is enabled and the specified partition has been initialized.
    *
-   * @param partition The partition to check
+   * @param metadataPartitionType The metadata table partition type to check
    * @returns true if the specific partition has been initialized, else returns false.
    */
-  public boolean isMetadataPartitionAvailable(MetadataPartitionType partition) {
-    return getMetadataPartitions().contains(partition.getPartitionPath());
+  public boolean isMetadataPartitionAvailable(MetadataPartitionType metadataPartitionType) {
+    return getMetadataPartitions().stream().anyMatch(metadataPartition ->
+        metadataPartition.equals(metadataPartitionType.getPartitionPath()) || (FUNCTIONAL_INDEX.equals(metadataPartitionType) && metadataPartition.startsWith(FUNCTIONAL_INDEX.getPartitionPath())));
   }
 
   /**
