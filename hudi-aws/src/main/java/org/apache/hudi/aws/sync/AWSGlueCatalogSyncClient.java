@@ -200,24 +200,6 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public List<Partition> getPartitionsByFilter(String tableName, String filter) {
-    try {
-      if (filter.length() <= GLUE_EXPRESSION_MAX_CHARS) {
-        LOG.info("Pushdown filters: {}", filter);
-        return getPartitions(GetPartitionsRequest.builder()
-            .databaseName(databaseName)
-            .tableName(tableName)
-            .expression(filter));
-      } else {
-        LOG.warn("Falling back to listing all partition since expression filter length > {}", GLUE_EXPRESSION_MAX_CHARS);
-        return getAllPartitions(tableName);
-      }
-    } catch (Exception e) {
-      throw new HoodieGlueSyncException("Failed to get partitions for table " + tableId(databaseName, tableName) + " from expression: " + filter, e);
-    }
-  }
-
-  @Override
   public List<Partition> getAllPartitions(String tableName) {
     ExecutorService executorService = Executors.newFixedThreadPool(this.allPartitionsReadParallelism);
     try {

@@ -50,10 +50,12 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
@@ -229,7 +231,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           .stream()
           .filter(f -> partitionKeys.contains(f.getName()))
           .collect(Collectors.toList());
-      filter = PartitionFilterGenerator.generatePushDownFilter(partitions, partitionFields, config);
+      filter = this.generatePushDownFilter(partitions, partitionFields);
+
       return client.listPartitionsByFilter(databaseName, tableName, filter, (short)-1)
           .stream()
           .map(p -> new Partition(p.getValues(), p.getSd().getLocation()))
