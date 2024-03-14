@@ -14,6 +14,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
+
 # RFC-77: Secondary Indexes
 
 ## Proposers
@@ -22,8 +23,8 @@
 - @codope
 
 ## Approvers
- - @<approver1 github username>
- - @<approver2 github username>
+ - @vinothchandar
+ - @nsivabalan
 
 ## Status
 
@@ -62,18 +63,19 @@ the design principle and goals are as follows:
 1. User specifies SI to be built on a given column of a table. A given SI can be built on only one column of the table
 (i.e composite keys are not allowed). Any number of SI can be built on a Hudi table. The indexes to be built are 
 specified using regular SQL statements.
-2. Metadata of a SI will be tracked through the Functional Index's index metadata file.
+2. Metadata of a SI will be tracked through the index metadata file under `<base_path>/.hoodie/.index` (this path can be configurable).
 3. Each SI will be a partition inside Hudi MDT. Index data will not be materialized with the base table's data files.
-4. Logical plan of a query will be used to effciently filter FileGroups based on the query predicate and the available
+4. Logical plan of a query will be used to efficiently filter FileGroups based on the query predicate and the available
 indexes.
 
 ### SQL
 SI can be created using the regular `CREATE INDEX` SQL statement.
 ```
 -- PROPOSED SYNTAX WITH `secondary_index` as the index type --
-CREATE INDEX [IF NOT EXISTS] index_name ON [TABLE] table_name USING secondary_index(index_column)
+CREATE INDEX [IF NOT EXISTS] index_name ON [TABLE] table_name [USING secondary_index](index_column)
 -- Examples --
 CREATE INDEX idx_city on hudi_table USING secondary_index(city)
+CREATE INDEX idx_last_name on hudi_table (last_name)
 
 -- NO CHANGE IN DROP INDEX --
 DROP INDEX idx_city;
@@ -105,10 +107,10 @@ The index needs to be updated on inserts, updates and deletes to the base table.
 the base table could be non-unique, this process differs significantly compared to RLI.
 
 ##### Inserts (on the base table)
-Newly inserted row's record-key and secondary-key is required to build the secondary-index entry. The record-key is 
-already stored in the WriteStatus and commit-metadata. This will be enhanced to store the secondary-key values (for all
+Newly inserted row's record-key and secondary-key is required to build the secondary-index entry. The record key is 
+already stored in the `WriteStatus` and commit metadata has the files touched by that commit. `WriteStatus` will be enhanced to store the secondary-key values (for all
 those columns on which secondary index is defined). The metadata writer will extract this information and write it out 
-to the secondary-index partition. [1]
+to the secondary index partition. [1]
 
 ##### Updates (on the base table)
 Similar to inserts, the `secondary-key -> record-key` tuples are extracted from the WriteStatus. However, additional 
@@ -119,20 +121,19 @@ Let's take an example where a row's `secondary-key` column is updated from its o
 the `new-secondary-key` could get mapped to a different FileGroup (in MDT partition hosting the SI) as compared to 
 `old-secondary-key`. There needs to be a mechanism to clean up the `old-secondary-key -> record_key` mapping (from the 
 MDT partition hosting SI). The proposal is to emit a tombstone entry `old-secondary-key -> (record-key ,deleted)`. This 
-is then followed by writing the `new-secondary-key -> record-key`. The log reader (merger) and compactor should 
+is then followed by writing the `new-secondary-key -> record-key`. The log record reader (merger) and compactor should 
 correctly use the tombstone marker to remove stale entries from the old FileGroup. Note that since the mapping of a 
 record (of the MDT) to a FileGroup is based on the `secondary-key`, it is guaranteed that 
 `old-secondary-key -> (record-key, deleted)` tombstone record will get mapped to the FileGroup containing the 
 `old-secondary-key, record-key` entry.
 
 Another key observation here is that `old-secondary-key` is required to construct the tombstone record. Unlike some other 
-data systems, Hudi does not read the old-image of a row (on upserts). It detects that a row is getting updated by simply 
-reading the index (RLI in this case?). Hence, there needs to eb a mechanism to extract `old-secondary-key`. The exact
-mechanism to obtain the `old-secondary-key` can change as the design matures. In the initial POC, we propose
+data systems, Hudi does not read the old-image of a row on updates until a merge is executed. It detects that a row is getting updated by simply 
+reading the index and appending the updates in log files. Hence, there needs to be a mechanism to extract `old-secondary-key`. We propose
 `old-secondary-key` to be extracted by scanning the MDT partition (hosting the SI) and doing a reverse lookup based 
 on the `record-key` of the row being updated. It should be noted that this is going to be expensive operation as the 
 base table grows in size (which inherently means that SI will grow in size) in terms of number of rows. One way to 
-optimize this is to build a reverse mapping `record-key -> secondary-key` is a different MDT partition. This is 
+optimize this is to build a reverse mapping `record-key -> secondary-key` in a different MDT partition. This is 
 left as a TBD (as of this writing).
 
 ##### Deletes (on the base table)
@@ -144,19 +145,15 @@ Secondary index will be used to prune the candidate files (to scan) if the query
 on `secondary-key` columns. The initial implementation will follow the same logic (and constraints) used by RLI based 
 data skipping(like single column keys, rule-based index selection etc.). In the first step, we scan the SI partition
 (in MDT) and filter all entries that match the secondary keys specified in the query predicate. We collect all the 
-record keys (after filtering). Subsequently, these record keys are used to look up the record location using RLI
+record keys (after filtering). Subsequently, these record keys are used to look up the record location using RLI.
 
-### Merging of records (on the read-path)
+### Merging of secondary index records (on the read-path or during compaction)
 Record mergers are used in MOR tables by the readers to merge log files and base files. Similarity of the 'keys' in 
 records is used to identify candidate records that need to be merged. The 'key' for RLI entry is the 
 `record-key` and by definition it is unique. But, the keys for secondary index entries are the `secondary-keys` which 
 can be non-unique. Hence, the merging of SI entries will make use of the  payload i.e `record-key` in the
 `secondary-key -> record-key` tuple to identify candidate records that need to be merged. It will also be guided by the 
-tombstone record emitted during update or deletes. 
-
-How this will be implemented is left out as an implementation-detail, but at a high level this will involve changes to
-`HoodieMetadataPayload`, `HoodieRecordPayload`, `HoodieAvroRecordMerger`, `HoodieMergedLogRecordScanner` among other 
-interfaces/classes/APIs. An example is provided here on how the different log files are merged and how the merged log 
+tombstone record emitted during update or deletes. An example is provided here on how the different log files are merged and how the merged log 
 records are finally merged with the base file to obtain the merged records (of the MDT partition hosting SI).
 
 Consider the following table, `trips_table`. Note that this table is only used to illustrate the merging logic and not 
@@ -170,17 +167,17 @@ chosen will depend on the cardinality of the `record-key` and `secondary-key` co
 | rider       | string      |
 | city        | string      |
 
-`uuid` is the `record-key` column and a SI is build on the `city` column. Few details to be noted:
+`uuid` is the `record-key` column and a SI is built on the `city` column. Few details to be noted:
 1. Base files in the MDT are sorted (HFile) by the 'record-key' for the records stored in the MDT. For the MDT 
-partition hosting SI, records are sorted by `secondary-key`. The log file entries are not sorted.
+partition hosting SI, records are sorted by `secondary-key`.
 2. Base file will never contain a tombstone record (record mergers never write tombstone or deleted records 
 into base file)
 
 Base File Entries:
 ```
+chennai -> c8abbe79-8d89-47ea-b4ce-4d224bae5bfa
 los-angeles -> 9909a8b1-2d15-4d3d-8ec9-efc48c536a01
 los-angeles -> 9809a8b1-2d15-4d3d-8ec9-efc48c536a01
-chennai -> c8abbe79-8d89-47ea-b4ce-4d224bae5bfa
 sfo -> 334e26e9-8355-45cc-97c6-c31daf0df330
 sfo -> 334e26e9-8355-45cc-97c6-c31daf0df329
 ```
@@ -218,19 +215,13 @@ on `secondary-key` and second search will be based on `record-key`. Hence, a sin
 uses a flat array will not be efficient. 
 4. Should allow for efficient insertion of records (for inserting merged record and for buffering fresh records). 
 
-The initial POC can make use of an in-memory multi map (or map-of-maps) - with the first level keyed by `secondary-key`  
-and the second level keyed by`record-key`. The final design should allow spilling to disk - the design of which is left  
-as TBD (as of this writing). Here are some initial thoughts:
-1. Extend Hudi's SpillableMap to support multi-map
-2. Use Guava multi map (insert doc link)
-3. Use Chronicle map (insert doc link)
-4. Use two different data structures - one is a set of `secondary-key` and the other is  map of 
-`record-key -> (secondary-key, HoodieRecord)`
-
-### Compaction
-The design of compaction will look similar to merging. The exact classes/interfaces/APIs is again left out as an 
-implementation detail. In addition to the classes/interfaces mentioned in `Merging of Records` section, 
-`HoodieSortedMergeHandle` and its associated parent/sub classes requires changes to handle MDT partition hosting SI.
+The initial POC makes use of an in-memory nested maps - with the first level keyed by `secondary-key`  
+and the second level keyed by`record-key`. The final design should allow spilling to disk. Here are some options:
+1. Extend Hudi's `ExternalSpillableMap` to support multi-map.
+2. Write spillable version of [Guava's multi-map](https://github.com/google/guava/wiki/NewCollectionTypesExplained#multimap).
+3. Use [Chronicle map](https://github.com/OpenHFT/Chronicle-Map).
+4. Use two different spillable data structures - one is a set of `secondary-key` and the other is  map of 
+`record-key -> (secondary-key, HoodieRecord)`.
 
 ## Comparing alternate design proposals
 
