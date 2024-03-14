@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -705,7 +704,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       Table table = getTable(awsGlue, databaseName, tableName);
       return Option.ofNullable(table.parameters().getOrDefault(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, null));
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get the last commit completion time synced from the table " + tableName, e);
+      throw new HoodieGlueSyncException("Failed to get the last commit completion time synced from the table " + tableName, e);
     }
   }
 
