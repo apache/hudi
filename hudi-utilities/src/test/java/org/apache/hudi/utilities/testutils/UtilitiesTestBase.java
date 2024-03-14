@@ -450,14 +450,14 @@ public class UtilitiesTestBase {
     public static TypedProperties setupSchemaOnDFS(String scope, String filename) throws IOException {
       UtilitiesTestBase.Helpers.copyToDFS(scope + "/" + filename, fs, basePath + "/" + filename);
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/" + filename);
+      props.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/" + filename);
       return props;
     }
 
     public static TypedProperties setupSchemaOnDFSWithAbsoluteScope(String scope, String filename) throws IOException {
       UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(scope + "/" + filename, fs, basePath + "/" + filename);
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/" + filename);
+      props.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/" + filename);
       return props;
     }
 
