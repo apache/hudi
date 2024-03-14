@@ -43,9 +43,6 @@ public enum RecordPayloadType {
   @EnumFieldDescription("Honors ordering field in both preCombine and combineAndGetUpdateValue.")
   HOODIE_AVRO_DEFAULT(DefaultHoodieRecordPayload.class.getName()),
 
-  @EnumFieldDescription("Honors ordering field in both preCombine and combineAndGetUpdateValue.")
-  HOODIE_AVRO_GREATER_RECORD(OverwriteWithGreaterRecordPayload.class.getName()),
-
   @EnumFieldDescription("The only difference with HOODIE_AVRO_DEFAULT is that this does not track the event time metadata for efficiency")
   EVENT_TIME_AVRO(EventTimeAvroPayload.class.getName()),
 
