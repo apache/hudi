@@ -6,7 +6,7 @@ keywords: [hudi, writing, reading]
 
 ### When is Hudi useful for me or my organization?
 
-If you are looking to quickly ingest data onto HDFS or cloud storage, Hudi can provide you tools to [help](/docs/writing_data/). Also, if you have ETL/hive/spark jobs which are slow/taking up a lot of resources, Hudi can potentially help by providing an incremental approach to reading and writing data.
+If you are looking to quickly ingest data onto HDFS or cloud storage, Hudi provides you [tools](/docs/hoodie_streaming_ingestion). Also, if you have ETL/hive/spark jobs which are slow/taking up a lot of resources, Hudi can potentially help by providing an incremental approach to reading and writing data.
 
 As an organization, Hudi can help you build an [efficient data lake](https://docs.google.com/presentation/d/1FHhsvh70ZP6xXlHdVsAI0g__B_6Mpto5KQFlZ0b8-mM/edit#slide=id.p), solving some of the most complex, low-level storage management problems, while putting data into hands of your data analysts, engineers and scientists much quicker.
 
@@ -61,7 +61,7 @@ Nonetheless, Hudi is designed very much like a database and provides similar fun
 
 ### How do I model the data stored in Hudi?
 
-When writing data into Hudi, you model the records like how you would on a key-value store - specify a key field (unique for a single partition/across table), a partition field (denotes partition to place key into) and preCombine/combine logic that specifies how to handle duplicates in a batch of records written. This model enables Hudi to enforce primary key constraints like you would get on a database table. See [here](/docs/writing_data/) for an example.
+When writing data into Hudi, you model the records like how you would on a key-value store - specify a key field (unique for a single partition/across table), a partition field (denotes partition to place key into) and preCombine/combine logic that specifies how to handle duplicates in a batch of records written. This model enables Hudi to enforce primary key constraints like you would get on a database table. See [here](/docs/next/writing_data) for an example.
 
 When querying/reading data, Hudi just presents itself as a json-like hierarchical table, everyone is used to querying using Hive/Spark/Presto over Parquet/Json/Avro.
 

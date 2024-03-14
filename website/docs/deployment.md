@@ -136,7 +136,7 @@ Here is an example invocation for reading from kafka topic in a continuous mode 
 
 ### Spark Datasource Writer Jobs
 
-As described in [Writing Data](/docs/writing_data#spark-datasource-writer), you can use spark datasource to ingest to hudi table. This mechanism allows you to ingest any spark dataframe in Hudi format. Hudi Spark DataSource also supports spark streaming to ingest a streaming source to Hudi table. For Merge On Read table types, inline compaction is turned on by default which runs after every ingestion run. The compaction frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". 
+As described in [Batch Writes](/docs/next/writing_data#spark-datasource-api), you can use spark datasource to ingest to hudi table. This mechanism allows you to ingest any spark dataframe in Hudi format. Hudi Spark DataSource also supports spark streaming to ingest a streaming source to Hudi table. For Merge On Read table types, inline compaction is turned on by default which runs after every ingestion run. The compaction frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". 
 
 Here is an example invocation using spark datasource
 

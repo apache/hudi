@@ -38,19 +38,30 @@ module.exports = {
         },
         {
             type: 'category',
-            label: 'How To',
+            label: 'Ingestion',
             items: [
-                {
-                    type: 'category',
-                    label: 'SQL',
-                    items: [
-                        'sql_ddl',
-                        'sql_dml',
-                        'sql_queries',
-                    ],
-                },
-                'writing_data',
                 'hoodie_streaming_ingestion',
+                'ingestion_flink',
+                'ingestion_kafka_connect',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Writing Tables',
+            items: [
+                'sql_ddl',
+                'sql_dml',
+                'writing_data',
+                'writing_tables_streaming_writes',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Reading Tables',
+            items: [
+                'sql_queries',
+                'reading_tables_batch_reads',
+                'reading_tables_streaming_reads',
             ],
         },
         {
@@ -76,6 +87,7 @@ module.exports = {
             items: [
                 'snapshot_exporter',
                 'precommit_validator',
+                'platform_services_post_commit_callback',
                 {
                     type: 'category',
                     label: 'Syncing to Catalogs',
@@ -87,6 +99,20 @@ module.exports = {
                         'syncing_xtable'
                     ],
                 }
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Operations',
+            items: [
+                'performance',
+                'deployment',
+                'cli',
+                'metrics',
+                'encryption',
+                'troubleshooting',
+                'tuning-guide',
+                'flink_tuning',
             ],
         },
         {
@@ -115,27 +141,13 @@ module.exports = {
         },
         {
             type: 'category',
-            label: 'Operations',
-            items: [
-                'performance',
-                'deployment',
-                'cli',
-                'metrics',
-                'encryption',
-                'troubleshooting',
-                'tuning-guide',
-                'flink_tuning',
-            ],
-        },
-        {
-            type: 'category',
             label: 'Frequently Asked Questions(FAQs)',
             items: [
                 'faq',
                 'faq_general',
                 'faq_design_and_concepts',
                 'faq_writing_tables',
-                'faq_querying_tables',
+                'faq_reading_tables',
                 'faq_table_services',
                 'faq_storage',
                 'faq_integrations',

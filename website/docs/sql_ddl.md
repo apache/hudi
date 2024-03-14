@@ -101,7 +101,7 @@ TBLPROPERTIES (
 ```
 
 ### Create table from an external location
-Often, Hudi tables are created from streaming writers like the [streamer tool](/docs/next/hoodie_streaming_ingestion#hudi-streamer), which
+Often, Hudi tables are created from streaming writers like the [streamer tool](/docs/hoodie_streaming_ingestion#hudi-streamer), which
 may later need some SQL statements to run on them. You can create an External table using the `location` statement.
 
 ```sql
@@ -503,7 +503,7 @@ Hudi currently has the following limitations when using Spark SQL, to create/alt
  - A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`, for ease
      of use. This can be overridden using table properties.
 
-## Flink
+## Flink SQL
 
 ### Create Catalog
 The catalog helps to manage the SQL tables, the table can be shared among sessions if the catalog persists the table definitions.

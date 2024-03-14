@@ -1,27 +1,16 @@
 ---
-title: Writing Data
-keywords: [hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL]
-summary: In this page, we will discuss some available tools for incrementally ingesting & storing data.
-toc: true
-last_modified_at: 2019-12-30T15:59:57-04:00
+title: Batch Writes
+keywords: [hudi, incremental, batch, processing]
+last_modified_at: 2024-03-13T15:59:57-04:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-In this section, we will cover ways to ingest new changes from external sources or even other Hudi tables.
-Currently Hudi supports following ways to write the data.
-- [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer)
-- [Spark Hudi Datasource](#spark-datasource-writer)
-- [Spark Structured Streaming](/docs/hoodie_streaming_ingestion#structured-streaming)
-- [Spark SQL](/docs/next/sql_ddl#spark-sql)
-- [Flink Writer](/docs/next/hoodie_streaming_ingestion#flink-ingestion)
-- [Flink SQL](/docs/next/sql_ddl#flink)
-- [Java Writer](#java-writer)
-- [Kafka Connect](/docs/next/hoodie_streaming_ingestion#kafka-connect-sink)
+## Spark DataSource API
 
-## Spark Datasource Writer
+The `hudi-spark` module offers the DataSource API to write a Spark DataFrame into a Hudi table.
 
-The `hudi-spark` module offers the DataSource API to write (and read) a Spark DataFrame into a Hudi table. There are a number of options available:
+There are a number of options available:
 
 **`HoodieWriteConfig`**:
 
@@ -59,7 +48,7 @@ Upsert a DataFrame, specifying the necessary field names for `recordKey => _row_
 
 ```java
 inputDF.write()
-       .format("org.apache.hudi")
+       .format("hudi")
        .options(clientOpts) //Where clientOpts is of type Map[String, String]. clientOpts can include any other options necessary.
        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
@@ -99,7 +88,7 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 (`uuid` in [schema](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
 [schema](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
 [Modeling data stored in Hudi](/docs/next/faq_general/#how-do-i-model-the-data-stored-in-hudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/hoodie_streaming_ingestion).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/write_operations)
 :::
@@ -135,7 +124,7 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 (`uuid` in [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
 [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
 [Modeling data stored in Hudi](/docs/next/faq_general/#how-do-i-model-the-data-stored-in-hudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/hoodie_streaming_ingestion).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/write_operations)
 :::
@@ -434,9 +423,9 @@ Then any record you want to delete you can mark `_hoodie_is_deleted` as true:
 
 ### Concurrency Control
 
-The `hudi-spark` module offers the DataSource API to write (and read) a Spark DataFrame into a Hudi table.
+Following is an example of how to use `optimistic_concurrency_control` via Spark DataSource API.
 
-Following is an example of how to use optimistic_concurrency_control via spark datasource. Read more in depth about concurrency control in the [concurrency control concepts](https://hudi.apache.org/docs/concurrency_control) section  
+Read more in-depth details about concurrency control in the [concurrency control concepts](/docs/concurrency_control) section.
 
 ```java
 inputDF.write.format("hudi")
@@ -455,171 +444,5 @@ inputDF.write.format("hudi")
        .save(basePath)
 ```
 
-### Commit Notifications
-Apache Hudi provides the ability to post a callback notification about a write commit. This may be valuable if you need
-an event notification stream to take actions with other services after a Hudi write commit.
-You can push a write commit callback notification into HTTP endpoints or to a Kafka server.
-
-#### HTTP Endpoints
-You can push a commit notification to an HTTP URL and can specify custom values by extending a callback class defined below.
-
-|  Config  | Description | Required | Default |
-|  -----------  | -------  | ------- | ------ |
-| TURN_CALLBACK_ON | Turn commit callback on/off | optional | false (*callbacks off*) |
-| CALLBACK_HTTP_URL | Callback host to be sent along with callback messages | required | N/A |
-| CALLBACK_HTTP_TIMEOUT_IN_SECONDS | Callback timeout in seconds | optional | 3 |
-| CALLBACK_CLASS_NAME | Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default | optional | org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback |
-| CALLBACK_HTTP_API_KEY_VALUE | Http callback API key | optional | hudi_write_commit_http_callback |
-| | | | |
-
-#### Kafka Endpoints
-You can push a commit notification to a Kafka topic so it can be used by other real time systems.
-
-|  Config  | Description | Required | Default |
-|  -----------  | -------  | ------- | ------ |
-| TOPIC | Kafka topic name to publish timeline activity into. | required | N/A |
-| PARTITION | It may be desirable to serialize all changes into a single Kafka partition for providing strict ordering. By default, Kafka messages are keyed by table name, which guarantees ordering at the table level, but not globally (or when new partitions are added) | required | N/A |
-| RETRIES | Times to retry the produce | optional | 3 |
-| ACKS | kafka acks level, all by default to ensure strong durability | optional | all |
-| BOOTSTRAP_SERVERS | Bootstrap servers of kafka cluster, to be used for publishing commit metadata | required | N/A |
-| | | | |
-
-#### Pulsar Endpoints
-You can push a commit notification to a Pulsar topic so it can be used by other real time systems. 
-
-|  Config  | Description                                                                 | Required | Default |
-|  -----------  |-----------------------------------------------------------------------------| ------- |--------|
-| hoodie.write.commit.callback.pulsar.broker.service.url | Server's Url of pulsar cluster to use to publish commit metadata.   | required | N/A    |
-| hoodie.write.commit.callback.pulsar.topic | Pulsar topic name to publish timeline activity into | required | N/A    |
-| hoodie.write.commit.callback.pulsar.producer.route-mode | Message routing logic for producers on partitioned topics.  | optional |   RoundRobinPartition     |
-| hoodie.write.commit.callback.pulsar.producer.pending-queue-size | The maximum size of a queue holding pending messages.               | optional | 1000   |
-| hoodie.write.commit.callback.pulsar.producer.pending-total-size | The maximum number of pending messages across partitions. | required | 50000  |
-| hoodie.write.commit.callback.pulsar.producer.block-if-queue-full | When the queue is full, the method is blocked instead of an exception is thrown. | optional | true   |
-| hoodie.write.commit.callback.pulsar.producer.send-timeout | The timeout in each sending to pulsar.     | optional | 30s    |
-| hoodie.write.commit.callback.pulsar.operation-timeout | Duration of waiting for completing an operation.     | optional | 30s    |
-| hoodie.write.commit.callback.pulsar.connection-timeout | Duration of waiting for a connection to a broker to be established.     | optional | 10s    |
-| hoodie.write.commit.callback.pulsar.request-timeout | Duration of waiting for completing a request.  | optional | 60s    |
-| hoodie.write.commit.callback.pulsar.keepalive-interval | Duration of keeping alive interval for each client broker connection. | optional | 30s    |
-| |                                                                             | |        |
-
-#### Bring your own implementation
-You can extend the HoodieWriteCommitCallback class to implement your own way to asynchronously handle the callback
-of a successful write. Use this public API:
-
-https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/callback/HoodieWriteCommitCallback.java
-
-## Flink SQL Writer
-The hudi-flink module defines the Flink SQL connector for both hudi source and sink.
-There are a number of options available for the sink table:
-
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| path | Y | N/A | Base path for the target hoodie table. The path would be created if it does not exist, otherwise a hudi table expects to be initialized successfully |
-| table.type  | N | COPY_ON_WRITE | Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ |
-| write.operation | N | upsert | The write operation, that this write should do (insert or upsert is supported) |
-| write.precombine.field | N | ts | Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..) |
-| write.payload.class | N | OverwriteWithLatestAvroPayload.class | Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for the option in-effective |
-| write.insert.drop.duplicates | N | false | Flag to indicate whether to drop duplicates upon insert. By default insert will accept duplicates, to gain extra performance |
-| write.ignore.failed | N | true | Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. By default true (in favor of streaming progressing over data integrity) |
-| hoodie.datasource.write.recordkey.field | N | uuid | Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c` |
-| hoodie.datasource.write.keygenerator.class | N | SimpleAvroKeyGenerator.class | Key generator class, that implements will extract the key out of incoming record |
-| write.tasks | N | 4 | Parallelism of tasks that do actual write, default is 4 |
-| write.batch.size.MB | N | 128 | Batch buffer size in MB to flush data into the underneath filesystem |
-
-If the table type is MERGE_ON_READ, you can also specify the asynchronous compaction strategy through options:
-
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| compaction.async.enabled | N | true | Async Compaction, enabled by default for MOR |
-| compaction.trigger.strategy | N | num_commits | Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits; 'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction; 'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied; 'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied. Default is 'num_commits' |
-| compaction.delta_commits | N | 5 | Max delta commits needed to trigger compaction, default 5 commits |
-| compaction.delta_seconds | N | 3600 | Max delta seconds time needed to trigger compaction, default 1 hour |
-
-You can write the data using the SQL `INSERT INTO` statements:
-```sql
-INSERT INTO hudi_table select ... from ...; 
-```
-
-**Note**: INSERT OVERWRITE is not supported yet but already on the roadmap.
-
-
-### Non-Blocking Concurrency Control (Experimental)
-
-Hudi Flink supports a new non-blocking concurrency control mode, where multiple writer tasks can be executed
-concurrently without blocking each other. One can read more about this mode in
-the [concurrency control](/docs/next/concurrency_control#model-c-multi-writer) docs. Let us see it in action here.
-
-In the below example, we have two streaming ingestion pipelines that concurrently update the same table. One of the
-pipeline is responsible for the compaction and cleaning table services, while the other pipeline is just for data
-ingestion.
-
-```sql
--- set the interval as 30 seconds
-execution.checkpointing.interval: 30000
-state.backend: rocksdb
-
--- This is a datagen source that can generates records continuously
-CREATE TABLE sourceT (
-    uuid varchar(20),
-    name varchar(10),
-    age int,
-    ts timestamp(3),
-    `partition` as 'par1'
-) WITH (
-    'connector' = 'datagen',
-    'rows-per-second' = '200'
-);
-
--- pipeline1: by default enable the compaction and cleaning services
-CREATE TABLE t1(
-    uuid varchar(20),
-    name varchar(10),
-    age int,
-    ts timestamp(3),
-    `partition` varchar(20)
-) WITH (
-    'connector' = 'hudi',
-    'path' = '/Users/chenyuzhao/workspace/hudi-demo/t1',
-    'table.type' = 'MERGE_ON_READ',
-    'index.type' = 'BUCKET',
-    'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',
-    'write.tasks' = '2'
-);
-
--- pipeline2: disable the compaction and cleaning services manually
-CREATE TABLE t1_2(
-    uuid varchar(20),
-    name varchar(10),
-    age int,
-    ts timestamp(3),
-    `partition` varchar(20)
-) WITH (
-    'connector' = 'hudi',
-    'path' = '/Users/chenyuzhao/workspace/hudi-demo/t1',
-    'table.type' = 'MERGE_ON_READ',
-    'index.type' = 'BUCKET',
-    'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',
-    'write.tasks' = '2',
-    'compaction.schedule.enabled' = 'false',
-    'compaction.async.enabled' = 'false',
-    'clean.async.enabled' = 'false'
-);
-
--- submit the pipelines
-insert into t1 select * from sourceT;
-insert into t1_2 select * from sourceT;
-
-select * from t1 limit 20;
-```
-
-As you can see from the above example, we have two pipelines with multiple tasks that concurrently write to the
-same table. To use the new concurrency mode, all you need to do is set the `hoodie.write.concurrency.mode`
-to `NON_BLOCKING_CONCURRENCY_CONTROL`. The `write.tasks` option is used to specify the number of write tasks that will
-be used for writing to the table. The `compaction.schedule.enabled`, `compaction.async.enabled`
-and `clean.async.enabled` options are used to disable the compaction and cleaning services for the second pipeline.
-This is done to ensure that the compaction and cleaning services are not executed twice for the same table.
-
-
-## Java Writer
+## Java Client
 We can use plain java to write to hudi tables. To use Java client we can refere [here](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-java/src/main/java/org/apache/hudi/examples/java/HoodieJavaWriteClientExample.java)
-
