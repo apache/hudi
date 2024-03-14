@@ -6,7 +6,7 @@ keywords: [hudi, writing, reading]
 
 ### What are some ways to write a Hudi table?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](/docs/write_operations/) against a Hudi table. If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](/docs/hoodie_streaming_ingestion#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](/docs/writing_data/#spark-datasource-writer) to write into Hudi.
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](/docs/write_operations/) against a Hudi table. If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](/docs/next/ingestion_spark#hudi-streamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](/docs/next/writing_tables_batch_writes#spark-datasource-api) to write into Hudi.
 
 ### How is a Hudi writer job deployed?
 
@@ -68,7 +68,7 @@ As you could see, ([combineAndGetUpdateValue(), getInsertValue()](https://github
 
 ### How do I delete records in the dataset using Hudi?
 
-GDPR has made deletes a must-have tool in everyone's data management toolbox. Hudi supports both soft and hard deletes. For details on how to actually perform them, see [here](/docs/writing_data/#deletes).
+GDPR has made deletes a must-have tool in everyone's data management toolbox. Hudi supports both soft and hard deletes. For details on how to actually perform them, see [here](/docs/next/writing_tables_batch_writes#deletes).
 
 ### Should I need to worry about deleting all copies of the records in case of duplicates?
 

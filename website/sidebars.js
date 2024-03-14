@@ -87,6 +87,7 @@ module.exports = {
             items: [
                 'snapshot_exporter',
                 'precommit_validator',
+                'platform_services_post_commit_callback',
                 {
                     type: 'category',
                     label: 'Syncing to Catalogs',
@@ -98,6 +99,20 @@ module.exports = {
                         'syncing_xtable'
                     ],
                 }
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Operations',
+            items: [
+                'performance',
+                'deployment',
+                'cli',
+                'metrics',
+                'encryption',
+                'troubleshooting',
+                'tuning-guide',
+                'flink_tuning',
             ],
         },
         {
@@ -126,27 +141,13 @@ module.exports = {
         },
         {
             type: 'category',
-            label: 'Operations',
-            items: [
-                'performance',
-                'deployment',
-                'cli',
-                'metrics',
-                'encryption',
-                'troubleshooting',
-                'tuning-guide',
-                'flink_tuning',
-            ],
-        },
-        {
-            type: 'category',
             label: 'Frequently Asked Questions(FAQs)',
             items: [
                 'faq',
                 'faq_general',
                 'faq_design_and_concepts',
                 'faq_writing_tables',
-                'faq_querying_tables',
+                'faq_reading_tables',
                 'faq_table_services',
                 'faq_storage',
                 'faq_integrations',
