@@ -95,7 +95,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test PrecombineAbsoluteGreaterPayload test") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       val targetTable = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
 
@@ -147,7 +147,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq("1", "cc", 124, "2024-02-19", 10),
       )
 
-    })
+    }
   }
 
   test("Test Insert Into with values") {

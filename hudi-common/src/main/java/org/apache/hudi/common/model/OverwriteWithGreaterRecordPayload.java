@@ -27,13 +27,13 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.Properties;
 
-public class PrecombineAbsoluteGreaterPayload extends DefaultHoodieRecordPayload {
+public class OverwriteWithGreaterRecordPayload extends DefaultHoodieRecordPayload {
 
-  public PrecombineAbsoluteGreaterPayload(GenericRecord record, Comparable orderingVal) {
+  public OverwriteWithGreaterRecordPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
 
-  public PrecombineAbsoluteGreaterPayload(Option<GenericRecord> record) {
+  public OverwriteWithGreaterRecordPayload(Option<GenericRecord> record) {
     super(record);
   }
 
