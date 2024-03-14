@@ -22,6 +22,7 @@ import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
@@ -200,7 +201,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public List<Partition> getAllPartitions(String tableName) {
-    ExecutorService executorService = Executors.newFixedThreadPool(this.allPartitionsReadParallelism);
+    ExecutorService executorService = Executors.newFixedThreadPool(this.allPartitionsReadParallelism, new CustomizedThreadFactory("glue-sync-all-partitions", true));
     try {
       List<Segment> segments = new ArrayList<>();
       for (int i = 0; i < allPartitionsReadParallelism; i++) {
@@ -233,7 +234,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
     HoodieTimer timer = HoodieTimer.start();
     List<List<String>> batches = CollectionUtils.batches(partitionList, MAX_PARTITIONS_PER_READ_REQUEST);
-    ExecutorService executorService = Executors.newFixedThreadPool(Math.min(this.changedPartitionsReadParallelism, batches.size()));
+    ExecutorService executorService = Executors.newFixedThreadPool(
+        Math.min(this.changedPartitionsReadParallelism, batches.size()),
+        new CustomizedThreadFactory("glue-sync-get-partitions-" + tableName, true)
+    );
     try {
       List<Future<List<Partition>>> futures = batches
           .stream()
@@ -294,7 +298,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   private <T> void parallelizeChange(List<T> items, int parallelism, Consumer<List<T>> consumer, int sliceSize) {
     List<List<T>> batches = CollectionUtils.batches(items, sliceSize);
-    ExecutorService executorService = Executors.newFixedThreadPool(Math.min(parallelism, batches.size()));
+    ExecutorService executorService = Executors.newFixedThreadPool(Math.min(parallelism, batches.size()), new CustomizedThreadFactory("glue-sync", true));
     try {
       List<Future<?>> futures = batches.stream()
           .map(item -> executorService.submit(() -> {
