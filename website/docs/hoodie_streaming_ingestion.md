@@ -321,7 +321,7 @@ For Kafka, this is the max # of events to read.
 
 `HoodieStreamer` supports custom transformation on records before writing to storage. This is done by supplying 
 implementation of `org.apache.hudi.utilities.transform.Transformer` via `--transformer-class` option. Check out
-the [options](#options) section for details.
+the [Transformers page](/docs/transforms) for details.
 
 ### Schema Providers
 
