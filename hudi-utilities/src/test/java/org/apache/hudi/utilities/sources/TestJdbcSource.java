@@ -77,11 +77,11 @@ public class TestJdbcSource extends UtilitiesTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.url", JDBC_URL);
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.driver.class", JDBC_DRIVER);
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.user", JDBC_USER);
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.password", JDBC_PASS);
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.name", "triprec");
+    PROPS.setProperty("hoodie.streamer.jdbc.url", JDBC_URL);
+    PROPS.setProperty("hoodie.streamer.jdbc.driver.class", JDBC_DRIVER);
+    PROPS.setProperty("hoodie.streamer.jdbc.user", JDBC_USER);
+    PROPS.setProperty("hoodie.streamer.jdbc.password", JDBC_PASS);
+    PROPS.setProperty("hoodie.streamer.jdbc.table.name", "triprec");
     connection = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASS);
   }
 
@@ -93,8 +93,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testSingleCommit() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       int numRecords = 100;
@@ -116,8 +116,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testInsertAndUpdate() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       final String commitTime = "000";
@@ -150,8 +150,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testTwoCommits() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       // Add 10 records with commit time "000"
@@ -178,8 +178,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testIncrementalFetchWithCommitTime() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       // Add 10 records with commit time "000"
@@ -204,8 +204,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testIncrementalFetchWithNoMatchingRows() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       // Add 10 records with commit time "000"
@@ -226,8 +226,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testIncrementalFetchWhenTableRecordsMoreThanSourceLimit() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "id");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "id");
 
     try {
       // Add 100 records with commit time "000"
@@ -257,8 +257,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testIncrementalFetchWhenLastCheckpointMoreThanTableRecords() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "id");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "id");
 
     try {
       // Add 100 records with commit time "000"
@@ -284,8 +284,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testIncrementalFetchFallbackToFullFetchWhenError() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       // Add 10 records with commit time "000"
@@ -299,14 +299,14 @@ public class TestJdbcSource extends UtilitiesTestBase {
       // Add 10 records with commit time "001"
       insert("001", 10, connection, DATA_GENERATOR, PROPS);
 
-      PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "dummy_col");
+      PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "dummy_col");
       assertThrows(HoodieException.class, () -> {
         // Start incremental scan with a dummy column that does not exist.
         // This will throw an exception as the default behavior is to not fallback to full fetch.
         runSource(Option.of(batch.getCheckpointForNextBatch()), -1);
       });
 
-      PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.fallback.to.full.fetch", "true");
+      PROPS.setProperty("hoodie.streamer.jdbc.incr.fallback.to.full.fetch", "true");
 
       // Start incremental scan with a dummy column that does not exist.
       // This will fallback to full fetch mode but still throw an exception checkpointing will fail.
@@ -321,7 +321,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testFullFetchWithCommitTime() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
 
     try {
       // Add 10 records with commit time "000"
@@ -345,8 +345,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testFullFetchWithCheckpoint() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       // Add 10 records with commit time "000"
@@ -360,7 +360,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
       // Get max of incremental column
       Column incrementalColumn = rowDataset
-          .col(PROPS.getString("hoodie.deltastreamer.jdbc.table.incr.column.name"));
+          .col(PROPS.getString("hoodie.streamer.jdbc.table.incr.column.name"));
       final String max = rowDataset.agg(functions.max(incrementalColumn).cast(DataTypes.StringType)).first()
           .getString(0);
 
@@ -382,10 +382,10 @@ public class TestJdbcSource extends UtilitiesTestBase {
       // Write secret string to fs in a file
       writeSecretToFs();
       // Remove secret string from props
-      PROPS.remove("hoodie.deltastreamer.jdbc.password");
+      PROPS.remove("hoodie.streamer.jdbc.password");
       // Set property to read secret from fs file
-      PROPS.setProperty("hoodie.deltastreamer.jdbc.password.file", "file:///tmp/hudi/config/secret");
-      PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
+      PROPS.setProperty("hoodie.streamer.jdbc.password.file", "file:///tmp/hudi/config/secret");
+      PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
       // Add 10 records with commit time 000
       clearAndInsert("000", 10, connection, DATA_GENERATOR, PROPS);
       Dataset<Row> rowDataset = runSource(Option.empty(), 10).getBatch().get();
@@ -401,8 +401,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
       // Write secret string to fs in a file
       writeSecretToFs();
       // Remove secret string from props
-      PROPS.remove("hoodie.deltastreamer.jdbc.password");
-      PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
+      PROPS.remove("hoodie.streamer.jdbc.password");
+      PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
       // Add 10 records with commit time 000
       clearAndInsert("000", 10, connection, DATA_GENERATOR, PROPS);
       runSource(Option.empty(), 10);
@@ -411,9 +411,9 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testSourceWithExtraOptions() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.extra.options.fetchsize", "10");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
-    PROPS.remove("hoodie.deltastreamer.jdbc.table.incr.column.name");
+    PROPS.setProperty("hoodie.streamer.jdbc.extra.options.fetchsize", "10");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
+    PROPS.remove("hoodie.streamer.jdbc.table.incr.column.name");
     try {
       // Add 20 records with commit time 000
       clearAndInsert("000", 20, connection, DATA_GENERATOR, PROPS);
@@ -426,8 +426,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testSourceWithStorageLevel() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.storage.level", "NONE");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
+    PROPS.setProperty("hoodie.streamer.jdbc.storage.level", "NONE");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
     try {
       // Add 10 records with commit time 000
       clearAndInsert("000", 10, connection, DATA_GENERATOR, PROPS);

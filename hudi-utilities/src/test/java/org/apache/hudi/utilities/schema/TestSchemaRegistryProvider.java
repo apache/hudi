@@ -64,10 +64,10 @@ class TestSchemaRegistryProvider {
   private static TypedProperties getProps() {
     return new TypedProperties() {
       {
-        put("hoodie.deltastreamer.schemaprovider.registry.baseUrl", "http://" + BASIC_AUTH + "@localhost");
-        put("hoodie.deltastreamer.schemaprovider.registry.urlSuffix", "-value");
-        put("hoodie.deltastreamer.schemaprovider.registry.url", "http://foo:bar@localhost");
-        put("hoodie.deltastreamer.source.kafka.topic", "foo");
+        put("hoodie.streamer.schemaprovider.registry.baseUrl", "http://" + BASIC_AUTH + "@localhost");
+        put("hoodie.streamer.schemaprovider.registry.urlSuffix", "-value");
+        put("hoodie.streamer.schemaprovider.registry.url", "http://foo:bar@localhost");
+        put("hoodie.streamer.source.kafka.topic", "foo");
       }
     };
   }
@@ -102,8 +102,8 @@ class TestSchemaRegistryProvider {
   @Test
   public void testGetSourceSchemaShouldRequestSchemaWithoutCreds() throws IOException {
     TypedProperties props = getProps();
-    props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost");
-    props.put("hoodie.deltastreamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
+    props.put("hoodie.streamer.schemaprovider.registry.url", "http://localhost");
+    props.put("hoodie.streamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
     SchemaRegistryProvider spyUnderTest = getUnderTest(props);
     Schema actual = spyUnderTest.getSourceSchema();
     assertNotNull(actual);
@@ -114,8 +114,8 @@ class TestSchemaRegistryProvider {
   @Test
   public void testGetTargetSchemaShouldRequestSchemaWithoutCreds() throws IOException {
     TypedProperties props = getProps();
-    props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost");
-    props.put("hoodie.deltastreamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
+    props.put("hoodie.streamer.schemaprovider.registry.url", "http://localhost");
+    props.put("hoodie.streamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
     SchemaRegistryProvider spyUnderTest = getUnderTest(props);
     Schema actual = spyUnderTest.getTargetSchema();
     assertNotNull(actual);

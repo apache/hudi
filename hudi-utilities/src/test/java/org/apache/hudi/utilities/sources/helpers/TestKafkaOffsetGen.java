@@ -65,9 +65,9 @@ public class TestKafkaOffsetGen {
 
   private TypedProperties getConsumerConfigs(String autoOffsetReset, String kafkaCheckpointType) {
     TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.source.kafka.checkpoint.type", kafkaCheckpointType);
+    props.put("hoodie.streamer.source.kafka.checkpoint.type", kafkaCheckpointType);
     props.put("auto.offset.reset", autoOffsetReset);
-    props.put("hoodie.deltastreamer.source.kafka.topic", testTopicName);
+    props.put("hoodie.streamer.source.kafka.topic", testTopicName);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.setProperty("key.deserializer", StringDeserializer.class.getName());
     props.setProperty("value.deserializer", StringDeserializer.class.getName());
@@ -250,7 +250,7 @@ public class TestKafkaOffsetGen {
     testUtils.createTopic(testTopicName, 1);
     boolean topicExists = kafkaOffsetGen.checkTopicExists(new KafkaConsumer(props));
     assertTrue(topicExists);
-    props.put("hoodie.deltastreamer.source.kafka.topic", "random");
+    props.put("hoodie.streamer.source.kafka.topic", "random");
     kafkaOffsetGen = new KafkaOffsetGen(props);
     topicExists = kafkaOffsetGen.checkTopicExists(new KafkaConsumer(props));
     assertFalse(topicExists);

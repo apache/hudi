@@ -80,7 +80,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
   public void init() throws Exception {
     String schemaFilePath = Objects.requireNonNull(TestJsonKafkaSource.SCHEMA_FILE_URL).toURI().getPath();
     TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
+    props.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
     schemaProvider = new FilebasedSchemaProvider(props, jsc());
   }
 

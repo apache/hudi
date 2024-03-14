@@ -55,8 +55,8 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
   @BeforeAll
   public static void init() {
     Pair<String, String> dbAndTableName = paresDBAndTableName(SOURCE_SCHEMA_TABLE_NAME);
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.hive.database", dbAndTableName.getLeft());
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.hive.table", dbAndTableName.getRight());
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.hive.database", dbAndTableName.getLeft());
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.hive.table", dbAndTableName.getRight());
   }
 
   @Disabled
@@ -84,8 +84,8 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
   public void testTargetSchema() throws Exception {
     try {
       Pair<String, String> dbAndTableName = paresDBAndTableName(TARGET_SCHEMA_TABLE_NAME);
-      PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.hive.database", dbAndTableName.getLeft());
-      PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.hive.table", dbAndTableName.getRight());
+      PROPS.setProperty("hoodie.streamer.schemaprovider.target.schema.hive.database", dbAndTableName.getLeft());
+      PROPS.setProperty("hoodie.streamer.schemaprovider.target.schema.hive.table", dbAndTableName.getRight());
       createSchemaTable(SOURCE_SCHEMA_TABLE_NAME);
       createSchemaTable(TARGET_SCHEMA_TABLE_NAME);
       Schema targetSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getTargetSchema();
@@ -105,7 +105,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
   @Test
   public void testNotExistTable() {
     String wrongName = "wrong_schema_tab";
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.hive.table", wrongName);
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.hive.table", wrongName);
     Assertions.assertThrows(NoSuchTableException.class, () -> {
       try {
         UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceSchema();

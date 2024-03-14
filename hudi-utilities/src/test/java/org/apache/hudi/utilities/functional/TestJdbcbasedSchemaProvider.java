@@ -51,13 +51,13 @@ public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarnes
 
   @BeforeAll
   public static void init() {
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url", JDBC_URL);
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.driver.type", JDBC_DRIVER);
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.username", JDBC_USER);
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.password", JDBC_PASS);
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.dbtable", "triprec");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.timeout", "0");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.nullable", "false");
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.connection.url", JDBC_URL);
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.driver.type", JDBC_DRIVER);
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.username", JDBC_USER);
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.password", JDBC_PASS);
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.dbtable", "triprec");
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.timeout", "0");
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.nullable", "false");
   }
 
   @Test
