@@ -140,11 +140,13 @@ public class TestKafkaOffsetGen {
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", "string"));
     OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 499, metrics);
-    assertEquals(2, nextOffsetRanges.length);
+    assertEquals(3, nextOffsetRanges.length);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
-    assertEquals(250, nextOffsetRanges[0].untilOffset());
-    assertEquals(0, nextOffsetRanges[1].fromOffset());
-    assertEquals(249, nextOffsetRanges[1].untilOffset());
+    assertEquals(249, nextOffsetRanges[0].untilOffset());
+    assertEquals(249, nextOffsetRanges[1].fromOffset());
+    assertEquals(250, nextOffsetRanges[1].untilOffset());
+    assertEquals(0, nextOffsetRanges[2].fromOffset());
+    assertEquals(249, nextOffsetRanges[2].untilOffset());
   }
 
   @Test
