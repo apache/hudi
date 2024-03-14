@@ -50,6 +50,6 @@ Hudi runs cleaner to remove old file versions as part of writing data either in 
 
 Yes. Hudi provides the ability to post a callback notification about a write commit. You can use a http hook or choose to
 
-be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](writing_data/#commit-notifications)
+be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](/docs/next/platform_services_post_commit_callback)
 
 for details

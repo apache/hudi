@@ -539,7 +539,7 @@ MERGE statement either using `SET *` or using `SET column1 = expression1 [, colu
 ## Delete data {#deletes}
 
 Delete operation removes the records specified from the table. For example, this code snippet deletes records
-for the HoodieKeys passed in. Check out the [deletion section](/docs/next/writing_tables_batch_writes#deletes) for more details.
+for the HoodieKeys passed in. Check out the [deletion section](/docs/writing_data#deletes) for more details.
 
 <Tabs
 groupId="programming-language"
@@ -1119,13 +1119,13 @@ For alter table commands, check out [this](/docs/next/sql_ddl#spark-alter-table)
 
 Hudi provides industry-leading performance and functionality for streaming data. 
 
-**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](/docs/next/ingestion_spark#hudi-streamer), to assist with ingesting data into Hudi 
+**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](/docs/hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
 from various different sources in a streaming manner, with powerful built-in capabilities like auto checkpointing, schema enforcement via schema provider, 
 transformation support, automatic table services and so on.
 
 **Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](/docs/next/writing_tables_streaming_writes#spark-streaming) for more.
 
-Check out more information on [modeling data in Hudi](/docs/next/faq_general#how-do-i-model-the-data-stored-in-hudi) and different ways to perform [batch writes](/docs/next/writing_tables_batch_writes) and [streaming writes](/docs/next/writing_tables_streaming_writes).
+Check out more information on [modeling data in Hudi](/docs/next/faq_general#how-do-i-model-the-data-stored-in-hudi) and different ways to perform [batch writes](/docs/writing_data) and [streaming writes](/docs/next/writing_tables_streaming_writes).
 
 ### Dockerized Demo
 Even as we showcased the core capabilities, Hudi supports a lot more advanced functionality that can make it easy

@@ -13,7 +13,7 @@ how to learn more to get started.
 Apache Hudi (pronounced “hoodie”) is the next generation [streaming data lake platform](/blog/2021/07/21/streaming-data-lake-platform). 
 Apache Hudi brings core warehouse and database functionality directly to a data lake. Hudi provides [tables](/docs/next/sql_ddl), 
 [transactions](/docs/next/timeline), [efficient upserts/deletes](/docs/next/write_operations), [advanced indexes](/docs/next/indexing), 
-[ingestion services](/docs/next/ingestion_spark), data [clustering](/docs/next/clustering)/[compaction](/docs/next/compaction) optimizations, 
+[ingestion services](/docs/hoodie_streaming_ingestion), data [clustering](/docs/next/clustering)/[compaction](/docs/next/compaction) optimizations, 
 and [concurrency](/docs/next/concurrency_control) all while keeping your data in open source file formats.
 
 Not only is Apache Hudi great for streaming workloads, but it also allows you to create efficient incremental batch pipelines. 

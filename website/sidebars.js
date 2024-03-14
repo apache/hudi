@@ -40,7 +40,7 @@ module.exports = {
             type: 'category',
             label: 'Ingestion',
             items: [
-                'ingestion_spark',
+                'hoodie_streaming_ingestion',
                 'ingestion_flink',
                 'ingestion_kafka_connect',
             ],
@@ -51,7 +51,7 @@ module.exports = {
             items: [
                 'sql_ddl',
                 'sql_dml',
-                'writing_tables_batch_writes',
+                'writing_data',
                 'writing_tables_streaming_writes',
             ],
         },

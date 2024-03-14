@@ -88,7 +88,7 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 (`uuid` in [schema](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
 [schema](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
 [Modeling data stored in Hudi](/docs/next/faq_general/#how-do-i-model-the-data-stored-in-hudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/next/ingestion_spark).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/hoodie_streaming_ingestion).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/write_operations)
 :::
@@ -124,7 +124,7 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 (`uuid` in [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
 [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
 [Modeling data stored in Hudi](/docs/next/faq_general/#how-do-i-model-the-data-stored-in-hudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/next/ingestion_spark).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/hoodie_streaming_ingestion).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/write_operations)
 :::
