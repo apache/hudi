@@ -152,6 +152,12 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Would only be effective with Spark 3.3+. Sets spark.sql.parquet.fieldId.write.enabled. "
           + "If enabled, Spark will write out parquet native field ids that are stored inside StructField's metadata as parquet.field.id to parquet files.");
 
+  public static final ConfigProperty<Boolean> PARQUET_WITH_BLOOM_FILTER_ENABLED = ConfigProperty
+      .key("hoodie.parquet.bloom.filter.enabled")
+      .defaultValue(true)
+      .withDocumentation("Control whether to write bloom filter or not. Default true. "
+          + "We can set to false in non bloom index cases for CPU resource saving.");
+
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_NAME = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")
       .defaultValue("GZ")
@@ -219,6 +225,17 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Provided write support class should extend HoodieAvroWriteSupport class "
           + "and it is loaded at runtime. This is only required when trying to "
           + "override the existing write context.");
+
+  public static final ConfigProperty<String> HOODIE_PARQUET_SPARK_ROW_WRITE_SUPPORT_CLASS = ConfigProperty
+      .key("hoodie.parquet.spark.row.write.support.class")
+      .defaultValue("org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport")
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Provided write support class should extend HoodieRowParquetWriteSupport class "
+          + "and it is loaded at runtime. This is only required when trying to "
+          + "override the existing write context when `hoodie.datasource.write.row.writer.enable=true`.");
+
+
 
   /**
    * @deprecated Use {@link #PARQUET_MAX_FILE_SIZE} and its methods instead
@@ -417,6 +434,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetFieldIdWrite(String parquetFieldIdWrite) {
       storageConfig.setValue(PARQUET_FIELD_ID_WRITE_ENABLED, parquetFieldIdWrite);
+      return this;
+    }
+
+    public Builder parquetBloomFilterEnable(boolean parquetBloomFilterEnable) {
+      storageConfig.setValue(PARQUET_WITH_BLOOM_FILTER_ENABLED, String.valueOf(parquetBloomFilterEnable));
       return this;
     }
 

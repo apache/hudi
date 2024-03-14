@@ -68,8 +68,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.hadoop.CachingPath;
-import org.apache.hudi.hadoop.SerializablePath;
+import org.apache.hudi.hadoop.fs.CachingPath;
+import org.apache.hudi.hadoop.fs.SerializablePath;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -392,7 +392,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Already initialized partitions can be ignored
     partitionsToInit.removeIf(metadataPartition -> dataMetaClient.getTableConfig().isMetadataPartitionAvailable((metadataPartition)));
 
-
     // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT
     List<DirectoryInfo> partitionInfoList;
     if (filesPartitionAvailable) {
@@ -462,7 +461,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
       bulkCommit(commitTimeForPartition, partitionType, records, fileGroupCount);
       metadataMetaClient.reloadActiveTimeline();
-      dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, true);
+      String partitionPath = (partitionType == FUNCTIONAL_INDEX) ? dataWriteConfig.getFunctionalIndexConfig().getIndexName() : partitionType.getPartitionPath();
+
+      dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, true);
       // initialize the metadata reader again so the MDT partition can be read after initialization
       initMetadataReader();
       long totalInitTime = partitionInitTimer.endTimer();
@@ -565,6 +566,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Collect record keys from the files in parallel
     HoodieData<HoodieRecord> records = readRecordKeysFromBaseFiles(
         engineContext,
+        dataWriteConfig,
         partitionBaseFilePairs,
         false,
         dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
@@ -794,7 +796,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     for (MetadataPartitionType partitionType : metadataPartitions) {
       String partitionPath = partitionType.getPartitionPath();
       // first update table config
-      dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, false);
+      dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, false);
       LOG.warn("Deleting Metadata Table partition: " + partitionPath);
       dataMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath(), partitionPath), true);
       // delete corresponding pending indexing instant file in the timeline
@@ -899,6 +901,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       return;
     }
     String indexUptoInstantTime = indexPartitionInfos.get(0).getIndexUptoInstant();
+    List<String> partitionPaths = new ArrayList<>();
     List<MetadataPartitionType> partitionTypes = new ArrayList<>();
     indexPartitionInfos.forEach(indexPartitionInfo -> {
       String relativePartitionPath = indexPartitionInfo.getMetadataPartitionPath();
@@ -912,10 +915,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         throw new HoodieIndexException(String.format("Indexing for metadata partition: %s is not enabled", partitionType));
       }
       partitionTypes.add(partitionType);
+      partitionPaths.add(relativePartitionPath);
     });
 
     // before initialization set these  partitions as inflight in table config
-    dataMetaClient.getTableConfig().setMetadataPartitionsInflight(dataMetaClient, partitionTypes);
+    dataMetaClient.getTableConfig().setMetadataPartitionsInflight(dataMetaClient, partitionPaths);
 
     // initialize partitions
     initializeFromFilesystem(HoodieTableMetadataUtil.createAsyncIndexerTimestamp(indexUptoInstantTime), partitionTypes, Option.empty());
@@ -931,7 +935,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   public void updateFromWriteStatuses(HoodieCommitMetadata commitMetadata, HoodieData<WriteStatus> writeStatus, String instantTime) {
     processAndCommit(instantTime, () -> {
       Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordMap =
-          HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, commitMetadata, instantTime, getRecordsGenerationParams());
+          HoodieTableMetadataUtil.convertMetadataToRecords(
+              engineContext, dataWriteConfig, commitMetadata, instantTime, getRecordsGenerationParams());
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
@@ -948,7 +953,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   public void update(HoodieCommitMetadata commitMetadata, HoodieData<HoodieRecord> records, String instantTime) {
     processAndCommit(instantTime, () -> {
       Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordMap =
-          HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, commitMetadata, instantTime, getRecordsGenerationParams());
+          HoodieTableMetadataUtil.convertMetadataToRecords(
+              engineContext, dataWriteConfig, commitMetadata, instantTime, getRecordsGenerationParams());
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(records, commitMetadata);
       partitionToRecordMap.put(RECORD_INDEX, records.union(additionalUpdates));
       updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
@@ -1535,6 +1541,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     return readRecordKeysFromBaseFiles(
         engineContext,
+        dataWriteConfig,
         partitionBaseFilePairs,
         true,
         dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),

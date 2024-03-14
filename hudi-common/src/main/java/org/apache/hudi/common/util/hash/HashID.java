@@ -20,11 +20,11 @@
 package org.apache.hudi.common.util.hash;
 
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.IOUtils;
 
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHash64;
 import net.jpountz.xxhash.XXHashFactory;
-import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.Serializable;
 import java.security.MessageDigest;
@@ -122,10 +122,10 @@ public class HashID implements Serializable {
     switch (bits) {
       case BITS_32:
         XXHash32 hash32 = factory.hash32();
-        return Bytes.toBytes(hash32.hash(message, 0, message.length, HASH_SEED));
+        return IOUtils.toBytes(hash32.hash(message, 0, message.length, HASH_SEED));
       case BITS_64:
         XXHash64 hash64 = factory.hash64();
-        return Bytes.toBytes(hash64.hash(message, 0, message.length, HASH_SEED));
+        return IOUtils.toBytes(hash64.hash(message, 0, message.length, HASH_SEED));
       default:
         throw new HoodieIOException("XX" + bits + " hash is unsupported!");
     }

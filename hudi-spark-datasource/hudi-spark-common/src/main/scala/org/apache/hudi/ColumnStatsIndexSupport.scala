@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
+import org.apache.hudi.common.function.SerializableFunction
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
@@ -106,14 +107,24 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean)(block: DataFrame => T): T = {
+  def loadTransposed[T](targetColumns: Seq[String],
+                        shouldReadInMemory: Boolean,
+                        prunedFileNamesOpt: Option[Set[String]] = None)(block: DataFrame => T): T = {
     cachedColumnStatsIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
-
       case None =>
-        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] =
-          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
+        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = prunedFileNamesOpt match {
+          case Some(prunedFileNames) =>
+            val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
+              override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = {
+                prunedFileNames.contains(r.getFileName)
+              }
+            }
+            loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(filterFunction)
+          case None =>
+            loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
+        }
 
         withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
           val (transposedRows, indexSchema) = transpose(colStatsRecords, targetColumns)
@@ -270,13 +281,17 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                   acc ++= Seq(colStatRecord.getMinValue, colStatRecord.getMaxValue, colStatRecord.getNullCount)
                 case None =>
                   // NOTE: This could occur in either of the following cases:
-                  //    1. Particular file does not have this particular column (which is indexed by Column Stats Index):
-                  //       in this case we're assuming missing column to essentially contain exclusively
-                  //       null values, we set min/max values as null and null-count to be equal to value-count (this
-                  //       behavior is consistent with reading non-existent columns from Parquet)
+                  //    1. When certain columns exist in the schema but are absent in some data files due to
+                  //       schema evolution or other reasons, these columns will not be present in the column stats.
+                  //       In this case, we fill in default values by setting the min, max and null-count to null
+                  //       (this behavior is consistent with reading non-existent columns from Parquet).
+                  //    2. When certain columns are present both in the schema and the data files,
+                  //       but the column stats are absent for these columns due to their types not supporting indexing,
+                  //       we also set these columns to default values.
                   //
-                  // This is a way to determine current column's index without explicit iteration (we're adding 3 stats / column)
-                  acc ++= Seq(null, null, valueCount)
+                  // This approach prevents errors during data skipping and, because the filter includes an isNull check,
+                  // these conditions will not affect the accurate return of files from data skipping.
+                  acc ++= Seq(null, null, null)
               }
           }
 

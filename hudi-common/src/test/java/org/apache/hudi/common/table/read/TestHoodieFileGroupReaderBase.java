@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -149,7 +150,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
     FileSystemViewManager viewManager = FileSystemViewManager.createViewManager(
-        engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder().build(),
+        engineContext, FileSystemViewStorageConfig.newBuilder().build(),
         HoodieCommonConfig.newBuilder().build(),
         mc -> HoodieTableMetadata.create(
             engineContext, metadataConfig, mc.getBasePathV2().toString()));
@@ -179,6 +180,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         metaClient.getTableConfig(),
         0,
         fileSlice.getTotalFileSize(),
+        false,
+        1024 * 1024 * 1000,
+        metaClient.getTempFolderPath(),
+        ExternalSpillableMap.DiskMapType.ROCKS_DB,
         false);
     fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {

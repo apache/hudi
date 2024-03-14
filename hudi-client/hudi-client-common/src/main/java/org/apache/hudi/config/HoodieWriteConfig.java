@@ -68,6 +68,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
@@ -353,6 +354,20 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
 
+  public static final ConfigProperty<String> WRITE_BUFFER_RECORD_SAMPLING_RATE = ConfigProperty
+      .key("hoodie.write.buffer.record.sampling.rate")
+      .defaultValue(String.valueOf(64))
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Sampling rate of in-memory buffer used to estimate object size. Higher value lead to lower CPU usage.");
+
+  public static final ConfigProperty<String> WRITE_BUFFER_RECORD_CACHE_LIMIT = ConfigProperty
+      .key("hoodie.write.buffer.record.cache.limit")
+      .defaultValue(String.valueOf(128 * 1024))
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Maximum queue size of in-memory buffer for parallelizing network reads and lake storage writes.");
+
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_BUFFER_LIMIT_BYTES = ConfigProperty
       .key("hoodie.write.executor.disruptor.buffer.limit.bytes")
       .defaultValue(String.valueOf(1024))
@@ -548,7 +563,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE = ConfigProperty
       .key("hoodie.merge.allow.duplicate.on.inserts")
-      .defaultValue("false")
+      .defaultValue("true")
       .markAdvanced()
       .withDocumentation("When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing)."
           + " This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.");
@@ -1366,6 +1381,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_LIMIT_BYTES_VALUE));
   }
 
+  public int getWriteBufferRecordSamplingRate() {
+    return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_RECORD_SAMPLING_RATE));
+  }
+
+  public int getWriteBufferRecordCacheLimit() {
+    return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_RECORD_CACHE_LIMIT));
+  }
+
   public String getWriteExecutorDisruptorWaitStrategy() {
     return getStringOrDefault(WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY);
   }
@@ -2128,6 +2151,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED);
   }
 
+  public boolean parquetBloomFilterEnabled() {
+    return getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED);
+  }
+
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
     return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
         .map(HoodieLogBlock.HoodieLogBlockType::fromId);
@@ -2210,6 +2237,26 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getGraphiteReportPeriodSeconds() {
     return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS);
+  }
+
+  public String getM3ServerHost() {
+    return getString(HoodieMetricsM3Config.M3_SERVER_HOST_NAME);
+  }
+
+  public int getM3ServerPort() {
+    return getInt(HoodieMetricsM3Config.M3_SERVER_PORT_NUM);
+  }
+
+  public String getM3Tags() {
+    return getString(HoodieMetricsM3Config.M3_TAGS);
+  }
+
+  public String getM3Env() {
+    return getString(HoodieMetricsM3Config.M3_ENV);
+  }
+
+  public String getM3Service() {
+    return getString(HoodieMetricsM3Config.M3_SERVICE);
   }
 
   public String getJmxHost() {
@@ -2671,6 +2718,29 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getWriteConcurrencyMode().isNonBlockingConcurrencyControl();
   }
 
+  /**
+   * TTL configs.
+   */
+  public boolean isInlinePartitionTTLEnable() {
+    return getBoolean(HoodieTTLConfig.INLINE_PARTITION_TTL);
+  }
+
+  public String getPartitionTTLStrategyClassName() {
+    return getString(HoodieTTLConfig.PARTITION_TTL_STRATEGY_CLASS_NAME);
+  }
+
+  public Integer getPartitionTTLStrategyDaysRetain() {
+    return getInt(HoodieTTLConfig.DAYS_RETAIN);
+  }
+
+  public String getPartitionTTLPartitionSelected() {
+    return getString(HoodieTTLConfig.PARTITION_SELECTED);
+  }
+
+  public Integer getPartitionTTLMaxPartitionsToDelete() {
+    return getInt(HoodieTTLConfig.MAX_PARTITION_TO_DELETE);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -2690,10 +2760,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isCallbackConfigSet = false;
     private boolean isPayloadConfigSet = false;
     private boolean isMetadataConfigSet = false;
+
+    private boolean isTTLConfigSet = false;
     private boolean isLockConfigSet = false;
     private boolean isPreCommitValidationConfigSet = false;
     private boolean isMetricsJmxConfigSet = false;
     private boolean isMetricsGraphiteConfigSet = false;
+    private boolean isMetricsM3ConfigSet = false;
     private boolean isLayoutConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
@@ -2843,6 +2916,16 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withWriteBufferRecordSamplingRate(int recordSamplingRate) {
+      writeConfig.setValue(WRITE_BUFFER_RECORD_SAMPLING_RATE, String.valueOf(recordSamplingRate));
+      return this;
+    }
+
+    public Builder withWriteBufferRecordCacheLimit(int recordCacheLimit) {
+      writeConfig.setValue(WRITE_BUFFER_RECORD_CACHE_LIMIT, String.valueOf(recordCacheLimit));
+      return this;
+    }
+
     public Builder withWriteExecutorDisruptorWaitStrategy(String waitStrategy) {
       writeConfig.setValue(WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY, String.valueOf(waitStrategy));
       return this;
@@ -2923,6 +3006,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMetricsM3Config(HoodieMetricsM3Config metricsM3Config) {
+      writeConfig.getProps().putAll(metricsM3Config.getProps());
+      isMetricsM3ConfigSet = true;
+      return this;
+    }
+
     public Builder withPreCommitValidatorConfig(HoodiePreCommitValidatorConfig validatorConfig) {
       writeConfig.getProps().putAll(validatorConfig.getProps());
       isPreCommitValidationConfigSet = true;
@@ -2956,6 +3045,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder withMetadataConfig(HoodieMetadataConfig metadataConfig) {
       writeConfig.getProps().putAll(metadataConfig.getProps());
       isMetadataConfigSet = true;
+      return this;
+    }
+
+    public Builder withTTLConfig(HoodieTTLConfig ttlConfig) {
+      writeConfig.getProps().putAll(ttlConfig.getProps());
+      isTTLConfigSet = true;
       return this;
     }
 
@@ -3226,6 +3321,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key());
       writeConfig.setDefaultOnCondition(!isLockConfigSet,
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+      writeConfig.setDefaultOnCondition(!isTTLConfigSet,
+          HoodieTTLConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
     }

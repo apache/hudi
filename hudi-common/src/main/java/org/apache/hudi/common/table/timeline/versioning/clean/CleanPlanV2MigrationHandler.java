@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hadoop.fs.Path;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +58,7 @@ public class CleanPlanV2MigrationHandler extends AbstractMigratorBase<HoodieClea
                 new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), e.getKey()), v).toString(), false))
             .collect(Collectors.toList()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     return new HoodieCleanerPlan(plan.getEarliestInstantToRetain(), plan.getLastCompletedCommitTimestamp(),
-        plan.getPolicy(), new HashMap<>(), VERSION, filePathsPerPartition, new ArrayList<>());
+        plan.getPolicy(), new HashMap<>(), VERSION, filePathsPerPartition, new ArrayList<>(), Collections.emptyMap());
   }
 
   @Override

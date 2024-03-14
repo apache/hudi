@@ -18,11 +18,11 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import com.codahale.metrics.MetricRegistry;
 import org.apache.hadoop.conf.Configuration;
@@ -50,6 +50,7 @@ public class Metrics {
   private final List<MetricsReporter> reporters;
   private final String commonMetricPrefix;
   private boolean initialized = false;
+  private transient Thread shutdownThread = null;
 
   public Metrics(HoodieWriteConfig metricConfig) {
     registry = new MetricRegistry();
@@ -65,7 +66,8 @@ public class Metrics {
     }
     reporters.forEach(MetricsReporter::start);
 
-    Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
+    shutdownThread = new Thread(() -> shutdown(true));
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
     this.initialized = true;
   }
 
@@ -93,7 +95,7 @@ public class Metrics {
   private List<MetricsReporter> addAdditionalMetricsExporters(HoodieWriteConfig metricConfig) {
     List<MetricsReporter> reporterList = new ArrayList<>();
     List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
-    try (FileSystem fs = FSUtils.getFs(propPathList.get(0), new Configuration())) {
+    try (FileSystem fs = HadoopFSUtils.getFs(propPathList.get(0), new Configuration())) {
       for (String propPath : propPathList) {
         HoodieWriteConfig secondarySourceConfig = HoodieWriteConfig.newBuilder().fromInputStream(
             fs.open(new Path(propPath))).withPath(metricConfig.getBasePath()).build();
@@ -112,16 +114,27 @@ public class Metrics {
     return reporterList;
   }
 
-  public synchronized void shutdown() {
-    try {
-      registerHoodieCommonMetrics();
-      reporters.forEach(MetricsReporter::report);
-      LOG.info("Stopping the metrics reporter...");
-      reporters.forEach(MetricsReporter::stop);
-    } catch (Exception e) {
-      LOG.warn("Error while closing reporter", e);
-    } finally {
-      initialized = false;
+  public void shutdown() {
+    shutdown(false);
+  }
+
+  private synchronized void shutdown(boolean fromShutdownHook) {
+    if (!fromShutdownHook) {
+      Runtime.getRuntime().removeShutdownHook(shutdownThread);
+    } else {
+      LOG.warn("Shutting down the metrics reporter from shutdown hook.");
+    }
+    if (initialized) {
+      try {
+        registerHoodieCommonMetrics();
+        reporters.forEach(MetricsReporter::report);
+        LOG.info("Stopping the metrics reporter...");
+        reporters.forEach(MetricsReporter::stop);
+      } catch (Exception e) {
+        LOG.warn("Error while closing reporter", e);
+      } finally {
+        initialized = false;
+      }
     }
   }
 

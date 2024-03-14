@@ -34,12 +34,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * Represents the LSM Timeline for the Hoodie table.
@@ -150,7 +151,7 @@ public class LSMTimeline {
       try {
         Option<byte[]> content = FileIOUtils.readDataFromPath(metaClient.getFs(), versionFilePath);
         if (content.isPresent()) {
-          return Integer.parseInt(new String(content.get(), StandardCharsets.UTF_8));
+          return Integer.parseInt(fromUTF8Bytes(content.get()));
         }
       } catch (Exception e) {
         // fallback to manifest file listing.
@@ -189,7 +190,7 @@ public class LSMTimeline {
     // read and deserialize the valid files.
     byte[] content = FileIOUtils.readDataFromPath(metaClient.getFs(), getManifestFilePath(metaClient, latestVersion)).get();
     try {
-      return HoodieLSMTimelineManifest.fromJsonString(new String(content, StandardCharsets.UTF_8), HoodieLSMTimelineManifest.class);
+      return HoodieLSMTimelineManifest.fromJsonString(fromUTF8Bytes(content), HoodieLSMTimelineManifest.class);
     } catch (Exception e) {
       throw new HoodieException("Error deserializing manifest entries", e);
     }

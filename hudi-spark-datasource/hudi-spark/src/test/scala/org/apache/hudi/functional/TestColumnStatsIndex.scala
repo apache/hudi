@@ -141,6 +141,65 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
+  def testMetadataColumnStatsWithFilesFilter(shouldReadInMemory: Boolean): Unit = {
+    val targetColumnsToIndex = Seq("c1", "c2", "c3")
+
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
+    )
+
+    val opts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true"
+    ) ++ metadataOpts
+
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
+
+    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
+    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+
+    inputDF
+      .sort("c1")
+      .repartition(4, new Column("c1"))
+      .write
+      .format("hudi")
+      .options(opts)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(toProperties(metadataOpts))
+      .build()
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+    val requestedColumns = Seq("c1")
+    // get all file names
+    val stringEncoder: Encoder[String] = org.apache.spark.sql.Encoders.STRING
+    val fileNameSet: Set[String] = columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { df =>
+      val fileNames: Array[String] = df.select("fileName").as[String](stringEncoder).collect()
+      val newFileNameSet: Set[String] = fileNames.toSet
+      newFileNameSet
+    }
+    val targetFileName = fileNameSet.take(2)
+    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Some(targetFileName)) { df =>
+      assertEquals(2, df.collect().length)
+      val targetDFFileNameSet: Set[String] = df.select("fileName").as[String](stringEncoder).collect().toSet
+      assertEquals(targetFileName, targetDFFileNameSet)
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
   def testMetadataColumnStatsIndexPartialProjection(shouldReadInMemory: Boolean): Unit = {
     val targetColumnsToIndex = Seq("c1", "c2", "c3")
 

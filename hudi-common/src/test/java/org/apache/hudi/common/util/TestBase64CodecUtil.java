@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.UUID;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -43,7 +44,11 @@ public class TestBase64CodecUtil {
       String encodeData = Base64CodecUtil.encode(originalData);
       byte[] decodeData = Base64CodecUtil.decode(encodeData);
 
+      ByteBuffer encodedByteBuffer = ByteBuffer.wrap(getUTF8Bytes(encodeData));
+      ByteBuffer decodeByteBuffer = Base64CodecUtil.decode(encodedByteBuffer);
+
       assertArrayEquals(originalData, decodeData);
+      assertArrayEquals(originalData, decodeByteBuffer.array());
     }
 
   }

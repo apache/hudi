@@ -26,6 +26,8 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
+import org.apache.hudi.utilities.streamer.SourceProfile;
+import org.apache.hudi.utilities.streamer.StreamContext;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -50,9 +52,9 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   protected final boolean shouldAddOffsets;
 
   protected KafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-                        SchemaProvider schemaProvider, SourceType sourceType, HoodieIngestionMetrics metrics) {
-    super(props, sparkContext, sparkSession, schemaProvider, sourceType);
-    this.schemaProvider = schemaProvider;
+                        SourceType sourceType, HoodieIngestionMetrics metrics, StreamContext streamContext) {
+    super(props, sparkContext, sparkSession, sourceType, streamContext);
+    this.schemaProvider = streamContext.getSchemaProvider();
     this.metrics = metrics;
     this.shouldAddOffsets = KafkaOffsetPostProcessor.Config.shouldAddOffsets(props);
   }
@@ -60,19 +62,32 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   @Override
   protected InputBatch<JavaRDD<T>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
     try {
-      OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
-      long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
-      LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
-      if (totalNewMsgs <= 0) {
-        metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, 0);
-        return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
+      OffsetRange[] offsetRanges;
+      if (sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null) {
+        SourceProfile<Long> kafkaSourceProfile = sourceProfileSupplier.get().getSourceProfile();
+        offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getSourcePartitions(), metrics);
+        LOG.info("About to read numEvents {} of size {} bytes in {} partitions from Kafka for topic {} with offsetRanges {}",
+            kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getMaxSourceBytes(),
+            kafkaSourceProfile.getSourcePartitions(), offsetGen.getTopicName(), offsetRanges);
+      } else {
+        offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
       }
-      metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, totalNewMsgs);
-      JavaRDD<T> newDataRDD = toRDD(offsetRanges);
-      return new InputBatch<>(Option.of(newDataRDD), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
+      return toInputBatch(offsetRanges);
     } catch (org.apache.kafka.common.errors.TimeoutException e) {
       throw new HoodieSourceTimeoutException("Kafka Source timed out " + e.getMessage());
     }
+  }
+
+  private InputBatch<JavaRDD<T>> toInputBatch(OffsetRange[] offsetRanges) {
+    long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
+    LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
+    if (totalNewMsgs <= 0) {
+      metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, 0);
+      return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
+    }
+    metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, totalNewMsgs);
+    JavaRDD<T> newDataRDD = toRDD(offsetRanges);
+    return new InputBatch<>(Option.of(newDataRDD), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
   abstract JavaRDD<T> toRDD(OffsetRange[] offsetRanges);

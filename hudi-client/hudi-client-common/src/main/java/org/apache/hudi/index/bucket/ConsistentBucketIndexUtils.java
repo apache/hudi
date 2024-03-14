@@ -19,7 +19,6 @@
 package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,9 +29,9 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -40,6 +39,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -184,10 +185,10 @@ public class ConsistentBucketIndexUtils {
     HoodieWrapperFileSystem fs = table.getMetaClient().getFs();
     Path dir = FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     Path fullPath = new Path(dir, metadata.getFilename());
-    try (FSDataOutputStream fsOut = fs.create(fullPath, overwrite)) {
+    try (OutputStream out = fs.create(fullPath, overwrite)) {
       byte[] bytes = metadata.toBytes();
-      fsOut.write(bytes);
-      fsOut.close();
+      out.write(bytes);
+      out.close();
       return true;
     } catch (IOException e) {
       LOG.warn("Failed to update bucket metadata: " + metadata, e);
@@ -209,7 +210,16 @@ public class ConsistentBucketIndexUtils {
     if (fs.exists(fullPath)) {
       return;
     }
-    FileIOUtils.createFileInPath(fs, fullPath, Option.of(getUTF8Bytes(StringUtils.EMPTY_STRING)));
+    //prevent exception from race condition. We are ok with the file being created in another thread, so we should
+    // check for the marker after catching the exception and we don't need to fail if the file exists
+    try {
+      FileIOUtils.createFileInPath(fs, fullPath, Option.of(getUTF8Bytes(StringUtils.EMPTY_STRING)));
+    } catch (HoodieIOException e) {
+      if (!fs.exists(fullPath)) {
+        throw e;
+      }
+      LOG.warn("Failed to create marker but " + fullPath + " exists", e);
+    }
   }
 
   /***
@@ -220,11 +230,11 @@ public class ConsistentBucketIndexUtils {
    * @return HoodieConsistentHashingMetadata object
    */
   private static Option<HoodieConsistentHashingMetadata> loadMetadataFromGivenFile(HoodieTable table, FileStatus metaFile) {
-    try {
-      if (metaFile == null) {
-        return Option.empty();
-      }
-      byte[] content = FileIOUtils.readAsByteArray(table.getMetaClient().getFs().open(metaFile.getPath()));
+    if (metaFile == null) {
+      return Option.empty();
+    }
+    try (InputStream is = table.getMetaClient().getFs().open(metaFile.getPath())) {
+      byte[] content = FileIOUtils.readAsByteArray(is);
       return Option.of(HoodieConsistentHashingMetadata.fromBytes(content));
     } catch (FileNotFoundException e) {
       return Option.empty();

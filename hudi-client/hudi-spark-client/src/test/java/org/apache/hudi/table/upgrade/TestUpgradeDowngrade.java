@@ -55,8 +55,6 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
@@ -73,6 +71,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -540,7 +540,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
             .withEnableRecordIndex(true).build())
         .build();
     for (MetadataPartitionType partitionType : MetadataPartitionType.values()) {
-      metaClient.getTableConfig().setMetadataPartitionState(metaClient, partitionType, true);
+      metaClient.getTableConfig().setMetadataPartitionState(metaClient, partitionType.getPartitionPath(), true);
     }
     metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, MetadataPartitionType.values());
     String metadataTableBasePath = Paths.get(basePath, METADATA_TABLE_FOLDER_PATH).toString();
@@ -893,7 +893,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   private void prepForDowngradeFromVersion(HoodieTableVersion fromVersion) throws IOException {
     metaClient.getTableConfig().setTableVersion(fromVersion);
     Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
-    try (FSDataOutputStream os = metaClient.getFs().create(propertyFile)) {
+    try (OutputStream os = metaClient.getFs().create(propertyFile)) {
       metaClient.getTableConfig().getProps().store(os, "");
     }
   }
@@ -926,10 +926,10 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     assertEquals(expectedVersion.versionCode(), metaClient.getTableConfig().getTableVersion().versionCode());
     Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     // Load the properties and verify
-    FSDataInputStream fsDataInputStream = metaClient.getFs().open(propertyFile);
+    InputStream inputStream = metaClient.getFs().open(propertyFile);
     HoodieConfig config = new HoodieConfig();
-    config.getProps().load(fsDataInputStream);
-    fsDataInputStream.close();
+    config.getProps().load(inputStream);
+    inputStream.close();
     assertEquals(Integer.toString(expectedVersion.versionCode()), config.getString(HoodieTableConfig.VERSION));
   }
 }

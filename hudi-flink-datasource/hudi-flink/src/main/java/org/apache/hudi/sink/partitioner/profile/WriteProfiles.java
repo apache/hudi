@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.partitioner.profile;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.core.fs.Path;
@@ -117,7 +117,7 @@ public class WriteProfiles {
       List<HoodieCommitMetadata> metadataList,
       HoodieTableType tableType,
       boolean ignoreMissingFiles) {
-    FileSystem fs = FSUtils.getFs(basePath.toString(), hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(basePath.toString(), hadoopConf);
     Map<String, FileStatus> uniqueIdToFileStatus = new HashMap<>();
     // If a file has been touched multiple times in the given commits, the return value should keep the one
     // from the latest commit, so here we traverse in reverse order

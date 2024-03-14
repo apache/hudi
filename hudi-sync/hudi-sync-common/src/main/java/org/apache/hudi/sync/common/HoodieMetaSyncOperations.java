@@ -231,4 +231,11 @@ public interface HoodieMetaSyncOperations {
   default void deleteLastReplicatedTimeStamp(String tableName) {
 
   }
+
+  /**
+   * Generates a push down filter string to retrieve existing partitions
+   */
+  default String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields) {
+    throw new UnsupportedOperationException();
+  }
 }

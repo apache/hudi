@@ -44,8 +44,8 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -61,7 +61,6 @@ import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -78,6 +77,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.time.Instant;
@@ -132,7 +132,7 @@ public class HiveTestUtil {
   private static DateTimeFormatter dtfOut;
   private static Set<String> createdTablesSet = new HashSet<>();
 
-  public static void setUp(Option<TypedProperties> hiveSyncProperties, boolean shouldClearBasePathAndTables) throws IOException, InterruptedException, HiveException, MetaException {
+  public static void setUp(Option<TypedProperties> hiveSyncProperties, boolean shouldClearBasePathAndTables) throws Exception {
     configuration = new Configuration();
     if (zkServer == null) {
       zkService = new ZookeeperTestService(configuration);
@@ -166,6 +166,9 @@ public class HiveTestUtil {
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+    if (ddlExecutor != null) {
+      ddlExecutor.close();
+    }
     ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf()));
 
     if (shouldClearBasePathAndTables) {
@@ -196,18 +199,72 @@ public class HiveTestUtil {
     return hiveSyncConfig;
   }
 
-  public static void shutdown() throws IOException {
-    if (hiveServer != null) {
-      hiveServer.stop();
+  public static void shutdown() {
+    List<String> failedReleases = new ArrayList<>();
+    try {
+      clear();
+    } catch (HiveException | MetaException | IOException he) {
+      he.printStackTrace();
+      failedReleases.add("HiveData");
     }
-    if (hiveTestService != null) {
-      hiveTestService.stop();
+
+    try {
+      if (ddlExecutor != null) {
+        ddlExecutor.close();
+        ddlExecutor = null;
+      }
+    } catch (Exception ex) {
+      ex.printStackTrace();
+      failedReleases.add("DDLExecutor");
     }
-    if (zkServer != null) {
-      zkServer.shutdown(true);
+
+    try {
+      if (hiveServer != null) {
+        hiveServer.stop();
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("HiveServer");
     }
-    if (fileSystem != null) {
-      fileSystem.close();
+
+    try {
+      if (hiveTestService != null) {
+        hiveTestService.stop();
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("HiveTestService");
+    }
+
+    try {
+      if (zkServer != null) {
+        zkServer.shutdown(true);
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("ZKServer");
+    }
+
+    try {
+      if (zkService != null) {
+        zkService.stop();
+      }
+    } catch (RuntimeException re) {
+      re.printStackTrace();
+      failedReleases.add("ZKService");
+    }
+
+    try {
+      if (fileSystem != null) {
+        fileSystem.close();
+      }
+    } catch (IOException ie) {
+      ie.printStackTrace();
+      failedReleases.add("FileSystem");
+    }
+
+    if (!failedReleases.isEmpty()) {
+      LOG.error("Exception happened during releasing: " + String.join(",", failedReleases));
     }
   }
 
@@ -610,9 +667,9 @@ public class HiveTestUtil {
   private static void createMetaFile(String basePath, String fileName, byte[] bytes)
       throws IOException {
     Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
-    FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-    fsout.write(bytes);
-    fsout.close();
+    OutputStream out = fileSystem.create(fullPath, true);
+    out.write(bytes);
+    out.close();
   }
 
   public static Set<String> getCreatedTablesSet() {

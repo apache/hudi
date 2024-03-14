@@ -18,14 +18,15 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.hadoop.CachingPath
+import org.apache.hudi.hadoop.fs.CachingPath
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -127,7 +128,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     }, SQLConf.get)
   }
 
-  private def injectSQLConf[T: ClassTag](rdd: RDD[T], conf: SQLConf): RDD[T] =
+  def injectSQLConf[T: ClassTag](rdd: RDD[T], conf: SQLConf): RDD[T] =
     new SQLConfInjectingRDD(rdd, conf)
 
   def safeCreateRDD(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
@@ -197,6 +198,27 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       }
       (rdd, df.sparkSession.sparkContext.emptyRDD[String])
     }
+  }
+
+  /**
+   * Rerwite the record into the target schema.
+   * Return tuple of rewritten records and records that could not be converted
+   */
+  def safeRewriteRDD(df: RDD[GenericRecord], serializedTargetSchema: String): Tuple2[RDD[GenericRecord], RDD[String]] = {
+    val rdds: RDD[Either[GenericRecord, String]] = df.mapPartitions { recs =>
+      if (recs.isEmpty) {
+        Iterator.empty
+      } else {
+        val schema = new Schema.Parser().parse(serializedTargetSchema)
+        val transform: GenericRecord => Either[GenericRecord, String] = record => try {
+          Left(HoodieAvroUtils.rewriteRecordDeep(record, schema, true))
+        } catch {
+          case _: Throwable => Right(HoodieAvroUtils.avroToJsonString(record, false))
+        }
+        recs.map(transform)
+      }
+    }
+    (rdds.filter(_.isLeft).map(_.left.get), rdds.filter(_.isRight).map(_.right.get))
   }
 
   def getCatalystRowSerDe(structType: StructType): SparkRowSerDe = {

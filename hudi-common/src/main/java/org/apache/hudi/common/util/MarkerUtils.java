@@ -30,8 +30,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -40,6 +38,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -111,14 +111,14 @@ public class MarkerUtils {
    */
   public static Option<MarkerType> readMarkerType(FileSystem fileSystem, String markerDir) {
     Path markerTypeFilePath = new Path(markerDir, MARKER_TYPE_FILENAME);
-    FSDataInputStream fsDataInputStream = null;
+    InputStream inputStream = null;
     Option<MarkerType> content = Option.empty();
     try {
       if (!doesMarkerTypeFileExist(fileSystem, markerDir)) {
         return Option.empty();
       }
-      fsDataInputStream = fileSystem.open(markerTypeFilePath);
-      String markerType = FileIOUtils.readAsUTFString(fsDataInputStream);
+      inputStream = fileSystem.open(markerTypeFilePath);
+      String markerType = FileIOUtils.readAsUTFString(inputStream);
       if (StringUtils.isNullOrEmpty(markerType)) {
         return Option.empty();
       }
@@ -127,7 +127,7 @@ public class MarkerUtils {
       throw new HoodieIOException("Cannot read marker type file " + markerTypeFilePath.toString()
           + "; " + e.getMessage(), e);
     } finally {
-      closeQuietly(fsDataInputStream);
+      closeQuietly(inputStream);
     }
     return content;
   }
@@ -141,18 +141,18 @@ public class MarkerUtils {
    */
   public static void writeMarkerTypeToFile(MarkerType markerType, FileSystem fileSystem, String markerDir) {
     Path markerTypeFilePath = new Path(markerDir, MARKER_TYPE_FILENAME);
-    FSDataOutputStream fsDataOutputStream = null;
+    OutputStream outputStream = null;
     BufferedWriter bufferedWriter = null;
     try {
-      fsDataOutputStream = fileSystem.create(markerTypeFilePath, false);
-      bufferedWriter = new BufferedWriter(new OutputStreamWriter(fsDataOutputStream, StandardCharsets.UTF_8));
+      outputStream = fileSystem.create(markerTypeFilePath, false);
+      bufferedWriter = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
       bufferedWriter.write(markerType.toString());
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker type file " + markerTypeFilePath.toString()
           + "; " + e.getMessage(), e);
     } finally {
       closeQuietly(bufferedWriter);
-      closeQuietly(fsDataOutputStream);
+      closeQuietly(outputStream);
     }
   }
 
@@ -224,13 +224,13 @@ public class MarkerUtils {
    * @return Markers in a {@code Set} of String.
    */
   public static Set<String> readMarkersFromFile(Path markersFilePath, SerializableConfiguration conf, boolean ignoreException) {
-    FSDataInputStream fsDataInputStream = null;
+    InputStream inputStream = null;
     Set<String> markers = new HashSet<>();
     try {
       LOG.debug("Read marker file: " + markersFilePath);
       FileSystem fs = markersFilePath.getFileSystem(conf.get());
-      fsDataInputStream = fs.open(markersFilePath);
-      markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(fsDataInputStream));
+      inputStream = fs.open(markersFilePath);
+      markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(inputStream));
     } catch (IOException e) {
       String errorMessage = "Failed to read MARKERS file " + markersFilePath;
       if (ignoreException) {
@@ -239,7 +239,7 @@ public class MarkerUtils {
         throw new HoodieIOException(errorMessage, e);
       }
     } finally {
-      closeQuietly(fsDataInputStream);
+      closeQuietly(inputStream);
     }
     return markers;
   }

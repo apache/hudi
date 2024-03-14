@@ -241,6 +241,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
+  public String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields) {
+    return new PartitionFilterGenerator().generatePushDownFilter(writtenPartitions, partitionFields, config);
+  }
+
+  @Override
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
                           String outputFormatClass, String serdeClass,
                           Map<String, String> serdeProperties, Map<String, String> tableProperties) {

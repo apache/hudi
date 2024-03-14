@@ -20,7 +20,6 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,6 +30,13 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
+import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -181,7 +187,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   public void testEnvVarVariablesPickedup() {
     environmentVariables.set("HOODIE_ENV_fs_DOT_key1", "value1");
-    Configuration conf = FSUtils.prepareHadoopConf(HoodieTestUtils.getDefaultHadoopConf());
+    Configuration conf = HadoopFSUtils.prepareHadoopConf(HoodieTestUtils.getDefaultHadoopConf());
     assertEquals("value1", conf.get("fs.key1"));
     conf.set("fs.key1", "value11");
     conf.set("fs.key2", "value2");
@@ -390,7 +396,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String log3 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 3, writeToken);
     Files.createFile(partitionPath.resolve(log3));
 
-    assertEquals(3, (int) FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
+    assertEquals(3, (int) FSUtils.getLatestLogVersion(HadoopFSUtils.getFs(basePath, new Configuration()),
         new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime).get().getLeft());
   }
 
@@ -573,6 +579,22 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     // null input
     assertThrows(NullPointerException.class, () -> FSUtils.getFileExtension(null));
+  }
+
+  @Test
+  public void testMakeQualified() {
+    FileSystem fs = HadoopFSUtils.getFs("file:///a/b/c", new Configuration());
+    FileSystem wrapperFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
+    HoodieStorage storage = new HoodieHadoopStorage(fs);
+    HoodieStorage wrapperStorage = new HoodieHadoopStorage(wrapperFs);
+    assertEquals(new StoragePath("file:///x/y"),
+        FSUtils.makeQualified(storage, new StoragePath("/x/y")));
+    assertEquals(new StoragePath("file:///x/y"),
+        FSUtils.makeQualified(wrapperStorage, new StoragePath("/x/y")));
+    assertEquals(new StoragePath("s3://x/y"),
+        FSUtils.makeQualified(storage, new StoragePath("s3://x/y")));
+    assertEquals(new StoragePath("s3://x/y"),
+        FSUtils.makeQualified(wrapperStorage, new StoragePath("s3://x/y")));
   }
 
   private Path getHoodieTempDir() {

@@ -108,8 +108,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
-import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
+import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 
 /**
  * Hoodie batch table source that always read the latest snapshot of the underneath table.
@@ -176,12 +176,12 @@ public class HoodieTableSource implements
     this.dataPruner = dataPruner;
     this.partitionPruner = partitionPruner;
     this.dataBucket = dataBucket;
-    this.requiredPos = Optional.ofNullable(requiredPos).orElse(IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
+    this.requiredPos = Optional.ofNullable(requiredPos).orElseGet(() -> IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
     this.limit = Optional.ofNullable(limit).orElse(NO_LIMIT_CONSTANT);
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    this.metaClient = Optional.ofNullable(metaClient).orElse(StreamerUtil.metaClientForReader(conf, hadoopConf));
+    this.metaClient = Optional.ofNullable(metaClient).orElseGet(() -> StreamerUtil.metaClientForReader(conf, hadoopConf));
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
-    this.internalSchemaManager = Optional.ofNullable(internalSchemaManager).orElse(InternalSchemaManager.get(this.conf, this.metaClient));
+    this.internalSchemaManager = Optional.ofNullable(internalSchemaManager).orElseGet(() -> InternalSchemaManager.get(this.conf, this.metaClient));
   }
 
   @Override
@@ -204,14 +204,23 @@ public class HoodieTableSource implements
               conf, FilePathUtils.toFlinkPath(path), tableRowType, maxCompactionMemoryInBytes, partitionPruner);
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
-          SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
+          DataStream<MergeOnReadInputSplit> monitorOperatorStream = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
               .uid(Pipelines.opUID("split_monitor", conf))
               .setParallelism(1)
-              .setMaxParallelism(1)
-              .keyBy(MergeOnReadInputSplit::getFileId)
-              .transform("split_reader", typeInfo, factory)
-              .uid(Pipelines.opUID("split_reader", conf))
-              .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+              .setMaxParallelism(1);
+          SingleOutputStreamOperator<RowData> source;
+          if (OptionsResolver.isAppendMode(HoodieTableSource.this.conf)) {
+            source = monitorOperatorStream
+                .transform("split_reader", typeInfo, factory)
+                .uid(Pipelines.opUID("split_reader", conf))
+                .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+          } else {
+            source = monitorOperatorStream
+                .keyBy(MergeOnReadInputSplit::getFileId)
+                .transform("split_reader", typeInfo, factory)
+                .uid(Pipelines.opUID("split_reader", conf))
+                .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+          }
           return new DataStreamSource<>(source);
         } else {
           InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
@@ -539,7 +548,7 @@ public class HoodieTableSource implements
         this.predicates,
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf),
-        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
+        this.conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE),
         this.internalSchemaManager
     );
   }

@@ -45,8 +45,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
-import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -68,8 +69,6 @@ import static org.mockito.Mockito.mock;
 public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
   protected static final String TEST_TOPIC_PREFIX = "hoodie_avro_test_";
 
-  protected static KafkaTestUtils testUtils;
-
   protected static HoodieTestDataGenerator dataGen;
 
   protected static String SCHEMA_PATH = "/tmp/schema_file.avsc";
@@ -78,15 +77,21 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
 
   protected SchemaProvider schemaProvider;
 
+  protected KafkaTestUtils testUtils;
+
   @BeforeAll
   public static void initClass() {
-    testUtils = new KafkaTestUtils();
     dataGen = new HoodieTestDataGenerator(0xDEED);
+  }
+
+  @BeforeEach
+  public void setup() {
+    testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterAll
-  public static void cleanupClass() {
+  @AfterEach
+  public void tearDown() {
     testUtils.teardown();
   }
 

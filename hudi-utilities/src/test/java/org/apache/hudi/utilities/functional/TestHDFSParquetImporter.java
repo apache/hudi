@@ -27,7 +27,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
@@ -43,6 +42,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -272,7 +272,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
   }
 
   private void createSchemaFile(String schemaFile) throws IOException {
-    FSDataOutputStream schemaFileOS = dfs().create(new Path(schemaFile));
+    OutputStream schemaFileOS = dfs().create(new Path(schemaFile));
     schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
     schemaFileOS.close();
   }

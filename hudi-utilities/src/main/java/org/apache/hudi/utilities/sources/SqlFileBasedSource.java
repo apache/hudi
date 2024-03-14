@@ -19,10 +19,10 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -80,7 +80,7 @@ public class SqlFileBasedSource extends RowSource {
   protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(
       Option<String> lastCkptStr, long sourceLimit) {
     Dataset<Row> rows = null;
-    final FileSystem fs = FSUtils.getFs(sourceSqlFile, sparkContext.hadoopConfiguration(), true);
+    final FileSystem fs = HadoopFSUtils.getFs(sourceSqlFile, sparkContext.hadoopConfiguration(), true);
     try {
       final Scanner scanner = new Scanner(fs.open(new Path(sourceSqlFile)));
       scanner.useDelimiter(";");

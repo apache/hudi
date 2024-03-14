@@ -25,7 +25,6 @@ import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.LSMTimelineWriter;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -59,6 +58,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
@@ -1580,6 +1580,36 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieTimeline timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
     assertEquals(6, timeline.countInstants(),
         "Since we have a pending clustering instant at 00000002, we should never archive any commit after 00000000");
+  }
+
+  @Test
+  public void testRetryArchivalAfterPreviousFailedDeletion() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 4, 2);
+    for (int i = 0; i <= 5; i++) {
+      testTable.doWriteOperation("10" + i, WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), 1);
+    }
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
+
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getWriteTimeline();
+    assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
+    assertTrue(archiver.archiveIfRequired(context) > 0);
+    // Simulate archival failing to delete by re-adding the .commit instant files
+    // (101.commit, 102.commit, and 103.commit instant files)
+    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "101_1001", wrapperFs.getConf());
+    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "102_1021", wrapperFs.getConf());
+    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "103_1031", wrapperFs.getConf());
+    timeline = metaClient.getActiveTimeline().reload().getWriteTimeline();
+    assertEquals(5, timeline.countInstants(), "Due to simulating partial archival deletion, there should"
+        + "be 5 instants (as instant times 101-103 .commit files should remain in timeline)");
+    // Re-running archival again should archive and delete the 101.commit, 102.commit, and 103.commit instant files
+    table.getMetaClient().reloadActiveTimeline();
+    table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    archiver = new HoodieTimelineArchiver(writeConfig, table);
+    assertTrue(archiver.archiveIfRequired(context) > 0);
+    timeline = metaClient.getActiveTimeline().reload().getWriteTimeline();
+    assertEquals(2, timeline.countInstants(), "The instants from prior archival should "
+        + "be deleted now");
   }
 
   private Pair<List<HoodieInstant>, List<HoodieInstant>> archiveAndGetCommitsList(HoodieWriteConfig writeConfig) throws IOException {

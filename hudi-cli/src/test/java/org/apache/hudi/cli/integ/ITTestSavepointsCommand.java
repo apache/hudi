@@ -33,6 +33,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,7 +66,7 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
   @BeforeEach
   public void init() throws IOException {
     String tableName = "test_table";
-    tablePath = basePath + Path.SEPARATOR + tableName;
+    tablePath = basePath + StoragePath.SEPARATOR + tableName;
 
     // Create table and connect
     new TableCommand().createTable(

@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView

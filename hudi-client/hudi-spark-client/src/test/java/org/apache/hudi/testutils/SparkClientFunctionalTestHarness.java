@@ -46,6 +46,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -144,7 +145,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
   public FileSystem fs() {
     if (fileSystem == null) {
-      fileSystem = FSUtils.getFs(basePath(), hadoopConf());
+      fileSystem = HadoopFSUtils.getFs(basePath(), hadoopConf());
     }
     return fileSystem;
   }
@@ -201,6 +202,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
+      HoodieClientTestUtils.overrideSparkHadoopConfiguration(spark.sparkContext());
       jsc = new JavaSparkContext(spark.sparkContext());
       context = new HoodieSparkEngineContext(jsc);
       timelineService = HoodieClientTestUtils.initTimelineService(

@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.common.fs;
@@ -21,8 +22,6 @@ package org.apache.hudi.common.fs;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.inline.InLineFSUtils;
-import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -36,8 +35,16 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.fs.CachingPath;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
+import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
+import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -60,7 +67,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -71,7 +77,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
+import static org.apache.hudi.hadoop.fs.CachingPath.getPathWithoutSchemeAndAuthority;
 
 /**
  * Utility functions related to accessing the file storage.
@@ -85,50 +91,16 @@ public class FSUtils {
       Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
-  private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
 
   private static final String LOG_FILE_EXTENSION = ".log";
 
   private static final PathFilter ALLOW_ALL_FILTER = file -> true;
-
-  public static Configuration prepareHadoopConf(Configuration conf) {
-    // look for all properties, prefixed to be picked up
-    for (Entry<String, String> prop : System.getenv().entrySet()) {
-      if (prop.getKey().startsWith(HOODIE_ENV_PROPS_PREFIX)) {
-        LOG.info("Picking up value for hoodie env var :" + prop.getKey());
-        conf.set(prop.getKey().replace(HOODIE_ENV_PROPS_PREFIX, "").replaceAll("_DOT_", "."), prop.getValue());
-      }
-    }
-    return conf;
-  }
 
   public static Configuration buildInlineConf(Configuration conf) {
     Configuration inlineConf = new Configuration(conf);
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
     inlineConf.setClassLoader(InLineFileSystem.class.getClassLoader());
     return inlineConf;
-  }
-
-  public static FileSystem getFs(String pathStr, Configuration conf) {
-    return getFs(new Path(pathStr), conf);
-  }
-
-  public static FileSystem getFs(Path path, Configuration conf) {
-    FileSystem fs;
-    prepareHadoopConf(conf);
-    try {
-      fs = path.getFileSystem(conf);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to get instance of " + FileSystem.class.getName(), e);
-    }
-    return fs;
-  }
-
-  public static FileSystem getFs(String pathStr, Configuration conf, boolean localByDefault) {
-    if (localByDefault) {
-      return getFs(addSchemeIfLocalPath(pathStr), conf);
-    }
-    return getFs(pathStr, conf);
   }
 
   /**
@@ -141,18 +113,6 @@ public class FSUtils {
     return fs.exists(new Path(path + "/" + HoodieTableMetaClient.METAFOLDER_NAME));
   }
 
-  public static Path addSchemeIfLocalPath(String path) {
-    Path providedPath = new Path(path);
-    File localFile = new File(path);
-    if (!providedPath.isAbsolute() && localFile.exists()) {
-      Path resolvedPath = new Path("file://" + localFile.getAbsolutePath());
-      LOG.info("Resolving file " + path + " to be a local file.");
-      return resolvedPath;
-    }
-    LOG.info("Resolving file " + path + "to be a remote file.");
-    return providedPath;
-  }
-
   /**
    * Makes path qualified w/ {@link FileSystem}'s URI
    *
@@ -162,6 +122,17 @@ public class FSUtils {
    */
   public static Path makeQualified(FileSystem fs, Path path) {
     return path.makeQualified(fs.getUri(), fs.getWorkingDirectory());
+  }
+
+  /**
+   * Makes location qualified with {@link HoodieStorage}'s URI.
+   *
+   * @param storage  instance of {@link HoodieStorage}.
+   * @param location to be qualified.
+   * @return qualified location, prefixed with the URI of the target HoodieStorage object provided.
+   */
+  public static StoragePath makeQualified(HoodieStorage storage, StoragePath location) {
+    return location.makeQualified(storage.getUri());
   }
 
   /**
@@ -654,7 +625,7 @@ public class FSUtils {
 
   public static Configuration registerFileSystem(Path file, Configuration conf) {
     Configuration returnConf = new Configuration(conf);
-    String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
+    String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
         HoodieWrapperFileSystem.class.getName());
     return returnConf;
@@ -669,7 +640,7 @@ public class FSUtils {
    */
   public static HoodieWrapperFileSystem getFs(String path, SerializableConfiguration hadoopConf,
       ConsistencyGuardConfig consistencyGuardConfig) {
-    FileSystem fileSystem = FSUtils.getFs(path, hadoopConf.newCopy());
+    FileSystem fileSystem = HadoopFSUtils.getFs(path, hadoopConf.newCopy());
     return new HoodieWrapperFileSystem(fileSystem,
         consistencyGuardConfig.isConsistencyCheckEnabled()
             ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)

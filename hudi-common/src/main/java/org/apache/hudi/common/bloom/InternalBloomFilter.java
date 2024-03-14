@@ -199,7 +199,7 @@ public class InternalBloomFilter extends InternalFilter {
   }
 
   /**
-   * @return size of the the bloomfilter
+   * @return size of the bloomfilter
    */
   public int getVectorSize() {
     return this.vectorSize;

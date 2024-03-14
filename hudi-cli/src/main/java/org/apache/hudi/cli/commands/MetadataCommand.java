@@ -151,7 +151,7 @@ public class MetadataCommand {
   public String deleteRecordIndex(@ShellOption(value = "--backup", help = "Backup the record index before delete", defaultValue = "true", arity = 1) final boolean backup) throws Exception {
     HoodieTableMetaClient dataMetaClient = HoodieCLI.getTableMetaClient();
     String backupPath = HoodieTableMetadataUtil.deleteMetadataTablePartition(dataMetaClient, new HoodieSparkEngineContext(jsc),
-        MetadataPartitionType.RECORD_INDEX, backup);
+        MetadataPartitionType.RECORD_INDEX.getPartitionPath(), backup);
     if (backup) {
       return "Record Index has been deleted from the Metadata Table and backed up to " + backupPath;
     } else {

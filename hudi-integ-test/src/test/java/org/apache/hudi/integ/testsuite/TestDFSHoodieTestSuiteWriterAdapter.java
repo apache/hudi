@@ -19,7 +19,7 @@
 package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.generator.FlexibleSchemaRecordGenerationIterator;
@@ -69,7 +69,7 @@ public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanupClass() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
@@ -138,7 +138,7 @@ public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
     FlexibleSchemaRecordGenerationIterator itr = new FlexibleSchemaRecordGenerationIterator(1000,
         schemaProvider.getSourceSchema().toString());
     dfsDeltaWriterAdapter.write(itr);
-    FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
     FileStatus[] fileStatuses = fs.listStatus(new Path(basePath));
     // Since maxFileSize was 10240L and we produced 1K records each close to 1K size, we should produce more than
     // 1 file

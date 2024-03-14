@@ -56,6 +56,7 @@ import java.util.stream.Stream;
  */
 public class BaseRollbackHelper implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackHelper.class);
   protected static final String EMPTY_STRING = "";
 

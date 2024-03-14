@@ -24,7 +24,6 @@ import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -34,6 +33,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
@@ -161,7 +161,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     if (connectConfigs.isMetaSyncEnabled()) {
       Set<String> syncClientToolClasses = new HashSet<>(
           Arrays.asList(connectConfigs.getMetaSyncClasses().split(",")));
-      FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
+      FileSystem fs = HadoopFSUtils.getFs(tableBasePath, new Configuration());
       for (String impl : syncClientToolClasses) {
         // TODO kafka connect config needs to support setting base file format
         String baseFileFormat = connectConfigs.getStringOrDefault(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT);

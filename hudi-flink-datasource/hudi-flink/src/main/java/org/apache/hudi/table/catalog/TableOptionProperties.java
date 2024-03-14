@@ -18,13 +18,14 @@
 
 package org.apache.hudi.table.catalog;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 
@@ -33,8 +34,6 @@ import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -43,6 +42,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -104,15 +105,33 @@ public class TableOptionProperties {
   public static void createProperties(String basePath,
                                       Configuration hadoopConf,
                                       Map<String, String> options) throws IOException {
+    Path propertiesFilePath = writePropertiesFile(basePath, hadoopConf, options, false);
+    LOG.info(String.format("Create file %s success.", propertiesFilePath));
+  }
+
+  /**
+   * Overwrite the {@link #FILE_NAME} meta file.
+   */
+  public static void overwriteProperties(String basePath,
+      Configuration hadoopConf,
+      Map<String, String> options) throws IOException {
+    Path propertiesFilePath = writePropertiesFile(basePath, hadoopConf, options, true);
+    LOG.info(String.format("Update file %s success.", propertiesFilePath));
+  }
+
+  private static Path writePropertiesFile(String basePath,
+      Configuration hadoopConf,
+      Map<String, String> options,
+      boolean isOverwrite) throws IOException {
     Path propertiesFilePath = getPropertiesFilePath(basePath);
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
-    try (FSDataOutputStream outputStream = fs.create(propertiesFilePath)) {
+    FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
+    try (OutputStream outputStream = fs.create(propertiesFilePath, isOverwrite)) {
       Properties properties = new Properties();
       properties.putAll(options);
       properties.store(outputStream,
           "Table option properties saved on " + new Date(System.currentTimeMillis()));
     }
-    LOG.info(String.format("Create file %s success.", propertiesFilePath));
+    return propertiesFilePath;
   }
 
   /**
@@ -123,8 +142,8 @@ public class TableOptionProperties {
     Map<String, String> options = new HashMap<>();
     Properties props = new Properties();
 
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
-    try (FSDataInputStream inputStream = fs.open(propertiesFilePath)) {
+    FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
+    try (InputStream inputStream = fs.open(propertiesFilePath)) {
       props.load(inputStream);
       for (final String name : props.stringPropertyNames()) {
         options.put(name, props.getProperty(name));
@@ -137,7 +156,7 @@ public class TableOptionProperties {
   }
 
   private static Path getPropertiesFilePath(String basePath) {
-    String auxPath = basePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
+    String auxPath = basePath + StoragePath.SEPARATOR + AUXILIARYFOLDER_NAME;
     return new Path(auxPath, FILE_NAME);
   }
 

@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -29,6 +28,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.HoodieSnapshotExporter;
@@ -84,7 +84,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     // Initialize test data dirs
     sourcePath = Paths.get(basePath(), "source").toString();
     targetPath = Paths.get(basePath(), "target").toString();
-    lfs = (LocalFileSystem) FSUtils.getFs(basePath(), jsc().hadoopConfiguration());
+    lfs = (LocalFileSystem) HadoopFSUtils.getFs(basePath(), jsc().hadoopConfiguration());
 
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
