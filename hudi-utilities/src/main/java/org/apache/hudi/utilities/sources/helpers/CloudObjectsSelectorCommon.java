@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -90,16 +89,13 @@ public class CloudObjectsSelectorCommon {
    * Return a function that extracts filepaths from a list of Rows.
    * Here Row is assumed to have the schema [bucket_name, filepath_relative_to_bucket, object_size]
    * @param storageUrlSchemePrefix    Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
-   * @param serializableHadoopConf
-   * @param checkIfExists             check if each file exists, before adding it to the returned list
    * @return
    */
-  public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(
-      String storageUrlSchemePrefix, SerializableConfiguration serializableHadoopConf, boolean checkIfExists) {
+  public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(String storageUrlSchemePrefix) {
     return rows -> {
       List<CloudObjectMetadata> cloudObjectMetadataPerPartition = new ArrayList<>();
       rows.forEachRemaining(row -> {
-        Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, serializableHadoopConf, checkIfExists);
+        Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix);
         filePathUrl.ifPresent(url -> {
           LOG.info("Adding file: " + url);
           long size;
@@ -129,21 +125,13 @@ public class CloudObjectsSelectorCommon {
    *
    * @param storageUrlSchemePrefix Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
    */
-  private static Option<String> getUrlForFile(Row row, String storageUrlSchemePrefix,
-                                              SerializableConfiguration serializableConfiguration,
-                                              boolean checkIfExists) {
-    final Configuration configuration = serializableConfiguration.newCopy();
-
+  private static Option<String> getUrlForFile(Row row, String storageUrlSchemePrefix) {
     String bucket = row.getString(0);
     String filePath = storageUrlSchemePrefix + bucket + "/" + row.getString(1);
 
     try {
       String filePathUrl = URLDecoder.decode(filePath, StandardCharsets.UTF_8.name());
-      if (!checkIfExists) {
-        return Option.of(filePathUrl);
-      }
-      boolean exists = checkIfFileExists(storageUrlSchemePrefix, bucket, filePathUrl, configuration);
-      return exists ? Option.of(filePathUrl) : Option.empty();
+      return Option.of(filePathUrl);
     } catch (Exception exception) {
       LOG.warn(String.format("Failed to generate path to cloud file %s", filePath), exception);
       throw new HoodieException(String.format("Failed to generate path to cloud file %s", filePath), exception);

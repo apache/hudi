@@ -30,7 +30,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -124,6 +129,47 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, props, "json", Option.of(new FilebasedSchemaProvider(props, jsc)));
     Assertions.assertTrue(result.isPresent());
     List<Row> expected = Arrays.asList(RowFactory.create("some data", "US", "CA"), RowFactory.create("some data", "US", "TX"), RowFactory.create("some data", "IND", "TS"));
+    List<Row> actual = result.get().collectAsList();
+    Assertions.assertEquals(new HashSet<>(expected), new HashSet<>(actual));
+  }
+
+  @Test
+  public void ignoreMissingFiles(@TempDir Path tempDir) {
+    TypedProperties props = new TypedProperties();
+    TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc");
+    String schemaFilePath = TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc").getPath();
+    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
+    props.put("hoodie.deltastreamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
+
+    List<CloudObjectMetadata> input = new ArrayList<>();
+    final List<String> tmpFileNames = Arrays.asList("data1.json", "data2.json", "data3.json");
+
+    try {
+      for (String tmpFileName : tmpFileNames) {
+        Path p = tempDir.resolve(tmpFileName);
+        String json = "{\"data\": \"" + tmpFileName + "\"}";
+        Files.write(p, Collections.singletonList(json));
+
+        input.add(new CloudObjectMetadata(p.toAbsolutePath().toString(), 1000));
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+      Assertions.fail();
+    }
+
+    sparkSession.conf().set("spark.sql.files.ignoreMissingFiles", "true");
+    Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, props, "json", Option.of(new FilebasedSchemaProvider(props, jsc)));
+
+    // Delete a file after creating the result dataframe
+    try {
+      Files.delete(tempDir.resolve(tmpFileNames.get(0)));
+    } catch (IOException e) {
+      e.printStackTrace();
+      Assertions.fail();
+    }
+
+    Assertions.assertTrue(result.isPresent());
+    List<Row> expected = Arrays.asList(RowFactory.create(tmpFileNames.get(1)), RowFactory.create(tmpFileNames.get(2)));
     List<Row> actual = result.get().collectAsList();
     Assertions.assertEquals(new HashSet<>(expected), new HashSet<>(actual));
   }

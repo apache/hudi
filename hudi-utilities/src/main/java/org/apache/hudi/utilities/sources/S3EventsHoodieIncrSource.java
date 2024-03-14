@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
@@ -67,7 +66,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
   private static final Logger LOG = LoggerFactory.getLogger(S3EventsHoodieIncrSource.class);
   private final String srcPath;
   private final int numInstantsPerFetch;
-  private final boolean checkIfFileExists;
   private final IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy;
   private final QueryRunner queryRunner;
   private final CloudDataFetcher cloudDataFetcher;
@@ -112,10 +110,15 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       QueryRunner queryRunner,
       CloudDataFetcher cloudDataFetcher) {
     super(props, sparkContext, sparkSession, schemaProvider);
+
+    if (getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK)) {
+      sparkSession.conf().set("spark.sql.files.ignoreMissingFiles", "true");
+      sparkSession.conf().set("spark.sql.files.ignoreCorruptFiles", "true");
+    }
+
     checkRequiredConfigProperties(props, Collections.singletonList(HOODIE_SRC_BASE_PATH));
     this.srcPath = getStringWithAltKeys(props, HOODIE_SRC_BASE_PATH);
     this.numInstantsPerFetch = getIntWithAltKeys(props, NUM_INSTANTS_PER_FETCH);
-    this.checkIfFileExists = getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK);
     this.missingCheckpointStrategy = getMissingCheckpointStrategy(props);
     this.queryRunner = queryRunner;
     this.cloudDataFetcher = cloudDataFetcher;
@@ -161,13 +164,12 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     String s3Prefix = s3FS + "://";
 
     // Create S3 paths
-    SerializableConfiguration serializableHadoopConf = new SerializableConfiguration(sparkContext.hadoopConfiguration());
     List<CloudObjectMetadata> cloudObjectMetadata = checkPointAndDataset.getRight().get()
         .select(CloudObjectsSelectorCommon.S3_BUCKET_NAME,
                 CloudObjectsSelectorCommon.S3_OBJECT_KEY,
                 CloudObjectsSelectorCommon.S3_OBJECT_SIZE)
         .distinct()
-        .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, serializableHadoopConf, checkIfFileExists), Encoders.kryo(CloudObjectMetadata.class))
+        .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix), Encoders.kryo(CloudObjectMetadata.class))
         .collectAsList();
     LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
 
