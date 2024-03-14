@@ -115,7 +115,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  'hoodie.index.type' = 'BUCKET',
            |  'hoodie.bucket.index.hash.field' = 'id',
            |  'hoodie.bucket.index.num.buckets'=512,
-           |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.PrecombineAbsoluteGreaterPayload'
+           |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.OverwriteWithGreaterRecordPayload'
            | )
            partitioned by (`day`,`hour`)
            location '${tablePath}'
