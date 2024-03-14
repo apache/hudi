@@ -94,7 +94,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test PrecombineAbsoluteGreaterPayload test") {
+  test("Test OverwriteWithGreaterRecordPayload test") {
     withTempDir { tmp =>
       val targetTable = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
@@ -134,7 +134,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |""".stripMargin)
 
       checkAnswer(s"select id, name, ts, day, hour from $targetTable limit 10")(
-        Seq("1", "aa", 123, "2024-02-19", 10),
+        Seq("1", "aa", 123, "2024-02-19", 10)
       )
 
       spark.sql(
@@ -144,7 +144,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |""".stripMargin)
 
       checkAnswer(s"select id, name, ts, day, hour from $targetTable limit 10")(
-        Seq("1", "cc", 124, "2024-02-19", 10),
+        Seq("1", "cc", 124, "2024-02-19", 10)
       )
 
     }
