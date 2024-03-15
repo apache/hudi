@@ -434,7 +434,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             fileGroupCountAndRecordsPair = initializeRecordIndexPartition();
             break;
           case FUNCTIONAL_INDEX:
-            fileGroupCountAndRecordsPair = initializeFunctionalIndexPartition();
+            Set<String> functionalIndexPartitionsToInit = getFunctionalIndexPartitionsToInit();
+            if (functionalIndexPartitionsToInit.isEmpty()) {
+              continue;
+            }
+            ValidationUtils.checkState(functionalIndexPartitionsToInit.size() == 1, "Only one functional index at a time is supported for now");
+            fileGroupCountAndRecordsPair = initializeFunctionalIndexPartition(functionalIndexPartitionsToInit.iterator().next());
             break;
           default:
             throw new HoodieMetadataException("Unsupported MDT partition type: " + partitionType);
@@ -520,9 +525,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                                                         int parallelism, Schema readerSchema,
                                                                         SerializableConfiguration hadoopConf);
 
-  private Pair<Integer, HoodieData<HoodieRecord>> initializeFunctionalIndexPartition() throws Exception {
+  private Pair<Integer, HoodieData<HoodieRecord>> initializeFunctionalIndexPartition(String indexName) throws Exception {
     HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(dataMetaClient, dataMetaClient.getActiveTimeline(), metadata);
-    String indexName = dataWriteConfig.getFunctionalIndexConfig().getIndexName();
     HoodieFunctionalIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexName);
     // Collect the list of latest file slices present in each partition
     List<String> partitions = metadata.getAllPartitionPaths();
@@ -536,6 +540,13 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
     Schema readerSchema = addMetadataFields(getProjectedSchemaForFunctionalIndex(indexDefinition, dataMetaClient), dataWriteConfig.allowOperationMetadataField());
     return Pair.of(fileGroupCount, getFunctionalIndexRecords(partitionFileSlicePairs, indexDefinition, dataMetaClient, parallelism, readerSchema, hadoopConf));
+  }
+
+  private Set<String> getFunctionalIndexPartitionsToInit() {
+    Set<String> functionalIndexPartitions = dataMetaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().keySet();
+    Set<String> completedMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
+    functionalIndexPartitions.removeAll(completedMetadataPartitions);
+    return functionalIndexPartitions;
   }
 
   private HoodieFunctionalIndexDefinition getFunctionalIndexDefinition(String indexName) {
