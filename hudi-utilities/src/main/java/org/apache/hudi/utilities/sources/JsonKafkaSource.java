@@ -80,7 +80,7 @@ public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
     return postProcess(maybeAppendKafkaOffsets(kafkaRDD));
   }
 
-  protected  JavaRDD<String> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
+  protected JavaRDD<String> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
     if (this.shouldAddOffsets) {
       return kafkaRDD.mapPartitions(partitionIterator -> {
         List<String> stringList = new LinkedList<>();

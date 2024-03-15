@@ -94,7 +94,7 @@ public class HoodieStreamerUtils {
                 props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
               }
               BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-              List<Either<HoodieRecord,String>> avroRecords = new ArrayList<>();
+              List<Either<HoodieRecord, String>> avroRecords = new ArrayList<>();
               while (genericRecordIterator.hasNext()) {
                 GenericRecord genRec = genericRecordIterator.next();
                 try {
