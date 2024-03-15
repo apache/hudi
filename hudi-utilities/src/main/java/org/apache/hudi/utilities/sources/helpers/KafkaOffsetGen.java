@@ -41,10 +41,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -69,11 +69,9 @@ public class KafkaOffsetGen {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaOffsetGen.class);
   private static final String METRIC_NAME_KAFKA_DELAY_COUNT = "kafkaDelayCount";
   private static final Comparator<OffsetRange> SORT_BY_PARTITION = Comparator.comparing(OffsetRange::partition);
-
   public static final String KAFKA_CHECKPOINT_TYPE_TIMESTAMP = "timestamp";
 
   public static class CheckpointUtils {
-
     /**
      * kafka checkpoint Pattern.
      * Format: topic_name,partition_num:offset,partition_num:offset,....
@@ -116,21 +114,12 @@ public class KafkaOffsetGen {
      * @param fromOffsetMap offsets where we left off last time
      * @param toOffsetMap offsets of where each partitions is currently at
      * @param numEvents maximum number of events to read.
+     * @param minPartitions minimum partitions used for
      */
     public static OffsetRange[] computeOffsetRanges(Map<TopicPartition, Long> fromOffsetMap,
                                                     Map<TopicPartition, Long> toOffsetMap,
                                                     long numEvents,
                                                     long minPartitions) {
-      boolean needSplitToMinPartitions = minPartitions > toOffsetMap.size();
-      if (needSplitToMinPartitions && minPartitions % toOffsetMap.size() != 0) {
-        throw new IllegalArgumentException("The config "
-            + KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key()
-            + " must be multiples of the number of topic partitions: minPartitions="
-            + minPartitions
-            + " numTopicPartitions="
-            + toOffsetMap.size());
-      }
-
       // Create initial offset ranges for each 'to' partition, with default from = 0 offsets.
       OffsetRange[] ranges = toOffsetMap.keySet().stream()
           .map(tp -> {
@@ -142,62 +131,56 @@ public class KafkaOffsetGen {
           .toArray(new OffsetRange[toOffsetMap.size()]);
       LOG.info("numEvents {}, minPartitions {}, ranges {}", numEvents, minPartitions, ranges);
 
-      long totalEvents = totalNewMessages(ranges);
-      long allocatedEvents = 0;
-      Set<Integer> exhaustedPartitions = new HashSet<>();
-      List<OffsetRange> finalRanges = new ArrayList<>();
       // choose the actualNumEvents with min(totalEvents, numEvents)
-      long actualNumEvents = Math.min(totalEvents, numEvents);
-
-      // keep going until we have events to allocate and partitions still not exhausted.
-      while (allocatedEvents < numEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
-        // Allocate the remaining events to non-exhausted partitions, in round robin fashion
-        Set<Integer> allocatedPartitionsThisLoop = new HashSet<>(exhaustedPartitions);
-        for (int i = 0; i < ranges.length; i++) {
-          long remainingEvents = actualNumEvents - allocatedEvents;
-          long remainingPartitions = toOffsetMap.size() - allocatedPartitionsThisLoop.size();
-          // if need tp split into minPartitions, recalculate the remainingPartitions
-          if (needSplitToMinPartitions) {
-            remainingPartitions = minPartitions - finalRanges.size();
+      long actualNumEvents = Math.min(totalNewMessages(ranges), numEvents);
+      minPartitions = Math.max(minPartitions, toOffsetMap.size());
+      // Each OffsetRange computed will have maximum of eventsPerPartition,
+      // this ensures all ranges are evenly distributed and there's no skew in one particular range.
+      long eventsPerPartition = Math.max(1L, actualNumEvents / minPartitions);
+      long allocatedEvents = 0;
+      Map<TopicPartition, List<OffsetRange>> finalRanges = new HashMap<>();
+      Map<TopicPartition, Long> partitionToAllocatedOffset = new HashMap<>();
+      // keep going until we have events to allocate.
+      while (allocatedEvents < actualNumEvents) {
+        // Allocate the remaining events in round-robin fashion.
+        for (OffsetRange range : ranges) {
+          // if we have already allocated required no of events, exit
+          if (allocatedEvents == actualNumEvents) {
+            break;
           }
-          long eventsPerPartition = (long) Math.ceil((1.0 * remainingEvents) / remainingPartitions);
-
-          OffsetRange range = ranges[i];
-          if (exhaustedPartitions.contains(range.partition())) {
-            continue;
+          // Compute startOffset.
+          long startOffset = range.fromOffset();
+          if (partitionToAllocatedOffset.containsKey(range.topicPartition())) {
+            startOffset = partitionToAllocatedOffset.get(range.topicPartition());
           }
-
+          // for last bucket, we may not have full eventsPerPartition msgs.
+          long eventsForThisPartition = Math.min(eventsPerPartition, (actualNumEvents - allocatedEvents));
+          // Compute toOffset.
           long toOffset = -1L;
-          if (range.fromOffset() + eventsPerPartition > range.fromOffset()) {
-            toOffset = Math.min(range.untilOffset(), range.fromOffset() + eventsPerPartition);
+          if (startOffset + eventsForThisPartition > startOffset) {
+            toOffset = Math.min(range.untilOffset(), startOffset + eventsForThisPartition);
           } else {
             // handling Long overflow
             toOffset = range.untilOffset();
           }
-          if (toOffset == range.untilOffset()) {
-            exhaustedPartitions.add(range.partition());
+          allocatedEvents += toOffset - startOffset;
+          OffsetRange thisRange = OffsetRange.create(range.topicPartition(), startOffset, toOffset);
+          // Add the offsetRange(startOffset,toOffset) to finalRanges.
+          if (!finalRanges.containsKey(range.topicPartition())) {
+            finalRanges.put(range.topicPartition(), new ArrayList<>(Collections.singleton(thisRange)));
+            partitionToAllocatedOffset.put(range.topicPartition(), thisRange.untilOffset());
+          } else if (toOffset > startOffset) {
+            finalRanges.get(range.topicPartition()).add(thisRange);
+            partitionToAllocatedOffset.put(range.topicPartition(), thisRange.untilOffset());
           }
-          // We need recompute toOffset if we have allocatedEvents are more than actualNumEvents.
-          long totalAllocatedEvents = allocatedEvents + (toOffset - range.fromOffset());
-          if (totalAllocatedEvents > actualNumEvents) {
-            long offsetsToAdd = Math.min(eventsPerPartition, (actualNumEvents - allocatedEvents));
-            toOffset = Math.min(range.untilOffset(), range.fromOffset() + offsetsToAdd);
-          }
-          allocatedEvents += toOffset - range.fromOffset();
-          OffsetRange thisRange = OffsetRange.create(range.topicPartition(), range.fromOffset(), toOffset);
-          finalRanges.add(thisRange);
-          ranges[i] = OffsetRange.create(range.topicPartition(), range.fromOffset() + thisRange.count(), range.untilOffset());
-          allocatedPartitionsThisLoop.add(range.partition());
         }
       }
-
-      if (!needSplitToMinPartitions) {
-        OffsetRange[] mergedRanges = mergeRangesByTopicPartition(finalRanges.toArray(new OffsetRange[0]));
-        LOG.info("final ranges merged by topic partition {}", Arrays.toString(mergedRanges));
-        return mergedRanges;
+      OffsetRange[] sortedRangeArray = finalRanges.values().stream().flatMap(Collection::stream)
+          .sorted(SORT_BY_PARTITION).toArray(OffsetRange[]::new);
+      if (actualNumEvents == 0) {
+        // We return the same ranges back in case of 0 events for checkpoint computation.
+        sortedRangeArray = ranges;
       }
-      finalRanges.sort(SORT_BY_PARTITION);
-      OffsetRange[] sortedRangeArray = finalRanges.toArray(new OffsetRange[0]);
       LOG.info("final ranges {}", Arrays.toString(sortedRangeArray));
       return sortedRangeArray;
     }
