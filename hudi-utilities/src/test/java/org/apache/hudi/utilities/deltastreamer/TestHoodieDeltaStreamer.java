@@ -2426,21 +2426,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
   }
 
-  @Disabled
   @Test
   public void testJdbcSourceIncrementalFetchInContinuousMode() {
-    try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:test_mem", "test", "jdbc")) {
+    try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:test_mem", "sa", "")) {
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.jdbc.url", "jdbc:h2:mem:test_mem");
-      props.setProperty("hoodie.deltastreamer.jdbc.driver.class", "org.h2.Driver");
-      props.setProperty("hoodie.deltastreamer.jdbc.user", "test");
-      props.setProperty("hoodie.deltastreamer.jdbc.password", "jdbc");
-      props.setProperty("hoodie.deltastreamer.jdbc.table.name", "triprec");
-      props.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-      props.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "id");
+      props.setProperty("hoodie.streamer.jdbc.url", "jdbc:h2:mem:test_mem");
+      props.setProperty("hoodie.streamer.jdbc.driver.class", "org.h2.Driver");
+      props.setProperty("hoodie.streamer.jdbc.user", "sa");
+      props.setProperty("hoodie.streamer.jdbc.password", "");
+      props.setProperty("hoodie.streamer.jdbc.table.name", "triprec");
+      props.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+      props.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "id");
 
       props.setProperty("hoodie.datasource.write.recordkey.field", "ID");
-      props.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
 
       UtilitiesTestBase.Helpers.savePropsToDFS(props, fs, basePath + "/test-jdbc-source.properties");
 
