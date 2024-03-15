@@ -21,6 +21,8 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
@@ -43,8 +45,6 @@ import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
 import java.io.IOException;
-import java.util.LinkedList;
-import java.util.List;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
@@ -56,6 +56,8 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
  * Read json kafka data.
  */
 public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
+
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
                          SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
@@ -83,25 +85,22 @@ public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
   protected JavaRDD<String> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
     if (this.shouldAddOffsets) {
       return kafkaRDD.mapPartitions(partitionIterator -> {
-        List<String> stringList = new LinkedList<>();
-        ObjectMapper om = new ObjectMapper();
-        partitionIterator.forEachRemaining(consumerRecord -> {
+        return new CloseableMappingIterator<>(ClosableIterator.wrap(partitionIterator), consumerRecord -> {
           String recordValue = consumerRecord.value().toString();
           String recordKey = StringUtils.objToString(consumerRecord.key());
           try {
-            ObjectNode jsonNode = (ObjectNode) om.readTree(recordValue);
+            ObjectNode jsonNode = (ObjectNode) OBJECT_MAPPER.readTree(recordValue);
             jsonNode.put(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
             jsonNode.put(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
             jsonNode.put(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
             if (recordKey != null) {
               jsonNode.put(KAFKA_SOURCE_KEY_COLUMN, recordKey);
             }
-            stringList.add(om.writeValueAsString(jsonNode));
+            return OBJECT_MAPPER.writeValueAsString(jsonNode);
           } catch (Throwable e) {
-            stringList.add(recordValue);
+            return recordValue;
           }
         });
-        return stringList.iterator();
       });
     }
     return kafkaRDD.map(consumerRecord -> (String) consumerRecord.value());
