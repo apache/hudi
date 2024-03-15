@@ -35,8 +35,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,7 +50,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
  * Only take care of partitions related to active timeline, instead of do full partition listing.
  */
 public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBasedClusteringPlanStrategy<T> {
-  private static final Logger LOG = LogManager.getLogger(FlinkSizeBasedClusteringPlanStrategyRecently.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkSizeBasedClusteringPlanStrategy.class);
   public FlinkSizeBasedClusteringPlanStrategyRecently(HoodieTable table,
                                                       HoodieEngineContext engineContext,
                                                       HoodieWriteConfig writeConfig) {
@@ -80,11 +80,10 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
 
     List<HoodieClusteringGroup> clusteringGroups = getEngineContext()
             .flatMap(
-                    partitionPaths,
-                    partitionPath -> {
-                      List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-                      return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
-                    },
+                    partitionPaths, partitionPath -> {
+                    List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
+                    return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
+                },
                     partitionPaths.size())
             .stream()
             .limit(getWriteConfig().getClusteringMaxNumGroups())
