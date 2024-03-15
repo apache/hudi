@@ -742,8 +742,9 @@ public class HoodieTableConfig extends HoodieConfig {
    * @returns true if the specific partition has been initialized, else returns false.
    */
   public boolean isMetadataPartitionAvailable(MetadataPartitionType metadataPartitionType) {
-    return getMetadataPartitions().stream().anyMatch(metadataPartition ->
-        metadataPartition.equals(metadataPartitionType.getPartitionPath()) || (FUNCTIONAL_INDEX.equals(metadataPartitionType) && metadataPartition.startsWith(FUNCTIONAL_INDEX.getPartitionPath())));
+    /*return getMetadataPartitions().stream().anyMatch(metadataPartition ->
+        metadataPartition.equals(metadataPartitionType.getPartitionPath()) || (FUNCTIONAL_INDEX.equals(metadataPartitionType) && metadataPartition.startsWith(FUNCTIONAL_INDEX.getPartitionPath())));*/
+    return getMetadataPartitions().contains(metadataPartitionType.getPartitionPath());
   }
 
   /**
