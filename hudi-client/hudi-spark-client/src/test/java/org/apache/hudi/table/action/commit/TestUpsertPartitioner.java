@@ -67,7 +67,6 @@ import scala.Tuple2;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.apache.hudi.table.action.commit.UpsertPartitioner.averageBytesPerRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -175,7 +174,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     LinkedList<Option<byte[]>> commits = generateCommitMetadataList();
     when(commitTimeLine.getInstantDetails(any(HoodieInstant.class))).thenAnswer(invocationOnMock -> commits.pop());
     long expectAvgSize = (long) Math.ceil((1.0 * 7500) / 1500);
-    long actualAvgSize = averageBytesPerRecord(commitTimeLine, config);
+    long actualAvgSize = AverageRecordSizeUtils.getInstance().averageBytesPerRecord(commitTimeLine, config);
     assertEquals(expectAvgSize, actualAvgSize);
   }
 
@@ -185,7 +184,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().build();
     when(commitTimeLine.empty()).thenReturn(true);
     long expectAvgSize = config.getCopyOnWriteRecordSizeEstimate();
-    long actualAvgSize = averageBytesPerRecord(commitTimeLine, config);
+    long actualAvgSize = AverageRecordSizeUtils.getInstance().averageBytesPerRecord(commitTimeLine, config);
     assertEquals(expectAvgSize, actualAvgSize);
   }
 
