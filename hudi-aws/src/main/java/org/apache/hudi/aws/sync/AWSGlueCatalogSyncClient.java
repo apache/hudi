@@ -183,22 +183,6 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
-  private List<Partition> getPartitions(GetPartitionsRequest.Builder partitionRequestBuilder) throws InterruptedException, ExecutionException {
-    List<Partition> partitions = new ArrayList<>();
-    String nextToken = null;
-    do {
-      GetPartitionsResponse result = awsGlue.getPartitions(partitionRequestBuilder
-          .excludeColumnSchema(true)
-          .nextToken(nextToken)
-          .build()).get();
-      partitions.addAll(result.partitions().stream()
-          .map(p -> new Partition(p.values(), p.storageDescriptor().location()))
-          .collect(Collectors.toList()));
-      nextToken = result.nextToken();
-    } while (nextToken != null);
-    return partitions;
-  }
-
   @Override
   public List<Partition> getAllPartitions(String tableName) {
     ExecutorService executorService = Executors.newFixedThreadPool(this.allPartitionsReadParallelism, new CustomizedThreadFactory("glue-sync-all-partitions", true));
@@ -249,26 +233,24 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         partitions.addAll(future.get());
       }
       LOG.info(
-          "Requested {} partitions, found existing {} partitions, new {} partitions, took {} ms to perform.",
+          "Requested {} partitions, found existing {} partitions, new {} partitions",
           partitionList.size(),
           partitions.size(),
-          partitionList.size() - partitions.size(),
-          timer.endTimer()
-      );
+          partitionList.size() - partitions.size());
 
       return partitions;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(this.databaseName, tableName), e);
     } finally {
       executorService.shutdownNow();
+      LOG.info("Took {} ms to get {} partitions for table {}", timer.endTimer(), partitionList.size(), tableId(this.databaseName, tableName));
     }
   }
 
   private List<Partition> getChangedPartitions(List<String> changedPartitions, String tableName) throws ExecutionException, InterruptedException {
-    List<PartitionValueList> partitionValueList = changedPartitions.stream().map(str -> {
-      PartitionValueList individualPartition = PartitionValueList.builder().values(partitionValueExtractor.extractPartitionValuesInPath(str)).build();
-      return individualPartition;
-    }).collect(Collectors.toList());
+    List<PartitionValueList> partitionValueList = changedPartitions.stream().map(str ->
+        PartitionValueList.builder().values(partitionValueExtractor.extractPartitionValuesInPath(str)).build()
+    ).collect(Collectors.toList());
     BatchGetPartitionRequest request = BatchGetPartitionRequest.builder()
         .databaseName(this.databaseName)
         .tableName(tableName)
@@ -286,14 +268,17 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
-    if (partitionsToAdd.isEmpty()) {
-      LOG.info("No partitions to add for " + tableId(this.databaseName, tableName));
-      return;
-    }
     HoodieTimer timer = HoodieTimer.start();
-    Table table = getTable(awsGlue, databaseName, tableName);
-    parallelizeChange(partitionsToAdd, this.changeParallelism, partitions -> this.addPartitionsToTableInternal(table, partitions), MAX_PARTITIONS_PER_CHANGE_REQUEST);
-    LOG.info("Added {} partitions to table {} in {} ms", partitionsToAdd.size(), tableId(this.databaseName, tableName), timer.endTimer());
+    try {
+      if (partitionsToAdd.isEmpty()) {
+        LOG.info("No partitions to add for " + tableId(this.databaseName, tableName));
+        return;
+      }
+      Table table = getTable(awsGlue, databaseName, tableName);
+      parallelizeChange(partitionsToAdd, this.changeParallelism, partitions -> this.addPartitionsToTableInternal(table, partitions), MAX_PARTITIONS_PER_CHANGE_REQUEST);
+    } finally {
+      LOG.info("Added {} partitions to table {} in {} ms", partitionsToAdd.size(), tableId(this.databaseName, tableName), timer.endTimer());
+    }
   }
 
   private <T> void parallelizeChange(List<T> items, int parallelism, Consumer<List<T>> consumer, int sliceSize) {
@@ -346,14 +331,17 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
-    if (changedPartitions.isEmpty()) {
-      LOG.info("No partitions to update for " + tableId(this.databaseName, tableName));
-      return;
-    }
     HoodieTimer timer = HoodieTimer.start();
-    Table table = getTable(awsGlue, databaseName, tableName);
-    parallelizeChange(changedPartitions, this.changeParallelism, partitions -> this.updatePartitionsToTableInternal(table, partitions), MAX_PARTITIONS_PER_CHANGE_REQUEST);
-    LOG.info("Updated {} partitions to table {} in {} ms", changedPartitions.size(), tableId(this.databaseName, tableName), timer.endTimer());
+    try {
+      if (changedPartitions.isEmpty()) {
+        LOG.info("No partitions to update for " + tableId(this.databaseName, tableName));
+        return;
+      }
+      Table table = getTable(awsGlue, databaseName, tableName);
+      parallelizeChange(changedPartitions, this.changeParallelism, partitions -> this.updatePartitionsToTableInternal(table, partitions), MAX_PARTITIONS_PER_CHANGE_REQUEST);
+    } finally {
+      LOG.info("Updated {} partitions to table {} in {} ms", changedPartitions.size(), tableId(this.databaseName, tableName), timer.endTimer());
+    }
   }
 
   private void updatePartitionsToTableInternal(Table table, List<String> changedPartitions) {
@@ -383,23 +371,24 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void dropPartitions(String tableName, List<String> partitionsToDrop) {
-    if (partitionsToDrop.isEmpty()) {
-      LOG.info("No partitions to drop for " + tableId(this.databaseName, tableName));
-      return;
-    }
     HoodieTimer timer = HoodieTimer.start();
-    parallelizeChange(partitionsToDrop, this.changeParallelism, partitions -> this.dropPartitionsInternal(tableName, partitions), MAX_DELETE_PARTITIONS_PER_REQUEST);
-    LOG.info("Deleted {} partitions to table {} in {} ms", partitionsToDrop.size(), tableId(this.databaseName, tableName), timer.endTimer());
+    try {
+      if (partitionsToDrop.isEmpty()) {
+        LOG.info("No partitions to drop for " + tableId(this.databaseName, tableName));
+        return;
+      }
+      parallelizeChange(partitionsToDrop, this.changeParallelism, partitions -> this.dropPartitionsInternal(tableName, partitions), MAX_DELETE_PARTITIONS_PER_REQUEST);
+    } finally {
+      LOG.info("Deleted {} partitions to table {} in {} ms", partitionsToDrop.size(), tableId(this.databaseName, tableName), timer.endTimer());
+    }
   }
 
   private void dropPartitionsInternal(String tableName, List<String> partitionsToDrop) {
     try {
-      List<PartitionValueList> partitionValueLists = partitionsToDrop.stream().map(partition -> {
-        PartitionValueList partitionValueList = PartitionValueList.builder()
+      List<PartitionValueList> partitionValueLists = partitionsToDrop.stream().map(partition -> PartitionValueList.builder()
             .values(partitionValueExtractor.extractPartitionValuesInPath(partition))
-            .build();
-        return partitionValueList;
-      }).collect(Collectors.toList());
+            .build()
+      ).collect(Collectors.toList());
 
       BatchDeletePartitionRequest batchDeletePartitionRequest = BatchDeletePartitionRequest.builder()
           .databaseName(databaseName)
