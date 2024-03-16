@@ -74,3 +74,8 @@ ccda484b4e9 [AUDIT-682] Upgrade to version release-v1.3.3 (#580)
 9d564fe3990 [MINOR] additional job contexts for ease of debugging (#587)
 11fc9eb4a17 [HUDI-7460] Relaxing compaction scheduling when there are pending delta commits (#549)
 80481436585 [AUDIT-685] Upgrade to version release-v1.4.0 (#585)
+
+---[2024-03-15 16:59:20] [release-v1.6.0] [AUDIT-698] Upgrade to version release-v1.6.0---
+201036279 [HUDI-7429] Fixing average record size estimation for delta commits (#592)
+de16d46f4 [HUDI-7506] Compute offsetRanges based on eventsPerPartition allocated in each range (#594)
+fdf2c5576 [AUDIT-689] Upgrade to version release-v1.5.0 (#588)
