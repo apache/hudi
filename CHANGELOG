@@ -79,3 +79,7 @@ ccda484b4e9 [AUDIT-682] Upgrade to version release-v1.3.3 (#580)
 201036279 [HUDI-7429] Fixing average record size estimation for delta commits (#592)
 de16d46f4 [HUDI-7506] Compute offsetRanges based on eventsPerPartition allocated in each range (#594)
 fdf2c5576 [AUDIT-689] Upgrade to version release-v1.5.0 (#588)
+
+---[2024-03-17 22:11:11] [release-v1.6.1] Upgrade to version release-v1.6.1---
+6f82b3413 [HUDI-7511] Fixing offset range calculation for kafka (#598)
+a7474658d [AUDIT-698] Upgrade to version release-v1.6.0 (#596)
