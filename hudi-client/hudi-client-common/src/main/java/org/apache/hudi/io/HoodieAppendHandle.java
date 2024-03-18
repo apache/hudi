@@ -309,12 +309,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private void initNewStatus() {
     HoodieDeltaWriteStat prevStat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
     // Make a new write status and copy basic fields over.
-    HoodieDeltaWriteStat stat = new HoodieDeltaWriteStat();
-    stat.setFileId(fileId);
-    stat.setPartitionPath(partitionPath);
-    stat.setPrevCommit(prevStat.getPrevCommit());
-    stat.setBaseFile(prevStat.getBaseFile());
-    stat.setLogFiles(new ArrayList<>(prevStat.getLogFiles()));
+    HoodieDeltaWriteStat stat = prevStat.copy();
 
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
