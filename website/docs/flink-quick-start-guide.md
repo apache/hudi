@@ -195,9 +195,9 @@ String targetTable = "hudi_table";
 String basePath = "file:///tmp/hudi_table";
 
 Map<String, String> options = new HashMap<>();
-options.put(FlinkOptions.PATH.key(), basePath);
-options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-options.put(FlinkOptions.PRECOMBINE_FIELD.key(), "ts");
+options.put("path", basePath);
+options.put("table.type", HoodieTableType.MERGE_ON_READ.name());
+options.put("precombine.field", "ts");
 
 DataStream<RowData> dataStream = env.addSource(...);
 HoodiePipeline.Builder builder = HoodiePipeline.builder(targetTable)
@@ -253,10 +253,10 @@ String targetTable = "hudi_table";
 String basePath = "file:///tmp/hudi_table";
 
 Map<String, String> options = new HashMap<>();
-options.put(FlinkOptions.PATH.key(), basePath);
-options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-options.put(FlinkOptions.READ_AS_STREAMING.key(), "true"); // this option enable the streaming read
-options.put(FlinkOptions.READ_START_COMMIT.key(), "20210316134557"); // specifies the start commit instant time
+options.put("path", basePath);
+options.put("table.type", HoodieTableType.MERGE_ON_READ.name());
+options.put("read.streaming.enabled", "true"); // this option enable the streaming read
+options.put("read.start-commit", "20210316134557"); // specifies the start commit instant time
     
 HoodiePipeline.Builder builder = HoodiePipeline.builder(targetTable)
     .column("uuid VARCHAR(20)")

@@ -36,10 +36,10 @@ val df = spark.readStream.
 // write stream to new hudi table
 df.writeStream.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, streamingTableName).
+  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.datasource.write.recordkey.field", "uuid").
+  option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+  option("hoodie.table.name", streamingTableName).
   outputMode("append").
   option("path", baseStreamingPath).
   option("checkpointLocation", checkpointLocation).

@@ -260,8 +260,8 @@ val data =
 
 var inserts = spark.createDataFrame(data).toDF(columns:_*)
 inserts.write.format("hudi").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.name", tableName).
   mode(Overwrite).
   save(basePath)
 ```
@@ -404,9 +404,9 @@ values={[
 val updatesDf = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-D").withColumn("fare", col("fare") * 10)
 
 updatesDf.write.format("hudi").
-  option(OPERATION_OPT_KEY, "upsert").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.operation", "upsert").
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.name", tableName).
   mode(Append).
   save(basePath)
 ```
@@ -560,9 +560,9 @@ values={[
 val deletesDF = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-F")
 
 deletesDF.write.format("hudi").
-  option(OPERATION_OPT_KEY, "delete").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.operation", "delete").
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.name", tableName).
   mode(Append).
   save(basePath)
 
@@ -717,8 +717,8 @@ val beginTime = commits(commits.length - 2) // commit time we are interested in
 
 // incrementally query data
 val tripsIncrementalDF = spark.read.format("hudi").
-  option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL).
-  option(BEGIN_INSTANTTIME.key(), 0).
+  option("hoodie.datasource.query.type", "incremental").
+  option("hoodie.datasource.read.begin.instanttime", 0).
   load(basePath)
 tripsIncrementalDF.createOrReplaceTempView("trips_incremental")
 
@@ -812,9 +812,9 @@ var df = spark.createDataFrame(data).toDF(columns:_*)
 
 // Insert data
 df.write.format("hudi").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(CDC_ENABLED.key(), "true").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.cdc.enabled", "true").
+  option("hoodie.table.name", tableName).
   mode(Overwrite).
   save(basePath)
 
@@ -822,18 +822,18 @@ df.write.format("hudi").
 val updatesDf = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-A" || $"rider" === "rider-B").withColumn("fare", col("fare") * 10)
 
 updatesDf.write.format("hudi").
-  option(OPERATION_OPT_KEY, "upsert").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(CDC_ENABLED.key(), "true").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.operation", "upsert").
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.cdc.enabled", "true").
+  option("hoodie.table.name", tableName).
   mode(Append).
   save(basePath)
 
 
 // Query CDC data
-spark.read.option(BEGIN_INSTANTTIME.key(), 0).
-  option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL).
-  option(INCREMENTAL_FORMAT.key(), "cdc").
+spark.read.option("hoodie.datasource.read.begin.instanttime", 0).
+  option("hoodie.datasource.query.type", "incremental").
+  option("hoodie.datasource.query.incremental.format", "cdc").
   format("hudi").load(basePath).show(false)
 ```
 </TabItem>
@@ -929,7 +929,7 @@ values={[
 // spark-shell
 inserts.write.format("hudi").
   ...
-  option(TABLE_TYPE.key(), "MERGE_ON_READ").
+  option("hoodie.datasource.write.table.type", "MERGE_ON_READ").
   ...
 ```
 </TabItem>
@@ -992,7 +992,7 @@ values={[
 // spark-shell
 inserts.write.format("hudi").
 ...
-option(RECORDKEY_FIELD.key(), "uuid").
+option("hoodie.datasource.write.recordkey.field", "uuid").
 ...
 ```
 
@@ -1063,7 +1063,7 @@ values={[
 // spark-shell 
 updatesDf.write.format("hudi").
   ...
-  option(PRECOMBINE_FIELD_NAME.key(), "ts").
+  option("hoodie.datasource.write.precombine.field", "ts").
   ...
 ```
 

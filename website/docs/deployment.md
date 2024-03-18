@@ -144,10 +144,10 @@ Here is an example invocation using spark datasource
 inputDF.write()
        .format("org.apache.hudi")
        .options(clientOpts) // any of the Hudi client opts can be passed in as well
-       .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-       .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-       .option(HoodieWriteConfig.TABLE_NAME, tableName)
+       .option("hoodie.datasource.write.recordkey.field", "_row_key")
+       .option("hoodie.datasource.write.partitionpath.field", "partition")
+       .option("hoodie.datasource.write.precombine.field"(), "timestamp")
+       .option("hoodie.table.name", tableName)
        .mode(SaveMode.Append)
        .save(basePath);
 ```
@@ -205,11 +205,11 @@ val inserts = convertToStringList(dataGen.generateInserts(100)).toList
 val insertDf = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 insertDf.write.format("hudi").
         options(getQuickstartWriteConfigs).
-        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-        option(TABLE_NAME, tableName).
-        option(OPERATION.key(), INSERT_OPERATION_OPT_VAL).
+        option("hoodie.datasource.write.precombine.field", "ts").
+        option("hoodie.datasource.write.recordkey.field", "uuid").
+        option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+        option("hoodie.table.name", tableName).
+        option("hoodie.datasource.write.operation", "insert").
         mode(Append).
         save(basePath)
 ```

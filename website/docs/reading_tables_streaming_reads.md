@@ -26,10 +26,10 @@ values={[
 // reload data
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.datasource.write.recordkey.field", "uuid").
+  option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+  option("hoodie.table.name", tableName).
   mode(Overwrite).
   save(basePath)
 

@@ -93,7 +93,7 @@ inputDF.write()
 .format("org.apache.hudi")
 .options(clientOpts) // any of the Hudi client opts can be passed in as well
 .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-.option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
+.option("hoodie.datasource.write.partitionpath.field", "partition")
 .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
 .option(HoodieWriteConfig.TABLE_NAME, tableName)
 .mode(SaveMode.Append)

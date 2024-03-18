@@ -89,7 +89,7 @@ Hudi configuration options covering the datasource and low level Hudi write clie
 ```scala
 inputDF.write().format("org.apache.hudi")
   .options(clientOpts) // any of the Hudi client opts can be passed in as well
-  .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
+  .option("hoodie.datasource.write.recordkey.field", "_row_key")
   ...
 ```
 

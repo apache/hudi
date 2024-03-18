@@ -34,7 +34,7 @@ Retrieve the data table at the present point in time.
 val hudiSnapshotQueryDF = spark
      .read
      .format("hudi")
-     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
+     .option("hoodie.datasource.query.type", "snapshot")
      .load(tablePath) 
 ```
 
@@ -47,8 +47,8 @@ The following snippet shows how to obtain all records changed after `beginInstan
 ```java
 Dataset<Row> hudiIncQueryDF = spark.read()
      .format("org.apache.hudi")
-     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), <beginInstantTime>)
+     .option("hoodie.datasource.query.type", "incremental"())
+     .option("hoodie.datasource.read.begin.instanttime", <beginInstantTime>)
      .option(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY(), "/year=2020/month=*/day=*") // Optional, use glob pattern if querying certain partitions
      .load(tablePath); // For incremental query, pass in the root/base path of table
      
