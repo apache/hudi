@@ -148,7 +148,6 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     if (writer != null) {
       writer.update(rollbackMetadata, instantTime);
     }
-    super.addRollbackCompleted(instantTime, rollbackMetadata, false);
     return this;
   }
 
