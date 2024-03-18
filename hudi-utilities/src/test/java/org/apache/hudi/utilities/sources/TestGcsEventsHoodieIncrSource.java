@@ -234,16 +234,17 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file5%s", extension), 150L, "2"));
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
-    List<Integer> numPartitions = Arrays.asList(1, 2, 3);
+    List<Long> bytesPerPartition = Arrays.asList(10L, 100L, -1L);
     setMockQueryRunner(inputDs);
 
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(100L, numPartitions.get(0)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(100L, bytesPerPartition.get(0)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1"), 100L, "1#path/to/file1" + extension, typedProperties);
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(100L, numPartitions.get(1)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(100L, bytesPerPartition.get(1)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file1" + extension), 100L, "1#path/to/file2" + extension, typedProperties);
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(1000L, numPartitions.get(2)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(1000L, bytesPerPartition.get(2)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file2" + extension), 1000L, "2#path/to/file5" + extension, typedProperties);
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
+    List<Integer> numPartitions = Arrays.asList(12, 2, 1);
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
     verify(cloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(any(), any(), any(), eq(schemaProvider), argumentCaptor.capture());
     Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
@@ -276,28 +277,28 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
     typedProperties.setProperty("hoodie.deltastreamer.source.cloud.data.ignore.relpath.prefix", "path/to/skip");
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
-    List<Integer> numPartitions = Arrays.asList(1, 2, 3, 4);
+    List<Long> bytesPerPartition = Arrays.asList(10L, 20L, -1L, 1000L * 1000L * 1000L);
 
     //1. snapshot query, read all records
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50000L, numPartitions.get(0)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50000L, bytesPerPartition.get(0)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50000L, exptected1, typedProperties);
     //2. incremental query, as commit is present in timeline
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(10L, numPartitions.get(1)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(10L, bytesPerPartition.get(1)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(exptected1), 10L, exptected2, typedProperties);
     //3. snapshot query with source limit less than first commit size
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, numPartitions.get(2)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, bytesPerPartition.get(2)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected3, typedProperties);
     typedProperties.setProperty("hoodie.deltastreamer.source.cloud.data.ignore.relpath.prefix", "path/to");
     //4. As snapshotQuery will return 1 -> same would be return as nextCheckpoint (dataset is empty due to ignore prefix).
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, numPartitions.get(3)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, bytesPerPartition.get(3)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected4, typedProperties);
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
     verify(cloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(any(), any(), any(), eq(schemaProvider), argumentCaptor.capture());
-    if (snapshotCheckPoint.equals("3")) {
-      Assertions.assertEquals(Arrays.asList(numPartitions.get(0), numPartitions.get(2)), argumentCaptor.getAllValues());
+    if (snapshotCheckPoint.equals("1") || snapshotCheckPoint.equals("2")) {
+      Assertions.assertEquals(Arrays.asList(12, 3, 1), argumentCaptor.getAllValues());
     } else {
-      Assertions.assertEquals(numPartitions.subList(0, 3), argumentCaptor.getAllValues());
+      Assertions.assertEquals(Arrays.asList(23, 1), argumentCaptor.getAllValues());
     }
   }
 

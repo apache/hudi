@@ -111,30 +111,27 @@ public class CloudDataFetcher implements Serializable {
     List<CloudObjectMetadata> cloudObjectMetadata = CloudObjectsSelectorCommon.getObjectMetadata(cloudType, sparkContext, checkPointAndDataset.getRight().get(), checkIfFileExists, props);
     LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
 
-    Option<Dataset<Row>> datasetOption;
+    long bytesPerPartition = props.containsKey(SOURCE_MAX_BYTES_PER_PARTITION.key()) ? props.getLong(SOURCE_MAX_BYTES_PER_PARTITION.key()) :
+        props.getLong(PARQUET_MAX_FILE_SIZE.key(), Long.parseLong(PARQUET_MAX_FILE_SIZE.defaultValue()));
     if (isSourceProfileSupplierAvailable) {
-      datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, sourceProfileSupplier.get().getSourceProfile().getSourcePartitions());
-    } else {
-      datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider);
+      long bytesPerPartitionFromProfile = (long) sourceProfileSupplier.get().getSourceProfile().getSourceSpecificContext();
+      if (bytesPerPartitionFromProfile > 0) {
+        LOG.debug("Using bytesPerPartition from source profile bytesPerPartitionFromConfig {} bytesPerPartitionFromProfile {}", bytesPerPartition, bytesPerPartitionFromProfile);
+        bytesPerPartition = bytesPerPartitionFromProfile;
+      }
     }
+    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition);
     return Pair.of(datasetOption, checkPointAndDataset.getLeft().toString());
   }
 
-  private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata, Option<SchemaProvider> schemaProviderOption) {
+  private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata, Option<SchemaProvider> schemaProviderOption, long bytesPerPartition) {
     long totalSize = 0;
     for (CloudObjectMetadata o : cloudObjectMetadata) {
       totalSize += o.getSize();
     }
     // inflate 10% for potential hoodie meta fields
-    totalSize *= 1.1;
-    // if source bytes are provided, then give preference to that.
-    long bytesPerPartition = props.containsKey(SOURCE_MAX_BYTES_PER_PARTITION.key()) ? props.getLong(SOURCE_MAX_BYTES_PER_PARTITION.key()) :
-        props.getLong(PARQUET_MAX_FILE_SIZE.key(), Long.parseLong(PARQUET_MAX_FILE_SIZE.defaultValue()));
-    int numPartitions = (int) Math.max(Math.ceil(totalSize / bytesPerPartition), 1);
-    return getCloudObjectDataDF(cloudObjectMetadata, schemaProviderOption, numPartitions);
-  }
-
-  private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata, Option<SchemaProvider> schemaProviderOption, int numPartitions) {
+    double totalSizeWithHoodieMetaFields = totalSize * 1.1;
+    int numPartitions = (int) Math.max(Math.ceil(totalSizeWithHoodieMetaFields / bytesPerPartition), 1);
     return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props), schemaProviderOption, numPartitions);
   }
 }
