@@ -86,7 +86,8 @@ public class CloudDataFetcher implements Serializable {
       Pair<QueryInfo, Dataset<Row>> queryInfoDatasetPair,
       Option<SchemaProvider> schemaProvider,
       long sourceLimit) {
-    if (sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null) {
+    boolean isSourceProfileSupplierAvailable = sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null;
+    if (isSourceProfileSupplierAvailable) {
       LOG.debug("Using source limit from source profile sourceLimitFromConfig {} sourceLimitFromProfile {}", sourceLimit, sourceProfileSupplier.get().getSourceProfile().getMaxSourceBytes());
       sourceLimit = sourceProfileSupplier.get().getSourceProfile().getMaxSourceBytes();
     }
@@ -111,7 +112,7 @@ public class CloudDataFetcher implements Serializable {
     LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
 
     Option<Dataset<Row>> datasetOption;
-    if (sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null) {
+    if (isSourceProfileSupplierAvailable) {
       datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, sourceProfileSupplier.get().getSourceProfile().getSourcePartitions());
     } else {
       datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider);
@@ -130,7 +131,7 @@ public class CloudDataFetcher implements Serializable {
     long bytesPerPartition = props.containsKey(SOURCE_MAX_BYTES_PER_PARTITION.key()) ? props.getLong(SOURCE_MAX_BYTES_PER_PARTITION.key()) :
         props.getLong(PARQUET_MAX_FILE_SIZE.key(), Long.parseLong(PARQUET_MAX_FILE_SIZE.defaultValue()));
     int numPartitions = (int) Math.max(Math.ceil(totalSize / bytesPerPartition), 1);
-    return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props), schemaProviderOption, numPartitions);
+    return getCloudObjectDataDF(cloudObjectMetadata, schemaProviderOption, numPartitions);
   }
 
   private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata, Option<SchemaProvider> schemaProviderOption, int numPartitions) {
