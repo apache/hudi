@@ -273,7 +273,7 @@ public class TestHoodieCatalog {
         CatalogTable.of(
             Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
             "test",
-            Lists.newArrayList("par1,par2"),
+            Lists.newArrayList("par1", "par2"),
             EXPECTED_OPTIONS),
         CREATE_TABLE_SCHEMA
     );
