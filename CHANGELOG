@@ -83,3 +83,9 @@ fdf2c5576 [AUDIT-689] Upgrade to version release-v1.5.0 (#588)
 ---[2024-03-17 22:11:11] [release-v1.6.1] Upgrade to version release-v1.6.1---
 6f82b3413 [HUDI-7511] Fixing offset range calculation for kafka (#598)
 a7474658d [AUDIT-698] Upgrade to version release-v1.6.0 (#596)
+
+---[2024-03-19 19:21:12] [release-v1.7.0] Upgrade to version release-v1.7.0---
+5864423ef73 [BREAKGLASS][ENG-7688] Fix IllegalArgumentException in reattempt of failed rollback for non partitioned tables (#601)
+6d6140abbed [HUDI-7501] Use source profile for S3 and GCS sources (#591)
+7573ed25355 [HUDI-7478] Fix max delta commits guard check w/ MDT (#593)
+7470771e74b [AUDIT-86drzn5xg] Upgrade to version release-v1.6.1 (#599)
