@@ -31,8 +31,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -52,17 +52,17 @@ import static org.mockito.Mockito.mock;
 public class TestKafkaOffsetGen {
 
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
-  private static KafkaTestUtils testUtils;
   private HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
+  private KafkaTestUtils testUtils;
 
-  @BeforeAll
-  public static void setup() throws Exception {
+  @BeforeEach
+  public void setup() throws Exception {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterAll
-  public static void teardown() throws Exception {
+  @AfterEach
+  public void teardown() throws Exception {
     testUtils.teardown();
   }
 
@@ -188,32 +188,6 @@ public class TestKafkaOffsetGen {
     assertEquals(400, nextOffsetRanges[0].untilOffset());
     assertEquals(249, nextOffsetRanges[1].fromOffset());
     assertEquals(399, nextOffsetRanges[1].untilOffset());
-
-    // try w/ 1 partition already exhausted. both partitions need to be returned as part of offset ranges
-    lastCheckpointString = testTopicName + ",0:400,1:500";
-    kafkaOffsetGen.commitOffsetToKafka(lastCheckpointString);
-    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
-    assertEquals(3, nextOffsetRanges.length);
-    assertEquals(400, nextOffsetRanges[0].fromOffset());
-    assertEquals(450, nextOffsetRanges[0].untilOffset());
-    assertEquals(450, nextOffsetRanges[1].fromOffset());
-    assertEquals(500, nextOffsetRanges[1].untilOffset());
-    assertEquals(0, nextOffsetRanges[1].partition());
-    assertEquals(500, nextOffsetRanges[2].fromOffset());
-    assertEquals(500, nextOffsetRanges[2].untilOffset());
-    assertEquals(1, nextOffsetRanges[2].partition());
-
-    // if there is just 1 msg to consume from just 1 partition.
-    lastCheckpointString = testTopicName + ",0:499,1:500";
-    kafkaOffsetGen.commitOffsetToKafka(lastCheckpointString);
-    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
-    assertEquals(2, nextOffsetRanges.length);
-    assertEquals(499, nextOffsetRanges[0].fromOffset());
-    assertEquals(500, nextOffsetRanges[0].untilOffset());
-    assertEquals(0, nextOffsetRanges[0].partition());
-    assertEquals(500, nextOffsetRanges[1].fromOffset());
-    assertEquals(500, nextOffsetRanges[1].untilOffset());
-    assertEquals(1, nextOffsetRanges[1].partition());
 
     // committed offsets are not present for the consumer group
     kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", "string"));

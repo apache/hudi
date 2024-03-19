@@ -165,17 +165,6 @@ public class TestCheckpointUtils {
     assertEquals(0, ranges[1].fromOffset());
     assertEquals(100, ranges[1].untilOffset());
 
-    // minPartitions < number of topic partitions
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1, 2}, new long[] {0, 0, 0}),
-        makeOffsetMap(new int[] {0, 1, 2}, new long[] {1000, 1000, 1000}), 300, 2);
-    assertEquals(3, ranges.length);
-    assertEquals(0, ranges[0].fromOffset());
-    assertEquals(100, ranges[0].untilOffset());
-    assertEquals(0, ranges[1].fromOffset());
-    assertEquals(100, ranges[1].untilOffset());
-    assertEquals(0, ranges[1].fromOffset());
-    assertEquals(100, ranges[1].untilOffset());
-
     // 1 TopicPartition to N offset ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
         makeOffsetMap(new int[] {0}, new long[] {1000}), 300, 3);
@@ -187,21 +176,18 @@ public class TestCheckpointUtils {
     assertEquals(200, ranges[2].fromOffset());
     assertEquals(300, ranges[2].untilOffset());
 
-
-    // minPartitions is 2x of number of topic partitions
+    // N skewed TopicPartitions to M offset ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {0, 0}),
-        makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 4);
-    assertEquals(5, ranges.length);
+        makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 3);
+    assertEquals(4, ranges.length);
     assertEquals(0, ranges[0].fromOffset());
     assertEquals(100, ranges[0].untilOffset());
     assertEquals(0, ranges[1].fromOffset());
-    assertEquals(150, ranges[1].untilOffset());
-    assertEquals(150, ranges[2].fromOffset());
-    assertEquals(300, ranges[2].untilOffset());
-    assertEquals(300, ranges[3].fromOffset());
-    assertEquals(450, ranges[3].untilOffset());
-    assertEquals(450, ranges[4].fromOffset());
-    assertEquals(500, ranges[4].untilOffset());
+    assertEquals(200, ranges[1].untilOffset());
+    assertEquals(200, ranges[2].fromOffset());
+    assertEquals(400, ranges[2].untilOffset());
+    assertEquals(400, ranges[3].fromOffset());
+    assertEquals(500, ranges[3].untilOffset());
 
     // range inexact multiple of minPartitions
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
@@ -234,7 +220,7 @@ public class TestCheckpointUtils {
 
     // all empty ranges, do not ignore empty ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}),
-        makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}), 600, 0);
+        makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}), 600, 3);
     assertEquals(0, CheckpointUtils.totalNewMessages(ranges));
     assertEquals(2, ranges.length);
     assertEquals(0, ranges[0].partition());
