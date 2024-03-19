@@ -40,8 +40,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -61,21 +61,21 @@ import static org.mockito.Mockito.when;
  */
 abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
   protected static final String TEST_TOPIC_PREFIX = "hoodie_test_";
+  protected static KafkaTestUtils testUtils;
 
   protected final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
   protected final Option<SourceProfileSupplier> sourceProfile = Option.of(mock(SourceProfileSupplier.class));
 
   protected SchemaProvider schemaProvider;
-  protected KafkaTestUtils testUtils;
 
-  @BeforeEach
-  public void initClass() {
+  @BeforeAll
+  public static void initClass() {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterEach
-  public void cleanupClass() {
+  @AfterAll
+  public static void cleanupClass() {
     testUtils.teardown();
   }
 

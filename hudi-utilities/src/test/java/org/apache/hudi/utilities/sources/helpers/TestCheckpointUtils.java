@@ -18,10 +18,12 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.streaming.kafka010.OffsetRange;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -163,6 +165,17 @@ public class TestCheckpointUtils {
     assertEquals(0, ranges[1].fromOffset());
     assertEquals(100, ranges[1].untilOffset());
 
+    // minPartitions < number of topic partitions
+    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1, 2}, new long[] {0, 0, 0}),
+        makeOffsetMap(new int[] {0, 1, 2}, new long[] {1000, 1000, 1000}), 300, 2);
+    assertEquals(3, ranges.length);
+    assertEquals(0, ranges[0].fromOffset());
+    assertEquals(100, ranges[0].untilOffset());
+    assertEquals(0, ranges[1].fromOffset());
+    assertEquals(100, ranges[1].untilOffset());
+    assertEquals(0, ranges[1].fromOffset());
+    assertEquals(100, ranges[1].untilOffset());
+
     // 1 TopicPartition to N offset ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
         makeOffsetMap(new int[] {0}, new long[] {1000}), 300, 3);
@@ -174,18 +187,21 @@ public class TestCheckpointUtils {
     assertEquals(200, ranges[2].fromOffset());
     assertEquals(300, ranges[2].untilOffset());
 
-    // N skewed TopicPartitions to M offset ranges
+
+    // minPartitions is 2x of number of topic partitions
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {0, 0}),
-        makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 3);
-    assertEquals(4, ranges.length);
+        makeOffsetMap(new int[] {0, 1}, new long[] {100, 500}), 600, 4);
+    assertEquals(5, ranges.length);
     assertEquals(0, ranges[0].fromOffset());
     assertEquals(100, ranges[0].untilOffset());
     assertEquals(0, ranges[1].fromOffset());
-    assertEquals(200, ranges[1].untilOffset());
-    assertEquals(200, ranges[2].fromOffset());
-    assertEquals(400, ranges[2].untilOffset());
-    assertEquals(400, ranges[3].fromOffset());
-    assertEquals(500, ranges[3].untilOffset());
+    assertEquals(150, ranges[1].untilOffset());
+    assertEquals(150, ranges[2].fromOffset());
+    assertEquals(300, ranges[2].untilOffset());
+    assertEquals(300, ranges[3].fromOffset());
+    assertEquals(450, ranges[3].untilOffset());
+    assertEquals(450, ranges[4].fromOffset());
+    assertEquals(500, ranges[4].untilOffset());
 
     // range inexact multiple of minPartitions
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0}, new long[] {0}),
@@ -218,7 +234,7 @@ public class TestCheckpointUtils {
 
     // all empty ranges, do not ignore empty ranges
     ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}),
-        makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}), 600, 3);
+        makeOffsetMap(new int[] {0, 1}, new long[] {100, 0}), 600, 0);
     assertEquals(0, CheckpointUtils.totalNewMessages(ranges));
     assertEquals(2, ranges.length);
     assertEquals(0, ranges[0].partition());
@@ -388,6 +404,16 @@ public class TestCheckpointUtils {
         OffsetRange.apply(TEST_TOPIC_NAME, 17, 787273821, 787273821),
     };
     assertArrayEquals(expectedRanges, ranges);
+  }
+
+  @Test
+  public void testIsResetCheckpoint() {
+    Assertions.assertFalse(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.empty()));
+    Assertions.assertTrue(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.of("Topic:RESET-example123")));
+    Assertions.assertTrue(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.of("Topic:RESET-")));
+    Assertions.assertTrue(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.of("Topic:RESET-   ")));
+    Assertions.assertFalse(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.of("Topic:example123")));
+    Assertions.assertTrue(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.of("Topic:RESET-_.*!@")));
   }
 
   private static Map<TopicPartition, Long> makeOffsetMap(int[] partitions, long[] offsets) {

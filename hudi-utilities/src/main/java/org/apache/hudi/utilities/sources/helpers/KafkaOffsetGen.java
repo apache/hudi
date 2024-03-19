@@ -77,6 +77,7 @@ public class KafkaOffsetGen {
      * Format: topic_name,partition_num:offset,partition_num:offset,....
      */
     private static final Pattern PATTERN = Pattern.compile(".*,.*:.*");
+    private static final Pattern RESET_CHECKPOINT_PATTERN = Pattern.compile("^[a-zA-Z0-9._-]+:RESET-.*$");
 
     /**
      * Reconstruct checkpoint from timeline.
@@ -104,7 +105,7 @@ public class KafkaOffsetGen {
       // at least 1 partition will be present.
       sb.append(ranges[0].topic() + ",");
       sb.append(Arrays.stream(ranges).map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
-              .collect(Collectors.joining(",")));
+          .collect(Collectors.joining(",")));
       return sb.toString();
     }
 
@@ -121,14 +122,15 @@ public class KafkaOffsetGen {
                                                     long numEvents,
                                                     long minPartitions) {
       // Create initial offset ranges for each 'to' partition, with default from = 0 offsets.
-      OffsetRange[] ranges = toOffsetMap.keySet().stream().map(tp -> {
-        long fromOffset = fromOffsetMap.getOrDefault(tp, 0L);
-        return OffsetRange.create(tp, fromOffset, toOffsetMap.get(tp));
-      })
+      OffsetRange[] ranges = toOffsetMap.keySet().stream()
+          .map(tp -> {
+            long fromOffset = fromOffsetMap.getOrDefault(tp, 0L);
+            return OffsetRange.create(tp, fromOffset, toOffsetMap.get(tp));
+          })
           .sorted(SORT_BY_PARTITION)
           .collect(Collectors.toList())
           .toArray(new OffsetRange[toOffsetMap.size()]);
-      LOG.debug("numEvents {}, minPartitions {}, ranges {}", numEvents, minPartitions, ranges);
+      LOG.info("numEvents {}, minPartitions {}, ranges {}", numEvents, minPartitions, ranges);
 
       // choose the actualNumEvents with min(totalEvents, numEvents)
       long actualNumEvents = Math.min(totalNewMessages(ranges), numEvents);
@@ -174,6 +176,13 @@ public class KafkaOffsetGen {
           }
         }
       }
+      // We need to ensure every partition is part of returned offset ranges even if we are not consuming any new msgs (for instance, if its already caught up).
+      // as this will be tracked as the checkpoint, we need to ensure all partitions are part of final ranges.
+      fromOffsetMap.entrySet()
+          .stream()
+          .filter((kv) -> !finalRanges.containsKey(kv.getKey()))
+          .forEach((kv) -> finalRanges.put(kv.getKey(), Collections.singletonList(OffsetRange.create(kv.getKey(), kv.getValue(), kv.getValue()))));
+
       OffsetRange[] sortedRangeArray = finalRanges.values().stream().flatMap(Collection::stream)
           .sorted(SORT_BY_PARTITION).toArray(OffsetRange[]::new);
       if (actualNumEvents == 0) {
@@ -209,6 +218,15 @@ public class KafkaOffsetGen {
     public static boolean checkTopicCheckpoint(Option<String> lastCheckpointStr) {
       Matcher matcher = PATTERN.matcher(lastCheckpointStr.get());
       return matcher.matches();
+    }
+
+    /*
+     * A checkpoint is a reset checkpoint if it is of the format: <topic_name>:reset-*.
+     * where * can be evolved based on the use case by the user.
+     * This format is not fixed and may change in the future
+     */
+    public static boolean isResetCheckpoint(Option<String> checkpointOpt) {
+      return checkpointOpt.isPresent() && RESET_CHECKPOINT_PATTERN.matcher(checkpointOpt.get()).matches();
     }
   }
 
@@ -260,6 +278,10 @@ public class KafkaOffsetGen {
   }
 
   public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long numEvents, long minPartitions, HoodieIngestionMetrics metrics) {
+    // Verifies if the provided lastCheckpointStr is a reset checkpoint.
+    // A reset checkpoint indicates that data ingestion should start afresh.
+    Option<String> checkpointOpt = KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(lastCheckpointStr) ? Option.empty() : lastCheckpointStr;
+
     // Obtain current metadata for the topic
     Map<TopicPartition, Long> fromOffsets;
     Map<TopicPartition, Long> toOffsets;
@@ -269,15 +291,15 @@ public class KafkaOffsetGen {
       }
       List<PartitionInfo> partitionInfoList = fetchPartitionInfos(consumer, topicName);
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
-              .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
+          .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
-      if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equals(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpointStr)) {
-        lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName, Long.parseLong(lastCheckpointStr.get()));
+      if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equals(kafkaCheckpointType) && isValidTimestampCheckpointType(checkpointOpt)) {
+        checkpointOpt = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName, Long.parseLong(checkpointOpt.get()));
       }
       // Determine the offset ranges to read from
-      if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
-        fromOffsets = fetchValidOffsets(consumer, lastCheckpointStr, topicPartitions);
-        metrics.updateStreamerSourceDelayCount(METRIC_NAME_KAFKA_DELAY_COUNT, delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer));
+      if (checkpointOpt.isPresent() && !checkpointOpt.get().isEmpty() && checkTopicCheckpoint(checkpointOpt)) {
+        fromOffsets = fetchValidOffsets(consumer, checkpointOpt, topicPartitions);
+        metrics.updateStreamerSourceDelayCount(METRIC_NAME_KAFKA_DELAY_COUNT, delayOffsetCalculation(checkpointOpt, topicPartitions, consumer));
       } else {
         switch (autoResetValue) {
           case EARLIEST:
@@ -299,7 +321,7 @@ public class KafkaOffsetGen {
     }
     return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents, minPartitions);
   }
-  
+
   /**
    * Fetch partition infos for given topic.
    *
@@ -337,7 +359,7 @@ public class KafkaOffsetGen {
    * @return a map of Topic partitions to offsets.
    */
   private Map<TopicPartition, Long> fetchValidOffsets(KafkaConsumer consumer,
-                                                        Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions) {
+                                                      Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions) {
     Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
     Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
     boolean isCheckpointOutOfBounds = checkpointOffsets.entrySet().stream()
@@ -397,8 +419,8 @@ public class KafkaOffsetGen {
                                                String topicName, Long timestamp) {
 
     Map<TopicPartition, Long> topicPartitionsTimestamp = partitionInfoList.stream()
-                                                    .map(x -> new TopicPartition(x.topic(), x.partition()))
-                                                    .collect(Collectors.toMap(Function.identity(), x -> timestamp));
+        .map(x -> new TopicPartition(x.topic(), x.partition()))
+        .collect(Collectors.toMap(Function.identity(), x -> timestamp));
 
     Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
     Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = consumer.offsetsForTimes(topicPartitionsTimestamp);
