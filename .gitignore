@@ -65,6 +65,7 @@ local.properties
 .out
 .idea/*
 !.idea/vcs.xml
+!.idea/icon.png
 *.ipr
 *.iws
 *.iml
