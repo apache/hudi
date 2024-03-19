@@ -139,7 +139,7 @@ public class HoodieRowCreateHandle implements Serializable {
               new Path(writeConfig.getBasePath()),
               FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath),
               table.getPartitionMetafileFormat());
-      partitionMetadata.trySave(taskPartitionId);
+      partitionMetadata.trySave(writeToken);
 
       createMarkerFile(partitionPath, fileName, instantTime, table, writeConfig);
 

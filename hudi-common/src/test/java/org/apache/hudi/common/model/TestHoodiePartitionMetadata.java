@@ -75,7 +75,7 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
     fs.mkdirs(partitionPath);
     final String commitTime = "000000000001";
     HoodiePartitionMetadata writtenMetadata = new HoodiePartitionMetadata(metaClient.getFs(), commitTime, new Path(basePath), partitionPath, format);
-    writtenMetadata.trySave(0);
+    writtenMetadata.trySave("0");
 
     // when
     HoodiePartitionMetadata readMetadata = new HoodiePartitionMetadata(metaClient.getFs(), new Path(metaClient.getBasePath(), partitionPath));

@@ -139,7 +139,7 @@ public class RepairsCommand {
           HoodiePartitionMetadata partitionMetadata =
               new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partitionPath,
                   client.getTableConfig().getPartitionMetafileFormat());
-          partitionMetadata.trySave(0);
+          partitionMetadata.trySave("0");
           row[2] = "Repaired";
         }
       }
@@ -247,7 +247,7 @@ public class RepairsCommand {
         if (!baseFormatFile.isPresent()) {
           HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partition,
               Option.of(client.getTableConfig().getBaseFileFormat()));
-          partitionMetadata.trySave(0);
+          partitionMetadata.trySave("0");
         }
 
         // delete it, in case we failed midway last time.

@@ -74,7 +74,7 @@ case class AlterHoodieTableAddPartitionCommand(
       } else Some(new HoodiePartitionMetadata(fileSystem, HoodieTimeline.INIT_INSTANT_TS, basePath, fullPartitionPath, format))
       (metadata, CatalogTablePartition(spec, table.storage.copy(locationUri = Some(fullPartitionPath.toUri))))
     }.unzip
-    partitionMetadata.flatten.foreach(_.trySave(0))
+    partitionMetadata.flatten.foreach(_.trySave("0"))
 
     // Sync new partitions in batch, enable ignoreIfExists to be silent for existing partitions.
     val batchSize = sparkSession.sparkContext.conf.getInt("spark.sql.addPartitionInBatch.size", 100)
