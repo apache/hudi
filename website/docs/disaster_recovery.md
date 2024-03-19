@@ -46,10 +46,10 @@ val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.datasource.write.recordkey.field", "uuid").
+  option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+  option("hoodie.table.name", tableName).
   mode(Overwrite).
   save(basePath)
 ```
@@ -61,10 +61,10 @@ for (_ <- 1 to 4) {
   val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
   df.write.format("hudi").
     options(getQuickstartWriteConfigs).
-    option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-    option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-    option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-    option(TABLE_NAME, tableName).
+    option("hoodie.datasource.write.precombine.field", "ts").
+    option("hoodie.datasource.write.recordkey.field", "uuid").
+    option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+    option("hoodie.table.name", tableName).
     mode(Append).
     save(basePath)
 }
@@ -159,10 +159,10 @@ for (_ <- 1 to 3) {
   val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
   df.write.format("hudi").
     options(getQuickstartWriteConfigs).
-    option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-    option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-    option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-    option(TABLE_NAME, tableName).
+    option("hoodie.datasource.write.precombine.field", "ts").
+    option("hoodie.datasource.write.recordkey.field", "uuid").
+    option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+    option("hoodie.table.name", tableName).
     mode(Append).
     save(basePath)
 }

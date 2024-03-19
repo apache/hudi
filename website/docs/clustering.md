@@ -191,10 +191,10 @@ import org.apache.hudi.config.HoodieWriteConfig._
 val df =  //generate data frame
 df.write.format("org.apache.hudi").
         options(getQuickstartWriteConfigs).
-        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-        option(TABLE_NAME, "tableName").
+        option("hoodie.datasource.write.precombine.field", "ts").
+        option("hoodie.datasource.write.recordkey.field", "uuid").
+        option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+        option("hoodie.table.name", "tableName").
         option("hoodie.parquet.small.file.limit", "0").
         option("hoodie.clustering.inline", "true").
         option("hoodie.clustering.inline.max.commits", "4").
@@ -293,10 +293,10 @@ We can also enable asynchronous clustering with Spark structured streaming sink 
 val commonOpts = Map(
    "hoodie.insert.shuffle.parallelism" -> "4",
    "hoodie.upsert.shuffle.parallelism" -> "4",
-   DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-   DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-   DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-   HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+   "hoodie.datasource.write.recordkey.field" -> "_row_key",
+   "hoodie.datasource.write.partitionpath.field" -> "partition",
+   "hoodie.datasource.write.precombine.field" -> "timestamp",
+   "hoodie.table.name" -> "hoodie_test"
 )
 
 def getAsyncClusteringOpts(isAsyncClustering: String, 

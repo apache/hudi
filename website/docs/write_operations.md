@@ -29,7 +29,7 @@ Hudi supports implementing two types of deletes on data stored in Hudi tables, b
 - **Soft Deletes** : Retain the record key and just null out the values for all the other fields.
   This can be achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
 - **Hard Deletes** : This method entails completely eradicating all evidence of a record from the table, including any duplicates. There are three distinct approaches to accomplish this: 
-  - Using DataSource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted. 
+  - Using DataSource, set `"hoodie.datasource.write.operation"` to `"delete"`. This will remove all the records in the DataSet being submitted. 
   - Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
   - Using DataSource or Hudi Streamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
 

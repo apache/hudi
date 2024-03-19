@@ -14,33 +14,29 @@ There are a number of options available:
 
 **`HoodieWriteConfig`**:
 
-**TABLE_NAME** (Required)<br/>
+**TABLE_NAME** <br/>
 
 
 **`DataSourceWriteOptions`**:
 
-**RECORDKEY_FIELD_OPT_KEY** (Required): Primary key field(s). Record keys uniquely identify a record/row within each partition. If one wants to have a global uniqueness, there are two options. You could either make the dataset non-partitioned, or, you can leverage Global indexes to ensure record keys are unique irrespective of the partition path. Record keys can either be a single column or refer to multiple columns. `KEYGENERATOR_CLASS_OPT_KEY` property should be set accordingly based on whether it is a simple or complex key. For eg: `"col1"` for simple field, `"col1,col2,col3,etc"` for complex field. Nested fields can be specified using the dot notation eg: `a.b.c`. <br/>
+**RECORDKEY_FIELD**: Primary key field(s). Record keys uniquely identify a record/row within each partition. If one wants to have a global uniqueness, there are two options. You could either make the dataset non-partitioned, or, you can leverage Global indexes to ensure record keys are unique irrespective of the partition path. Record keys can either be a single column or refer to multiple columns. `KEYGENERATOR_CLASS_OPT_KEY` property should be set accordingly based on whether it is a simple or complex key. For eg: `"col1"` for simple field, `"col1,col2,col3,etc"` for complex field. Nested fields can be specified using the dot notation eg: `a.b.c`. <br/>
 Default value: `"uuid"`<br/>
 
-**PARTITIONPATH_FIELD_OPT_KEY** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_OPT_KEY`. If partition path needs to be url encoded, you can set `URL_ENCODE_PARTITIONING_OPT_KEY`. If synchronizing to hive, also specify using `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.`<br/>
+**PARTITIONPATH_FIELD**: Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_OPT_KEY`. If partition path needs to be url encoded, you can set `URL_ENCODE_PARTITIONING_OPT_KEY`. If synchronizing to hive, also specify using `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.`<br/>
 Default value: `"partitionpath"`<br/>
 
-**PRECOMBINE_FIELD_OPT_KEY** (Required): When two records within the same batch have the same key value, the record with the largest value from the field specified will be choosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precendence compared to the one in storage ignoring this `PRECOMBINE_FIELD_OPT_KEY`. <br/>
+**PRECOMBINE_FIELD**: When two records within the same batch have the same key value, the record with the largest value from the field specified will be choosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precendence compared to the one in storage ignoring this `PRECOMBINE_FIELD_OPT_KEY`. <br/>
 Default value: `"ts"`<br/>
 
-**OPERATION_OPT_KEY**: The [write operations](/docs/write_operations) to use.<br/>
+**OPERATION**: The [write operations](/docs/write_operations) to use.<br/>
 Available values:<br/>
-`UPSERT_OPERATION_OPT_VAL` (default), `BULK_INSERT_OPERATION_OPT_VAL`, `INSERT_OPERATION_OPT_VAL`, `DELETE_OPERATION_OPT_VAL`
+`"upsert"` (default), `"bulk_insert"`, `"insert"`, `"delete"`
 
-**TABLE_TYPE_OPT_KEY**: The [type of table](/docs/concepts#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.<br/>
+**TABLE_TYPE**: The [type of table](/docs/concepts#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.<br/>
 Available values:<br/>
 [`COW_TABLE_TYPE_OPT_VAL`](/docs/concepts#copy-on-write-table) (default), [`MOR_TABLE_TYPE_OPT_VAL`](/docs/concepts#merge-on-read-table)
 
-**KEYGENERATOR_CLASS_OPT_KEY**: Refer to [Key Generation](/docs/key_generation) section below.
-
-**HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY**: If using hive, specify if the table should or should not be partitioned.<br/>
-Available values:<br/>
-`classOf[MultiPartKeysValueExtractor].getCanonicalName` (default), `classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName`, `classOf[TimestampBasedKeyGenerator].getCanonicalName`, `classOf[NonPartitionedExtractor].getCanonicalName`, `classOf[GlobalDeleteKeyGenerator].getCanonicalName` (to be used when `OPERATION_OPT_KEY` is set to `DELETE_OPERATION_OPT_VAL`)
+**KEYGENERATOR_CLASS_NAME**: Refer to [Key Generation](/docs/key_generation) section below.
 
 
 Example:
@@ -50,10 +46,10 @@ Upsert a DataFrame, specifying the necessary field names for `recordKey => _row_
 inputDF.write()
        .format("hudi")
        .options(clientOpts) //Where clientOpts is of type Map[String, String]. clientOpts can include any other options necessary.
-       .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-       .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-       .option(HoodieWriteConfig.TABLE_NAME, tableName)
+       .option("hoodie.datasource.write.recordkey.field", "_row_key")
+       .option("hoodie.datasource.write.partitionpath.field", "partition")
+       .option("hoodie.datasource.write.precombine.field"(), "timestamp")
+       .option("hoodie.table.name", tableName)
        .mode(SaveMode.Append)
        .save(basePath);
 ```
@@ -75,10 +71,10 @@ val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.datasource.write.recordkey.field", "uuid").
+  option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+  option("hoodie.table.name", tableName).
   mode(Overwrite).
   save(basePath)
 ```
@@ -200,11 +196,11 @@ val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"insert_overwrite_table").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.operation","insert_overwrite_table").
+  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.datasource.write.recordkey.field", "uuid").
+  option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+  option("hoodie.table.name", tableName).
   mode(Append).
   save(basePath)
 
@@ -258,11 +254,11 @@ val df = spark.
   filter("partitionpath = 'americas/united_states/san_francisco'")
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"insert_overwrite").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.operation","insert_overwrite").
+  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.datasource.write.recordkey.field", "uuid").
+  option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+  option("hoodie.table.name", tableName).
   mode(Append).
   save(basePath)
 
@@ -315,18 +311,18 @@ val softDeleteDf = nullifyColumns.
 // simply upsert the table after setting these fields to null
 softDeleteDf.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY, "upsert").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.operation", "upsert").
+  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.datasource.write.recordkey.field", "uuid").
+  option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+  option("hoodie.table.name", tableName).
   mode(Append).
   save(basePath)
 ```
 
 - **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways. 
 
-1. Using Datasource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
+1. Using Datasource, set `"hoodie.datasource.write.operation"` to `"delete"`. This will remove all the records in the DataSet being submitted.
 
 Example, first read in a dataset:
 ```scala
@@ -349,11 +345,11 @@ val deletes = dataGen.generateDeletes(df.collectAsList())
 val df = spark.read.json(spark.sparkContext.parallelize(deletes, 2));
 df.write.format("org.apache.hudi").
 options(getQuickstartWriteConfigs).
-option(OPERATION_OPT_KEY,"delete").
-option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-option(TABLE_NAME, tableName).
+option("hoodie.datasource.write.operation","delete").
+option("hoodie.datasource.write.precombine.field", "ts").
+option("hoodie.datasource.write.recordkey.field", "uuid").
+option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+option("hoodie.table.name", tableName).
 mode(Append).
 save(basePath);
 ```
@@ -430,16 +426,16 @@ Read more in-depth details about concurrency control in the [concurrency control
 ```java
 inputDF.write.format("hudi")
        .options(getQuickstartWriteConfigs)
-       .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
+       .option("hoodie.datasource.write.precombine.field", "ts")
        .option("hoodie.cleaner.policy.failed.writes", "LAZY")
        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
        .option("hoodie.write.lock.zookeeper.url", "zookeeper")
        .option("hoodie.write.lock.zookeeper.port", "2181")
        .option("hoodie.write.lock.zookeeper.lock_key", "test_table")
        .option("hoodie.write.lock.zookeeper.base_path", "/test")
-       .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
-       .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
-       .option(TABLE_NAME, tableName)
+       .option("hoodie.datasource.write.recordkey.field", "uuid")
+       .option("hoodie.datasource.write.partitionpath.field", "partitionpath")
+       .option("hoodie.table.name", tableName)
        .mode(Overwrite)
        .save(basePath)
 ```

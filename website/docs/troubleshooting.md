@@ -101,11 +101,11 @@ Unless Hive sync is enabled, the dataset written by Hudi using one of the method
 val hudiSnapshotQueryDF = spark
      .read()
      .format("hudi")
-     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
+     .option("hoodie.datasource.query.type", "snapshot")
      .load(basePath) 
 val hudiIncQueryDF = spark.read().format("hudi")
-     .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(), DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
-     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), <beginInstantTime>)
+     .option("hoodie.datasource.query.type", "incremental")
+     .option("hoodie.datasource.read.begin.instanttime", <beginInstantTime>)
      .load(basePath);
 ```
 

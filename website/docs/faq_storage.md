@@ -71,8 +71,8 @@ spark.read.parquet("your_data_set/path/to/month")
      .write.format("org.apache.hudi")
      .option("hoodie.datasource.write.operation", "bulk_insert")
      .option("hoodie.datasource.write.storage.type", "storage_type") // COPY_ON_WRITE or MERGE_ON_READ
-     .option(RECORDKEY_FIELD_OPT_KEY, "<your key>").
-     .option(PARTITIONPATH_FIELD_OPT_KEY, "<your_partition>")
+     .option("hoodie.datasource.write.recordkey.field", "<your key>").
+     .option("hoodie.datasource.write.partitionpath.field", "<your_partition>")
      ...
      .mode(SaveMode.Append)
      .save(basePath);
@@ -84,8 +84,8 @@ Once you have the initial copy, you can simply run upsert operations on this by 
 spark.read.parquet("your_data_set/path/to/month").limit(n) // Limit n records
      .write.format("org.apache.hudi")
      .option("hoodie.datasource.write.operation", "upsert")
-     .option(RECORDKEY_FIELD_OPT_KEY, "<your key>").
-     .option(PARTITIONPATH_FIELD_OPT_KEY, "<your_partition>")
+     .option("hoodie.datasource.write.recordkey.field", "<your key>").
+     .option("hoodie.datasource.write.partitionpath.field", "<your_partition>")
      ...
      .mode(SaveMode.Append)
      .save(basePath);
