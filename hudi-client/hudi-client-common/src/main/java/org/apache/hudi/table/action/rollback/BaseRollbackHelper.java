@@ -317,12 +317,13 @@ public class BaseRollbackHelper implements Serializable {
         .leftOuterJoin(partitionPathToLogFilesHoodieData)
         .map((SerializableFunction<Pair<String, Pair<HoodieRollbackStat, Option<List<String>>>>, HoodieRollbackStat>) v1 -> {
           if (v1.getValue().getValue().isPresent()) {
-            Path partitionPath = new Path(v1.getKey());
+
+            String partition = v1.getKey();
             HoodieRollbackStat rollbackStat = v1.getValue().getKey();
             List<String> missingLogFiles = v1.getValue().getRight().get();
 
             // fetch file sizes.
-            Path fullPartitionPath = StringUtils.isNullOrEmpty(partitionPath.toString()) ? new Path(basePathStr) : new Path(basePathStr, partitionPath);
+            Path fullPartitionPath = StringUtils.isNullOrEmpty(partition) ? new Path(basePathStr) : new Path(basePathStr, partition);
             FileSystem fs = fullPartitionPath.getFileSystem(serializableConfiguration.get());
             List<Option<FileStatus>> fileStatusesOpt = FSUtils.getFileStatusesUnderPartition(fs,
                 fullPartitionPath, new HashSet<>(missingLogFiles), true);

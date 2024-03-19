@@ -67,6 +67,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -83,6 +85,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NO_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -325,9 +328,19 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     }
   }
 
+  public static List<Arguments> testReattemptRollbackArguments() {
+    List<Arguments> arguments = new ArrayList<>();
+    for (boolean arg1 : new Boolean[] {true, false}) {
+      for (boolean arg2 : new Boolean[] {true, false}) {
+        arguments.add(Arguments.of(arg1, arg2));
+      }
+    }
+    return arguments;
+  }
+
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testReattemptRollback(boolean rollbackUsingMarkers) throws Exception {
+  @MethodSource("testReattemptRollbackArguments")
+  void testReattemptRollback(boolean rollbackUsingMarkers, boolean partitionedTable) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder =
         getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
 
@@ -340,7 +353,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
-      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+      HoodieTestDataGenerator dataGen = partitionedTable ? new HoodieTestDataGenerator()
+          : new HoodieTestDataGenerator(new String[] {NO_PARTITION_PATH});
 
       // Test delta commit rollback
       /*
