@@ -124,9 +124,13 @@ public class LSMTimelineWriter {
           exceptionHandler.ifPresent(handler -> handler.accept(e));
         }
       }
-      updateManifest(filePath.getName());
     } catch (Exception e) {
       throw new HoodieCommitException("Failed to write commits", e);
+    }
+    try {
+      updateManifest(filePath.getName());
+    } catch (Exception e) {
+      throw new HoodieCommitException("Failed to update archiving manifest", e);
     }
   }
 
