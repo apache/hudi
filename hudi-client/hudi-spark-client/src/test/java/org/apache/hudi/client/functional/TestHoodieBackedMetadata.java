@@ -2872,15 +2872,22 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .enableMetrics(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltacommits + 100)
+            .withMaxNumDeltaCommitsBeforeCompaction(5)
             .withMaxNumDeltacommitsWhenPending(maxNumDeltacommits)
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
-    testTable.addRequestedCommit(String.format("%016d", 0));
-    for (int i = 1; i <= maxNumDeltacommits; i++) {
+
+    // trigger 5 commits so that compaction gets triggered in MDT
+    for (int i = 1; i <= 5; i++) {
       doWriteOperation(testTable, String.format("%016d", i));
     }
-    int instant = maxNumDeltacommits + 1;
+    // add a pending commit
+    testTable.addRequestedCommit(String.format("%016d", 6));
+    // add 3 more and we should hit exception.
+    for (int i = 7; i <= (7 + maxNumDeltacommits - 1); i++) {
+      doWriteOperation(testTable, String.format("%016d", i));
+    }
+    int instant = 7 + maxNumDeltacommits;
     Throwable t = assertThrows(HoodieMetadataException.class, () -> doWriteOperation(testTable, String.format("%016d", instant)));
     assertTrue(t.getMessage().startsWith(String.format("Metadata table's deltacommits exceeded %d: ", maxNumDeltacommits)));
   }

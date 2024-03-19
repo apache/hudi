@@ -97,7 +97,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
@@ -765,7 +765,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected static void checkNumDeltaCommits(HoodieTableMetaClient metaClient, int maxNumDeltaCommitsWhenPending) {
     final HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
     Option<HoodieInstant> lastCompaction = activeTimeline.filterCompletedInstants()
-        .filter(s -> s.getAction().equals(COMPACTION_ACTION)).lastInstant();
+        .filter(s -> s.getAction().equals(COMMIT_ACTION)).lastInstant();
     int numDeltaCommits = lastCompaction.isPresent()
         ? activeTimeline.getDeltaCommitTimeline().findInstantsAfter(lastCompaction.get().getTimestamp()).countInstants()
         : activeTimeline.getDeltaCommitTimeline().countInstants();
