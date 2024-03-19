@@ -42,6 +42,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
+import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -335,7 +336,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
     TypedProperties typedProperties = new TypedProperties(properties);
-    HoodieIncrSource incrSource = new HoodieIncrSource(typedProperties, jsc(), spark(), new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA));
+    HoodieIncrSource incrSource = new HoodieIncrSource(typedProperties, jsc(), spark(), new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA), Option.empty()));
 
     // read everything until latest
     Pair<Option<Dataset<Row>>, String> batchCheckPoint = incrSource.fetchNextBatch(checkpointToPull, 500);

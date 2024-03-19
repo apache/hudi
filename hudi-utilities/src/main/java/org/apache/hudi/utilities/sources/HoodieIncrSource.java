@@ -25,9 +25,9 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
-import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
+import org.apache.hudi.utilities.streamer.StreamContext;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -126,9 +126,8 @@ public class HoodieIncrSource extends RowSource {
         HoodieIncrSourceConfig.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE.defaultValue();
   }
 
-  public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-                          SchemaProvider schemaProvider) {
-    super(props, sparkContext, sparkSession, schemaProvider);
+  public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession, StreamContext streamContext) {
+    super(props, sparkContext, sparkSession, streamContext);
     this.snapshotLoadQuerySplitter = SnapshotLoadQuerySplitter.getInstance(props);
   }
 

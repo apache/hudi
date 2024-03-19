@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
@@ -136,42 +137,30 @@ public class UtilHelpers {
   }
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-      SparkSession sparkSession, SchemaProvider schemaProvider,
-      HoodieIngestionMetrics metrics) throws IOException {
-    try {
-      try {
-        return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
-                SparkSession.class, SchemaProvider.class,
-                HoodieIngestionMetrics.class},
-            cfg, jssc, sparkSession, schemaProvider, metrics);
-      } catch (HoodieException e) {
-        return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
-                SparkSession.class, SchemaProvider.class},
-            cfg, jssc, sparkSession, schemaProvider);
-      }
-    } catch (Throwable e) {
-      throw new IOException("Could not load source class " + sourceClass, e);
-    }
-  }
+                                    SparkSession sparkSession, HoodieIngestionMetrics metrics, StreamContext streamContext) throws IOException {
+    // All possible constructors.
+    Class<?>[] constructorArgsStreamContextMetrics = new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, HoodieIngestionMetrics.class, StreamContext.class};
+    Class<?>[] constructorArgsStreamContext = new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, StreamContext.class};
+    Class<?>[] constructorArgsMetrics = new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class, HoodieIngestionMetrics.class};
+    Class<?>[] constructorArgs = new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class};
+    // List of constructor and their respective arguments.
+    List<Pair<Class<?>[], Object[]>> sourceConstructorAndArgs = new ArrayList<>();
+    sourceConstructorAndArgs.add(Pair.of(constructorArgsStreamContextMetrics, new Object[] {cfg, jssc, sparkSession, metrics, streamContext}));
+    sourceConstructorAndArgs.add(Pair.of(constructorArgsStreamContext, new Object[] {cfg, jssc, sparkSession, streamContext}));
+    sourceConstructorAndArgs.add(Pair.of(constructorArgsMetrics, new Object[] {cfg, jssc, sparkSession, streamContext.getSchemaProvider(), metrics}));
+    sourceConstructorAndArgs.add(Pair.of(constructorArgs, new Object[] {cfg, jssc, sparkSession, streamContext.getSchemaProvider()}));
 
-  public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-                                    SparkSession sparkSession, HoodieIngestionMetrics metrics, StreamContext streamContext)
-      throws IOException {
-    try {
+    HoodieException sourceClassLoadException = null;
+    for (Pair<Class<?>[], Object[]> constructor : sourceConstructorAndArgs) {
       try {
-        return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
-                SparkSession.class,
-                HoodieIngestionMetrics.class, StreamContext.class},
-            cfg, jssc, sparkSession, metrics, streamContext);
+        return (Source) ReflectionUtils.loadClass(sourceClass, constructor.getLeft(), constructor.getRight());
       } catch (HoodieException e) {
-        return createSource(sourceClass, cfg, jssc, sparkSession, streamContext.getSchemaProvider(), metrics);
+        sourceClassLoadException = e;
+      } catch (Throwable t) {
+        throw new IOException("Could not load source class " + sourceClass, t);
       }
-    } catch (Throwable e) {
-      throw new IOException("Could not load source class " + sourceClass, e);
     }
+    throw new IOException("Could not load source class " + sourceClass, sourceClassLoadException);
   }
 
   public static JsonKafkaSourcePostProcessor createJsonKafkaSourcePostProcessor(String postProcessorClassNames, TypedProperties props) throws IOException {
