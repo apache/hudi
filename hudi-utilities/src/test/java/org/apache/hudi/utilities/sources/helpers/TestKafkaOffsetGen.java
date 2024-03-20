@@ -132,12 +132,11 @@ public class TestKafkaOffsetGen {
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs(autoOffsetResetConfig, "string"));
 
     OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(resetCheckpoint), 500, metrics);
-    if(autoOffsetResetConfig.equals("latest")) {
+    if (autoOffsetResetConfig.equals("latest")) {
       assertEquals(1, nextOffsetRanges.length);
       assertEquals(1000, nextOffsetRanges[0].fromOffset());
       assertEquals(1000, nextOffsetRanges[0].untilOffset());
-    }
-    else {
+    } else {
       assertEquals(1, nextOffsetRanges.length);
       assertEquals(0, nextOffsetRanges[0].fromOffset());
       assertEquals(500, nextOffsetRanges[0].untilOffset());
