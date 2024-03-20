@@ -167,6 +167,10 @@ import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBas
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_DRIVER;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_PASS;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_URL;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_USER;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecordsByPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -2428,12 +2432,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testJdbcSourceIncrementalFetchInContinuousMode() {
-    try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:test_mem", "sa", "")) {
+    try (Connection connection = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASS)) {
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.streamer.jdbc.url", "jdbc:h2:mem:test_mem");
-      props.setProperty("hoodie.streamer.jdbc.driver.class", "org.h2.Driver");
-      props.setProperty("hoodie.streamer.jdbc.user", "sa");
-      props.setProperty("hoodie.streamer.jdbc.password", "");
+      props.setProperty("hoodie.streamer.jdbc.url", JDBC_URL);
+      props.setProperty("hoodie.streamer.jdbc.driver.class", JDBC_DRIVER);
+      props.setProperty("hoodie.streamer.jdbc.user", JDBC_USER);
+      props.setProperty("hoodie.streamer.jdbc.password", JDBC_PASS);
       props.setProperty("hoodie.streamer.jdbc.table.name", "triprec");
       props.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
       props.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "id");
