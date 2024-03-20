@@ -46,6 +46,10 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_DRIVER;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_PASS;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_URL;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_USER;
 import static org.apache.hudi.utilities.testutils.JdbcTestUtils.clearAndInsert;
 import static org.apache.hudi.utilities.testutils.JdbcTestUtils.close;
 import static org.apache.hudi.utilities.testutils.JdbcTestUtils.count;
@@ -73,12 +77,12 @@ public class TestJdbcSource extends UtilitiesTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.url", "jdbc:h2:mem:test_mem");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.driver.class", "org.h2.Driver");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.user", "test");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.password", "jdbc");
+    PROPS.setProperty("hoodie.deltastreamer.jdbc.url", JDBC_URL);
+    PROPS.setProperty("hoodie.deltastreamer.jdbc.driver.class", JDBC_DRIVER);
+    PROPS.setProperty("hoodie.deltastreamer.jdbc.user", JDBC_USER);
+    PROPS.setProperty("hoodie.deltastreamer.jdbc.password", JDBC_PASS);
     PROPS.setProperty("hoodie.deltastreamer.jdbc.table.name", "triprec");
-    connection = DriverManager.getConnection("jdbc:h2:mem:test_mem", "test", "jdbc");
+    connection = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASS);
   }
 
   @AfterEach
@@ -438,7 +442,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
   private void writeSecretToFs() throws IOException {
     FileSystem fs = FileSystem.get(new Configuration());
     FSDataOutputStream outputStream = fs.create(new Path("file:///tmp/hudi/config/secret"));
-    outputStream.writeBytes("jdbc");
+    outputStream.writeBytes(JDBC_PASS);
     outputStream.close();
   }
 
