@@ -68,13 +68,11 @@ module.exports = {
             type: 'category',
             label: 'Table Services',
             items: [
-                'procedures',
                 'migration_guide',
                 'compaction',
                 'clustering',
                 'metadata_indexing',
                 'hoodie_cleaner',
-                'transforms',
                 'rollbacks',
                 'markers',
                 'file_sizing',
@@ -107,6 +105,7 @@ module.exports = {
             items: [
                 'performance',
                 'deployment',
+                'procedures',
                 'cli',
                 'metrics',
                 'encryption',
