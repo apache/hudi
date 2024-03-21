@@ -18,9 +18,12 @@
 
 package org.apache.hudi.index.bucket;
 
+import org.apache.commons.io.FileUtils;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -61,6 +64,12 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
           if (!bucketIdToFileIdMapping.containsKey(bucketId)) {
             bucketIdToFileIdMapping.put(bucketId, new HoodieRecordLocation(commitTime, fileId));
           } else {
+            // If hoodie.write.bucketid.multiple.delete.partition enable, delete the partition to confirm next write is success
+            if (config.getWhetherDeletePartitonWhenBucketIdMultiple()) {
+              Path partitionPath = FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePathV2(), partition);
+              hoodieTable.getMetaClient().getFs().delete(partitionPath, true);
+            }
+
             // Check if bucket data is valid
             throw new HoodieIOException("Find multiple files at partition path="
                 + partition + " belongs to the same bucket id = " + bucketId);

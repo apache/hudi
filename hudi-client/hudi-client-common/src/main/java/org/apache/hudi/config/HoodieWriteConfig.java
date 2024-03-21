@@ -780,6 +780,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
           + "Hudi write client and user is not expected to manually change the value.");
 
+  public static final ConfigProperty<Boolean> BUCKETID_MULTIPLE_DELETE_PARTITION_PATH = ConfigProperty
+          .key("hoodie.write.bucketid.multiple.delete.partition")
+          .defaultValue(false)
+          .markAdvanced()
+          .sinceVersion("1.0.0")
+          .withDocumentation("When write data to bucket index table's partiton occur multiple bucketid, "
+                  + "decide whether to delete partition path for the next write success.");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -1256,6 +1264,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getTaggedRecordStorageLevel() {
     return getString(TAGGED_RECORD_STORAGE_LEVEL_VALUE);
+  }
+
+  public Boolean getWhetherDeletePartitonWhenBucketIdMultiple() {
+    return getBoolean(BUCKETID_MULTIPLE_DELETE_PARTITION_PATH);
   }
 
   public String getInternalSchema() {
