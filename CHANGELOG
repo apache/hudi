@@ -89,3 +89,7 @@ a7474658d [AUDIT-698] Upgrade to version release-v1.6.0 (#596)
 6d6140abbed [HUDI-7501] Use source profile for S3 and GCS sources (#591)
 7573ed25355 [HUDI-7478] Fix max delta commits guard check w/ MDT (#593)
 7470771e74b [AUDIT-86drzn5xg] Upgrade to version release-v1.6.1 (#599)
+
+---[2024-03-21 13:14:55] [release-v1.7.1] ---
+8bf2b68db [HUDI-7523] Add HOODIE_SPARK_DATASOURCE_OPTIONS to be used in HoodieIncrSource (#606)
+2ace7cb13 [AUDIT-705] Upgrade to version release-v1.7.0 (#602)
