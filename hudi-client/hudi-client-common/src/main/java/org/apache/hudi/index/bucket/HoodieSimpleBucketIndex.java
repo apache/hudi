@@ -73,6 +73,9 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
                 throw new HoodieIOException("Find multiple files at partition path="
                         + partition + " belongs to the same bucket id = " + bucketId, e);
               }
+              throw new HoodieIOException("Find multiple files at partition path="
+                      + partition + " belongs to the same bucket id = " + bucketId
+                      + ", and had deleted the partition path, you can try the job again");
             }
 
             // Check if bucket data is valid
