@@ -116,7 +116,7 @@ public class TestDefaultHoodieRecordPayload {
     assertEquals(record2, payload2.getInsertValue(schema, props).get());
 
     assertEquals(payload1.combineAndGetUpdateValue(record2, schema, props).get(), record2);
-    assertEquals(payload2.combineAndGetUpdateValue(record1, schema, props).get(), record2);
+    assertEquals(payload2.combineAndGetUpdateValue(record1, schema, props).get(), record1);
   }
 
   @ParameterizedTest
