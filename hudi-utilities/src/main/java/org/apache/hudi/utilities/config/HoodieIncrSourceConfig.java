@@ -101,4 +101,11 @@ public class HoodieIncrSourceConfig extends HoodieConfig {
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.hoodieincr.partition.extractor.class")
       .markAdvanced()
       .withDocumentation("PartitionValueExtractor class to extract partition fields from _hoodie_partition_path");
+
+  public static final ConfigProperty<String> HOODIE_SPARK_DATASOURCE_OPTIONS = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.hoodieincr.data.datasource.options")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("A comma separate list of options that can be passed to the spark dataframe reader of a hudi table, "
+          + "eg: hoodie.metadata.enable=true,hoodie.enable.data.skipping=true");
 }
