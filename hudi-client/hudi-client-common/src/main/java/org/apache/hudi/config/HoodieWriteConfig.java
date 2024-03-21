@@ -781,12 +781,12 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "Hudi write client and user is not expected to manually change the value.");
 
   public static final ConfigProperty<Boolean> BUCKETID_MULTIPLE_DELETE_PARTITION_PATH = ConfigProperty
-          .key("hoodie.write.bucketid.multiple.delete.partition")
-          .defaultValue(false)
-          .markAdvanced()
-          .sinceVersion("1.0.0")
-          .withDocumentation("When write data to bucket index table's partiton occur multiple bucketid, "
-                  + "decide whether to delete partition path for the next write success.");
+       .key("hoodie.write.bucketid.multiple.delete.partition")
+       .defaultValue(false)
+       .markAdvanced()
+       .sinceVersion("1.0.0")
+       .withDocumentation("When write data to bucket index table's partiton occur multiple bucketid, "
+           + "decide whether to delete partition path for the next write success.");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
