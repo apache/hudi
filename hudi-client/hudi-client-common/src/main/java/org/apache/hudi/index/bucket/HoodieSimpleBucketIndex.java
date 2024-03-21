@@ -33,6 +33,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -66,7 +67,12 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
             // If hoodie.write.bucketid.multiple.delete.partition enable, delete the partition to confirm next write is success
             if (config.getWhetherDeletePartitonWhenBucketIdMultiple()) {
               Path partitionPath = FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePathV2(), partition);
-              hoodieTable.getMetaClient().getFs().delete(partitionPath, true);
+              try {
+                hoodieTable.getMetaClient().getFs().delete(partitionPath, true);
+              } catch (IOException e) {
+                throw new HoodieIOException("Find multiple files at partition path="
+                        + partition + " belongs to the same bucket id = " + bucketId, e);
+              }
             }
 
             // Check if bucket data is valid
