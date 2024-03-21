@@ -18,11 +18,11 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.avro.Schema
-import org.apache.hudi.DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
-import org.apache.hudi.common.config.HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT
+import org.apache.hudi.common.config.HoodieReaderConfig
+import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.function.SerializableFunctionUnchecked
@@ -31,8 +31,8 @@ import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.testutils.HoodieTestUtils.{getDefaultHadoopConf, getLogFileListFromFileSlice}
-import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -71,9 +71,9 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
-      spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-      spark.sql(s"set ${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
-      spark.sql(s"set ${FILE_GROUP_READER_ENABLED.key} = true")
+      spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+      spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
+      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
 
       // Create a table with five data fields
       spark.sql(
@@ -115,16 +115,15 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     }
   }
 
-  /* HUDI-7487: disabled due to flakiness
   test("Test MERGE INTO with inserts only on MOR table when partial updates are enabled") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
-      spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-      spark.sql(s"set ${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
-      spark.sql(s"set ${FILE_GROUP_READER_ENABLED.key} = true")
+      spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+      spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
+      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
       // Write inserts to log block
-      spark.sql(s"set ${INDEX_TYPE.key} = INMEMORY")
+      spark.sql(s"set ${HoodieIndexConfig.INDEX_TYPE.key} = INMEMORY")
 
       // Create a table with five data fields
       spark.sql(
@@ -171,17 +170,16 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         false)
     }
   }
-  */
 
   def testPartialUpdate(tableType: String,
                         logDataBlockFormat: String): Unit = {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
-      spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-      spark.sql(s"set ${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
-      spark.sql(s"set ${LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
-      spark.sql(s"set ${FILE_GROUP_READER_ENABLED.key} = true")
+      spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+      spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
+      spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
+      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
 
       // Create a table with five data fields
       spark.sql(
@@ -281,10 +279,10 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
-      spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-      spark.sql(s"set ${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
-      spark.sql(s"set ${LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
-      spark.sql(s"set ${FILE_GROUP_READER_ENABLED.key} = true")
+      spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+      spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
+      spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
+      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
 
       // Create a table with five data fields
       spark.sql(
@@ -381,7 +379,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
                        expectedNumLogFile: Int,
                        changedFields: Seq[Seq[String]],
                        isPartial: Boolean): Unit = {
-    val hadoopConf = getDefaultHadoopConf
+    val hadoopConf = HoodieTestUtils.getDefaultHadoopConf
     val metaClient: HoodieTableMetaClient =
       HoodieTableMetaClient.builder.setConf(hadoopConf).setBasePath(basePath).build
     val metadataConfig = HoodieMetadataConfig.newBuilder.build
@@ -400,12 +398,12 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("")
       .filter(new Predicate[FileSlice] {
         override def test(fileSlice: FileSlice): Boolean = {
-          getLogFileListFromFileSlice(fileSlice).size() == expectedNumLogFile
+          HoodieTestUtils.getLogFileListFromFileSlice(fileSlice).size() == expectedNumLogFile
         }
       })
       .findFirst()
     assertTrue(fileSlice.isPresent)
-    val logFilePathList: List[String] = getLogFileListFromFileSlice(fileSlice.get)
+    val logFilePathList: List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
     Collections.sort(logFilePathList)
 
     val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
