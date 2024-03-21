@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index.bucket;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.data.HoodieData;
