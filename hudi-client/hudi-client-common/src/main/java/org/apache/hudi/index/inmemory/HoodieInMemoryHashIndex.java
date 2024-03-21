@@ -29,13 +29,13 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -63,19 +63,17 @@ public class HoodieInMemoryHashIndex
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     return records.mapPartitions(hoodieRecordIterator -> {
-      List<HoodieRecord<R>> taggedRecords = new ArrayList<>();
       HoodieTimeline commitsTimeline = hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants();
-      while (hoodieRecordIterator.hasNext()) {
-        HoodieRecord<R> record = hoodieRecordIterator.next();
-        HoodieRecordLocation location = recordLocationMap.get(record.getKey());
-        if ((location != null) && HoodieIndexUtils.checkIfValidCommit(commitsTimeline, location.getInstantTime())) {
-          record.unseal();
-          record.setCurrentLocation(location);
-          record.seal();
-        }
-        taggedRecords.add(record);
-      }
-      return taggedRecords.iterator();
+      return new CloseableMappingIterator<>(ClosableIterator.wrap(hoodieRecordIterator),
+          record -> {
+            HoodieRecordLocation location = recordLocationMap.get(record.getKey());
+            if ((location != null) && HoodieIndexUtils.checkIfValidCommit(commitsTimeline, location.getInstantTime())) {
+              record.unseal();
+              record.setCurrentLocation(location);
+              record.seal();
+            }
+            return record;
+          });
     }, true);
   }
 

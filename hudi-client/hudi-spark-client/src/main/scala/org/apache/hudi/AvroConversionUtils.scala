@@ -98,13 +98,10 @@ object AvroConversionUtils {
    */
   def createDataFrame(rdd: RDD[GenericRecord], schemaStr: String, ss: SparkSession): Dataset[Row] = {
     ss.createDataFrame(rdd.mapPartitions { records =>
-      if (records.isEmpty) Iterator.empty
-      else {
-        val schema = new Schema.Parser().parse(schemaStr)
-        val dataType = convertAvroSchemaToStructType(schema)
-        val converter = createConverterToRow(schema, dataType)
-        records.map { r => converter(r) }
-      }
+      val schema = new Schema.Parser().parse(schemaStr)
+      val dataType = convertAvroSchemaToStructType(schema)
+      val converter = createConverterToRow(schema, dataType)
+      records.map { r => converter(r) }
     }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr)))
   }
 

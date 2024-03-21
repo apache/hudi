@@ -108,23 +108,19 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     //       injecting [[SQLConf]], which by default isn't propagated by Spark to the executor(s).
     //       [[SQLConf]] is required by [[AvroSerializer]]
     injectSQLConf(df.queryExecution.toRdd.mapPartitions { rows =>
-      if (rows.isEmpty) {
-        Iterator.empty
-      } else {
-        val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
-        val transform: GenericRecord => GenericRecord =
-          if (sameSchema) identity
-          else {
-            HoodieAvroUtils.rewriteRecordDeep(_, readerAvroSchema)
-          }
+      val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
+      val transform: GenericRecord => GenericRecord =
+        if (sameSchema) identity
+        else {
+          HoodieAvroUtils.rewriteRecordDeep(_, readerAvroSchema)
+        }
 
-        // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from
-        // existing Writer's schema into Reader's (avro) schema
-        val writerAvroSchema = new Schema.Parser().parse(writerAvroSchemaStr)
-        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
+      // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from
+      // existing Writer's schema into Reader's (avro) schema
+      val writerAvroSchema = new Schema.Parser().parse(writerAvroSchemaStr)
+      val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
 
-        rows.map { ir => transform(convert(ir)) }
-      }
+      rows.map { ir => transform(convert(ir)) }
     }, SQLConf.get)
   }
 
@@ -165,20 +161,16 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
 
     if (!sameSchema) {
       val rdds: RDD[Either[GenericRecord, InternalRow]] = df.queryExecution.toRdd.mapPartitions { rows =>
-        if (rows.isEmpty) {
-          Iterator.empty
-        } else {
-          val writerAvroSchema = new Schema.Parser().parse(writerAvroSchemaStr)
-          val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
-          val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
-          val transform: InternalRow => Either[GenericRecord, InternalRow] = internalRow => try {
-            Left(HoodieAvroUtils.rewriteRecordDeep(convert(internalRow), readerAvroSchema, true))
-          } catch {
-            case _: Throwable =>
-              Right(internalRow)
-          }
-          rows.map(transform)
+        val writerAvroSchema = new Schema.Parser().parse(writerAvroSchemaStr)
+        val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
+        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
+        val transform: InternalRow => Either[GenericRecord, InternalRow] = internalRow => try {
+          Left(HoodieAvroUtils.rewriteRecordDeep(convert(internalRow), readerAvroSchema, true))
+        } catch {
+          case _: Throwable =>
+            Right(internalRow)
         }
+        rows.map(transform)
       }
 
       val rowDeserializer = getCatalystRowSerDe(writerSchema)
@@ -189,12 +181,8 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       (rdds.filter(_.isLeft).map(_.left.get), errorRDD.toJSON.rdd)
     } else {
       val rdd = df.queryExecution.toRdd.mapPartitions { rows =>
-        if (rows.isEmpty) {
-          Iterator.empty
-        } else {
-          val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
-          rows.map(convert)
-        }
+        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
+        rows.map(convert)
       }
       (rdd, df.sparkSession.sparkContext.emptyRDD[String])
     }
@@ -206,17 +194,13 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
    */
   def safeRewriteRDD(df: RDD[GenericRecord], serializedTargetSchema: String): Tuple2[RDD[GenericRecord], RDD[String]] = {
     val rdds: RDD[Either[GenericRecord, String]] = df.mapPartitions { recs =>
-      if (recs.isEmpty) {
-        Iterator.empty
-      } else {
-        val schema = new Schema.Parser().parse(serializedTargetSchema)
-        val transform: GenericRecord => Either[GenericRecord, String] = record => try {
-          Left(HoodieAvroUtils.rewriteRecordDeep(record, schema, true))
-        } catch {
-          case _: Throwable => Right(HoodieAvroUtils.avroToJsonString(record, false))
-        }
-        recs.map(transform)
+      val schema = new Schema.Parser().parse(serializedTargetSchema)
+      val transform: GenericRecord => Either[GenericRecord, String] = record => try {
+        Left(HoodieAvroUtils.rewriteRecordDeep(record, schema, true))
+      } catch {
+        case _: Throwable => Right(HoodieAvroUtils.avroToJsonString(record, false))
       }
+      recs.map(transform)
     }
     (rdds.filter(_.isLeft).map(_.left.get), rdds.filter(_.isRight).map(_.right.get))
   }
