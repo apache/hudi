@@ -224,7 +224,7 @@ public class HoodieTableMetaClient implements Serializable {
    * Returns Option of {@link HoodieFunctionalIndexMetadata} from index definition file if present, else returns empty Option.
    */
   public Option<HoodieFunctionalIndexMetadata> getFunctionalIndexMetadata() {
-    if (functionalIndexMetadata.isPresent()) {
+    if (functionalIndexMetadata.isPresent() && !functionalIndexMetadata.get().getIndexDefinitions().isEmpty()) {
       return functionalIndexMetadata;
     }
     if (tableConfig.getIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getIndexDefinitionPath().get())) {
