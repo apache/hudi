@@ -74,7 +74,6 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
 
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
