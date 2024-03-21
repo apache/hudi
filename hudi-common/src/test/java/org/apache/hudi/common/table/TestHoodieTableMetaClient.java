@@ -18,19 +18,27 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_PROPERTIES_FILE;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultHadoopConf;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Tests hoodie table meta client {@link HoodieTableMetaClient}.
@@ -124,5 +133,19 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     assertEquals(metaClient1.toString(), metaClient2.toString());
     assertNotEquals(metaClient1.toString(), new Object().toString());
+  }
+
+  @Test
+  public void testHoodiePropertiesAreNotOverwritten() throws IOException {
+    Configuration hadoopConf = getDefaultHadoopConf();
+    final FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
+    assertTrue(fs.exists(new Path(metaClient.getMetaPath() + "/" + HOODIE_PROPERTIES_FILE)));
+
+    try {
+      HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, new TypedProperties());
+      fail("Should fail");
+    } catch (HoodieException e) {
+      assertTrue(e.getMessage().contains("hoodie.properties already exists"));
+    }
   }
 }
