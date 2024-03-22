@@ -94,7 +94,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test OverwriteWithGreaterRecordPayload test") {
+  test("Test FirstValueAvroPayload test") {
     withTempDir { tmp =>
       val targetTable = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
@@ -115,7 +115,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  'hoodie.index.type' = 'BUCKET',
            |  'hoodie.bucket.index.hash.field' = 'id',
            |  'hoodie.bucket.index.num.buckets'=12,
-           |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.OverwriteWithGreaterRecordPayload'
+           |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.FirstValueAvroPayload'
            | )
            partitioned by (`day`,`hour`)
            location '${tablePath}'

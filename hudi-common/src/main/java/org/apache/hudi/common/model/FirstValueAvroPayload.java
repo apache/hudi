@@ -50,7 +50,7 @@ import java.util.Properties;
  *      1       1       name_1  price_1
  *  Insert data:
  *      id      ts      name    price
- *      1       1       name_2    price_2
+ *      1       1       name_2  price_2
  *
  *  Result data after #preCombine or #combineAndGetUpdateValue:
  *      id      ts      name    price
@@ -64,13 +64,13 @@ import java.util.Properties;
  *      1       1       name_1  price_1
  *  Insert data:
  *      id      ts      name    price
- *      1       2       name_2    price_2
+ *      1       2       name_2  price_2
  *
  *  Result data after preCombine or combineAndGetUpdateValue:
  *      id      ts      name    price
  *      1       2       name_2  price_2
  *
- *  Other condition it keep the same with DefaultHoodieRecordPayload which would save the record with the larger precombine value
+ *  The other functionalities are inherited from DefaultHoodieRecordPayload.
  * </pre>
  */
 public class FirstValueAvroPayload extends DefaultHoodieRecordPayload {
