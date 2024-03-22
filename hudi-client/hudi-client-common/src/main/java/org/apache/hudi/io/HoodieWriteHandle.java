@@ -190,7 +190,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   public abstract List<WriteStatus> close();
 
-  public List<WriteStatus> writeStatuses() {
+  public List<WriteStatus> getWriteStatuses() {
     return Collections.singletonList(writeStatus);
   }
 
