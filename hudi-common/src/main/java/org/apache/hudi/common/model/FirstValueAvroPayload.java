@@ -27,13 +27,13 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.Properties;
 
-public class OverwriteWithGreaterRecordPayload extends DefaultHoodieRecordPayload {
+public class FirstValueAvroPayload extends DefaultHoodieRecordPayload {
 
-  public OverwriteWithGreaterRecordPayload(GenericRecord record, Comparable orderingVal) {
+  public FirstValueAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
 
-  public OverwriteWithGreaterRecordPayload(Option<GenericRecord> record) {
+  public FirstValueAvroPayload(Option<GenericRecord> record) {
     super(record);
   }
 
