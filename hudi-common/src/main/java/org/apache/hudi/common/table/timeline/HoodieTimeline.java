@@ -180,6 +180,12 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline getWriteTimeline();
 
   /**
+   * Timeline to include completed commit/compaction instants.
+   * @return
+   */
+  HoodieTimeline filterCompletedCommitInstants();
+
+  /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions that are completed and contiguous.
    * For example, if timeline is [C0.completed, C1.completed, C2.completed, C3.inflight, C4.completed].
    * Then, a timeline of [C0.completed, C1.completed, C2.completed] will be returned.
