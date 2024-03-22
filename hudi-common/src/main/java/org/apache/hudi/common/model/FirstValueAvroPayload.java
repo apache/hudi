@@ -27,6 +27,52 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.Properties;
 
+/**
+ * Payload clazz that is used for Hudi Table.
+ *
+ * <p>Simplified FirstValueAvroPayload Logic:
+ * <pre>
+ *
+ *  Illustration with simple data.
+ *  the order field is 'ts', recordkey is 'id' and schema is :
+ *  {
+ *    [
+ *      {"name":"id","type":"string"},
+ *      {"name":"ts","type":"long"},
+ *      {"name":"name","type":"string"},
+ *      {"name":"price","type":"string"}
+ *    ]
+ *  }
+ *
+ *  case 1
+ *  Current data:
+ *      id      ts      name    price
+ *      1       1       name_1  price_1
+ *  Insert data:
+ *      id      ts      name    price
+ *      1       1       name_2    price_2
+ *
+ *  Result data after #preCombine or #combineAndGetUpdateValue:
+ *      id      ts      name    price
+ *      1       1       name_1  price_1
+ *
+ *  If precombine is the same, would keep the first one record
+ *
+ *  case 2
+ *  Current data:
+ *      id      ts      name    price
+ *      1       1       name_1  price_1
+ *  Insert data:
+ *      id      ts      name    price
+ *      1       2       name_2    price_2
+ *
+ *  Result data after preCombine or combineAndGetUpdateValue:
+ *      id      ts      name    price
+ *      1       2       name_2  price_2
+ *
+ *  Other condition it keep the same with DefaultHoodieRecordPayload which would save the record with the larger precombine value
+ * </pre>
+ */
 public class FirstValueAvroPayload extends DefaultHoodieRecordPayload {
 
   public FirstValueAvroPayload(GenericRecord record, Comparable orderingVal) {
