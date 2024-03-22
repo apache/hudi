@@ -34,50 +34,47 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestFirstValueAvroPayload {
 
-    private Schema schema;
-    private Properties props;
+  private Schema schema;
+  private Properties props;
 
-    @BeforeEach
-    public void setUp() throws Exception {
-        schema = Schema.createRecord(Arrays.asList(
-                new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
-                new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", null),
-                new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
-                new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false)
-        ));
-        props = new Properties();
-        props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
-        props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "ts");
-    }
+  @BeforeEach
+  public void setUp() throws Exception {
+    schema = Schema.createRecord(Arrays.asList(
+            new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
+            new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", null),
+            new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
+            new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false)
+    ));
+    props = new Properties();
+    props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
+    props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "ts");
+  }
 
-    @ParameterizedTest
-    @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
-    public void testActiveRecordsForFirstValueAvroPayload(String key) throws IOException {
-        PreCombineTestUtils.setPreCombineConfig(props, key, "ts");
-        GenericRecord record1 = new GenericData.Record(schema);
-        record1.put("id", "0");
-        record1.put("partition", "partition0");
-        record1.put("ts", 0L);
-        record1.put("_hoodie_is_deleted", false);
+  @ParameterizedTest
+  @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
+  public void testActiveRecordsForFirstValueAvroPayload(String key) throws IOException {
+    PreCombineTestUtils.setPreCombineConfig(props, key, "ts");
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("id", "0");
+    record1.put("partition", "partition0");
+    record1.put("ts", 0L);
+    record1.put("_hoodie_is_deleted", false);
 
-        GenericRecord record2 = new GenericData.Record(schema);
-        record2.put("id", "0");
-        record2.put("partition", "partition0");
-        record2.put("ts", 0L);
-        record2.put("_hoodie_is_deleted", false);
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("id", "0");
+    record2.put("partition", "partition0");
+    record2.put("ts", 0L);
+    record2.put("_hoodie_is_deleted", false);
 
-        DefaultHoodieRecordPayload payload1 = new FirstValueAvroPayload(record1, 1);
-        DefaultHoodieRecordPayload payload2 = new FirstValueAvroPayload(record2, 1);
-        assertEquals(payload1.preCombine(payload2, props), payload2);
-        assertEquals(payload2.preCombine(payload1, props), payload1);
+    DefaultHoodieRecordPayload payload1 = new FirstValueAvroPayload(record1, 1);
+    DefaultHoodieRecordPayload payload2 = new FirstValueAvroPayload(record2, 1);
+    assertEquals(payload1.preCombine(payload2, props), payload2);
+    assertEquals(payload2.preCombine(payload1, props), payload1);
 
-        assertEquals(record1, payload1.getInsertValue(schema, props).get());
-        assertEquals(record2, payload2.getInsertValue(schema, props).get());
+    assertEquals(record1, payload1.getInsertValue(schema, props).get());
+    assertEquals(record2, payload2.getInsertValue(schema, props).get());
 
-        assertEquals(payload1.combineAndGetUpdateValue(record2, schema, props).get(), record2);
-        assertEquals(payload2.combineAndGetUpdateValue(record1, schema, props).get(), record1);
-    }
-
-
-
+    assertEquals(payload1.combineAndGetUpdateValue(record2, schema, props).get(), record2);
+    assertEquals(payload2.combineAndGetUpdateValue(record1, schema, props).get(), record1);
+  }
 }
