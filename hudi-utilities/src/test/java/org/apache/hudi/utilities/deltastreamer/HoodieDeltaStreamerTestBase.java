@@ -135,20 +135,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   Map<String, String> hudiOpts = new HashMap<>();
   public KafkaTestUtils testUtils;
 
-  @BeforeEach
-  protected void prepareTestSetup() throws IOException {
-    PARQUET_SOURCE_ROOT = basePath + "/parquetFiles";
-    ORC_SOURCE_ROOT = basePath + "/orcFiles";
-    JSON_KAFKA_SOURCE_ROOT = basePath + "/jsonKafkaFiles";
-    testUtils = new KafkaTestUtils();
-    testUtils.setup();
-    topicName = "topic" + testNum;
-    prepareInitialConfigs(fs, basePath, testUtils.brokerAddress());
-    prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
-    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
-  }
-
-  protected static void prepareInitialConfigs(FileSystem dfs, String dfsBasePath, String brokerAddress) throws IOException {
+  protected static void prepareInitialConfigs(FileSystem dfs, String dfsBasePath) throws IOException {
     // prepare the configs.
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/base.properties", dfs, dfsBasePath + "/base.properties");
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/base.properties", dfs, dfsBasePath + "/config/base.properties");
@@ -208,10 +195,6 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     inferKeygenProps.setProperty("hoodie.datasource.write.partitionpath.field", "");
     UtilitiesTestBase.Helpers.savePropsToDFS(inferKeygenProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_INFER_NONPARTITIONED_KEYGEN);
 
-    TypedProperties props1 = new TypedProperties();
-    populateAllCommonProps(props1, dfsBasePath, brokerAddress);
-    UtilitiesTestBase.Helpers.savePropsToDFS(props1, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
-
     TypedProperties properties = new TypedProperties();
     populateInvalidTableConfigFilePathProps(properties, dfsBasePath);
     UtilitiesTestBase.Helpers.savePropsToDFS(properties, dfs, dfsBasePath + "/" + PROPS_INVALID_TABLE_CONFIG_FILE);
@@ -220,6 +203,12 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     invalidHiveSyncProps.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "uber_db.dummy_table_uber");
     invalidHiveSyncProps.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/invalid_hive_sync_uber_config.properties");
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidHiveSyncProps, dfs, dfsBasePath + "/" + PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1);
+  }
+
+  protected void prepareBrokerConfigs(FileSystem dfs, String dfsBasePath, String brokerAddress) throws IOException {
+    TypedProperties props = new TypedProperties();
+    populateAllCommonProps(props, dfsBasePath, brokerAddress);
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
   }
 
   protected static void writeCommonPropsToFile(FileSystem dfs, String dfsBasePath) throws IOException {
@@ -244,10 +233,16 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   @BeforeAll
   public static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices(false, true, false);
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFiles";
+    ORC_SOURCE_ROOT = basePath + "/orcFiles";
+    JSON_KAFKA_SOURCE_ROOT = basePath + "/jsonKafkaFiles";
+    prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
+    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
+    prepareInitialConfigs(fs, basePath);
   }
 
   @AfterAll
-  public static void tearDown() throws IOException {
+  public static void tearDown() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
@@ -259,9 +254,13 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   }
 
   @BeforeEach
-  public void setupTest() {
+  public void setupTest() throws IOException {
     TestDataSource.returnEmptyBatch = false;
     hudiOpts = new HashMap<>();
+    testUtils = new KafkaTestUtils();
+    testUtils.setup();
+    topicName = "topic" + testNum;
+    prepareBrokerConfigs(fs, basePath, testUtils.brokerAddress());
   }
 
   protected static void populateInvalidTableConfigFilePathProps(TypedProperties props, String dfsBasePath) {

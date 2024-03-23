@@ -115,7 +115,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   }
 
   @BeforeEach
-  public void setupTest() {
+  public void setupTest() throws IOException{
     super.setupTest();
     TestErrorTable.commited = new HashMap<>();
     TestErrorTable.errorEvents = new ArrayList<>();
