@@ -31,7 +31,6 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionRequest;
 import software.amazon.awssdk.services.glue.model.Column;
@@ -61,7 +60,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 
-//@Disabled("HUDI-7475 The tests do not work. Disabling them to unblock Azure CI")
 public class ITTestGluePartitionPushdown {
 
   private static final String MOTO_ENDPOINT = "http://localhost:5010";
@@ -81,11 +79,11 @@ public class ITTestGluePartitionPushdown {
   @BeforeEach
   public void setUp() throws Exception {
     hiveSyncProps = new TypedProperties();
-//    hiveSyncProps.setProperty(HoodieAWSConfig.AWS_ACCESS_KEY.key(), "dummy");
-//    hiveSyncProps.setProperty(HoodieAWSConfig.AWS_SECRET_KEY.key(), "dummy");
-//    hiveSyncProps.setProperty(HoodieAWSConfig.AWS_SESSION_TOKEN.key(), "dummy");
+    hiveSyncProps.setProperty(HoodieAWSConfig.AWS_ACCESS_KEY.key(), "dummy");
+    hiveSyncProps.setProperty(HoodieAWSConfig.AWS_SECRET_KEY.key(), "dummy");
+    hiveSyncProps.setProperty(HoodieAWSConfig.AWS_SESSION_TOKEN.key(), "dummy");
     hiveSyncProps.setProperty(HoodieAWSConfig.AWS_GLUE_ENDPOINT.key(), MOTO_ENDPOINT);
-//    hiveSyncProps.setProperty(HoodieAWSConfig.AWS_GLUE_REGION.key(), "us-east-1");
+    hiveSyncProps.setProperty(HoodieAWSConfig.AWS_GLUE_REGION.key(), "us-east-1");
     hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), tablePath);
     hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
 
