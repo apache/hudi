@@ -562,7 +562,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     return IOType.APPEND;
   }
 
-  public List<WriteStatus> writeStatuses() {
+  public List<WriteStatus> getWriteStatuses() {
     return statuses;
   }
 
