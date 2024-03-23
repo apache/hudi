@@ -229,7 +229,7 @@
     <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
-    <moto.port>5000</moto.port>
+    <moto.port>5010</moto.port>
     <moto.endpoint>http://localhost:${moto.port}</moto.endpoint>
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>

@@ -61,7 +61,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 
-@Disabled("HUDI-7475 The tests do not work. Disabling them to unblock Azure CI")
+//@Disabled("HUDI-7475 The tests do not work. Disabling them to unblock Azure CI")
 public class ITTestGluePartitionPushdown {
 
   private static final String MOTO_ENDPOINT = "http://localhost:5010";
