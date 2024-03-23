@@ -474,6 +474,15 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
   }
 
+  public Iterator<List<WriteStatus>> getWriteStatusesAsIterator() {
+    List<WriteStatus> statuses = getWriteStatuses();
+    // TODO(vc): This needs to be revisited
+    if (getPartitionPath() == null) {
+      LOG.info("Upsert Handle has partition path as null {}, {}", getOldFilePath(), statuses);
+    }
+    return Collections.singletonList(statuses).iterator();
+  }
+
   public Path getOldFilePath() {
     return oldFilePath;
   }
