@@ -18,16 +18,15 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, SPARK_SQL_INSERT_INTO_OPERATION, TABLE_NAME}
-import org.apache.hudi.QuickstartUtils.{DataGenerator, convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, HoodieSparkUtils, QuickstartUtils}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -77,7 +76,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
-          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           spark.sql("set hoodie.schema.on.read.enable=true")
           // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
           //       and are disallowed now by default in Spark 3.x
@@ -138,7 +137,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
           spark.sessionState.catalog.dropTable(TableIdentifier(tableName), true, true)
           spark.sessionState.catalog.refreshTable(TableIdentifier(tableName))
-          spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
+          spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
         }
       }
     })
@@ -244,7 +243,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
-          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
           //       and are disallowed now by default in Spark 3.x
           spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
@@ -337,7 +336,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 or id = 11 order by id").show(false)
         }
       }
-      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
+      spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
     }
   }
 
@@ -348,7 +347,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
-          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           spark.sql(
             s"""
                |create table $tableName (
@@ -389,7 +388,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
         }
       }
-      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
+      spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
@@ -546,7 +545,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
   test("Test alter column with complex schema") {
     withTempDir { tmp =>
-      withSQLConf(s"$SPARK_SQL_INSERT_INTO_OPERATION" -> "upsert",
+      withSQLConf(s"${DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION}" -> "upsert",
         "hoodie.schema.on.read.enable" -> "true",
         "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
         val tableName = generateTableName
@@ -713,36 +712,36 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
-          val dataGen = new DataGenerator
-          val inserts = convertToStringList(dataGen.generateInserts(10))
+          val dataGen = new QuickstartUtils.DataGenerator
+          val inserts = QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
           val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
           df.write.format("hudi").
-            options(getQuickstartWriteConfigs).
+            options(QuickstartUtils.getQuickstartWriteConfigs).
             option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, tableType).
-            option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-            option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-            option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+            option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, "ts").
+            option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "uuid").
+            option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
             option("hoodie.schema.on.read.enable","true").
-            option(TABLE_NAME.key(), tableName).
+            option(DataSourceWriteOptions.TABLE_NAME.key(), tableName).
             option("hoodie.table.name", tableName).
             mode("overwrite").
             save(tablePath)
 
-          val updates = convertToStringList(dataGen.generateUpdates(10))
+          val updates = QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
           // type change: fare (double -> String)
           // add new column and drop a column
           val dfUpdate = spark.read.json(spark.sparkContext.parallelize(updates, 2))
             .withColumn("fare", expr("cast(fare as string)"))
             .withColumn("addColumn", lit("new"))
           dfUpdate.drop("begin_lat").write.format("hudi").
-            options(getQuickstartWriteConfigs).
+            options(QuickstartUtils.getQuickstartWriteConfigs).
             option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, tableType).
-            option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-            option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-            option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+            option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, "ts").
+            option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "uuid").
+            option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
             option("hoodie.schema.on.read.enable","true").
             option("hoodie.datasource.write.reconcile.schema","true").
-            option(TABLE_NAME.key(), tableName).
+            option(DataSourceWriteOptions.TABLE_NAME.key(), tableName).
             option("hoodie.table.name", tableName).
             mode("append").
             save(tablePath)
@@ -760,35 +759,35 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
           spark.sql(s"select * from  hudi_trips_snapshot").show(false)
           //  test insert_over_write  + update again
-          val overwrite = convertToStringList(dataGen.generateInserts(10))
+          val overwrite = QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
           val dfOverWrite = spark.
             read.json(spark.sparkContext.parallelize(overwrite, 2)).
             filter("partitionpath = 'americas/united_states/san_francisco'")
             .withColumn("fare", expr("cast(fare as string)")) // fare now in table is string type, we forbid convert string to double.
           dfOverWrite.write.format("hudi").
-            options(getQuickstartWriteConfigs).
+            options(QuickstartUtils.getQuickstartWriteConfigs).
             option("hoodie.datasource.write.operation","insert_overwrite").
-            option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-            option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-            option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+            option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, "ts").
+            option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "uuid").
+            option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
             option("hoodie.schema.on.read.enable","true").
             option("hoodie.datasource.write.reconcile.schema","true").
-            option(TABLE_NAME.key(), tableName).
+            option(DataSourceWriteOptions.TABLE_NAME.key(), tableName).
             option("hoodie.table.name", tableName).
             mode("append").
             save(tablePath)
           spark.read.format("hudi").load(tablePath).show(false)
 
-          val updatesAgain = convertToStringList(dataGen.generateUpdates(10))
+          val updatesAgain = QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
           val dfAgain = spark.read.json(spark.sparkContext.parallelize(updatesAgain, 2)).withColumn("fare", expr("cast(fare as string)"))
           dfAgain.write.format("hudi").
-            options(getQuickstartWriteConfigs).
-            option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-            option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-            option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+            options(QuickstartUtils.getQuickstartWriteConfigs).
+            option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, "ts").
+            option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "uuid").
+            option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
             option("hoodie.schema.on.read.enable","true").
             option("hoodie.datasource.write.reconcile.schema","true").
-            option(TABLE_NAME.key(), tableName).
+            option(DataSourceWriteOptions.TABLE_NAME.key(), tableName).
             option("hoodie.table.name", tableName).
             mode("append").
             save(tablePath)
@@ -882,6 +881,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
           // Not checking answer as this is an unsafe casting operation, just need to make sure that error is not thrown
           spark.sql(s"select id, name, cast(price as string), ts from $tableName")
+
+          // clear after using INMEMORY index
+          HoodieInMemoryHashIndex.clear()
         }
       }
     }
@@ -947,6 +949,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             Seq(11, "a11", "-10.04", 1000),
             Seq(12, "a12", "-10.04", 1000)
           )
+
+          // clear after using INMEMORY index
+          HoodieInMemoryHashIndex.clear()
         }
       }
     }
@@ -1012,6 +1017,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             Seq(11, "a11", "-10.04", 1000),
             Seq(12, "a12", "-10.04", 1000)
           )
+
+          // clear after using INMEMORY index
+          HoodieInMemoryHashIndex.clear()
         }
       }
     }
