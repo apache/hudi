@@ -84,11 +84,14 @@ public abstract class KafkaSource<T> extends Source<T> {
       SourceProfile<Long> kafkaSourceProfile = sourceProfileSupplier.get().getSourceProfile();
       offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, kafkaSourceProfile.getSourceSpecificContext(),
           kafkaSourceProfile.getSourcePartitions(), metrics);
+      metrics.updateStreamerSourceParallelism(kafkaSourceProfile.getSourcePartitions());
+      metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(kafkaSourceProfile.getMaxSourceBytes());
       LOG.info("About to read maxEventsInSyncRound {} of size {} bytes in {} partitions from Kafka for topic {} with offsetRanges {}",
           kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getMaxSourceBytes(),
           kafkaSourceProfile.getSourcePartitions(), offsetGen.getTopicName(), offsetRanges);
     } else {
       long minPartitions = getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
+      metrics.updateStreamerSourceParallelism(minPartitions);
       offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
       LOG.info("About to read sourceLimit {} in {} spark partitions from kafka for topic {} with offset ranges {}",
           sourceLimit, minPartitions, offsetGen.getTopicName(),

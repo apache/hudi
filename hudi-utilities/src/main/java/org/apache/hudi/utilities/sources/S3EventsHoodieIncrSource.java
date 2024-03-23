@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectIncrCheckpoint;
@@ -72,21 +73,23 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       TypedProperties props,
       JavaSparkContext sparkContext,
       SparkSession sparkSession,
+      HoodieIngestionMetrics metrics,
       SchemaProvider schemaProvider) {
     this(props, sparkContext, sparkSession, new QueryRunner(sparkSession, props),
-        new CloudDataFetcher(props, sparkContext, sparkSession), new DefaultStreamContext(schemaProvider, Option.empty()));
+        new CloudDataFetcher(props, sparkContext, sparkSession, metrics), new DefaultStreamContext(schemaProvider, Option.empty()));
   }
 
   public S3EventsHoodieIncrSource(
       TypedProperties props,
       JavaSparkContext sparkContext,
       SparkSession sparkSession,
+      HoodieIngestionMetrics metrics,
       StreamContext streamContext) {
     this(props, sparkContext, sparkSession, new QueryRunner(sparkSession, props),
-        new CloudDataFetcher(props, sparkContext, sparkSession), streamContext);
+        new CloudDataFetcher(props, sparkContext, sparkSession, metrics), streamContext);
   }
 
-  public S3EventsHoodieIncrSource(
+  S3EventsHoodieIncrSource(
       TypedProperties props,
       JavaSparkContext sparkContext,
       SparkSession sparkSession,
