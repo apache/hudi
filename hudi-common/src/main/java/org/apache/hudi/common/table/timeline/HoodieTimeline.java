@@ -222,6 +222,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingReplaceTimeline();
 
   /**
+   * Filter this timeline to just include requested and inflight commit instants with commit/deltacommit/replacement.
+   */
+  HoodieTimeline filterPendingCommitTimeline();
+
+  /**
    * Filter this timeline to include pending rollbacks.
    */
   HoodieTimeline filterPendingRollbackTimeline();

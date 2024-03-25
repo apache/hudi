@@ -63,18 +63,9 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
           if (!bucketIdToFileIdMapping.containsKey(bucketId)) {
             bucketIdToFileIdMapping.put(bucketId, new HoodieRecordLocation(commitTime, fileId));
           } else {
-            // If hoodie.write.bucketid.conflict.rollback.enable enable, rollback unfinished replacement instant
-            if (config.getWhetherRollbackReplacementWhenBucketIdConflict()) {
-              List<HoodieInstant> instants = hoodieTable.getMetaClient().getActiveTimeline().filterPendingReplaceTimeline().getInstants();
-              for (HoodieInstant instant : instants) {
-                String commitTimeStr = hoodieTable.getMetaClient().createNewInstantTime();
-                hoodieTable.rollback(hoodieTable.getContext(), commitTimeStr, instant, true, true);
-              }
-            }
-
             // Check if bucket data is valid
             throw new HoodieIOException("Find multiple files at partition path="
-                + partition + " belongs to the same bucket id = " + bucketId);
+                + partition + " belongs to the same bucket id = " + bucketId + ", you can use call fix_bucket_path to fix the partition before write again.");
           }
         });
     return bucketIdToFileIdMapping;

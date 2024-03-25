@@ -780,14 +780,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
           + "Hudi write client and user is not expected to manually change the value.");
 
-  public static final ConfigProperty<Boolean> BUCKETID_CONFLICT_ROLL_BACK_ENABLE = ConfigProperty
-       .key("hoodie.write.bucketid.conflict.rollback.enable")
-       .defaultValue(false)
-       .markAdvanced()
-       .sinceVersion("1.0.0")
-       .withDocumentation("When write data to bucket index table's partiton occur multiple bucketid, "
-           + "decide whether to rollback unfinished replacement instant.");
-
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -1264,10 +1256,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getTaggedRecordStorageLevel() {
     return getString(TAGGED_RECORD_STORAGE_LEVEL_VALUE);
-  }
-
-  public Boolean getWhetherRollbackReplacementWhenBucketIdConflict() {
-    return getBoolean(BUCKETID_CONFLICT_ROLL_BACK_ENABLE);
   }
 
   public String getInternalSchema() {

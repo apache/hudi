@@ -188,6 +188,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline filterPendingCommitTimeline() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(
+        s -> (s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
+            || s.getAction().equals(HoodieTimeline.COMMIT_ACTION)
+            || s.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)) && !s.isCompleted()), details);
+  }
+
+  @Override
   public HoodieTimeline filterPendingRollbackTimeline() {
     return new HoodieDefaultTimeline(getInstantsAsStream().filter(
         s -> s.getAction().equals(HoodieTimeline.ROLLBACK_ACTION) && !s.isCompleted()), details);
