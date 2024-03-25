@@ -31,7 +31,6 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionRequest;
 import software.amazon.awssdk.services.glue.model.Column;
@@ -61,7 +60,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 
-@Disabled("HUDI-7475 The tests do not work. Disabling them to unblock Azure CI")
 public class ITTestGluePartitionPushdown {
 
   private static final String MOTO_ENDPOINT = "http://localhost:5000";
@@ -165,7 +163,7 @@ public class ITTestGluePartitionPushdown {
   }
 
   @Test
-  public void testDeletingManyPartitions() throws ExecutionException, InterruptedException {
+  public void testDeletingAllPartitionsShouldReturnEmpty() throws ExecutionException, InterruptedException {
     List<String> partitions = createPartitions(2000, 2, true);
     int firstDeleteBatch = 1000;
     glueSync.dropPartitions(TABLE_NAME, partitions.subList(0, firstDeleteBatch));
@@ -175,7 +173,7 @@ public class ITTestGluePartitionPushdown {
   }
 
   @Test
-  public void testReadFromList() throws ExecutionException, InterruptedException {
+  public void testReadFromListAlongWithUnknownShouldReturnKnown() throws ExecutionException, InterruptedException {
     List<String> existingPartitions = createPartitions(1000, 2, true);
     List<String> fakePartitions = createPartitions(1000, 2, false);
     Assertions.assertEquals(existingPartitions.size(), glueSync.getPartitionsFromList(
