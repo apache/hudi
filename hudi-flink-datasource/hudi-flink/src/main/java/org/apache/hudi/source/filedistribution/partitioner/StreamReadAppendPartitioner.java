@@ -1,4 +1,3 @@
-package org.apache.hudi.source.filedistribution.partitioner;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -16,6 +15,8 @@ package org.apache.hudi.source.filedistribution.partitioner;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+package org.apache.hudi.source.filedistribution.partitioner;
 
 import org.apache.flink.api.common.functions.Partitioner;
 
