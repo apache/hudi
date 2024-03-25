@@ -84,10 +84,10 @@ class FixBucketIdConflictProcedure extends BaseProcedure with ProcedureBuilder w
       val fileName = fileStatus.getPath.getName
       // FileName starts with bucket id and contains instant timestamp
       if (BucketIdentifier.bucketIdFromFileId(fileName) == bucketId && fileName.contains(i.getTimestamp)) {
-        return true
+        true
       }
     }
-    return false
+    false
   }
 
   override def build: Procedure = new FixBucketIdConflictProcedure()
