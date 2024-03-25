@@ -18,14 +18,13 @@
 
 package org.apache.hudi.index.bucket;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -33,8 +32,8 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
@@ -64,18 +63,12 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
           if (!bucketIdToFileIdMapping.containsKey(bucketId)) {
             bucketIdToFileIdMapping.put(bucketId, new HoodieRecordLocation(commitTime, fileId));
           } else {
-            // If hoodie.write.bucketid.multiple.delete.partition enable, delete the partition to confirm next write is success
+            // If hoodie.write.bucketid.multiple.rollback.enable enable, rollback unfinished replacement instant
             if (config.getWhetherDeletePartitonWhenBucketIdMultiple()) {
-              Path partitionPath = FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePathV2(), partition);
-              try {
-                hoodieTable.getMetaClient().getFs().delete(partitionPath, true);
-              } catch (IOException e) {
-                throw new HoodieIOException("Find multiple files at partition path="
-                        + partition + " belongs to the same bucket id = " + bucketId, e);
+              List<HoodieInstant> instants = hoodieTable.getMetaClient().getActiveTimeline().filterPendingReplaceTimeline().getInstants();
+              for (HoodieInstant instant : instants) {
+                hoodieTable.rollback(hoodieTable.getContext(), commitTime, instant, true, true);
               }
-              throw new HoodieIOException("Find multiple files at partition path="
-                      + partition + " belongs to the same bucket id = " + bucketId
-                      + ", and had deleted the partition path, you can try the job again");
             }
 
             // Check if bucket data is valid
