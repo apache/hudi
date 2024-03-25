@@ -93,3 +93,9 @@ a7474658d [AUDIT-698] Upgrade to version release-v1.6.0 (#596)
 ---[2024-03-21 13:14:55] [release-v1.7.1] ---
 8bf2b68db [HUDI-7523] Add HOODIE_SPARK_DATASOURCE_OPTIONS to be used in HoodieIncrSource (#606)
 2ace7cb13 [AUDIT-705] Upgrade to version release-v1.7.0 (#602)
+
+---[2024-03-25 20:41:41] [release-v1.7.2] ---
+1eb7c3f07 [HUDI-7535] Add metrics for sourceParallelism and Refresh profile in S3/GCS (#611)
+96f3fe33e [HUDI-7508] Avoid collecting records in HoodieStreamerUtils.createHoodieRecords and JsonKafkaSource mapPartitions (#595)
+bd3525032 [HUDI-7528] Fixing RowCustomColumnsSortPartitioner to use repartition instead of coalesce (#608)
+561ecab03 [AUDIT-711] Upgrade to version release-v1.7.1 (#607)
