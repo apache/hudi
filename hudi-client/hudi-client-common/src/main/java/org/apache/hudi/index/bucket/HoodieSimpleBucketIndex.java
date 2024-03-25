@@ -65,7 +65,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
           } else {
             // Check if bucket data is valid
             throw new HoodieIOException("Find multiple files at partition path="
-                + partition + " belongs to the same bucket id = " + bucketId + ", you can use call fix_bucket_path to fix the partition before write again.");
+                + partition + " belongs to the same bucket id = " + bucketId + ", you can use `call fix_bucket_path` procedure to fix the partition before write again.");
           }
         });
     return bucketIdToFileIdMapping;
