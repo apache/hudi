@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 
 abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
@@ -66,10 +67,14 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
       if (sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null) {
         SourceProfile<Long> kafkaSourceProfile = sourceProfileSupplier.get().getSourceProfile();
         offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getSourcePartitions(), metrics);
+        metrics.updateStreamerSourceParallelism(kafkaSourceProfile.getSourcePartitions());
+        metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(kafkaSourceProfile.getMaxSourceBytes());
         LOG.info("About to read numEvents {} of size {} bytes in {} partitions from Kafka for topic {} with offsetRanges {}",
             kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getMaxSourceBytes(),
             kafkaSourceProfile.getSourcePartitions(), offsetGen.getTopicName(), offsetRanges);
       } else {
+        int minPartitions = (int) getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
+        metrics.updateStreamerSourceParallelism(minPartitions);
         offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
       }
       return toInputBatch(offsetRanges);

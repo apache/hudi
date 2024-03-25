@@ -88,7 +88,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -109,6 +108,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   QueryInfo queryInfo;
   @Mock
   CloudObjectsSelectorCommon cloudObjectsSelectorCommon;
+  @Mock
+  HoodieIngestionMetrics metrics;
   @Mock
   SourceProfileSupplier sourceProfileSupplier;
 
@@ -294,18 +295,22 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected4, typedProperties);
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
+    ArgumentCaptor<Integer> argumentCaptorForMetrics = ArgumentCaptor.forClass(Integer.class);
     verify(cloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(any(), any(), any(), eq(schemaProvider), argumentCaptor.capture());
+    verify(metrics, atLeastOnce()).updateStreamerSourceParallelism(argumentCaptorForMetrics.capture());
+    List<Integer> numPartitions;
     if (snapshotCheckPoint.equals("1") || snapshotCheckPoint.equals("2")) {
-      Assertions.assertEquals(Arrays.asList(12, 3, 1), argumentCaptor.getAllValues());
+      numPartitions = Arrays.asList(12, 3, 1);
     } else {
-      Assertions.assertEquals(Arrays.asList(23, 1), argumentCaptor.getAllValues());
+      numPartitions = Arrays.asList(23, 1);
     }
+    Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
+    Assertions.assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
   }
 
   @Test
   public void testCreateSource() throws IOException {
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
-    HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
     Source gcsSource = UtilHelpers.createSource(GcsEventsHoodieIncrSource.class.getName(), typedProperties, jsc(), spark(), metrics,
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
     assertEquals(Source.SourceType.ROW, gcsSource.getSourceType());
@@ -340,7 +345,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
                              TypedProperties typedProperties) {
 
     GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(typedProperties, jsc(),
-        spark(), new CloudDataFetcher(typedProperties, jsc(), spark(), cloudObjectsSelectorCommon), queryRunner,
+        spark(), new CloudDataFetcher(typedProperties, jsc(), spark(), metrics, cloudObjectsSelectorCommon), queryRunner,
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
     Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = incrSource.fetchNextBatch(checkpointToPull, sourceLimit);
