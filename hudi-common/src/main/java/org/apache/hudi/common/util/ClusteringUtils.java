@@ -76,7 +76,7 @@ public class ClusteringUtils {
 
   /**
    * Checks if the requested, inflight, or completed instant of replacecommit action
-   * is a clustering instant, by checking whether the requested instant contains
+   * is a clustering operation, by checking whether the requested instant contains
    * a clustering plan.
    *
    * @param timeline       Hudi timeline.
