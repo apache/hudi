@@ -512,16 +512,20 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public Option<HoodieInstant> getLastClusterCommit() {
-    return  Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
+  public Option<HoodieInstant> getLastCompleteOrPendingClusteringInstant() {
+    return Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
         .getReverseOrderedInstants()
         .filter(i -> {
-          try {
-            HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
-            return metadata.getOperationType().equals(WriteOperationType.CLUSTER);
-          } catch (IOException e) {
-            LOG.warn("Unable to read commit metadata for " + i + " due to " + e.getMessage());
-            return false;
+          if (i.isCompleted()) {
+            try {
+              HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
+              return metadata.getOperationType().equals(WriteOperationType.CLUSTER);
+            } catch (IOException e) {
+              LOG.warn("Unable to read commit metadata for " + i + " due to " + e.getMessage());
+              return false;
+            }
+          } else {
+            return ClusteringUtils.isPendingClusteringInstant(this, i);
           }
         }).findFirst());
   }
