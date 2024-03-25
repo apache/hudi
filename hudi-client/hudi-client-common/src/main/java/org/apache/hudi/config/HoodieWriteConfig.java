@@ -780,8 +780,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
           + "Hudi write client and user is not expected to manually change the value.");
 
-  public static final ConfigProperty<Boolean> BUCKETID_MULTIPLE_ROLL_BACK_ENABLE = ConfigProperty
-       .key("hoodie.write.bucketid.multiple.rollback.enable")
+  public static final ConfigProperty<Boolean> BUCKETID_CONFLICT_ROLL_BACK_ENABLE = ConfigProperty
+       .key("hoodie.write.bucketid.conflict.rollback.enable")
        .defaultValue(false)
        .markAdvanced()
        .sinceVersion("1.0.0")
@@ -1266,8 +1266,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(TAGGED_RECORD_STORAGE_LEVEL_VALUE);
   }
 
-  public Boolean getWhetherDeletePartitonWhenBucketIdMultiple() {
-    return getBoolean(BUCKETID_MULTIPLE_ROLL_BACK_ENABLE);
+  public Boolean getWhetherRollbackReplacementWhenBucketIdConflict() {
+    return getBoolean(BUCKETID_CONFLICT_ROLL_BACK_ENABLE);
   }
 
   public String getInternalSchema() {

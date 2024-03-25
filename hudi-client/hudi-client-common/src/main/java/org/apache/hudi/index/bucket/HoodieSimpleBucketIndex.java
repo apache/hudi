@@ -63,8 +63,8 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
           if (!bucketIdToFileIdMapping.containsKey(bucketId)) {
             bucketIdToFileIdMapping.put(bucketId, new HoodieRecordLocation(commitTime, fileId));
           } else {
-            // If hoodie.write.bucketid.multiple.rollback.enable enable, rollback unfinished replacement instant
-            if (config.getWhetherDeletePartitonWhenBucketIdMultiple()) {
+            // If hoodie.write.bucketid.conflict.rollback.enable enable, rollback unfinished replacement instant
+            if (config.getWhetherRollbackReplacementWhenBucketIdConflict()) {
               List<HoodieInstant> instants = hoodieTable.getMetaClient().getActiveTimeline().filterPendingReplaceTimeline().getInstants();
               for (HoodieInstant instant : instants) {
                 String commitTimeStr = hoodieTable.getMetaClient().createNewInstantTime();
