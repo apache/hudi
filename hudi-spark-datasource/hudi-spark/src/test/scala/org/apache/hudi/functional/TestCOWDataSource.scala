@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
@@ -45,6 +46,7 @@ import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
+import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
@@ -1820,8 +1822,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testInsertOverwriteCluster(firstClusteringCompleted: Boolean): Unit = {
+  @EnumSource(value = classOf[HoodieInstant.State], names = Array("REQUESTED", "INFLIGHT", "COMPLETED"))
+  def testInsertOverwriteCluster(firstClusteringState: HoodieInstant.State): Unit = {
     val (writeOpts, _) = getWriterReaderOpts()
 
     // Insert Operation
@@ -1866,6 +1868,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         // Last instant is clustering
         assertTrue(TimelineUtils.getCommitMetadata(lastInstant, metaClient.getActiveTimeline)
           .getOperationType.equals(WriteOperationType.CLUSTER))
+        assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline, lastInstant))
         lastClustering = lastInstant
         assertEquals(
           lastClustering,
@@ -1873,12 +1876,19 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       } else {
         assertTrue(TimelineUtils.getCommitMetadata(lastInstant, metaClient.getActiveTimeline)
           .getOperationType.equals(WriteOperationType.INSERT_OVERWRITE))
+        assertFalse(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline, lastInstant))
         assertEquals(
           lastClustering,
           metaClient.getActiveTimeline.getLastCompleteOrPendingClusteringInstant.get)
       }
       if (i == 1) {
-        if (!firstClusteringCompleted) {
+        val writeConfig = HoodieWriteConfig.newBuilder()
+          .forTable("hoodie_test")
+          .withPath(basePath)
+          .withProps(optsWithCluster)
+          .build()
+        if (firstClusteringState == HoodieInstant.State.INFLIGHT
+          || firstClusteringState == HoodieInstant.State.REQUESTED) {
           // Move the clustering to inflight for testing
           fs.delete(new Path(metaClient.getMetaPath, lastInstant.getFileName), false)
           val inflightClustering = metaClient.reloadActiveTimeline.lastInstant.get
@@ -1887,14 +1897,25 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             inflightClustering,
             metaClient.getActiveTimeline.getLastCompleteOrPendingClusteringInstant.get)
         }
+        if (firstClusteringState == HoodieInstant.State.REQUESTED) {
+          val table = HoodieSparkTable.create(writeConfig, context)
+          table.rollbackInflightClustering(
+            metaClient.getActiveTimeline.getLastCompleteOrPendingClusteringInstant.get,
+            (commitToRollback: String) => new SparkRDDWriteClient(context, writeConfig)
+              .getTableServiceClient.getPendingRollbackInfo(table.getMetaClient, commitToRollback, false))
+          val requestedClustering = metaClient.reloadActiveTimeline
+            .filter(e => !e.getAction.equals(HoodieTimeline.ROLLBACK_ACTION)).lastInstant.get
+          assertTrue(requestedClustering.isRequested)
+          assertEquals(
+            requestedClustering,
+            metaClient.getActiveTimeline.getLastCompleteOrPendingClusteringInstant.get)
+        }
         // This should not schedule any new clustering
-        new SparkRDDWriteClient(context, HoodieWriteConfig.newBuilder()
-          .forTable("hoodie_test")
-          .withPath(basePath)
-          .withProps(optsWithCluster)
-          .build()).scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]()))
+        new SparkRDDWriteClient(context, writeConfig)
+          .scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]()))
         assertEquals(lastInstant.getTimestamp,
-          metaClient.reloadActiveTimeline.lastInstant.get.getTimestamp)
+          metaClient.reloadActiveTimeline.filter(
+            e => !e.getAction.equals(HoodieTimeline.ROLLBACK_ACTION)).lastInstant.get.getTimestamp)
       }
     }
     val timeline = metaClient.reloadActiveTimeline

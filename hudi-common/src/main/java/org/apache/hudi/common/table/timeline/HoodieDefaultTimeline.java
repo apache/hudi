@@ -525,7 +525,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
               return false;
             }
           } else {
-            return ClusteringUtils.isPendingClusteringInstant(this, i);
+            return ClusteringUtils.isClusteringInstant(this, i);
           }
         }).findFirst());
   }
@@ -534,7 +534,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   public Option<HoodieInstant> getLastPendingClusterInstant() {
     return  Option.fromJavaOptional(filterPendingReplaceTimeline()
         .getReverseOrderedInstants()
-        .filter(i -> ClusteringUtils.isPendingClusteringInstant(this, i)).findFirst());
+        .filter(i -> ClusteringUtils.isClusteringInstant(this, i)).findFirst());
   }
 
   @Override
