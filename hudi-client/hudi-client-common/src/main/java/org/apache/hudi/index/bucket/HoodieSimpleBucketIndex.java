@@ -67,7 +67,8 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
             if (config.getWhetherDeletePartitonWhenBucketIdMultiple()) {
               List<HoodieInstant> instants = hoodieTable.getMetaClient().getActiveTimeline().filterPendingReplaceTimeline().getInstants();
               for (HoodieInstant instant : instants) {
-                hoodieTable.rollback(hoodieTable.getContext(), commitTime, instant, true, true);
+                String commitTimeStr = hoodieTable.getMetaClient().createNewInstantTime();
+                hoodieTable.rollback(hoodieTable.getContext(), commitTimeStr, instant, true, true);
               }
             }
 
