@@ -659,9 +659,7 @@ public class StreamSync implements Serializable, Closeable {
         // Rewrite transformed records into the expected target schema
         schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getTargetSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
         String serializedTargetSchema = schemaProvider.getTargetSchema().toString();
-        if (schemaProvider.getTargetSchema().equals(dataAndCheckpoint.getSchemaProvider().getTargetSchema())) {
-          avroRDDOptional = dataAndCheckpoint.getBatch();
-        } else if (errorTableWriter.isPresent()
+        if (errorTableWriter.isPresent()
             && props.getBoolean(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
             HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue())) {
           avroRDDOptional = dataAndCheckpoint.getBatch().map(

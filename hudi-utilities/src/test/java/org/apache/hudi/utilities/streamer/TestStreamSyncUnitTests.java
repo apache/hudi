@@ -65,7 +65,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -74,12 +73,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class TestFetchNextBatchFromSource {
+public class TestStreamSyncUnitTests {
 
   @ParameterizedTest
-  @MethodSource("testCases")
+  @MethodSource("testCasesFetchNextBatchFromSource")
   void testFetchNextBatchFromSource(Boolean useRowWriter, Boolean hasTransformer, Boolean hasSchemaProvider,
-                                    Boolean nullTargetSchema, Boolean hasErrorTable, Boolean deduceSchemaSame) {
+                                    Boolean isNullTargetSchema, Boolean hasErrorTable, Boolean shouldTryWriteToErrorTable) {
     //basic deltastreamer inputs
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
     FileSystem fs = mock(FileSystem.class);
@@ -111,7 +110,7 @@ public class TestFetchNextBatchFromSource {
     //user provided schema provider
     SchemaProvider schemaProvider = null;
     if (hasSchemaProvider) {
-      schemaProvider = getSchemaProvider("UserProvided", nullTargetSchema);
+      schemaProvider = getSchemaProvider("UserProvided", isNullTargetSchema);
     }
 
     //error table
@@ -130,11 +129,7 @@ public class TestFetchNextBatchFromSource {
         fs, configuration, client -> true, schemaProvider, errorTableWriterOption, sourceFormatAdapter, transformerOption, useRowWriter, false);
     StreamSync spy = spy(streamSync);
     SchemaProvider deducedSchemaProvider;
-    if (deduceSchemaSame) {
-      deducedSchemaProvider = inputBatchSchemaProvider;
-    } else {
-      deducedSchemaProvider = getSchemaProvider("deduced", false);
-    }
+    deducedSchemaProvider = getSchemaProvider("deduced", false);
     doReturn(deducedSchemaProvider).when(spy).getDeducedSchemaProvider(any(), any(), any());
 
     //run the method we are unit testing:
@@ -144,52 +139,46 @@ public class TestFetchNextBatchFromSource {
     verify(spy, times(1)).getDeducedSchemaProvider(any(), any(), any());
 
     //make sure we use error table when we should
-    //
-    //When should we use error table?
-    // - error table enabled obviously: hasErrorTable
-    // - row writer disabled (not implemented yet): !useRowWriter
-    // - if there is a transformer: hasTransformer
-    //    - if schema provider is present and the target schema is non null: !nullTargetSchema && hasSchemaProvider
-    // - if there is no transformer: !hasTransformer
-    //    - if the deduced schema is different than the schema of the input batch:  !deduceSchemaSame
-    verify(propsSpy, hasErrorTable && !useRowWriter
-        && ((!hasTransformer && !deduceSchemaSame)
-        || (hasTransformer && !nullTargetSchema && hasSchemaProvider)) ? atLeastOnce() : never())
+    verify(propsSpy, shouldTryWriteToErrorTable ? times(1) : never())
         .getBoolean(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
             HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue());
   }
 
-  private SchemaProvider getSchemaProvider(String name, boolean nullTargetSchema) {
+  private SchemaProvider getSchemaProvider(String name, boolean isNullTargetSchema) {
     SchemaProvider schemaProvider = mock(SchemaProvider.class);
     Schema sourceSchema = mock(Schema.class);
-    Schema targetSchema = nullTargetSchema ? InputBatch.NULL_SCHEMA : mock(Schema.class);
+    Schema targetSchema = isNullTargetSchema ? InputBatch.NULL_SCHEMA : mock(Schema.class);
     when(schemaProvider.getSourceSchema()).thenReturn(sourceSchema);
     when(schemaProvider.getTargetSchema()).thenReturn(targetSchema);
     when(sourceSchema.toString()).thenReturn(name + "SourceSchema");
-    if (!nullTargetSchema) {
+    if (!isNullTargetSchema) {
       when(targetSchema.toString()).thenReturn(name + "TargetSchema");
     }
     return schemaProvider;
   }
 
-  static Stream<Arguments> testCases() {
+  static Stream<Arguments> testCasesFetchNextBatchFromSource() {
     Stream.Builder<Arguments> b = Stream.builder();
 
     //no transformer
     for (Boolean useRowWriter : new Boolean[]{false, true}) {
       for (Boolean hasErrorTable : new Boolean[]{false, true}) {
-        for (Boolean deduceSchemaSame : new Boolean[]{false, true}) {
-          b.add(Arguments.of(useRowWriter, false, false, false, hasErrorTable, deduceSchemaSame));
-        }
+        boolean errorTableEnabled = hasErrorTable && !useRowWriter;
+        b.add(Arguments.of(useRowWriter, false, false, false,
+            hasErrorTable, errorTableEnabled));
       }
     }
 
     //with transformer
     for (Boolean useRowWriter : new Boolean[]{false, true}) {
       for (Boolean hasSchemaProvider : new Boolean[]{false, true}) {
-        for (Boolean nullTargetSchema : new Boolean[]{false, true}) {
+        for (Boolean isNullTargetSchema : new Boolean[]{false, true}) {
           for (Boolean hasErrorTable : new Boolean[]{false, true}) {
-            b.add(Arguments.of(useRowWriter, true, hasSchemaProvider, nullTargetSchema, hasErrorTable, false));
+            boolean errorTableEnabled = hasErrorTable && !useRowWriter;
+            boolean schemaProviderNullOrMissing = isNullTargetSchema || !hasSchemaProvider;
+            boolean shouldTryWriteToErrorTable = errorTableEnabled && !schemaProviderNullOrMissing;
+            b.add(Arguments.of(useRowWriter, true, hasSchemaProvider, isNullTargetSchema,
+                hasErrorTable, shouldTryWriteToErrorTable));
           }
         }
       }
