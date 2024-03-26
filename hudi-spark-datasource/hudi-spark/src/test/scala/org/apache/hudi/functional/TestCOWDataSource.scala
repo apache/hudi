@@ -1903,8 +1903,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             metaClient.getActiveTimeline.getLastCompleteOrPendingClusteringInstant.get,
             (commitToRollback: String) => new SparkRDDWriteClient(context, writeConfig)
               .getTableServiceClient.getPendingRollbackInfo(table.getMetaClient, commitToRollback, false))
-          val requestedClustering = metaClient.reloadActiveTimeline
-            .filter(e => !e.getAction.equals(HoodieTimeline.ROLLBACK_ACTION)).lastInstant.get
+          val requestedClustering = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get
           assertTrue(requestedClustering.isRequested)
           assertEquals(
             requestedClustering,
@@ -1914,8 +1913,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         new SparkRDDWriteClient(context, writeConfig)
           .scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]()))
         assertEquals(lastInstant.getTimestamp,
-          metaClient.reloadActiveTimeline.filter(
-            e => !e.getAction.equals(HoodieTimeline.ROLLBACK_ACTION)).lastInstant.get.getTimestamp)
+          metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get.getTimestamp)
       }
     }
     val timeline = metaClient.reloadActiveTimeline
