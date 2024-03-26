@@ -28,7 +28,6 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 import scala.collection.JavaConverters._
-import scala.util.control.Breaks
 
 /**
  * Can use the procedure when bucket index partition occur conflict due to multiple write
