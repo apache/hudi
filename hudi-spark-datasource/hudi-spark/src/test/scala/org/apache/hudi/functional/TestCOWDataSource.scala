@@ -34,8 +34,8 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, Tim
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
-import org.apache.hudi.common.util
-import org.apache.hudi.common.util.ClusteringUtils
+import org.apache.hudi.common.util.{ClusteringUtils, Option}
+import org.apache.hudi.common.{HoodiePendingRollbackInfo, util}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
@@ -1901,8 +1901,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
           val table = HoodieSparkTable.create(writeConfig, context)
           table.rollbackInflightClustering(
             metaClient.getActiveTimeline.getLastCompleteOrPendingClusteringInstant.get,
-            (commitToRollback: String) => new SparkRDDWriteClient(context, writeConfig)
-              .getTableServiceClient.getPendingRollbackInfo(table.getMetaClient, commitToRollback, false))
+            new java.util.function.Function[String, Option[HoodiePendingRollbackInfo]] {
+              override def apply(commitToRollback: String): Option[HoodiePendingRollbackInfo] = {
+                new SparkRDDWriteClient(context, writeConfig).getTableServiceClient
+                  .getPendingRollbackInfo(table.getMetaClient, commitToRollback, false)
+              }
+            })
           val requestedClustering = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get
           assertTrue(requestedClustering.isRequested)
           assertEquals(
