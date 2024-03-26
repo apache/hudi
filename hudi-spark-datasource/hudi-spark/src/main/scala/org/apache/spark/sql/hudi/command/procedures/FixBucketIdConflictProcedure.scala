@@ -61,7 +61,7 @@ class FixBucketIdConflictProcedure extends BaseProcedure with ProcedureBuilder w
 
     val basePath: String = getBasePath(tableName, path)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val instants = metaClient.getActiveTimeline.filterPendingCommitTimeline().getInstants.asScala.toList
+    val instants = metaClient.getActiveTimeline.getCommitsTimeline().filterInflightsAndRequested().getInstants.asScala.toList
 
     val statuses = metaClient.getFs.listStatus(new Path(partitionPath.get.asInstanceOf[String]))
     for (status <- statuses) {
