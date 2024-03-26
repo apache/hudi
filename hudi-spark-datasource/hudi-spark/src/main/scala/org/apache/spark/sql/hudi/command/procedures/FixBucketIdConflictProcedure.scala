@@ -88,7 +88,6 @@ class FixBucketIdConflictProcedure extends BaseProcedure with ProcedureBuilder w
       try {
         if (fileStatus.isFile && BucketIdentifier.bucketIdFromFileId(fileName).toString.equals(bucketId) && fileName.contains(i.getTimestamp)) {
           ret = true
-          Breaks.break()
         }
       } catch {
         case e: NumberFormatException => false
