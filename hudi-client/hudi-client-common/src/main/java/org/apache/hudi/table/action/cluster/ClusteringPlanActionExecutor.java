@@ -58,7 +58,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
     LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
     Option<HoodieInstant> lastClusteringInstant =
-        table.getActiveTimeline().getLastCompleteOrPendingClusteringInstant();
+        table.getActiveTimeline().getLastClusteringInstant();
 
     int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
