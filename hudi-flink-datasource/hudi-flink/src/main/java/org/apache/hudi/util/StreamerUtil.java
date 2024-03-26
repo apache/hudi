@@ -514,7 +514,7 @@ public class StreamerUtil {
   public static boolean isWriteCommit(HoodieTableType tableType, HoodieInstant instant, HoodieTimeline timeline) {
     return tableType == HoodieTableType.MERGE_ON_READ
         ? !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) // not a compaction
-        : !ClusteringUtils.isClusteringInstant(instant, timeline);   // not a clustering
+        : !ClusteringUtils.isCompletedClusteringInstant(instant, timeline);   // not a clustering
   }
 
   /**
