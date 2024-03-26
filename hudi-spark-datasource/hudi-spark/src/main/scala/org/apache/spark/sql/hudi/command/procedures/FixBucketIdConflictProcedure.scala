@@ -28,6 +28,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 import scala.collection.JavaConverters._
+import scala.util.control.Breaks
 
 /**
  * Can use the procedure when bucket index partition occur conflict due to multiple write
@@ -80,19 +81,21 @@ class FixBucketIdConflictProcedure extends BaseProcedure with ProcedureBuilder w
    * 2. file is uncompleted instant.
    */
   def judgeDeleteConflictBucketFile(fileStatus: FileStatus, bucketId: String, filterInstants: Seq[HoodieInstant]): Boolean = {
+    var ret = false
     for (i <- filterInstants) {
       val fileName = fileStatus.getPath.getName
       // FileName starts with bucket id and contains instant timestamp
       try {
         if (fileStatus.isFile && BucketIdentifier.bucketIdFromFileId(fileName).toString.equals(bucketId) && fileName.contains(i.getTimestamp)) {
-          true
+          ret = true
+          Breaks.break()
         }
       } catch {
         case e: NumberFormatException => false
       }
 
     }
-    false
+    ret
   }
 
   override def build: Procedure = new FixBucketIdConflictProcedure()
