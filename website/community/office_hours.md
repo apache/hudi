@@ -12,6 +12,6 @@ Office hours are held every week on Thu, 08:00 AM Pacific Time (US and Canada)([
 
 One of the PMC members/committers will hold office hours to help answer questions interactively, on a first-come first-serve basis.
 
-## 15-min Consultation
+## 1-1 Consultation
 
-Book a 15-min 1-1 consultation with Hudi PMC via [calendly.com/apache-hudi/office-hour](https://calendly.com/apache-hudi/office-hour) for dedicated discussion and tips.
+Book a 1-1 consultation with Hudi PMC via [calendly.com/apache-hudi/office-hour](https://calendly.com/apache-hudi/office-hour) for dedicated discussion and tips.
