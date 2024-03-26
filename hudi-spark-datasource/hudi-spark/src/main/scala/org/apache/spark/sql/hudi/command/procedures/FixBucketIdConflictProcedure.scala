@@ -89,7 +89,7 @@ class FixBucketIdConflictProcedure extends BaseProcedure with ProcedureBuilder w
           ret = true
         }
       } catch {
-        case e: NumberFormatException => false
+        case e: NumberFormatException => ret
       }
 
     }
