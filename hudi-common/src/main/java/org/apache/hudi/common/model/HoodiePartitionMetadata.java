@@ -26,12 +26,13 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -97,32 +98,25 @@ public class HoodiePartitionMetadata {
    */
   public void trySave(String writeToken) throws IOException {
     String extension = getMetafileExtension();
-    Path tmpMetaPath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + "_" + writeToken + extension);
     Path metaPath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + extension);
-    boolean metafileExists = false;
 
     try {
-      metafileExists = fs.exists(metaPath);
-      if (!metafileExists) {
-        // write to temporary file
-        writeMetafile(tmpMetaPath);
-        // move to actual path
-        fs.rename(tmpMetaPath, metaPath);
+      if (!fs.exists(metaPath)) {
+        if (format.isPresent()) {
+          Path tmpMetaPath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + "_" + writeToken + extension);
+          writeMetafileInFormat(metaPath, tmpMetaPath, format.get());
+        } else {
+          // Backwards compatible properties file format
+          try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+            props.store(os, "partition metadata");
+            Option content = Option.of(os.toByteArray());
+            HadoopFSUtils.createImmutableFileInPath(fs, metaPath, content, true, "_" + writeToken);
+          }
+        }
       }
     } catch (IOException ioe) {
       LOG.error("Error trying to save partition metadata, " + partitionPath);
       throw ioe;
-    } finally {
-      if (!metafileExists) {
-        try {
-          // clean up tmp file, if still lying around
-          if (fs.exists(tmpMetaPath)) {
-            fs.delete(tmpMetaPath, false);
-          }
-        } catch (IOException ioe) {
-          LOG.warn("Error trying to clean up temporary files for " + partitionPath, ioe);
-        }
-      }
     }
   }
 
@@ -135,17 +129,25 @@ public class HoodiePartitionMetadata {
    * Write the partition metadata in the correct format in the given file path.
    *
    * @param filePath Path of the file to write
+   * @param tmpPath Temp file path
+   * @param format Hoodie table file format
    * @throws IOException
    */
-  private void writeMetafile(Path filePath) throws IOException {
-    if (format.isPresent()) {
-      BaseFileUtils.getInstance(format.get()).writeMetaFile(fs, filePath, props);
-    } else {
-      // Backwards compatible properties file format
-      OutputStream os = fs.create(filePath, true);
-      props.store(os, "partition metadata");
-      os.flush();
-      os.close();
+  private void writeMetafileInFormat(Path filePath, Path tmpPath, HoodieFileFormat format) throws IOException {
+    try {
+      // write to temporary file
+      BaseFileUtils.getInstance(format).writeMetaFile(fs, tmpPath, props);
+      // move to actual path
+      fs.rename(tmpPath, filePath);
+    } finally {
+      try {
+        // clean up tmp file, if still lying around
+        if (fs.exists(tmpPath)) {
+          fs.delete(tmpPath, false);
+        }
+      } catch (IOException ioe) {
+        LOG.warn("Error trying to clean up temporary files for " + partitionPath, ioe);
+      }
     }
   }
 

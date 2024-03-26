@@ -52,7 +52,6 @@ import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Progressable;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.EnumSet;
@@ -1020,58 +1019,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
    */
   public void createImmutableFileInPath(Path fullPath, Option<byte[]> content)
       throws HoodieIOException {
-    OutputStream out = null;
-    Path tmpPath = null;
-
-    boolean needTempFile = needCreateTempFile();
-
-    try {
-      if (!content.isPresent()) {
-        out = fileSystem.create(fullPath, false);
-      }
-
-      if (content.isPresent() && needTempFile) {
-        Path parent = fullPath.getParent();
-        tmpPath = new Path(parent, fullPath.getName() + TMP_PATH_POSTFIX);
-        out = fileSystem.create(tmpPath, false);
-        out.write(content.get());
-      }
-
-      if (content.isPresent() && !needTempFile) {
-        out = fileSystem.create(fullPath, false);
-        out.write(content.get());
-      }
-    } catch (IOException e) {
-      String errorMsg = "Failed to create file " + (tmpPath != null ? tmpPath : fullPath);
-      throw new HoodieIOException(errorMsg, e);
-    } finally {
-      try {
-        if (null != out) {
-          out.close();
-        }
-      } catch (IOException e) {
-        String errorMsg = "Failed to close file " + (needTempFile ? tmpPath : fullPath);
-        throw new HoodieIOException(errorMsg, e);
-      }
-
-      boolean renameSuccess = false;
-      try {
-        if (null != tmpPath) {
-          renameSuccess = fileSystem.rename(tmpPath, fullPath);
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to rename " + tmpPath + " to the target " + fullPath, e);
-      } finally {
-        if (!renameSuccess && null != tmpPath) {
-          try {
-            fileSystem.delete(tmpPath, false);
-            LOG.warn("Fail to rename " + tmpPath + " to " + fullPath + ", target file exists: " + fileSystem.exists(fullPath));
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to delete tmp file " + tmpPath, e);
-          }
-        }
-      }
-    }
+    HadoopFSUtils.createImmutableFileInPath(fileSystem, fullPath, content, needCreateTempFile(), TMP_PATH_POSTFIX);
   }
 
   public FileSystem getFileSystem() {
