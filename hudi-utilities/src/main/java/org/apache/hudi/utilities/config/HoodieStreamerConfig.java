@@ -132,4 +132,11 @@ public class HoodieStreamerConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Number of records to sample from the first write. To improve the estimation's accuracy, "
           + "for smaller or more compressable record size, set the sample size bigger. For bigger or less compressable record size, set smaller.");
+
+  public static final ConfigProperty<Boolean> EXTRA_ROW_SOURCE_EXCEPTIONS = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "extra.row.source.exceptions")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Reads from source to row format will have the dataframe wrapped with an exception handler");
 }

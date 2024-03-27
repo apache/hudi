@@ -25,6 +25,7 @@ import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -53,6 +54,7 @@ import java.util.stream.Collectors;
 
 import scala.util.Either;
 
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.EXTRA_ROW_SOURCE_EXCEPTIONS;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -66,6 +68,8 @@ public final class SourceFormatAdapter implements Closeable {
 
   private final Source source;
   private boolean shouldSanitize = SANITIZE_SCHEMA_FIELD_NAMES.defaultValue();
+
+  private  boolean wrapWithException = EXTRA_ROW_SOURCE_EXCEPTIONS.defaultValue();
   private String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();
 
   private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
@@ -80,6 +84,7 @@ public final class SourceFormatAdapter implements Closeable {
     if (props.isPresent()) {
       this.shouldSanitize = SanitizationUtils.shouldSanitize(props.get());
       this.invalidCharMask = SanitizationUtils.getInvalidCharMask(props.get());
+      this.wrapWithException = props.get().getBoolean(EXTRA_ROW_SOURCE_EXCEPTIONS.key(), EXTRA_ROW_SOURCE_EXCEPTIONS.defaultValue());
     }
     if (this.shouldSanitize && source.getSourceType() == Source.SourceType.PROTO) {
       throw new IllegalArgumentException("PROTO cannot be sanitized");
@@ -244,7 +249,8 @@ public final class SourceFormatAdapter implements Closeable {
           StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
           return new InputBatch<>(
               Option.ofNullable(
-                  r.getBatch().map(rdd -> source.getSparkSession().read().schema(dataType).json(rdd)).orElse(null)),
+                  r.getBatch().map(rdd -> HoodieSparkUtils.maybeWrapDataFrameWithException(source.getSparkSession().read().schema(dataType).json(rdd),
+                      SchemaCompatibilityException.class.getName(), "Schema does not match json data", wrapWithException)).orElse(null)),
               r.getCheckpointForNextBatch(), r.getSchemaProvider());
         }
       }
