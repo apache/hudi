@@ -14,12 +14,15 @@ out the new features and provide feedback. The release is not meant for producti
 
 ## Migration Guide
 
-This release contains major format changes as we will see in highlights below. As such, migration would be required when
-the release is made generally available (GA). However, we encourage users to try out the features on new tables.
+This release contains major format changes as we will see in highlights below. We encourage users to try out the 
+**1.0.0-beta1** features on new tables. The 1.0 general availability (GA) release will support automatic table upgrades 
+from 0.x versions, while also ensuring full backward compatibility when reading 0.x Hudi tables using 1.0, ensuring a
+seamless migration experience. 
+
 
 :::caution
-Given that timeline format and log file format has changed in this beta release, it is recommended not to attempt to do
-rolling upgrades from older versions to this release.
+Given that timeline format and log file format has changed in this **beta release**, it is recommended not to attempt to do
+rolling upgrades from older versions to this release. 
 :::
 
 ## Highlights
