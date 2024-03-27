@@ -716,7 +716,6 @@ public class TestPriorityBasedFileSystemView {
     verify(secondary, times(1)).loadPartitions(Collections.singletonList(partitionPath));
 
     resetMocks();
-    doThrow(new RuntimeException()).when(primary).loadPartitions(Collections.singletonList(partitionPath));
     doThrow(new RuntimeException()).when(secondary).loadPartitions(Collections.singletonList(partitionPath));
     assertThrows(RuntimeException.class, () -> {
       fsView.loadPartitions(Collections.singletonList(partitionPath));
