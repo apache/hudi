@@ -129,6 +129,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         // (remote or local embedded), thus to reduce the risk of an OOM exception.
         List<String> subPartitionsToClean = partitionsToClean.subList(i, Math.min(i + cleanerParallelism, partitionsToClean.size()));
         if (shouldUseBatchLookup) {
+          LOG.info("Load partitions and files into file system view in advance. Paths: {}", subPartitionsToClean);
           table.getHoodieView().loadPartitions(subPartitionsToClean);
         }
         Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
