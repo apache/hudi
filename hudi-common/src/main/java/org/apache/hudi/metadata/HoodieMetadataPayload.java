@@ -48,6 +48,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -98,7 +100,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_L
  * During compaction on the table, the deletions are merged with additions and hence records are pruned.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
-
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataPayload.class);
   /**
    * Type of the record. This can be an enum in the schema but Avro1.8
    * has a bug - https://issues.apache.org/jira/browse/AVRO-1810
@@ -554,27 +556,34 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             //          - First we merge records from all of the delta log-files
             //          - Then we merge records from base-files with the delta ones (coming as a result
             //          of the previous step)
-            (oldFileInfo, newFileInfo) ->
-                // NOTE: We can’t assume that MT update records will be ordered the same way as actual
-                //       FS operations (since they are not atomic), therefore MT record merging should be a
-                //       _commutative_ & _associative_ operation (ie one that would work even in case records
-                //       will get re-ordered), which is
-                //          - Possible for file-sizes (since file-sizes will ever grow, we can simply
-                //          take max of the old and new records)
-                //          - Not possible for is-deleted flags*
-                //
-                //       *However, we’re assuming that the case of concurrent write and deletion of the same
-                //       file is _impossible_ -- it would only be possible with concurrent upsert and
-                //       rollback operation (affecting the same log-file), which is implausible, b/c either
-                //       of the following have to be true:
-                //          - We’re appending to failed log-file (then the other writer is trying to
-                //          rollback it concurrently, before it’s own write)
-                //          - Rollback (of completed instant) is running concurrently with append (meaning
-                //          that restore is running concurrently with a write, which is also nut supported
-                //          currently)
-                newFileInfo.getIsDeleted()
-                    ? null
-                    : new HoodieMetadataFileInfo(Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false));
+            (oldFileInfo, newFileInfo) -> {
+              // NOTE: We can’t assume that MT update records will be ordered the same way as actual
+              //       FS operations (since they are not atomic), therefore MT record merging should be a
+              //       _commutative_ & _associative_ operation (ie one that would work even in case records
+              //       will get re-ordered), which is
+              //          - Possible for file-sizes (since file-sizes will ever grow, we can simply
+              //          take max of the old and new records)
+              //          - Not possible for is-deleted flags*
+              //
+              //       *However, we’re assuming that the case of concurrent write and deletion of the same
+              //       file is _impossible_ -- it would only be possible with concurrent upsert and
+              //       rollback operation (affecting the same log-file), which is implausible, b/c either
+              //       of the following have to be true:
+              //          - We’re appending to failed log-file (then the other writer is trying to
+              //          rollback it concurrently, before it’s own write)
+              //          - Rollback (of completed instant) is running concurrently with append (meaning
+              //          that restore is running concurrently with a write, which is also nut supported
+              //          currently)
+              if (newFileInfo.getIsDeleted()) {
+                if (oldFileInfo.getIsDeleted()) {
+                  LOG.warn("A file is repeatedly deleted in the files partition of the metadata table: " + key);
+                  return newFileInfo;
+                }
+                return null;
+              }
+              return new HoodieMetadataFileInfo(
+                  Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false);
+            });
       });
     }
 
