@@ -107,7 +107,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
@@ -671,108 +670,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(sort(genRecords), sort(scannedRecords),
         "Scanner records count should be the same as appended records");
     scanner.close();
-  }
-
-  @Test
-  public void testBasicAppendsWithBlockSeqNos() throws IOException, URISyntaxException, InterruptedException {
-    testAppendsWithSpruiousLogBlocks(true, (partitionPath, schema, genRecords, numFiles, enableBlockSeqNos) -> {
-      return writeLogFiles(partitionPath, schema, genRecords, numFiles, enableBlockSeqNos);
-    });
-  }
-
-  @Test
-  public void testAppendsWithSpruiousLogBlocksExactDup() throws IOException, URISyntaxException, InterruptedException {
-    testAppendsWithSpruiousLogBlocks(true, (partitionPath, schema, genRecords, numFiles, enableBlockSeqNos) -> {
-      Set<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, numFiles, enableBlockSeqNos);
-      // re add the same records again
-      logFiles.addAll(writeLogFiles(partitionPath, schema, genRecords, numFiles, enableBlockSeqNos));
-      return logFiles;
-    });
-  }
-
-  @Test
-  public void testAppendsWithSpruiousLogBlocksFirstAttemptPartial() throws IOException, URISyntaxException, InterruptedException {
-    testAppendsWithSpruiousLogBlocks(true, (partitionPath, schema, genRecords, numFiles, enableBlockSeqNos) -> {
-      Set<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, numFiles, enableBlockSeqNos);
-      // removing 4th log block to simulate partial failure in 1st attempt
-      List<HoodieLogFile> logFileList = new ArrayList<>(logFiles);
-      logFiles.remove(logFileList.get(logFileList.size() - 1));
-      // re add the same records again
-      logFiles.addAll(writeLogFiles(partitionPath, schema, genRecords, numFiles, enableBlockSeqNos));
-      return logFiles;
-    });
-  }
-
-  @Test
-  public void testAppendsWithSpruiousLogBlocksSecondAttemptPartial() throws IOException, URISyntaxException, InterruptedException {
-    testAppendsWithSpruiousLogBlocks(true, (partitionPath, schema, genRecords, numFiles, enableBlockSeqNos) -> {
-      Set<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, numFiles, enableBlockSeqNos);
-      // re add the same records again
-      Set<HoodieLogFile> logFilesSet2 = writeLogFiles(partitionPath, schema, genRecords, numFiles, enableBlockSeqNos);
-      // removing 4th log block to simular partial failure in 2nd attempt
-      List<HoodieLogFile> logFileList2 = new ArrayList<>(logFilesSet2);
-      logFilesSet2.remove(logFileList2.get(logFileList2.size() - 1));
-      logFiles.addAll(logFilesSet2);
-      return logFiles;
-    });
-  }
-
-  private void testAppendsWithSpruiousLogBlocks(
-      boolean enableOptimizedLogBlocksScan,
-      Function5<Set<HoodieLogFile>, Path, Schema, List<IndexedRecord>, Integer, Boolean> logGenFunc)
-      throws IOException, URISyntaxException, InterruptedException {
-
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    SchemaTestUtil testUtil = new SchemaTestUtil();
-    List<IndexedRecord> genRecords = testUtil.generateHoodieTestRecords(0, 400);
-    Set<HoodieLogFile> logFiles = logGenFunc.apply(partitionPath, schema, genRecords, 4, true);
-
-    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
-
-    HoodieMergedLogRecordScanner scanner = getLogRecordScanner(logFiles, schema, enableOptimizedLogBlocksScan);
-    // even though we have duplicates records, due to block sequence reconcile, only one set of blocks should be parsed as valid
-    assertRecordsAndCloseScanner(scanner, genRecords, schema);
-  }
-
-  private void assertRecordsAndCloseScanner(HoodieMergedLogRecordScanner scanner, List<IndexedRecord> genRecords, Schema schema) throws IOException {
-    List<IndexedRecord> scannedRecords = new ArrayList<>();
-    for (HoodieRecord record : scanner) {
-      scannedRecords.add((IndexedRecord)
-          ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
-    }
-
-    assertEquals(sort(genRecords), sort(scannedRecords),
-        "Scanner records count should be the same as appended records");
-    scanner.close();
-  }
-
-  private HoodieMergedLogRecordScanner getLogRecordScanner(Set<HoodieLogFile> logFiles, Schema schema,
-                                                           boolean enableOptimizedLogBlocksScan) {
-
-    // scan all log blocks (across multiple log files)
-    return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
-        .withBasePath(basePath)
-        .withLogFilePaths(
-            logFiles.stream().sorted(HoodieLogFile.getLogFileComparator())
-                .map(l -> l.getPath().toString()).collect(toList()))
-        .withReaderSchema(schema)
-        .withLatestInstantTime("100")
-        .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(true)
-        .withReverseReader(false)
-        .withBufferSize(BUFFER_SIZE)
-        .withSpillableMapBasePath(spillableBasePath)
-        .withDiskMapType(ExternalSpillableMap.DiskMapType.BITCASK)
-        .withBitCaskDiskMapCompressionEnabled(true)
-        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
-        .build();
-  }
-
-  @FunctionalInterface
-  public interface Function5<R, T1, T2, T3, T4, T5> {
-
-    R apply(T1 v1, T2 v2, T3 v3, T4 v4, T5 v5) throws IOException, InterruptedException;
   }
 
   @ParameterizedTest
@@ -2860,15 +2757,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                   Schema schema,
                                                   List<IndexedRecord> records,
                                                   int numFiles) throws IOException, InterruptedException {
-    return writeLogFiles(partitionPath, schema, records, numFiles, false);
-  }
-
-  private static Set<HoodieLogFile> writeLogFiles(Path partitionPath,
-                                                  Schema schema,
-                                                  List<IndexedRecord> records,
-                                                  int numFiles,
-                                                  boolean enableBlockSequenceNumbers) throws IOException, InterruptedException {
-    int blockSeqNo = 0;
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withSizeThreshold(1024).withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
@@ -2890,9 +2778,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       List<IndexedRecord> targetRecords = records.subList(offset, offset + targetRecordsCount);
 
       logFiles.add(writer.getLogFile());
-      if (enableBlockSequenceNumbers) {
-        header = getUpdatedHeader(header, blockSeqNo++);
-      }
       writer.appendBlock(getDataBlock(DEFAULT_DATA_BLOCK_TYPE, targetRecords, header));
       filesWritten++;
     }
@@ -2900,13 +2785,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     return logFiles;
-  }
-
-  private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber) {
-    Map<HeaderMetadataType, String> updatedHeader = new HashMap<>();
-    updatedHeader.putAll(header);
-    updatedHeader.put(HeaderMetadataType.BLOCK_IDENTIFIER, String.valueOf(blockSequenceNumber));
-    return updatedHeader;
   }
 
   /**

@@ -54,7 +54,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -129,12 +128,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   // use writer schema for log compaction.
   private boolean useWriterSchema = false;
 
-  private Properties recordProperties = new Properties();
-  // Block Sequence number will be used to detect duplicate log blocks(by log reader) added due to spark task retries.
-  // It should always start with 0 for a given file slice. for roll overs and delete blocks, we increment by 1.
-  private int blockSequenceNumber = 0;
-  // On task failures, a given task could be retried. So, this attempt number will track the number of attempts.
-  private int attemptNumber = 0;
+  private final Properties recordProperties = new Properties();
   // maintains backwards compataible writes so that 0.13.x and 0.12.x hudi can read the logs produced by 0.14.x
   private boolean maintainBackwardsCompatibleWritesWith0140 = false;
 
@@ -148,7 +142,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.useWriterSchema = true;
     this.isLogCompaction = true;
     this.header.putAll(header);
-    this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
     this.maintainBackwardsCompatibleWritesWith0140 = config.doMaintainBackwardsCompatibleWritesWith0140();
   }
 
@@ -160,7 +153,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
-    this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
     this.maintainBackwardsCompatibleWritesWith0140 = config.doMaintainBackwardsCompatibleWritesWith0140();
   }
 
@@ -464,14 +456,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, maintainBackwardsCompatibleWritesWith0140 ? header : getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
-                                    addBlockIdentifier()), keyField));
+        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, header, keyField));
       }
 
       if (appendDeleteBlocks && recordsToDelete.size() > 0) {
-        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]),
-            maintainBackwardsCompatibleWritesWith0140 ? header : getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
-            addBlockIdentifier()), logBlockVersionToWrite));
+        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), header, logBlockVersionToWrite));
       }
 
       if (blocks.size() > 0) {
@@ -643,16 +632,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         throw new HoodieException("Base file format " + hoodieTable.getBaseFileFormat()
             + " does not have associated log block type");
     }
-  }
-
-  private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber, long attemptNumber,
-                                                                  HoodieWriteConfig config, boolean addBlockIdentifier) {
-    Map<HeaderMetadataType, String> updatedHeader = new HashMap<>();
-    updatedHeader.putAll(header);
-    if (addBlockIdentifier && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) { // add block sequence numbers only for data table.
-      updatedHeader.put(HeaderMetadataType.BLOCK_IDENTIFIER, String.valueOf(attemptNumber) + "," + String.valueOf(blockSequenceNumber));
-    }
-    return updatedHeader;
   }
 
   private static HoodieLogBlock getBlock(HoodieWriteConfig writeConfig,

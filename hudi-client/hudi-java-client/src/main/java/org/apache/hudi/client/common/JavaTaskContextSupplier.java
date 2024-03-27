@@ -45,9 +45,4 @@ public class JavaTaskContextSupplier extends TaskContextSupplier {
     return Option.empty();
   }
 
-  @Override
-  public Supplier<Integer> getAttemptNumberSupplier() {
-    return () -> 0;
-  }
-
 }
