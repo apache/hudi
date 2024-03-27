@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 import static org.apache.hudi.table.action.clean.CleanPlanner.SAVEPOINTED_TIMESTAMPS;
 
@@ -122,10 +123,14 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
       Map<String, List<HoodieCleanFileInfo>> cleanOps = new HashMap<>();
       List<String> partitionsToDelete = new ArrayList<>();
+      boolean shouldUseBatchLookup = shouldUseBatchLookup(table.getMetaClient().getTableConfig(), config);
       for (int i = 0; i < partitionsToClean.size(); i += cleanerParallelism) {
         // Handles at most 'cleanerParallelism' number of partitions once at a time to avoid overlarge memory pressure to the timeline server
         // (remote or local embedded), thus to reduce the risk of an OOM exception.
         List<String> subPartitionsToClean = partitionsToClean.subList(i, Math.min(i + cleanerParallelism, partitionsToClean.size()));
+        if (shouldUseBatchLookup) {
+          table.getHoodieView().loadPartitions(subPartitionsToClean);
+        }
         Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
             .map(subPartitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean, earliestInstant)), cleanerParallelism)
             .stream()
