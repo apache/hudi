@@ -68,10 +68,7 @@ object AvroConversionUtils {
         case e: HoodieSchemaException => throw e
         case e => throw new SchemaCompatibilityException("Failed to convert spark record into avro record", e)
       }
-
     }
-
-
   }
 
   /**
