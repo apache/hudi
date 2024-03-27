@@ -2134,8 +2134,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     String tableBasePath = basePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer.Config config = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
-        null, PROPS_FILENAME_TEST_PARQUET, false,
-        false, 100000, false, null, null, "timestamp", null);
+        Collections.singletonList(TestIdentityTransformer.class.getName()), PROPS_FILENAME_TEST_PARQUET, false,
+        false, 100000, false, null, "MERGE_ON_READ", "timestamp", null);
 
     config.schemaProviderClassName = NullValueSchemaProvider.class.getName();
     config.sourceClassName = TestParquetDFSSourceEmptyBatch.class.getName();
