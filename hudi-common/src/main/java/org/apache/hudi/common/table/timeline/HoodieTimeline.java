@@ -397,9 +397,8 @@ public interface HoodieTimeline extends Serializable {
 
   /**
    * get the most recent cluster commit if present
-   *
    */
-  Option<HoodieInstant> getLastClusterCommit();
+  Option<HoodieInstant> getLastClusteringInstant();
 
   /**
    * get the most recent pending cluster commit if present

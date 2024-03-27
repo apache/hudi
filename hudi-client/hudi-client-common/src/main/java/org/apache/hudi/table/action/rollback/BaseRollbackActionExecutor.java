@@ -191,7 +191,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
           return true;
         }
-        return !ClusteringUtils.isPendingClusteringInstant(table.getMetaClient(), instant);
+        return !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant);
       }).map(HoodieInstant::getTimestamp)
           .collect(Collectors.toList());
       if ((instantTimeToRollback != null) && !inflights.isEmpty()
