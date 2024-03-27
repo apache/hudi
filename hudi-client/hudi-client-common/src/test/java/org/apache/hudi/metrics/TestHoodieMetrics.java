@@ -87,6 +87,14 @@ public class TestHoodieMetrics {
     long msec = (Long)metrics.getRegistry().getGauges().get(metricName).getValue();
     assertTrue(msec > 0);
 
+    // PreWrite metrics
+    timer = hoodieMetrics.getPreWriteTimerCtx();
+    Thread.sleep(5); // Ensure timer duration is > 0
+    hoodieMetrics.updatePreWriteMetrics("some_action", hoodieMetrics.getDurationInMs(timer.stop()));
+    metricName = hoodieMetrics.getMetricsName("pre_write", "some_action.duration");
+    msec = (Long)metrics.getRegistry().getGauges().get(metricName).getValue();
+    assertTrue(msec > 0);
+
     // test index type
     metricName = hoodieMetrics.getMetricsName("index", "type");
     for (HoodieIndex.IndexType indexType: HoodieIndex.IndexType.values()) {
