@@ -63,6 +63,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
@@ -133,10 +134,13 @@ public class TestStreamSyncUnitTests {
     doReturn(deducedSchemaProvider).when(spy).getDeducedSchemaProvider(any(), any(), any());
 
     //run the method we are unit testing:
-    spy.fetchNextBatchFromSource(Option.empty(), mock(HoodieTableMetaClient.class));
+    InputBatch batch = spy.fetchNextBatchFromSource(Option.empty(), mock(HoodieTableMetaClient.class));
 
     //make sure getDeducedSchemaProvider is always called once
     verify(spy, times(1)).getDeducedSchemaProvider(any(), any(), any());
+
+    //make sure the deduced schema is actually used
+    assertEquals(deducedSchemaProvider.getTargetSchema(), batch.getSchemaProvider().getTargetSchema());
 
     //make sure we use error table when we should
     verify(propsSpy, shouldTryWriteToErrorTable ? times(1) : never())
