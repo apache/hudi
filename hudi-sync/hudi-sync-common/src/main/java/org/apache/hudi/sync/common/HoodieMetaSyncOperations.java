@@ -99,11 +99,9 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
-   * Get the metadata of partitions that belong to the specified table
-   * @param tableName
-   * @return
+   * Get partitions given input list of partitions.
    */
-  default List<Partition> getPartitionsByFilter(String tableName, String filter) {
+  default List<Partition> getPartitionsFromList(String tableName, List<String> partitionList) {
     return Collections.emptyList();
   }
 

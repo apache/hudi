@@ -230,7 +230,7 @@ public class IncrementalQueryAnalyzer {
       timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
     }
     if (skipClustering) {
-      timeline = timeline.filter(instant -> !ClusteringUtils.isClusteringInstant(instant, oriTimeline));
+      timeline = timeline.filter(instant -> !ClusteringUtils.isCompletedClusteringInstant(instant, oriTimeline));
     }
     return timeline;
   }

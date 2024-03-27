@@ -73,6 +73,13 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieArchivedTimeline.class);
 
   /**
+   * Used for loading the archived timeline incrementally, the earliest loaded instant time get memorized
+   * each time the timeline is loaded. The instant time is then used as the end boundary
+   * of the next loading.
+   */
+  private String cursorInstant;
+
+  /**
    * Loads all the archived instants.
    * Note that there is no lazy loading, so this may not work if the archived timeline range is really long.
    * TBD: Should we enforce maximum time range?
@@ -80,6 +87,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
     setInstants(this.loadInstants());
+    this.cursorInstant = firstInstant().map(HoodieInstant::getTimestamp).orElse(null);
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
@@ -92,6 +100,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   public HoodieArchivedTimeline(HoodieTableMetaClient metaClient, String startTs) {
     this.metaClient = metaClient;
     setInstants(loadInstants(new StartTsFilter(startTs), LoadMode.METADATA));
+    this.cursorInstant = startTs;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
@@ -150,6 +159,26 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   public HoodieArchivedTimeline reload() {
     return new HoodieArchivedTimeline(metaClient);
+  }
+
+  /**
+   * Reloads the archived timeline incrementally with given beginning timestamp {@code startTs}.
+   * This method is not thread safe.
+   *
+   * <p>IMPORTANT: this is for multiple loading of one static snapshot of the timeline, if there is new instants got archived,
+   * use {@link #reload()} instead.
+   */
+  public HoodieArchivedTimeline reload(String startTs) {
+    if (this.cursorInstant != null) {
+      if (HoodieTimeline.compareTimestamps(startTs, LESSER_THAN, this.cursorInstant)) {
+        appendInstants(loadInstants(new ClosedOpenTimeRangeFilter(startTs, this.cursorInstant), LoadMode.METADATA));
+        this.cursorInstant = startTs;
+      }
+      return this;
+    } else {
+      // a null cursor instant indicates an empty timeline
+      return new HoodieArchivedTimeline(metaClient, startTs);
+    }
   }
 
   private HoodieInstant readCommit(String instantTime, GenericRecord record, Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer) {

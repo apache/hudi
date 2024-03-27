@@ -108,7 +108,7 @@ def test_title():
 #                                                                             #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #                                            
     
-#Enums for the the outcome of parsing a single line
+#Enums for the outcome of parsing a single line
 class Outcomes:
     #error was found so we should stop parsing and exit with error
     ERROR = 0
