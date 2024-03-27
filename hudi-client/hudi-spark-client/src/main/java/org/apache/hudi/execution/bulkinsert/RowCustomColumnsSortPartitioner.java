@@ -51,7 +51,7 @@ public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Da
   public Dataset<Row> repartitionRecords(Dataset<Row> records, int outputSparkPartitions) {
     return records
         .sort(Arrays.stream(sortColumnNames).map(Column::new).toArray(Column[]::new))
-        .repartition(outputSparkPartitions);
+        .coalesce(outputSparkPartitions);
   }
 
   @Override

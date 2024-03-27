@@ -139,10 +139,10 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieSparkClientT
         .build();
 
     testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns, config),
-        records, true, false, true, generateExpectedPartitionNumRecords(records), Option.of(comparator), true);
+        records, true, true, true, generateExpectedPartitionNumRecords(records), Option.of(comparator), true);
 
     testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
-        records, true, false, true, generateExpectedPartitionNumRecords(records), Option.of(comparator), true);
+        records, true, true, true, generateExpectedPartitionNumRecords(records), Option.of(comparator), true);
   }
 
   private void testBulkInsertInternalPartitioner(BulkInsertPartitioner partitioner,

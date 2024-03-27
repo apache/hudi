@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
-import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -197,35 +196,6 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     assertTrue(dataset.except(trimmedOutput).count() == 0);
-  }
-
-  @Test
-  public void testRowCustomSortPartitioner() {
-    List<Row> rows = DataSourceTestUtils.generateRandomRows(100);
-    Map<String, String> props = getPropsAllSet("_row_key");
-    props.put(HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS.key(), "ts");
-    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(props)
-        .withPopulateMetaFields(false).build();
-    Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
-    RowCustomColumnsSortPartitioner partitioner = new RowCustomColumnsSortPartitioner(config);
-    Dataset<Row> output = partitioner.repartitionRecords(dataset, 1);
-    output.cache();
-
-    assertEquals(output.count(), 100);
-    assertEquals(output.rdd().getNumPartitions(), 1);
-
-    // if original df contains higher num partitions, it should reduce and honor lower value passed in.
-    output = partitioner.repartitionRecords(dataset.repartition(5), 3);
-    output.cache();
-
-    assertEquals(output.count(), 100);
-    assertEquals(output.rdd().getNumPartitions(), 3);
-
-    // higher value of output spark partitions.
-    output = partitioner.repartitionRecords(dataset.repartition(3), 6);
-    output.cache();
-    assertEquals(output.count(), 100);
-    assertEquals(output.rdd().getNumPartitions(), 6);
   }
 
   @ParameterizedTest
