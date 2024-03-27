@@ -74,7 +74,12 @@ class DefaultSource extends RelationProvider
   override def createRelation(sqlContext: SQLContext,
                               parameters: Map[String, String]): BaseRelation = {
     try {
-      createRelation(sqlContext, parameters, null)
+      val relation = createRelation(sqlContext, parameters, null)
+      if (relation.schema.isEmpty) {
+        new EmptyRelation(sqlContext, new StructType())
+      } else {
+        relation
+      }
     } catch {
       case _: HoodieSchemaNotFoundException => new EmptyRelation(sqlContext, new StructType())
       case e => throw e

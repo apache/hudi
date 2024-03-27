@@ -62,7 +62,7 @@ import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABL
 /**
  * Adapts data-format provided by the source to the data-format required by the client (DeltaStreamer).
  */
-public final class SourceFormatAdapter implements Closeable {
+public class SourceFormatAdapter implements Closeable {
 
   private final Source source;
   private boolean shouldSanitize = SANITIZE_SCHEMA_FIELD_NAMES.defaultValue();
