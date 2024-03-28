@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.avro.LogicalTypes.{Date, Decimal, TimestampMicros, TimestampMillis}
+import org.apache.avro.LogicalTypes.{Date, Decimal, LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.spark.annotation.DeveloperApi
@@ -76,7 +76,8 @@ private[sql] object SchemaConverters {
       case DOUBLE => SchemaType(DoubleType, nullable = false)
       case FLOAT => SchemaType(FloatType, nullable = false)
       case LONG => avroSchema.getLogicalType match {
-        case _: TimestampMillis | _: TimestampMicros => SchemaType(TimestampType, nullable = false)
+        case _: TimestampMillis | _: TimestampMicros | _: LocalTimestampMillis | _: LocalTimestampMicros
+            => SchemaType(TimestampType, nullable = false)
         case _ => SchemaType(LongType, nullable = false)
       }
 
