@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Overrides the {@link #write} method to not look up index and partition the records, because
@@ -99,24 +100,34 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, List<HoodieRecord
 
     // caution that the avro schema is not serializable
     final Schema schema = new Schema.Parser().parse(schemaStr);
-    return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
-      HoodieRecord<T> reducedRecord;
-      try {
-        // Precombine do not need schema and do not return null
-        reducedRecord =  merger.merge(rec1, schema, rec2, schema, props).get().getLeft();
-      } catch (IOException e) {
-        throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
+    boolean sortBeforePrecombine = merger.useSortedMerge(props);
+    return keyedRecords.values().stream().map(hoodieRecords -> {
+      Stream<HoodieRecord<T>> recordStream;
+      if (sortBeforePrecombine) {
+        recordStream = hoodieRecords.stream().sorted(new SortedPrecombineComparator(schema, props));
+      } else {
+        recordStream = hoodieRecords.stream();
       }
-      // we cannot allow the user to change the key or partitionPath, since that will affect
-      // everything
-      // so pick it from one of the records.
-      boolean choosePrev = rec1.getData() == reducedRecord.getData();
-      HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
-      HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-      HoodieRecord<T> hoodieRecord = reducedRecord.newInstance(reducedKey, operation);
-      // reuse the location from the first record.
-      hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
-      return hoodieRecord;
-    }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
+
+      return recordStream.reduce((rec1, rec2) -> {
+        HoodieRecord<T> reducedRecord;
+        try {
+          // Precombine do not need schema and do not return null
+          reducedRecord = merger.merge(rec1, schema, rec2, schema, props).get().getLeft();
+        } catch (IOException e) {
+          throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
+        }
+        // we cannot allow the user to change the key or partitionPath, since that will affect
+        // everything
+        // so pick it from one of the records.
+        boolean choosePrev = rec1.getData() == reducedRecord.getData();
+        HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
+        HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
+        HoodieRecord<T> hoodieRecord = reducedRecord.newInstance(reducedKey, operation);
+        // reuse the location from the first record.
+        hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
+        return hoodieRecord;
+      }).orElse(null);
+    }).filter(Objects::nonNull).collect(Collectors.toList());
   }
 }
