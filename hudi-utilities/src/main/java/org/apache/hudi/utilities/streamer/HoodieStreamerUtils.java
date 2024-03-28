@@ -36,6 +36,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.exception.HoodieRecordCreationException;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -104,10 +107,7 @@ public class HoodieStreamerUtils {
                       : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
                   avroRecords.add(Either.left(new HoodieAvroRecord<>(hoodieKey, payload)));
                 } catch (Exception e) {
-                  if (!shouldErrorTable) {
-                    throw e;
-                  }
-                  avroRecords.add(generateErrorRecord(genRec));
+                  avroRecords.add(generateErrorRecordOrThrowException(genRec, e, shouldErrorTable));
                 }
               }
               return avroRecords.iterator();
@@ -135,10 +135,7 @@ public class HoodieStreamerUtils {
               return Either.left(new HoodieSparkRecord(new HoodieKey(recordKey, partitionPath),
                   HoodieInternalRowUtils.getCachedUnsafeProjection(baseStructType, targetStructType).apply(row), targetStructType, false));
             } catch (Exception e) {
-              if (!shouldErrorTable) {
-                throw e;
-              }
-              return generateErrorRecord(rec);
+              return generateErrorRecordOrThrowException(rec, e, shouldErrorTable);
             }
           });
 
@@ -159,7 +156,16 @@ public class HoodieStreamerUtils {
    * @return the representation of error record (empty {@link HoodieRecord} and the error record
    * String) for writing to error table.
    */
-  private static Either<HoodieRecord, String> generateErrorRecord(GenericRecord genRec) {
+  private static Either<HoodieRecord, String> generateErrorRecordOrThrowException(GenericRecord genRec, Exception e, boolean shouldErrorTable) {
+    if (!shouldErrorTable) {
+      if (e instanceof HoodieKeyException) {
+        throw (HoodieKeyException) e;
+      } else if (e instanceof HoodieKeyGeneratorException) {
+        throw (HoodieKeyGeneratorException) e;
+      } else {
+        throw new HoodieRecordCreationException("Failed to create Hoodie Record", e);
+      }
+    }
     try {
       return Either.right(HoodieAvroUtils.avroToJsonString(genRec, false));
     } catch (Exception ex) {
