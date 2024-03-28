@@ -111,23 +111,24 @@ public class HoodieFileGroupReaderTestUtils {
         Schema schema,
         boolean shouldUseRecordPosition
     ) {
-      return new HoodieFileGroupReader<>(
-          readerContext,
-          hadoopConf,
-          basePath,
-          latestCommitTime,
-          fileSlice,
-          schema,
-          schema,
-          props,
-          tableConfig,
-          start,
-          length,
-          shouldUseRecordPosition,
-          1024 * 1024 * 1000,
-          basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME,
-          ExternalSpillableMap.DiskMapType.ROCKS_DB,
-          false);
+      return HoodieFileGroupReader.builder()
+          .withReaderContext(readerContext)
+          .withHadoopConf(hadoopConf)
+          .withTablePath(basePath)
+          .withLatestCommitTime(latestCommitTime)
+          .withFileSlice(fileSlice)
+          .withDataSchema(schema)
+          .withRequestedSchema(schema)
+          .withTypedProperties(props)
+          .withTableConfig(tableConfig)
+          .withStart(start)
+          .withLength(length)
+          .withUseRecordPosition(shouldUseRecordPosition)
+          .withMaxMemorySizeInBytes(1024 * 1024 * 1000)
+          .withSpillableMapBasePath(basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME)
+          .withDiskMapType(ExternalSpillableMap.DiskMapType.ROCKS_DB)
+          .withBitCaskDiskMapCompressionEnabled(false)
+          .build();
     }
   }
 }
