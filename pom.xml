@@ -100,6 +100,7 @@
     <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
     <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
     <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+    <codehaus.jackson.version>1.9.13</codehaus.jackson.version>
     <kafka.version>2.0.0</kafka.version>
     <kafka.spark3.version>2.8.0</kafka.spark3.version>
     <pulsar.version>3.0.2</pulsar.version>
@@ -2334,6 +2335,11 @@
           <scope>test</scope>
         </dependency>
         <dependency>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>jackson-core-asl</artifactId>
+          <version>${codehaus.jackson.version}</version>
+        </dependency>
+        <dependency>
           <groupId>${hive.groupid}</groupId>
           <artifactId>hive-storage-api</artifactId>
           <version>${hive.storage.version}</version>
@@ -2461,6 +2467,13 @@
         <module>hudi-spark-datasource/hudi-spark3-common</module>
         <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
+      <dependencies>
+        <dependency>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>jackson-core-asl</artifactId>
+          <version>${codehaus.jackson.version}</version>
+        </dependency>
+      </dependencies>
       <activation>
         <activeByDefault>true</activeByDefault>
         <property>
@@ -2506,6 +2519,13 @@
         <module>hudi-spark-datasource/hudi-spark3-common</module>
         <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
+      <dependencies>
+        <dependency>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>jackson-core-asl</artifactId>
+          <version>${codehaus.jackson.version}</version>
+        </dependency>
+      </dependencies>
       <activation>
         <property>
           <name>spark3.3</name>
@@ -2553,6 +2573,11 @@
         <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
       <dependencies>
+        <dependency>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>jackson-core-asl</artifactId>
+          <version>${codehaus.jackson.version}</version>
+        </dependency>
         <dependency>
           <groupId>org.slf4j</groupId>
           <artifactId>slf4j-log4j12</artifactId>
