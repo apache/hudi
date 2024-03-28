@@ -57,7 +57,7 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
       HoodiePairData<String, String> partitionRecordKeyPairs,
       HoodiePairData<HoodieFileGroupId, String> fileComparisonPairs,
-      Map<String, List<BloomIndexFileInfo>> partitionToFileInfo, Map<String, Long> recordsPerPartition) {
+      Map<String, List<BloomIndexFileInfo>> partitionToFileInfo, HoodiePairData<String, Long> recordsPerPartition) {
     List<Pair<HoodieFileGroupId, String>> fileComparisonPairList =
         fileComparisonPairs.collectAsList().stream()
             .sorted(Comparator.comparing(Pair::getLeft)).collect(toList());
@@ -68,7 +68,7 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
                 .apply(fileComparisonPairList.iterator())
             )
             .flatMap(Collection::stream)
-            .filter(lr -> lr.getMatchingRecordKeysAndPositions().size() > 0)
+            .filter(lr -> !lr.getMatchingRecordKeysAndPositions().isEmpty())
             .collect(toList());
 
     return context.parallelize(keyLookupResults).flatMap(lookupResult ->

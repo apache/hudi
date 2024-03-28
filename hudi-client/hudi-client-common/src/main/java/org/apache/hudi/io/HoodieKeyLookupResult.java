@@ -20,7 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.util.collection.Pair;
 
-import java.util.List;
+import java.util.Collection;
 
 /**
  * Encapsulates the result from a key lookup.
@@ -29,11 +29,11 @@ public class HoodieKeyLookupResult {
 
   private final String fileId;
   private final String baseInstantTime;
-  private final List<Pair<String, Long>> matchingRecordKeysAndPositions;
+  private final Collection<Pair<String, Long>> matchingRecordKeysAndPositions;
   private final String partitionPath;
 
   public HoodieKeyLookupResult(String fileId, String partitionPath, String baseInstantTime,
-                               List<Pair<String, Long>> matchingRecordKeysAndPositions) {
+                               Collection<Pair<String, Long>> matchingRecordKeysAndPositions) {
     this.fileId = fileId;
     this.partitionPath = partitionPath;
     this.baseInstantTime = baseInstantTime;
@@ -52,7 +52,7 @@ public class HoodieKeyLookupResult {
     return partitionPath;
   }
 
-  public List<Pair<String, Long>> getMatchingRecordKeysAndPositions() {
+  public Collection<Pair<String, Long>> getMatchingRecordKeysAndPositions() {
     return matchingRecordKeysAndPositions;
   }
 }

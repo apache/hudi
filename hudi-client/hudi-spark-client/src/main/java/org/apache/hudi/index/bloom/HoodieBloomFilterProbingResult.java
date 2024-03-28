@@ -19,17 +19,17 @@
 
 package org.apache.hudi.index.bloom;
 
-import java.util.List;
+import java.util.Set;
 
 class HoodieBloomFilterProbingResult {
 
-  private final List<String> candidateKeys;
+  private final Set<String> candidateKeys;
 
-  HoodieBloomFilterProbingResult(List<String> candidateKeys) {
+  HoodieBloomFilterProbingResult(Set<String> candidateKeys) {
     this.candidateKeys = candidateKeys;
   }
 
-  public List<String> getCandidateKeys() {
+  public Set<String> getCandidateKeys() {
     return candidateKeys;
   }
 }
