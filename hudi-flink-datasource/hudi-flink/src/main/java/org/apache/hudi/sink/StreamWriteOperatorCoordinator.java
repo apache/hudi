@@ -51,6 +51,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.runtime.operators.coordination.RecreateOnResetOperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -637,11 +638,12 @@ public class StreamWriteOperatorCoordinator
   /**
    * Provider for {@link StreamWriteOperatorCoordinator}.
    */
-  public static class Provider implements OperatorCoordinator.Provider {
+  public static class Provider extends RecreateOnResetOperatorCoordinator.Provider {
     private final OperatorID operatorId;
     private final Configuration conf;
 
     public Provider(OperatorID operatorId, Configuration conf) {
+      super(operatorId);
       this.operatorId = operatorId;
       this.conf = conf;
     }
@@ -652,7 +654,7 @@ public class StreamWriteOperatorCoordinator
     }
 
     @Override
-    public OperatorCoordinator create(Context context) {
+    protected OperatorCoordinator getCoordinator(Context context) throws Exception {
       return new StreamWriteOperatorCoordinator(this.conf, context);
     }
   }
