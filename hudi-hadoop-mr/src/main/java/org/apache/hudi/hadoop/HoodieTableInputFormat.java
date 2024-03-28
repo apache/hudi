@@ -23,6 +23,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.SelfDescribingInputFormatInterface;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.FileInputFormat;
@@ -36,7 +37,7 @@ import java.io.IOException;
  * Copy-on-Write (COW) and Merge-on-Read (MOR) tables
  */
 public abstract class HoodieTableInputFormat extends FileInputFormat<NullWritable, ArrayWritable>
-    implements Configurable {
+    implements Configurable, SelfDescribingInputFormatInterface {
 
   protected Configuration conf;
 
