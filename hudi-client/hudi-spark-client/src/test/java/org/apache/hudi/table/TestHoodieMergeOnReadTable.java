@@ -72,8 +72,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -687,9 +688,9 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       BaseSparkDeltaCommitActionExecutor actionExecutor = new SparkDeleteDeltaCommitActionExecutor(context(), cfg, hoodieTable,
           newDeleteTime, HoodieJavaRDD.of(deleteRDD));
       actionExecutor.getUpsertPartitioner(new WorkloadProfile(buildProfile(deleteRDD)));
-      final List<List<WriteStatus>> deleteStatus = jsc().parallelize(Arrays.asList(1)).map(x -> {
-        return actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator());
-      }).map(Transformations::flatten).collect();
+      final List<List<WriteStatus>> deleteStatus = jsc().parallelize(Collections.singletonList(1))
+          .map(x -> (Iterator<List<WriteStatus>>) actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator()))
+          .map(Transformations::flatten).collect();
 
       // Verify there are  errors because records are from multiple partitions (but handleUpdate is invoked for
       // specific partition)

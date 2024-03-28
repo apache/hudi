@@ -26,9 +26,9 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.config._
 import org.apache.hudi.exception.HoodieWriteConflictException
-import org.apache.hudi.functional.TestCOWDataSourceStorage.{SQL_DRIVER_IS_NOT_NULL, SQL_DRIVER_IS_NULL, SQL_QUERY_EQUALITY_VALIDATOR_CLASS_NAME, SQL_QUERY_INEQUALITY_VALIDATOR_CLASS_NAME, SQL_RIDER_IS_NOT_NULL, SQL_RIDER_IS_NULL}
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.util.JavaConversions
+
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._

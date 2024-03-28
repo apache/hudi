@@ -78,7 +78,9 @@ import java.io.Serializable;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -463,9 +465,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     final List<HoodieRecord> inserts = dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
     BaseSparkCommitActionExecutor actionExecutor = new SparkInsertCommitActionExecutor(context, config, table,
         instantTime, context.parallelize(inserts));
-    final List<List<WriteStatus>> ws = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator());
-    }).map(Transformations::flatten).collect();
+    final List<List<WriteStatus>> ws = jsc.parallelize(Collections.singletonList(1))
+        .map(x -> (Iterator<List<WriteStatus>>) actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator()))
+        .map(Transformations::flatten).collect();
 
     WriteStatus writeStatus = ws.get(0).get(0);
     String fileId = writeStatus.getFileId();
@@ -477,9 +479,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, HoodieTableMetaClient.reload(metaClient));
     BaseSparkCommitActionExecutor newActionExecutor = new SparkUpsertCommitActionExecutor(context, config, table,
         instantTime, context.parallelize(updates));
-    final List<List<WriteStatus>> updateStatus = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator());
-    }).map(Transformations::flatten).collect();
+    final List<List<WriteStatus>> updateStatus = jsc.parallelize(Collections.singletonList(1))
+        .map(x -> (Iterator<List<WriteStatus>>) newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator()))
+        .map(Transformations::flatten).collect();
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 
