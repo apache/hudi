@@ -250,7 +250,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   /**
    * @deprecated please use non-static version
    */
-  public static void writePartitionMetadataDeprecated(FileSystem fs, String[] partitionPaths, String basePath) {
+  public static void writePartitionMetadataDeprecated(FileSystem fs, String[] partitionPaths, String basePath) throws IOException {
     new HoodieTestDataGenerator().writePartitionMetadata(fs, partitionPaths, basePath);
   }
 
@@ -260,9 +260,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * @implNote {@link HoodieTestDataGenerator} is supposed to just generate records with schemas. Leave HoodieTable files (metafile, basefile, logfile, etc) to {@link HoodieTestTable}.
    * @deprecated Use {@link HoodieTestTable#withPartitionMetaFiles(java.lang.String...)} instead.
    */
-  public void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) {
+  public void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) throws IOException {
     for (String partitionPath : partitionPaths) {
-      new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath), Option.empty()).trySave(0);
+      new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath), Option.empty()).trySave("0");
     }
   }
 

@@ -75,7 +75,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
         if (!baseFormatFile.isPresent) {
           val partitionMetadata: HoodiePartitionMetadata = new HoodiePartitionMetadata(metaClient.getFs, latestCommit,
             basePath, partition, Option.of(getWriteConfig(basePath.toString).getBaseFileFormat))
-          partitionMetadata.trySave(0)
+          partitionMetadata.trySave("0")
         }
         // delete it, in case we failed midway last time.
         textFormatFile.ifPresent(
