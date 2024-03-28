@@ -233,7 +233,7 @@
     <moto.endpoint>http://localhost:${moto.port}</moto.endpoint>
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
-    <snappy.version>1.1.8.3</snappy.version>
+    <snappy.version>1.1.10.4</snappy.version>
   </properties>
 
   <scm>
