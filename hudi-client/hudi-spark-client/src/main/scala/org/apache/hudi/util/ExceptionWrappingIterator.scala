@@ -21,7 +21,7 @@ package org.apache.hudi.util
 
 import org.apache.hudi.common.util.ReflectionUtils
 
-class ExceptionWrappingIterator[T](var in: Iterator[T], var exceptionClass: String, var msg: String) extends Iterator[T] {
+class ExceptionWrappingIterator[T](val in: Iterator[T], val exceptionClass: String, val msg: String) extends Iterator[T] {
   override def hasNext: Boolean = try in.hasNext
   catch {
     case e: Throwable => throw createException(e)
