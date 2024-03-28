@@ -114,6 +114,14 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     return basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
   }
 
+  static boolean isMetadataTableSecondaryIndexPartition(String basePath, Option<String> partitionName) {
+    if (!isMetadataTable(basePath) || !partitionName.isPresent()) {
+      return false;
+    }
+
+    return partitionName.get().startsWith("secondary_index_");
+  }
+
   static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath) {
     return create(engineContext, metadataConfig, datasetBasePath, false);
   }
@@ -214,6 +222,12 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
   Map<String, List<HoodieRecordGlobalLocation>> readRecordIndex(List<String> recordKeys);
+
+  /**
+   * Returns the location of records which the provided secondary keys maps to.
+   * Records that are not found are ignored and won't be part of map object that is returned.
+   */
+  Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys);
 
   /**
    * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,

@@ -432,6 +432,34 @@
                 }
             ],
             "default" : null
+        },
+        {
+            "name": "SecondaryIndexMetadata",
+            "doc": "Metadata Index that contains information about secondary keys and the corresponding record keys in the dataset",
+            "type": [
+                "null",
+                {
+                    "type": "record",
+                    "name": "HoodieSecondaryIndexInfo",
+                    "fields": [
+                        {
+                            "name": "recordKey",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default": null,
+                            "doc": "Refers to the record key that this secondary key maps to"
+                        },
+                        {
+                            "name": "isDeleted",
+                            "type": "boolean",
+                            "doc": "True if this entry has been deleted"
+                        }
+                    ]
+                }
+            ],
+            "default" : null
         }
     ]
 }

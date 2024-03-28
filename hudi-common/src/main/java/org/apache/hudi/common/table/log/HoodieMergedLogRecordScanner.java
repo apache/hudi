@@ -37,9 +37,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -51,6 +54,8 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -60,6 +65,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Scans through all the blocks in a list of HoodieLogFile and builds up a compacted/merged list of records which will
@@ -82,6 +88,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   public final HoodieTimer timer = HoodieTimer.create();
   // Map of compacted/merged records
   private final ExternalSpillableMap<String, HoodieRecord> records;
+
+  private final ExternalSpillableMap<String, HashMap<String, HoodieRecord>> nonUniqueKeyRecords;
+
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
   private final Set<String> scannedPrefixes;
   // count of merged records in log
@@ -89,6 +98,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private final long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
+
+  private final boolean logContainsNonUniqueKeys;
 
   @SuppressWarnings("unchecked")
   private HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -102,7 +113,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                        InternalSchema internalSchema,
                                        Option<String> keyFieldOverride,
                                        boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
-                                      Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+                                       Option<HoodieTableMetaClient> hoodieTableMetaClientOption,
+                                       boolean logContainsNonUniqueKeys) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
         hoodieTableMetaClientOption);
@@ -111,6 +123,16 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
+      this.nonUniqueKeyRecords = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
+          new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
+
+      if (logFilePaths.size() > 0 && HoodieTableMetadata.isMetadataTableSecondaryIndexPartition(basePath, partitionName)) {
+        this.logContainsNonUniqueKeys = true;
+      } else {
+        this.logContainsNonUniqueKeys = false;
+      }
+
+      // this.logContainsNonUniqueKeys = logContainsNonUniqueKeys;
       this.scannedPrefixes = new HashSet<>();
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
@@ -216,15 +238,69 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   @Override
   public Iterator<HoodieRecord> iterator() {
-    return records.iterator();
+    if (!logContainsNonUniqueKeys) {
+      return records.iterator();
+    }
+    ClosableIterator<HashMap<String, HoodieRecord>> recordIterator = ClosableIterator.wrap(nonUniqueKeyRecords.values().iterator());
+    return new ClosableIterator<HoodieRecord>() {
+      private Iterator<HoodieRecord> nextKeyRecords;
+
+      @Override
+      public void close() {
+        recordIterator.close();
+      }
+
+      @Override
+      public boolean hasNext() {
+        if (nextKeyRecords == null) {
+          if (!recordIterator.hasNext()) {
+            return false;
+          }
+          nextKeyRecords = recordIterator.next().values().iterator();
+        }
+
+        if (nextKeyRecords.hasNext()) {
+          return true;
+        }
+
+        if (!recordIterator.hasNext()) {
+          return false;
+        }
+
+        nextKeyRecords = recordIterator.next().values().iterator();
+        return nextKeyRecords.hasNext();
+      }
+
+      @Override
+      public HoodieRecord next() {
+        return nextKeyRecords.next();
+      }
+    };
   }
 
   public Map<String, HoodieRecord> getRecords() {
+    checkArgument(!logContainsNonUniqueKeys, "Cannot get records when the log contains non-unique keys");
     return records;
+  }
+
+  public Collection<String> getKeySet() {
+    if (!logContainsNonUniqueKeys) {
+      return records.keySet();
+    }
+
+    return nonUniqueKeyRecords.keySet();
+  }
+
+  public Map<String, HashMap<String, HoodieRecord>> getNonUniqueRecordsMap() {
+    return nonUniqueKeyRecords;
   }
 
   public HoodieRecordType getRecordType() {
     return recordMerger.getRecordType();
+  }
+
+  public boolean getLogContainsNonUniqueKeys() {
+    return logContainsNonUniqueKeys;
   }
 
   public long getNumMergedRecordsInLog() {
@@ -240,6 +316,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   @Override
   public <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
+    if (logContainsNonUniqueKeys) {
+      processNextNonUniqueKeyRecord(newRecord);
+      return;
+    }
+
     String key = newRecord.getRecordKey();
     HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {
@@ -266,6 +347,68 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
       records.put(key, newRecord.copy());
+    }
+  }
+
+  private <T> void processNextNonUniqueKeyRecord(HoodieRecord<T> newRecord) throws IOException {
+    String key = newRecord.getRecordKey();
+    HoodieMetadataPayload newPayload = (HoodieMetadataPayload) newRecord.getData();
+
+    // The rules for merging the prevRecord and the latestRecord is noted below. Note that this only applies for SecondaryIndex
+    // records in the metadata table (which is the only user of this API as of this implementation)
+    // 1. Iff latestRecord is deleted (i.e it is a tombstone) AND prevRecord is null (i.e not buffered), then retain the latestRecord
+    //    The rationale here is that there could be a 'prev record' in the base-file that needs to be merged at a later stage
+    // 2. Iff latestRecord is deleted AND prevRecord is non-null, then remove prevRecord from the buffer AND discard the latestRecord
+    // 3. Iff latestRecord is not deleted AND prevRecord is non-null, then remove the prevRecord from the buffer AND retain the latestRecord
+    //    The rationale is that the most recent record is always retained (based on arrival time). TODO: verify this logic
+    // 4. Iff latestRecord is not deleted AND prevRecord is null, then retain the latestRecord (same rationale as #1)
+
+    HashMap<String, HoodieRecord> prevRecords = nonUniqueKeyRecords.get(key);
+    if (prevRecords == null) {
+      // Case #1 and #4
+      HashMap<String, HoodieRecord> recordsMap = new HashMap<>();
+      recordsMap.put(newPayload.getRecordKeyFromSecondaryIndex(), newRecord.copy());
+      nonUniqueKeyRecords.put(key, recordsMap);
+      return;
+    }
+
+    String newRecordKey = newPayload.getRecordKeyFromSecondaryIndex();
+    HoodieRecord prevRecord = prevRecords.get(newRecordKey);
+    if (prevRecord == null) {
+      // Case #1 and #4
+      prevRecords.put(newRecordKey, newRecord.copy());
+      nonUniqueKeyRecords.put(key, prevRecords);
+      return;
+    }
+
+    HoodieMetadataPayload prevPayload = (HoodieMetadataPayload) prevRecord.getData();
+    assert prevPayload.getRecordKeyFromSecondaryIndex().equals(newPayload.getRecordKeyFromSecondaryIndex());
+
+    // TODO: Merger need not be called here as the merging logic is handled explicitly in this function.
+    // Retain until Secondary Index feature is tested and stabilized
+    HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
+        newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
+
+    if (combinedRecord.getData() != prevRecord.getData()) {
+      HoodieRecord latestHoodieRecord =
+          combinedRecord.newInstance(new HoodieKey(key, newRecord.getPartitionPath()), newRecord.getOperation());
+
+      latestHoodieRecord.unseal();
+      latestHoodieRecord.setCurrentLocation(newRecord.getCurrentLocation());
+      latestHoodieRecord.seal();
+
+      HoodieMetadataPayload latestPayload = (HoodieMetadataPayload) latestHoodieRecord.getData();
+
+      if (latestPayload.isSecondaryIndexDeleted()) {
+        // If latestPayload is a tombstone record, then remove the prevRecord and discard the current record
+        // Case #1
+        prevRecords.remove(newRecordKey);
+      } else {
+        // Retain the latest (merged) record and discard the previous record
+        // Case #3
+        prevRecords.put(latestPayload.getRecordKeyFromSecondaryIndex(), latestHoodieRecord.copy());
+        nonUniqueKeyRecords.put(key, prevRecords);
+      }
     }
   }
 
@@ -300,6 +443,27 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
   }
 
+  Option<HoodieRecord> remove(HoodieRecord record) {
+    if (!logContainsNonUniqueKeys) {
+      return Option.ofNullable(records.remove(record.getRecordKey()));
+    }
+
+    HoodieMetadataPayload payload = (HoodieMetadataPayload) record.getData();
+    String secondaryKey = record.getRecordKey();
+    String recordKey = payload.getRecordKeyFromSecondaryIndex();
+
+    HashMap<String, HoodieRecord> secondaryKeyRecords = nonUniqueKeyRecords.get(secondaryKey);
+    if (secondaryKeyRecords == null) {
+      return Option.empty();
+    }
+
+    HoodieRecord secondaryKeyRecord = secondaryKeyRecords.remove(recordKey);
+    if (secondaryKeyRecords.isEmpty()) {
+      nonUniqueKeyRecords.remove(secondaryKey);
+    }
+    return Option.ofNullable(secondaryKeyRecord);
+  }
+
   public long getTotalTimeTakenToReadAndMergeBlocks() {
     return totalTimeTakenToReadAndMergeBlocks;
   }
@@ -309,6 +473,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     if (records != null) {
       records.close();
     }
+  }
+
+  public boolean hasKey(String key) {
+    if (!logContainsNonUniqueKeys) {
+      return records.containsKey(key);
+    }
+
+    return nonUniqueKeyRecords.containsKey(key);
   }
 
   /**
@@ -340,6 +512,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
     protected HoodieTableMetaClient hoodieTableMetaClient;
+
+    private boolean logContainsNonUniqueKeys = false;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -462,6 +636,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    public Builder withLogContainsNonUniqueKeys(boolean logContainsNonUniqueKeys) {
+      this.logContainsNonUniqueKeys = logContainsNonUniqueKeys;
+      return this;
+    }
+
     @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
@@ -474,7 +653,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
           Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger,
-          Option.ofNullable(hoodieTableMetaClient));
+          Option.ofNullable(hoodieTableMetaClient), logContainsNonUniqueKeys);
     }
   }
 }

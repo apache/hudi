@@ -367,7 +367,7 @@ object LogFileIterator extends SparkAdapterSupport {
       val relativePartitionPath = getRelativePartitionPath(new Path(tablePath), partitionPath)
 
       val logRecordReader =
-        metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath, toJavaOption(Some(forceFullScan)))
+        metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath, toJavaOption(Some(forceFullScan)), toJavaOption(None))
           .getLeft
 
       val recordList = closing(logRecordReader) {

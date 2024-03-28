@@ -65,6 +65,32 @@ class RecordLevelIndexSupport(spark: SparkSession,
   }
 
   /**
+   * Returns the list of candidate files which store the provided record keys based on Metadata Table Secondary Index
+   * and Metadata Table Record Index.
+   * @param secondaryKeys - List of secondary keys.
+   * @return Sequence of file names which need to be queried
+   */
+  def getCandidateFilesFromSecondaryIndex(allFiles: Seq[FileStatus], secondaryKeys: List[String]): Set[String] = {
+    val recordKeyLocationsMap = metadataTable.readSecondaryIndex(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava)
+    val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
+    val candidateFiles: mutable.Set[String] = mutable.Set.empty
+    for (locations <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
+      for (location <- JavaConverters.collectionAsScalaIterableConverter(locations).asScala) {
+        fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
+      }
+    }
+
+    for (file <- allFiles) {
+      val fileId = FSUtils.getFileIdFromFilePath(file.getPath)
+      val partitionOpt = fileIdToPartitionMap.get(fileId)
+      if (partitionOpt.isDefined) {
+        candidateFiles += file.getPath.getName
+      }
+    }
+    candidateFiles.toSet
+  }
+
+  /**
    * Returns the configured record key for the table if it is a simple record key else returns empty option.
    */
   private def getRecordKeyConfig: Option[String] = {
@@ -79,16 +105,33 @@ class RecordLevelIndexSupport(spark: SparkSession,
   }
 
   /**
-   * Matches the configured simple record key with the input attribute name.
-   * @param attributeName The attribute name provided in the query
-   * @return true if input attribute name matches the configured simple record key
+   * Returns the configured secondary key for the table
+   * TODO: Handle multiple secondary indexes (similar to functional index)
    */
-  private def attributeMatchesRecordKey(attributeName: String): Boolean = {
-    val recordKeyOpt = getRecordKeyConfig
-    if (recordKeyOpt.isDefined && recordKeyOpt.get == attributeName) {
+  private def getSecondaryKeyConfig: Option[String] = {
+    val secondaryKeysOpt: org.apache.hudi.common.util.Option[Array[String]] = metaClient.getTableConfig.getSecondaryKeyFields
+    val secondaryKeyOpt = secondaryKeysOpt.map[String](JFunction.toJavaFunction[Array[String], String](arr =>
+      if (arr.length == 1) {
+        arr(0)
+      } else {
+        null
+      }))
+    Option.apply(secondaryKeyOpt.orElse(null))
+  }
+
+  /**
+   * Matches the configured  key (record key or secondary key) with the input attribute name.
+   * @param attributeName The attribute name provided in the query
+   * @param isPrimaryKey Should match primary key (record key). If false, it matches secondary key.
+   * @return true if input attribute name matches the configured key
+   * TODO: Handle multiple secondary indexes (similar to functional index)
+   */
+  private def attributeMatchesKey(attributeName: String, isPrimaryKey: Boolean): Boolean = {
+    val keyOpt = if (isPrimaryKey) getRecordKeyConfig else getSecondaryKeyConfig
+    if (keyOpt.isDefined && keyOpt.get == attributeName) {
       true
     } else {
-      HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == recordKeyOpt.get
+      false
     }
   }
 
@@ -132,7 +175,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
       var recordKeyQueries: List[Expression] = List.empty
       var recordKeys: List[String] = List.empty
       for (query <- queryFilters) {
-        filterQueryWithRecordKey(query).foreach({
+        filterQueryWithKey(query, true).foreach({
           case (exp: Expression, recKeys: List[String]) =>
             recordKeys = recordKeys ++ recKeys
             recordKeyQueries = recordKeyQueries :+ exp
@@ -143,18 +186,37 @@ class RecordLevelIndexSupport(spark: SparkSession,
     }
   }
 
+  def filterQueriesWithSecondaryKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
+    if (!isSecondaryIndexAvailable) {
+      (List.empty, List.empty)
+    } else {
+      var secondaryKeyQueries: List[Expression] = List.empty
+      var secondaryKeys: List[String] = List.empty
+      for (query <- queryFilters) {
+        filterQueryWithKey(query, false).foreach({
+          case (exp: Expression, recKeys: List[String]) =>
+            secondaryKeys = secondaryKeys ++ recKeys
+            secondaryKeyQueries = secondaryKeyQueries :+ exp
+        })
+      }
+
+      Tuple2.apply(secondaryKeyQueries, secondaryKeys)
+    }
+  }
+
   /**
    * If the input query is an EqualTo or IN query on simple record key columns, the function returns a tuple of
    * list of the query and list of record key literals present in the query otherwise returns an empty option.
    *
    * @param queryFilter The query that need to be filtered.
+   * @param isPrimaryKey Should use primary key (record key) to filter. If false, it uses secondary key.
    * @return Tuple of filtered query and list of record key literals that need to be matched
    */
-  private def filterQueryWithRecordKey(queryFilter: Expression): Option[(Expression, List[String])] = {
+  private def filterQueryWithKey(queryFilter: Expression, isPrimaryKey: Boolean): Option[(Expression, List[String])] = {
     queryFilter match {
       case equalToQuery: EqualTo =>
         val (attribute, literal) = getAttributeLiteralTuple(equalToQuery.left, equalToQuery.right).orNull
-        if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name)) {
+        if (attribute != null && attribute.name != null && attributeMatchesKey(attribute.name, isPrimaryKey)) {
           Option.apply(equalToQuery, List.apply(literal.value.toString))
         } else {
           Option.empty
@@ -165,6 +227,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
           case _: AttributeReference =>
           case _ => validINQuery = false
         }
+
         var literals: List[String] = List.empty
         inQuery.list.foreach {
           case literal: Literal => literals = literals :+ literal.value.toString
@@ -184,5 +247,12 @@ class RecordLevelIndexSupport(spark: SparkSession,
    */
   def isIndexAvailable: Boolean = {
     metadataConfig.enabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
+  }
+
+  /**
+   * Return true if metadata table is enabled and secondary index metadata partition is available.
+   */
+  def isSecondaryIndexAvailable: Boolean = {
+    isIndexAvailable && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX)
   }
 }

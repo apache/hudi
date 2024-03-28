@@ -398,6 +398,9 @@ public class HoodieIndexUtils {
     if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType)) {
       checkArgument(metaClient.getFunctionalIndexMetadata().isPresent(), "Index definition is not present");
       return metaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
+    } else if (MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
+      checkArgument(metaClient.getFunctionalIndexMetadata().isPresent(), "Index definition is not present");
+      return metaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
     }
     return partitionType.getPartitionPath();
   }

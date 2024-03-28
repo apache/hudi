@@ -54,6 +54,13 @@ public class KeyGeneratorOptions extends HoodieConfig {
           + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using\n"
           + "the dot notation eg: `a.b.c`");
 
+  public static final ConfigProperty<String> SECONDARYKEY_FIELD_NAME = ConfigProperty
+      .key("hoodie.datasource.write.secondarykey.field")
+      .noDefaultValue()
+      .withDocumentation("Secondary key field. Columns that consitute the secondary key component.\n"
+          + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using\n"
+          + "the dot notation eg: `a.b.c`");
+
   public static final ConfigProperty<String> PARTITIONPATH_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.partitionpath.field")
       .noDefaultValue()

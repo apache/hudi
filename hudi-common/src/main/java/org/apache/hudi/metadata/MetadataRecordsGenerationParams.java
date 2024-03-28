@@ -22,7 +22,9 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Encapsulates all parameters required to generate metadata index for enabled index types.
@@ -35,7 +37,7 @@ import java.util.List;
 public class MetadataRecordsGenerationParams implements Serializable {
 
   private final HoodieTableMetaClient dataMetaClient;
-  private final List<MetadataPartitionType> enabledPartitionTypes;
+  private final Set<MetadataPartitionType> enabledPartitionTypes;
   private final String bloomFilterType;
   private final int bloomIndexParallelism;
   private final boolean isColumnStatsIndexEnabled;
@@ -43,7 +45,7 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final List<String> targetColumnsForColumnStatsIndex;
   private final List<String> targetColumnsForBloomFilterIndex;
 
-  MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
+  MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, Set<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
                                   boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
@@ -60,7 +62,7 @@ public class MetadataRecordsGenerationParams implements Serializable {
   }
 
   public List<MetadataPartitionType> getEnabledPartitionTypes() {
-    return enabledPartitionTypes;
+    return new ArrayList<>(enabledPartitionTypes);
   }
 
   public String getBloomFilterType() {

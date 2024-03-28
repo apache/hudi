@@ -32,7 +32,6 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Properties;
 
 public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
@@ -43,7 +42,6 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
 
   private TypedProperties payloadProps = new TypedProperties();
   private Option<Pair<String, String>> simpleKeyGenFieldsOpt;
-  Map<String, HoodieRecord> records;
   HoodieRecordMerger merger;
 
   public HoodieFileSliceReader(Option<HoodieFileReader> baseFileReader,
@@ -63,7 +61,6 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
     }
     this.props = props;
     this.simpleKeyGenFieldsOpt = simpleKeyGenFieldsOpt;
-    this.records = scanner.getRecords();
   }
 
   private boolean hasNextInternal() {
@@ -71,7 +68,14 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
       try {
         HoodieRecord currentRecord = baseFileIterator.get().next().wrapIntoHoodieRecordPayloadWithParams(schema, props,
             simpleKeyGenFieldsOpt, scanner.isWithOperationField(), scanner.getPartitionNameOverride(), false, Option.empty());
-        Option<HoodieRecord> logRecord = removeLogRecord(currentRecord.getRecordKey());
+
+        if (!scanner.hasKey(currentRecord.getRecordKey())) {
+          nextRecord = currentRecord;
+          return true;
+        }
+
+        // Option<HoodieRecord> logRecord = removeLogRecord(currentRecord.getRecordKey());
+        Option<HoodieRecord> logRecord = removeLogRecord(currentRecord);
         if (!logRecord.isPresent()) {
           nextRecord = currentRecord;
           return true;

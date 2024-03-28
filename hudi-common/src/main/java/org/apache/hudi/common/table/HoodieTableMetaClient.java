@@ -921,6 +921,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String tableName;
     private String tableCreateSchema;
     private String recordKeyFields;
+    private String secondaryKeyFields;
     private String archiveLogFolder;
     private String payloadClassName;
     private String payloadType;
@@ -985,6 +986,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setRecordKeyFields(String recordKeyFields) {
       this.recordKeyFields = recordKeyFields;
+      return this;
+    }
+
+    public PropertyBuilder setSecondaryKeyFields(String secondaryKeyFields) {
+      this.secondaryKeyFields = secondaryKeyFields;
       return this;
     }
 
@@ -1208,6 +1214,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)) {
         setRecordKeyFields(hoodieConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.SECONDARYKEY_FIELDS)) {
+        setSecondaryKeyFields(hoodieConfig.getString(HoodieTableConfig.SECONDARYKEY_FIELDS));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.CDC_ENABLED)) {
         setCDCEnabled(hoodieConfig.getBoolean(HoodieTableConfig.CDC_ENABLED));
       }
@@ -1322,6 +1331,11 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != recordKeyFields) {
         tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, recordKeyFields);
       }
+
+      if (null != secondaryKeyFields) {
+        tableConfig.setValue(HoodieTableConfig.SECONDARYKEY_FIELDS, secondaryKeyFields);
+      }
+
       if (null != cdcEnabled) {
         tableConfig.setValue(HoodieTableConfig.CDC_ENABLED, Boolean.toString(cdcEnabled));
         if (cdcEnabled && null != cdcSupplementalLoggingMode) {

@@ -79,7 +79,9 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
 
   @Override
   public void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) {
-    indexName = HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX + indexName;
+    indexName = indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX)
+        ? HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX + indexName : HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX + indexName;
+
     if (indexExists(metaClient, indexName)) {
       throw new HoodieFunctionalIndexException("Index already exists: " + indexName);
     }
@@ -143,7 +145,9 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
       });
     }
 
-    HoodieFunctionalIndexConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> writeConfig.put(key.toString(), value.toString()));
+    HoodieFunctionalIndexConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> {
+      writeConfig.put(key.toString(), value.toString());
+    });
     return writeConfig;
   }
 }

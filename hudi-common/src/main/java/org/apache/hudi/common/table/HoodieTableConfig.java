@@ -131,6 +131,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Columns used to uniquely identify the table. Concatenated values of these fields are used as "
           + " the record key component of HoodieKey.");
 
+  public static final ConfigProperty<String> SECONDARYKEY_FIELDS = ConfigProperty
+      .key("hoodie.table.secondarykey.fields")
+      .noDefaultValue()
+      .withDocumentation("Columns used to uniquely identify the table. Concatenated values of these fields are used as "
+          + " the record key component of HoodieKey.");
+
   public static final ConfigProperty<Boolean> CDC_ENABLED = ConfigProperty
       .key("hoodie.table.cdc.enabled")
       .defaultValue(false)
@@ -536,6 +542,16 @@ public class HoodieTableConfig extends HoodieConfig {
       return Option.empty();
     } else {
       return Option.of(Arrays.stream(keyFieldsValue.split(","))
+          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
+    }
+  }
+
+  public Option<String[]> getSecondaryKeyFields() {
+    String secondaryKeyFieldsValue = getStringOrDefault(SECONDARYKEY_FIELDS, null);
+    if (secondaryKeyFieldsValue == null) {
+      return Option.empty();
+    } else {
+      return Option.of(Arrays.stream(secondaryKeyFieldsValue.split(","))
           .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
     }
   }

@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.secondary.SecondaryIndexType;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -37,6 +38,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -66,7 +68,8 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
       .defaultValue(MetadataPartitionType.COLUMN_STATS.name())
       .withValidValues(
           MetadataPartitionType.COLUMN_STATS.name(),
-          MetadataPartitionType.BLOOM_FILTERS.name()
+          MetadataPartitionType.BLOOM_FILTERS.name(),
+          HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX.toUpperCase(Locale.ROOT)
       )
       .sinceVersion("1.0.0")
       .withDocumentation("Type of the functional index. Default is `column_stats` if there are no functions and expressions in the command. "
@@ -247,7 +250,11 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
     }
 
     public Builder withIndexFunction(String indexFunction) {
-      functionalIndexConfig.setValue(INDEX_FUNCTION, indexFunction);
+      if (indexFunction == null || indexFunction.isEmpty()) {
+        functionalIndexConfig.setValue(INDEX_FUNCTION, "null");
+      } else {
+        functionalIndexConfig.setValue(INDEX_FUNCTION, indexFunction);
+      }
       return this;
     }
 
