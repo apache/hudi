@@ -99,3 +99,6 @@ a7474658d [AUDIT-698] Upgrade to version release-v1.6.0 (#596)
 96f3fe33e [HUDI-7508] Avoid collecting records in HoodieStreamerUtils.createHoodieRecords and JsonKafkaSource mapPartitions (#595)
 bd3525032 [HUDI-7528] Fixing RowCustomColumnsSortPartitioner to use repartition instead of coalesce (#608)
 561ecab03 [AUDIT-711] Upgrade to version release-v1.7.1 (#607)
+
+---[2024-03-27 19:27:12] [release-v1.7.4] Upgrade to version release-v1.7.4---
+2d8d7c718 [ENG-8111][INTERNAL] revert pr 608 (#621)
