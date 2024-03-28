@@ -76,7 +76,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
             bucketIdToFileIdMapping.put(bucketId, new HoodieRecordLocation(commitTime, fileId));
           } else {
             // Finding the instants which conflict with the bucket id
-            Set<String> instants = findTheConflictBucketIdInPartition(hoodieTable ,partition, bucketId);
+            Set<String> instants = findTheConflictBucketIdInPartition(hoodieTable, partition, bucketId);
 
             // Check if bucket data is valid
             throw new HoodieIOException("Find multiple files at partition path="
