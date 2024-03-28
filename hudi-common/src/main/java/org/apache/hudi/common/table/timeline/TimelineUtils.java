@@ -286,7 +286,7 @@ public class TimelineUtils {
       HoodieTableMetaClient metaClient, String exclusiveStartInstantTime, Option<String> lastMaxCompletionTime) {
     HoodieDefaultTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
 
-    HoodieDefaultTimeline timeline = writeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
+    HoodieDefaultTimeline timeline = writeTimeline.isArchived(exclusiveStartInstantTime)
         ? metaClient.getArchivedTimeline(exclusiveStartInstantTime).mergeTimeline(writeTimeline)
         : writeTimeline;
 
@@ -347,7 +347,7 @@ public class TimelineUtils {
         ? dataTableActiveTimeline.getTimelineOfActions(
             CollectionUtils.createSet(
                 COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, SAVEPOINT_ACTION))
-        .getFirstNonSavepointCommit()
+        .getFirstNonSavepointActiveCommit()
         : dataTableActiveTimeline.getCommitsTimeline().firstInstant();
     // This is for all instants which are in-flight
     Option<HoodieInstant> earliestInflight =

@@ -154,7 +154,7 @@ public class HoodieFileGroup implements Serializable {
       return false;
     }
 
-    return timeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime());
+    return timeline.isValidInstant(slice.getBaseInstantTime());
   }
 
   /**

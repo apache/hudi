@@ -213,7 +213,7 @@ public class HoodieIndexUtils {
    * @return                true if the commit timestamp is valid for the timeline
    */
   public static boolean checkIfValidCommit(HoodieTimeline commitTimeline, String commitTs) {
-    return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
+    return !commitTimeline.empty() && commitTimeline.isValidInstant(commitTs);
   }
 
   public static HoodieIndex createUserDefinedIndex(HoodieWriteConfig config) {

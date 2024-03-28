@@ -271,7 +271,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
     boolean partitionsChanged;
     if (!lastCommitTimeSynced.isPresent()
-        || syncClient.getActiveTimeline().isBeforeTimelineStarts(lastCommitTimeSynced.get())) {
+        || syncClient.getActiveTimeline().isArchived(lastCommitTimeSynced.get())) {
       // If the last commit time synced is before the start of the active timeline,
       // the Hive sync falls back to list all partitions on storage, instead of
       // reading active and archived timelines for written partitions.

@@ -147,7 +147,7 @@ public class IncrSourceHelper {
       }
     }
 
-    if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST || !activeCommitTimeline.isBeforeTimelineStarts(beginInstantTime)) {
+    if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST || !activeCommitTimeline.isArchived(beginInstantTime)) {
       Option<HoodieInstant> nthInstant;
       // When we are in the upgrade code path from non-sourcelimit-based batching to sourcelimit-based batching, we need to avoid fetching the commit
       // that is read already. Else we will have duplicates in append-only use case if we use "findInstantsAfterOrEquals".
