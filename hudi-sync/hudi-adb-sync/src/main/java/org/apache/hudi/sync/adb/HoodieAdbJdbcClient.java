@@ -54,6 +54,7 @@ import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_USE_HIVE_STYLE_PAR
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 public class HoodieAdbJdbcClient extends HoodieSyncClient {
 
@@ -109,11 +110,11 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
       Map<String, String> serdeProperties, Map<String, String> tableProperties) {
     try {
       LOG.info("Creating table:{}", tableName);
-      String createSQLQuery = HiveSchemaUtil.generateCreateDDL(tableName, storageSchema,
+      String createSQLQuery = HiveSchemaUtil.generateCreateTableDDL(databaseName, tableName, storageSchema,
           config, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
       executeAdbSql(createSQLQuery);
     } catch (IOException e) {
-      throw new HoodieException("Fail to create table:" + tableName, e);
+      throw new HoodieException("Fail to create table:" + tableId(databaseName, tableName), e);
     }
   }
 
