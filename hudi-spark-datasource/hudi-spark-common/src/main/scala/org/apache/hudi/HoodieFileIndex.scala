@@ -100,6 +100,12 @@ case class HoodieFileIndex(spark: SparkSession,
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
   /**
+   * NOTE: [[PartitionStatsIndexSupport]] is a transient state, since it's only relevant while logical plan
+   *       is handled by the Spark's driver
+   */
+  @transient private lazy val partitionStatsIndex = new PartitionStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+
+  /**
    * NOTE: [[RecordLevelIndexSupport]] is a transient state, since it's only relevant while logical plan
    * is handled by the Spark's driver
    */
@@ -349,7 +355,13 @@ case class HoodieFileIndex(spark: SparkSession,
       Option.empty
     } else if (recordKeys.nonEmpty) {
       Option.apply(recordLevelIndex.getCandidateFiles(getAllFiles(), recordKeys))
-    } else if (functionalIndex.isIndexAvailable && !queryFilters.isEmpty) {
+    } else if (partitionStatsIndex.isIndexAvailable && queryFilters.nonEmpty) {
+      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
+      val shouldReadInMemory = partitionStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
+      partitionStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory) { transposedColStatsDF =>
+        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
+      }
+    } else if (functionalIndex.isIndexAvailable && queryFilters.nonEmpty) {
       val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
       val shouldReadInMemory = functionalIndex.shouldReadInMemory(this, queryReferencedColumns)
       val indexDf = functionalIndex.loadFunctionalIndexDataFrame("", shouldReadInMemory)
@@ -421,6 +433,7 @@ case class HoodieFileIndex(spark: SparkSession,
   override def refresh(): Unit = {
     super.refresh()
     columnStatsIndex.invalidateCaches()
+    partitionStatsIndex.invalidateCaches()
     hasPushedDownPartitionPredicates = false
   }
 

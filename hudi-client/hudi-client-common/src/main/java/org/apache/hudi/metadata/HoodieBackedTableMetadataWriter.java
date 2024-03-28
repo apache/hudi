@@ -40,7 +40,6 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
 import org.apache.hudi.common.model.HoodieFunctionalIndexMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -83,7 +82,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -107,6 +105,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInfli
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.createRollbackTimestamp;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
@@ -116,6 +115,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
 /**
@@ -128,8 +128,6 @@ import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableMetadataWriter {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadataWriter.class);
-
-  public static final String METADATA_COMPACTION_TIME_SUFFIX = "001";
 
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
@@ -227,6 +225,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     if (dataMetaClient.getFunctionalIndexMetadata().isPresent()) {
       this.enabledPartitionTypes.add(FUNCTIONAL_INDEX);
     }
+    if ((metadataConfig.isPartitionStatsIndexEnabled() && !metadataConfig.getColumnsEnabledForColumnStatsIndex().isEmpty())
+        || dataMetaClient.getTableConfig().isMetadataPartitionAvailable(PARTITION_STATS)) {
+      this.enabledPartitionTypes.add(PARTITION_STATS);
+    }
   }
 
   protected abstract void initRegistry();
@@ -267,8 +269,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       if (!dataWriteConfig.isMetadataAsyncIndex()) {
         Set<String> completedPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
         LOG.info("Async metadata indexing disabled and following partitions already initialized: " + completedPartitions);
-        // TODO: fix the filter to check for exact partition name, e.g. completedPartitions could have func_index_datestr,
-        //       but now the user is trying to initialize the func_index_dayhour partition.
         this.enabledPartitionTypes.stream()
             .filter(p -> !completedPartitions.contains(p.getPartitionPath()) && !FILES.equals(p))
             .forEach(partitionsToInit::add);
@@ -436,6 +436,13 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           case FUNCTIONAL_INDEX:
             fileGroupCountAndRecordsPair = initializeFunctionalIndexPartition();
             break;
+          case PARTITION_STATS:
+            if (getRecordsGenerationParams().getTargetColumnsForColumnStatsIndex().isEmpty()) {
+              LOG.warn("Skipping partition stats index initialization as target columns are not set");
+              continue;
+            }
+            fileGroupCountAndRecordsPair = initializePartitionStatsIndex(partitionInfoList);
+            break;
           default:
             throw new HoodieMetadataException("Unsupported MDT partition type: " + partitionType);
         }
@@ -496,6 +503,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         return commitInstantTime;
       }
     }
+  }
+
+  private Pair<Integer, HoodieData<HoodieRecord>> initializePartitionStatsIndex(List<DirectoryInfo> partitionInfoList) {
+    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext, partitionInfoList, getRecordsGenerationParams());
+    final int fileGroupCount = dataWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
+    return Pair.of(fileGroupCount, records);
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeColumnStatsPartition(Map<String, Map<String, Long>> partitionToFilesMap) {
@@ -851,7 +864,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
         dataWriteConfig.getColumnStatsIndexParallelism(),
         dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
-        dataWriteConfig.getColumnsEnabledForBloomFilterIndex());
+        dataWriteConfig.getColumnsEnabledForBloomFilterIndex(),
+        dataWriteConfig.isPartitionStatsIndexEnabled(),
+        dataWriteConfig.getPartitionStatsIndexParallelism());
   }
 
   /**
@@ -1598,69 +1613,4 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
-
-  /**
-   * A class which represents a directory and the files and directories inside it.
-   * <p>
-   * A {@code PartitionFileInfo} object saves the name of the partition and various properties requires of each file
-   * required for initializing the metadata table. Saving limited properties reduces the total memory footprint when
-   * a very large number of files are present in the dataset being initialized.
-   */
-  static class DirectoryInfo implements Serializable {
-    // Relative path of the directory (relative to the base directory)
-    private final String relativePath;
-    // Map of filenames within this partition to their respective sizes
-    private final HashMap<String, Long> filenameToSizeMap;
-    // List of directories within this partition
-    private final List<Path> subDirectories = new ArrayList<>();
-    // Is this a hoodie partition
-    private boolean isHoodiePartition = false;
-
-    public DirectoryInfo(String relativePath, FileStatus[] fileStatus, String maxInstantTime) {
-      this.relativePath = relativePath;
-
-      // Pre-allocate with the maximum length possible
-      filenameToSizeMap = new HashMap<>(fileStatus.length);
-
-      for (FileStatus status : fileStatus) {
-        if (status.isDirectory()) {
-          // Ignore .hoodie directory as there cannot be any partitions inside it
-          if (!status.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
-            this.subDirectories.add(status.getPath());
-          }
-        } else if (status.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
-          // Presence of partition meta file implies this is a HUDI partition
-          this.isHoodiePartition = true;
-        } else if (FSUtils.isDataFile(status.getPath())) {
-          // Regular HUDI data file (base file or log file)
-          String dataFileCommitTime = FSUtils.getCommitTime(status.getPath().getName());
-          // Limit the file listings to files which were created before the maxInstant time.
-          if (HoodieTimeline.compareTimestamps(dataFileCommitTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, maxInstantTime)) {
-            filenameToSizeMap.put(status.getPath().getName(), status.getLen());
-          }
-        }
-      }
-    }
-
-    String getRelativePath() {
-      return relativePath;
-    }
-
-    int getTotalFiles() {
-      return filenameToSizeMap.size();
-    }
-
-    boolean isHoodiePartition() {
-      return isHoodiePartition;
-    }
-
-    List<Path> getSubDirectories() {
-      return subDirectories;
-    }
-
-    // Returns a map of filenames mapped to their lengths
-    Map<String, Long> getFileNameToSizeMap() {
-      return filenameToSizeMap;
-    }
-  }
 }

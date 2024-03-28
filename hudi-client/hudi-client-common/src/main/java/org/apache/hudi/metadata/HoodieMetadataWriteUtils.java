@@ -71,8 +71,7 @@ public class HoodieMetadataWriteUtils {
   private static final long MDT_MAX_HFILE_SIZE_BYTES = 10 * 1024 * 1024 * 1024L; // 10GB
 
   /**
-   * Create a {@code HoodieWriteConfig} to use for the Metadata Table.  This is used by async
-   * indexer only.
+   * Create a {@code HoodieWriteConfig} to use for the Metadata Table.
    *
    * @param writeConfig                {@code HoodieWriteConfig} of the main dataset writer
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes

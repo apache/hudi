@@ -42,9 +42,12 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final int columnStatsIndexParallelism;
   private final List<String> targetColumnsForColumnStatsIndex;
   private final List<String> targetColumnsForBloomFilterIndex;
+  private final boolean isPartitionStatsIndexEnabled;
+  private final int partitionStatsIndexParallelism;
 
   MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
-                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex) {
+                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex,
+                                  boolean isPartitionStatsIndexEnabled, int partitionStatsIndexParallelism) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
@@ -53,6 +56,8 @@ public class MetadataRecordsGenerationParams implements Serializable {
     this.columnStatsIndexParallelism = columnStatsIndexParallelism;
     this.targetColumnsForColumnStatsIndex = targetColumnsForColumnStatsIndex;
     this.targetColumnsForBloomFilterIndex = targetColumnsForBloomFilterIndex;
+    this.isPartitionStatsIndexEnabled = isPartitionStatsIndexEnabled;
+    this.partitionStatsIndexParallelism = partitionStatsIndexParallelism;
   }
 
   public HoodieTableMetaClient getDataMetaClient() {
@@ -85,5 +90,13 @@ public class MetadataRecordsGenerationParams implements Serializable {
 
   public List<String> getSecondaryKeysForBloomFilterIndex() {
     return targetColumnsForBloomFilterIndex;
+  }
+
+  public boolean isPartitionStatsIndexEnabled() {
+    return isPartitionStatsIndexEnabled;
+  }
+
+  public int getPartitionStatsIndexParallelism() {
+    return partitionStatsIndexParallelism;
   }
 }
