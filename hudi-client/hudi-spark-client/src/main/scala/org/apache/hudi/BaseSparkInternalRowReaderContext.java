@@ -69,30 +69,15 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public Object getValue(InternalRow row, Schema schema, String fieldName) {
-    return getFieldValueFromInternalRow(row, schema, fieldName);
-  }
-
-  @Override
-  public String getRecordKey(InternalRow row, Schema schema) {
-    return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
-  }
-
-  @Override
-  public Comparable getOrderingValue(Option<InternalRow> rowOption,
-                                     Map<String, Object> metadataMap,
-                                     Schema schema,
-                                     TypedProperties props) {
-    if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
-      return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
+    StructType structType = getCachedSchema(schema);
+    scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
+        HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
+    if (cachedNestedFieldPath.isDefined()) {
+      HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+      return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, nestedFieldPath);
+    } else {
+      return null;
     }
-
-    if (!rowOption.isPresent()) {
-      return 0;
-    }
-
-    String orderingFieldName = ConfigUtils.getOrderingField(props);
-    Object value = getFieldValueFromInternalRow(rowOption.get(), schema, orderingFieldName);
-    return value != null ? (Comparable) value : 0;
   }
 
   @Override
@@ -117,23 +102,11 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public long extractRecordPosition(InternalRow record, Schema recordSchema, String fieldName, long providedPositionIfNeeded) {
-    Object position = getFieldValueFromInternalRow(record, recordSchema, fieldName);
+    Object position = getValue(record, recordSchema, fieldName);
     if (position != null) {
       return (long) position;
     }
     return providedPositionIfNeeded;
-  }
-
-  private Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
-    StructType structType = getCachedSchema(recordSchema);
-    scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
-        HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
-    if (cachedNestedFieldPath.isDefined()) {
-      HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
-      return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, nestedFieldPath);
-    } else {
-      return null;
-    }
   }
 
   @Override

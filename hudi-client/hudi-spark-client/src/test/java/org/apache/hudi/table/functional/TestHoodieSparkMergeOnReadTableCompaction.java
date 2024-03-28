@@ -22,6 +22,7 @@ package org.apache.hudi.table.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -146,43 +147,50 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   @ParameterizedTest
   @MethodSource("writeLogTest")
   public void testWriteLogDuringCompaction(boolean enableMetadataTable, boolean enableTimelineServer) throws IOException {
-    Properties props = getPropertiesForKeyGen(true);
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .forTable("test-trip-table")
-        .withPath(basePath())
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(2, 2)
-        .withAutoCommit(true)
-        .withEmbeddedTimelineServerEnabled(enableTimelineServer)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withLayoutConfig(HoodieLayoutConfig.newBuilder()
-            .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
-            .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
-        .build();
-    props.putAll(config.getProps());
+    try {
+      //disable for this test because it seems like we process mor in a different order?
+      jsc().hadoopConfiguration().set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
+      Properties props = getPropertiesForKeyGen(true);
+      HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+          .forTable("test-trip-table")
+          .withPath(basePath())
+          .withSchema(TRIP_EXAMPLE_SCHEMA)
+          .withParallelism(2, 2)
+          .withAutoCommit(true)
+          .withEmbeddedTimelineServerEnabled(enableTimelineServer)
+          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
+          .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+              .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+          .withLayoutConfig(HoodieLayoutConfig.newBuilder()
+              .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
+              .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
+          .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
+          .build();
+      props.putAll(config.getProps());
 
-    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
-    client = getHoodieWriteClient(config);
+      metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
+      client = getHoodieWriteClient(config);
 
-    final List<HoodieRecord> records = dataGen.generateInserts("001", 100);
-    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 2);
+      final List<HoodieRecord> records = dataGen.generateInserts("001", 100);
+      JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 2);
 
-    // initialize 100 records
-    client.upsert(writeRecords, client.startCommit());
-    // update 100 records
-    client.upsert(writeRecords, client.startCommit());
-    // schedule compaction
-    client.scheduleCompaction(Option.empty());
-    // delete 50 records
-    List<HoodieKey> toBeDeleted = records.stream().map(HoodieRecord::getKey).limit(50).collect(Collectors.toList());
-    JavaRDD<HoodieKey> deleteRecords = jsc().parallelize(toBeDeleted, 2);
-    client.delete(deleteRecords, client.startCommit());
-    // insert the same 100 records again
-    client.upsert(writeRecords, client.startCommit());
-    Assertions.assertEquals(100, readTableTotalRecordsNum());
+      // initialize 100 records
+      client.upsert(writeRecords, client.startCommit());
+      // update 100 records
+      client.upsert(writeRecords, client.startCommit());
+      // schedule compaction
+      client.scheduleCompaction(Option.empty());
+      // delete 50 records
+      List<HoodieKey> toBeDeleted = records.stream().map(HoodieRecord::getKey).limit(50).collect(Collectors.toList());
+      JavaRDD<HoodieKey> deleteRecords = jsc().parallelize(toBeDeleted, 2);
+      client.delete(deleteRecords, client.startCommit());
+      // insert the same 100 records again
+      client.upsert(writeRecords, client.startCommit());
+      Assertions.assertEquals(100, readTableTotalRecordsNum());
+    } finally {
+      jsc().hadoopConfiguration().set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");
+    }
+
   }
 
   private long readTableTotalRecordsNum() {

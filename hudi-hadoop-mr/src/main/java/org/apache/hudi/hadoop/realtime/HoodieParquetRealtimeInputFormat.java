@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.hadoop.HoodieFileGroupReaderRecordReader;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
@@ -69,6 +70,11 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
     ValidationUtils.checkArgument(split instanceof RealtimeSplit,
         "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
     RealtimeSplit realtimeSplit = (RealtimeSplit) split;
+
+    if (HoodieFileGroupReaderRecordReader.useFilegroupReader(jobConf)) {
+      return super.getRecordReader(realtimeSplit, jobConf, reporter);
+    }
+
     // add preCombineKey
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(realtimeSplit.getBasePath()).build();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
