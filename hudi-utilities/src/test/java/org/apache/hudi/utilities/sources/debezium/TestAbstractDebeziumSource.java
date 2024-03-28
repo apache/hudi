@@ -26,6 +26,7 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
@@ -118,7 +119,7 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
     TypedProperties props = createPropsForJsonSource();
 
     SchemaProvider schemaProvider = new MockSchemaRegistryProvider(props, jsc, this);
-    SourceFormatAdapter debeziumSource = new SourceFormatAdapter(UtilHelpers.createSource(sourceClass, props, jsc, sparkSession, schemaProvider, metrics));
+    SourceFormatAdapter debeziumSource = new SourceFormatAdapter(UtilHelpers.createSource(sourceClass, props, jsc, sparkSession, metrics, new DefaultStreamContext(schemaProvider, Option.empty())));
 
     testUtils.sendMessages(testTopicName, new String[] {generateDebeziumEvent(operation).toString()});
 
