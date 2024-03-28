@@ -18,10 +18,12 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.streaming.kafka010.OffsetRange;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -388,6 +390,16 @@ public class TestCheckpointUtils {
         OffsetRange.apply(TEST_TOPIC_NAME, 17, 787273821, 787273821),
     };
     assertArrayEquals(expectedRanges, ranges);
+  }
+
+  @Test
+  public void testIsResetCheckpoint() {
+    Assertions.assertFalse(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.empty()));
+    Assertions.assertTrue(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.of("Topic:RESET-example123")));
+    Assertions.assertTrue(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.of("Topic:RESET-")));
+    Assertions.assertTrue(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.of("Topic:RESET-   ")));
+    Assertions.assertFalse(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.of("Topic:example123")));
+    Assertions.assertTrue(KafkaOffsetGen.CheckpointUtils.isResetCheckpoint(Option.of("Topic:RESET-_.*!@")));
   }
 
   private static Map<TopicPartition, Long> makeOffsetMap(int[] partitions, long[] offsets) {

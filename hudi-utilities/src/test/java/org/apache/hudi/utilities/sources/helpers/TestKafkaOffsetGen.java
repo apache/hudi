@@ -34,7 +34,10 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -117,6 +120,27 @@ public class TestKafkaOffsetGen {
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(250, nextOffsetRanges[0].fromOffset());
     assertEquals(750, nextOffsetRanges[0].untilOffset());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"latest","earliest"})
+  public void testGetNextOffsetRangesWhenUsingResetCheckpoint(String autoOffsetResetConfig) {
+    String resetCheckpoint = String.format("%s:reset-%s",testTopicName, Instant.now().toEpochMilli());
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.createTopic(testTopicName, 1);
+    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs(autoOffsetResetConfig, "string"));
+
+    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(resetCheckpoint), 500, metrics);
+    if (autoOffsetResetConfig.equals("latest")) {
+      assertEquals(1, nextOffsetRanges.length);
+      assertEquals(1000, nextOffsetRanges[0].fromOffset());
+      assertEquals(1000, nextOffsetRanges[0].untilOffset());
+    } else {
+      assertEquals(1, nextOffsetRanges.length);
+      assertEquals(0, nextOffsetRanges[0].fromOffset());
+      assertEquals(500, nextOffsetRanges[0].untilOffset());
+    }
   }
 
   @Test
