@@ -79,7 +79,10 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   /**
    * Helps us pack inserts into 1 or more buckets depending on number of incoming records.
    */
-  private HashMap<String, List<InsertBucketCumulativeWeightPair>> partitionPathToInsertBucketInfos;
+  protected HashMap<String, List<InsertBucketCumulativeWeightPair>> partitionPathToInsertBucketInfos;
+
+  protected HashMap<String, Long> partitionPathToStartingRecordIndex;
+
   /**
    * Remembers what type each bucket is for later.
    */
@@ -90,8 +93,11 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
       HoodieWriteConfig config) {
     super(profile, table);
+
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBucketInfos = new HashMap<>();
+    partitionPathToStartingRecordIndex = new HashMap<>();
+
     bucketInfoMap = new HashMap<>();
     this.config = config;
     assignUpdates(profile);
@@ -162,9 +168,14 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     }
   }
 
+  protected List<String> getPartitionPath(WorkloadProfile profile) {
+    return profile.getPartitionPaths().stream().collect(Collectors.toList());
+  }
+
   private void assignInserts(WorkloadProfile profile, HoodieEngineContext context) {
     // for new inserts, compute buckets depending on how many records we have for each partition
-    Set<String> partitionPaths = profile.getPartitionPaths();
+    List<String> partitionPaths = getPartitionPath(profile);
+
     /*
      * NOTE: we only use commit instants to calculate average record size because replacecommit can be
      * created by clustering, which has smaller average record size, which affects assigning inserts and
@@ -178,6 +189,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
         getSmallFilesForPartitions(new ArrayList<>(partitionPaths), context);
 
     Map<String, Set<String>> partitionPathToPendingClusteringFileGroupsId = getPartitionPathToPendingClusteringFileGroupsId();
+    Long startingRecordForPartition = 0L;
 
     for (String partitionPath : partitionPaths) {
       WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
@@ -216,6 +228,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
             }
             bucketNumbers.add(bucket);
             recordsPerBucket.add(recordsToAppend);
+
             totalUnassignedInserts -= recordsToAppend;
             if (totalUnassignedInserts <= 0) {
               // stop the loop when all the inserts are assigned
@@ -241,6 +254,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
             } else {
               recordsPerBucket.add(totalUnassignedInserts - (insertBuckets - 1) * insertRecordsPerBucket);
             }
+
             BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), partitionPath);
             bucketInfoMap.put(totalBuckets, bucketInfo);
             if (profile.hasOutputWorkLoadStats()) {
@@ -262,6 +276,8 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
         }
         LOG.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);
+        partitionPathToStartingRecordIndex.put(partitionPath, startingRecordForPartition);
+        startingRecordForPartition += pStat.getNumInserts();
       }
       if (profile.hasOutputWorkLoadStats()) {
         profile.updateOutputPartitionPathStatMap(partitionPath, outputWorkloadStats);

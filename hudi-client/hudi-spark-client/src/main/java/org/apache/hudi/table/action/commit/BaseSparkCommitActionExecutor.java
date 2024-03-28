@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -41,6 +42,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
@@ -53,6 +55,7 @@ import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 
+import org.apache.avro.Schema;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -64,6 +67,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -76,6 +80,9 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.config.HoodieWriteConfig.INSERT_SORT_MODE;
+import static org.apache.hudi.config.HoodieWriteConfig.INSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 public abstract class BaseSparkCommitActionExecutor<T> extends
@@ -229,31 +236,35 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   private HoodieData<WriteStatus> mapPartitionsAsRDD(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
-    JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> mappedRDD = HoodieJavaPairRDD.getJavaPairRDD(
-        dedupedRecords.mapToPair(record -> Pair.of(new Tuple2<>(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record)));
-
-    JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> partitionedRDD;
-    if (table.requireSortedRecords()) {
-      // Partition and sort within each partition as a single step. This is faster than partitioning first and then
-      // applying a sort.
-      Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> comparator = (Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> & Serializable) (t1, t2) -> {
-        HoodieKey key1 = t1._1;
-        HoodieKey key2 = t2._1;
-        return key1.getRecordKey().compareTo(key2.getRecordKey());
-      };
-
-      partitionedRDD = mappedRDD.repartitionAndSortWithinPartitions(partitioner, comparator);
+    if (operationRequiresSorting()) {
+      return sortAndMapPartitionsAsRDDAndWrite(dedupedRecords, partitioner);
     } else {
-      // Partition only
-      partitionedRDD = mappedRDD.partitionBy(partitioner);
-    }
-    return HoodieJavaRDD.of(partitionedRDD.map(Tuple2::_2).mapPartitionsWithIndex((partition, recordItr) -> {
-      if (WriteOperationType.isChangingRecords(operationType)) {
-        return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
+      JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> mappedRDD = HoodieJavaPairRDD.getJavaPairRDD(
+          dedupedRecords.mapToPair(record -> Pair.of(new Tuple2<>(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record)));
+
+      JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> partitionedRDD;
+      if (table.requireSortedRecords()) {
+        // Partition and sort within each partition as a single step. This is faster than partitioning first and then
+        // applying a sort.
+        Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> comparator = (Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> & Serializable) (t1, t2) -> {
+          HoodieKey key1 = t1._1;
+          HoodieKey key2 = t2._1;
+          return key1.getRecordKey().compareTo(key2.getRecordKey());
+        };
+
+        partitionedRDD = mappedRDD.repartitionAndSortWithinPartitions(partitioner, comparator);
       } else {
-        return handleInsertPartition(instantTime, partition, recordItr, partitioner);
+        // Partition only
+        partitionedRDD = mappedRDD.partitionBy(partitioner);
       }
-    }, true).flatMap(List::iterator));
+      return HoodieJavaRDD.of(partitionedRDD.map(Tuple2::_2).mapPartitionsWithIndex((partition, recordItr) -> {
+        if (WriteOperationType.isChangingRecords(operationType)) {
+          return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
+        } else {
+          return handleInsertPartition(instantTime, partition, recordItr, partitioner);
+        }
+      }, true).flatMap(List::iterator));
+    }
   }
 
   protected HoodieData<WriteStatus> updateIndex(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
@@ -372,7 +383,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (profile == null) {
       throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
     }
-    return new UpsertPartitioner<>(profile, context, table, config);
+
+    if (operationRequiresSorting()) {
+      // Return UpsertSortPartitioner if the input records are going to be sorted
+      return new UpsertSortPartitioner<>(profile, context, table, config);
+    } else {
+      return new UpsertPartitioner<>(profile, context, table, config);
+    }
   }
 
   public Partitioner getInsertPartitioner(WorkloadProfile profile) {
@@ -388,5 +405,86 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   @Override
   protected void runPrecommitValidators(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
     SparkValidatorUtils.runValidators(config, writeMetadata, context, table, instantTime);
+  }
+
+  private HoodieData<WriteStatus> sortAndMapPartitionsAsRDDAndWrite(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
+    JavaPairRDD<Tuple2<HoodieKey, Long>, HoodieRecord<T>> mappedRDD = getSortedIndexedRecords(dedupedRecords);
+    JavaPairRDD<Tuple2<HoodieKey, Long>, HoodieRecord<T>> partitionedRDD;
+    if (table.requireSortedRecords()) {
+      // Partition and sort within each partition as a single step. This is faster than partitioning first and then
+      // applying a sort.
+      Comparator<Tuple2<HoodieKey, Long>> comparator = (Comparator<Tuple2<HoodieKey, Long>> & Serializable) (t1, t2) -> {
+        HoodieKey key1 = t1._1();
+        HoodieKey key2 = t2._1();
+        return key1.getRecordKey().compareTo(key2.getRecordKey());
+      };
+      partitionedRDD = mappedRDD.repartitionAndSortWithinPartitions(partitioner, comparator);
+    } else {
+      // Partition only
+      partitionedRDD = mappedRDD.partitionBy(partitioner);
+    }
+
+    return HoodieJavaRDD.of(partitionedRDD.map(Tuple2::_2).mapPartitionsWithIndex((partition, recordItr) -> {
+      if (WriteOperationType.isChangingRecords(operationType)) {
+        return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
+      } else {
+        return handleInsertPartition(instantTime, partition, recordItr, partitioner);
+      }
+    }, true).flatMap(List::iterator));
+  }
+
+  private boolean operationRequiresSorting() {
+    return operationType == WriteOperationType.INSERT && config.getString(INSERT_SORT_MODE).equals(BulkInsertSortMode.GLOBAL_SORT.name());
+  }
+
+  private JavaPairRDD<Tuple2<HoodieKey, Long>, HoodieRecord<T>> getSortedIndexedRecords(HoodieData<HoodieRecord<T>> dedupedRecords) {
+    // Get any user specified sort columns
+    String customSortColField = config.getString(INSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS);
+
+    String[] customSortColumns;
+    if (!isNullOrEmpty(customSortColField)) {
+      // Extract user specified sort-column fields as an array
+      customSortColumns = Arrays.stream(customSortColField.split(","))
+          .map(String::trim).toArray(String[]::new);
+    } else {
+      customSortColumns = null;
+    }
+
+    // Get the record's schema from the write config
+    SerializableSchema serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
+
+    JavaRDD<HoodieRecord<T>> javaRdd = HoodieJavaRDD.getJavaRDD(dedupedRecords);
+    JavaRDD<HoodieRecord<T>> sortedRecordsRdd = javaRdd.sortBy(record -> {
+      String secondarySortColString;
+      if (customSortColumns == null || customSortColumns.length == 0) {
+        // If sorting based on record-key, extract it directly using record.getRecordKey() and prepend with partition-path
+        secondarySortColString = record.getRecordKey();
+      } else {
+        // Extract the sort columns from the record and return it as string (prepended with partition-path)
+        Object[] columnValues = record.getColumnValues(serializableSchema.get(), customSortColumns, config.isConsistentLogicalTimestampEnabled());
+        secondarySortColString = Arrays.stream(columnValues).map(Object::toString).collect(Collectors.joining());
+      }
+      return new StringBuilder()
+          .append(record.getPartitionPath())
+          .append("+")
+          .append(secondarySortColString)
+          .toString();
+    }, true, 0);
+
+    // Assign index to each record in the RDD
+    JavaRDD<Pair<HoodieRecord<T>, Long>> indexedRecordsRdd = sortedRecordsRdd.zipWithIndex()
+        .map(recordWithIndex -> {
+          HoodieRecord<T> record = recordWithIndex._1();
+          Long index = recordWithIndex._2();
+          return Pair.of(record, index);
+        });
+
+    // Extract HoodieJavaPairRDD as required by the partitioner
+    return HoodieJavaPairRDD.getJavaPairRDD(
+        HoodieJavaRDD.of(indexedRecordsRdd).mapToPair(recordWithIndex -> {
+          HoodieRecord<T> record = recordWithIndex.getLeft();
+          Long index = recordWithIndex.getRight();
+          return Pair.of(new Tuple2<>(record.getKey(), index), record);
+        }));
   }
 }
