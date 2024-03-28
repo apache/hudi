@@ -272,26 +272,21 @@ public class ClusteringUtils {
                 ? cleanInstant
                 : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
             .getEarliestInstantToRetain();
-        String retainLowerBound;
+
         if (earliestInstantToRetain != null && !StringUtils.isNullOrEmpty(earliestInstantToRetain.getTimestamp())) {
-          retainLowerBound = earliestInstantToRetain.getTimestamp();
+          oldestInstantToRetain = replaceTimeline.filter(instant ->
+              HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestInstantToRetain.getTimestamp())
+          ).firstInstant();
         } else {
           // no earliestInstantToRetain, indicate KEEP_LATEST_FILE_VERSIONS clean policy,
-          // retain first instant after clean instant.
-          // For KEEP_LATEST_FILE_VERSIONS cleaner policy, file versions are only maintained for active file groups
-          // not for replaced file groups. So, last clean instant can be considered as a lower bound, since
-          // the cleaner would have removed all the file groups until then. But there is a catch to this logic,
-          // while cleaner is running if there is a pending replacecommit then those files are not cleaned.
-          // TODO: This case has to be handled. HUDI-6352
-          retainLowerBound = cleanInstant.getTimestamp();
+          // retain first instant after clean instant
+          String instantTimeLowerBound = cleanInstant.getTimestamp();
+          String stateTransitionTimeLowerBound = cleanInstant.getStateTransitionTime();
+          oldestInstantToRetain = replaceTimeline.filter(instant ->
+              HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTimeLowerBound)
+                  || stateTransitionTimeLowerBound != null && instant.getStateTransitionTime().compareTo(stateTransitionTimeLowerBound) > 0
+          ).firstInstant();
         }
-
-        oldestInstantToRetain = replaceTimeline.filter(instant ->
-                HoodieTimeline.compareTimestamps(
-                    instant.getTimestamp(),
-                    HoodieTimeline.GREATER_THAN_OR_EQUALS,
-                    retainLowerBound))
-            .firstInstant();
       } else {
         oldestInstantToRetain = replaceTimeline.firstInstant();
       }

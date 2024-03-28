@@ -707,4 +707,76 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       assertFalse(testTable.baseFileExists(p1, firstCommitTs, file1P1C0));
     }
   }
+
+  /**
+   * make sure commits after the earliest pending commit is retained under HoodieCleaningPolicy.KEEP_LATEST_COMMITS
+   */
+  @Test
+  public void testKeepLatestCommitsWithPendingCommit() throws Exception {
+    testCleanWithPendingCommit(
+        HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(1)
+            .build());
+  }
+
+  /**
+   * make sure commits after the earliest pending commit is retained under HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS
+   */
+  @Test
+  public void testKeepByHoursWithPendingCommit() throws Exception {
+    testCleanWithPendingCommit(
+        HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS)
+            .cleanerNumHoursRetained(20)
+            .build());
+  }
+
+  private void testCleanWithPendingCommit(HoodieCleanConfig cleanConfig) throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withCleanConfig(cleanConfig)
+        .build();
+
+    long now = System.currentTimeMillis();
+    String commitInstant1 = HoodieActiveTimeline.formatDate(new Date(now - 40 * 3600 * 1000));
+    String commitInstant2 = HoodieActiveTimeline.formatDate(new Date(now - 30 * 3600 * 1000));
+    String commitInstant3 = HoodieActiveTimeline.formatDate(new Date(now - 20 * 3600 * 1000));
+    String commitInstant4 = HoodieActiveTimeline.formatDate(new Date(now - 10 * 3600 * 1000));
+
+    String p1 = "part_1";
+    String file1P1 = UUID.randomUUID().toString();
+    String file2P1 = UUID.randomUUID().toString();
+
+    String p2 = "part_2";
+    String file1P2 = UUID.randomUUID().toString();
+    String file2P2 = UUID.randomUUID().toString();
+
+    HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
+    testTable.withPartitionMetaFiles(p1, p2);
+
+    testTable.addInflightCommit(commitInstant1);
+
+    Map<String, List<String>> partToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+      {
+        put(p1, CollectionUtils.createImmutableList(file1P1, file2P1));
+        put(p2, CollectionUtils.createImmutableList(file1P2, file2P2));
+      }
+    });
+    testTable.addInflightCommit(commitInstant2);
+    commitWithMdt(commitInstant2, partToFileId, testTable, metadataWriter, true, true);
+
+    testTable.addInflightCommit(commitInstant3);
+    commitWithMdt(commitInstant3, partToFileId, testTable, metadataWriter, true, true);
+
+    testTable.addInflightCommit(commitInstant4);
+    commitWithMdt(commitInstant4, partToFileId, testTable, metadataWriter, true, true);
+
+    runCleaner(config);
+
+    assertTrue(testTable.baseFileExists(p1, commitInstant2, file1P1), "commit after pending commit retained.");
+    assertTrue(testTable.baseFileExists(p1, commitInstant2, file2P1), "commit after pending commit retained.");
+    assertTrue(testTable.baseFileExists(p2, commitInstant2, file1P2), "commit after pending commit retained.");
+    assertTrue(testTable.baseFileExists(p2, commitInstant2, file2P2), "commit after pending commit retained.");
+  }
 }
