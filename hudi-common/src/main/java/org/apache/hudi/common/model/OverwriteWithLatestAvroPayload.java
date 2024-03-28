@@ -50,10 +50,6 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
   @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
-    if (oldValue.recordBytes.length == 0) {
-      // use natural order for delete record
-      return this;
-    }
     if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
       // pick the payload with greatest ordering value
       return oldValue;
