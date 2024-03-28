@@ -205,14 +205,12 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     partitionPath = tablePath + StoragePath.SEPARATOR + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     Files.createDirectories(Paths.get(partitionPath));
 
-    HoodieLogFormat.Writer writer = null;
-    try {
-      // set little threshold to split file.
-      writer =
-          HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionPath))
-              .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-              .withFileId("test-log-fileid1").withDeltaCommit(INSTANT_TIME).withFs(fs).withSizeThreshold(500).build();
-
+    try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
+        .onParentPath(new Path(partitionPath))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withFileId("test-log-fileid1").withDeltaCommit(INSTANT_TIME).withFs(fs)
+        // set little threshold to split file.
+        .withSizeThreshold(500).build()) {
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<HoodieRecord> records1 = testUtil.generateHoodieTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
@@ -220,10 +218,6 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
       HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
-    } finally {
-      if (writer != null) {
-        writer.close();
-      }
     }
 
     Object result = shell.evaluate(() -> "show logfile records --logFilePathPattern "

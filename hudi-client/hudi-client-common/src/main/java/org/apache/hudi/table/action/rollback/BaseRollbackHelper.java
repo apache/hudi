@@ -121,37 +121,28 @@ public class BaseRollbackHelper implements Serializable {
         rollbackStats.forEach(entry -> partitionToRollbackStats.add(Pair.of(entry.getPartitionPath(), entry)));
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
-        HoodieLogFormat.Writer writer = null;
         final Path filePath;
         try {
           String fileId = rollbackRequest.getFileId();
 
-          writer = HoodieLogFormat.newWriterBuilder()
+          try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
               .withDeltaCommit(instantToRollback.getTimestamp())
               .withFs(metaClient.getFs())
-              .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
-
-          // generate metadata
-          if (doDelete) {
-            Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
-            // if update belongs to an existing log file
-            // use the log file path from AppendResult in case the file handle may roll over
-            filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
-          } else {
-            filePath = writer.getLogFile().getPath();
+              .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build()) {
+            // generate metadata
+            if (doDelete) {
+              Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
+              // if update belongs to an existing log file
+              // use the log file path from AppendResult in case the file handle may roll over
+              filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
+            } else {
+              filePath = writer.getLogFile().getPath();
+            }
           }
         } catch (IOException | InterruptedException io) {
           throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
-        } finally {
-          try {
-            if (writer != null) {
-              writer.close();
-            }
-          } catch (IOException io) {
-            throw new HoodieIOException("Error appending rollback block", io);
-          }
         }
 
         // This step is intentionally done after writer is closed. Guarantees that
