@@ -105,7 +105,6 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
 public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
   private final String srcPath;
-  private final boolean checkIfFileExists;
   private final int numInstantsPerFetch;
 
   private final MissingCheckpointStrategy missingCheckpointStrategy;
@@ -131,11 +130,15 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
                             SchemaProvider schemaProvider, GcsObjectMetadataFetcher gcsObjectMetadataFetcher, CloudDataFetcher gcsObjectDataFetcher, QueryRunner queryRunner) {
     super(props, jsc, spark, schemaProvider);
 
+    if (getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK)) {
+      sparkSession.conf().set("spark.sql.files.ignoreMissingFiles", "true");
+      sparkSession.conf().set("spark.sql.files.ignoreCorruptFiles", "true");
+    }
+
     checkRequiredConfigProperties(props, Collections.singletonList(HOODIE_SRC_BASE_PATH));
     srcPath = getStringWithAltKeys(props, HOODIE_SRC_BASE_PATH);
     missingCheckpointStrategy = getMissingCheckpointStrategy(props);
     numInstantsPerFetch = getIntWithAltKeys(props, NUM_INSTANTS_PER_FETCH);
-    checkIfFileExists = getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK);
 
     this.gcsObjectMetadataFetcher = gcsObjectMetadataFetcher;
     this.gcsObjectDataFetcher = gcsObjectDataFetcher;
@@ -146,7 +149,6 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
     LOG.info("srcPath: " + srcPath);
     LOG.info("missingCheckpointStrategy: " + missingCheckpointStrategy);
     LOG.info("numInstantsPerFetch: " + numInstantsPerFetch);
-    LOG.info("checkIfFileExists: " + checkIfFileExists);
   }
 
   @Override
@@ -187,7 +189,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   }
 
   private Pair<Option<Dataset<Row>>, String> extractData(QueryInfo queryInfo, Dataset<Row> cloudObjectMetadataDF) {
-    List<CloudObjectMetadata> cloudObjectMetadata = gcsObjectMetadataFetcher.getGcsObjectMetadata(sparkContext, cloudObjectMetadataDF, checkIfFileExists);
+    List<CloudObjectMetadata> cloudObjectMetadata = gcsObjectMetadataFetcher.getGcsObjectMetadata(cloudObjectMetadataDF);
     LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
     Option<Dataset<Row>> fileDataRows = gcsObjectDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props, schemaProvider);
     return Pair.of(fileDataRows, queryInfo.getEndInstant());

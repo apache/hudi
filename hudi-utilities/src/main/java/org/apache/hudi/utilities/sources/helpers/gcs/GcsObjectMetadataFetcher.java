@@ -18,12 +18,10 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
 
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
@@ -58,15 +56,13 @@ public class GcsObjectMetadataFetcher implements Serializable {
   /**
    * @param cloudObjectMetadataDF a Dataset that contains metadata of GCS objects. Assumed to be a persisted form
    *                              of a Cloud Storage Pubsub Notification event.
-   * @param checkIfExists         Check if each file exists, before returning its full path
    * @return A {@link List} of {@link CloudObjectMetadata} containing GCS info.
    */
-  public List<CloudObjectMetadata> getGcsObjectMetadata(JavaSparkContext jsc, Dataset<Row> cloudObjectMetadataDF, boolean checkIfExists) {
-    SerializableConfiguration serializableHadoopConf = new SerializableConfiguration(jsc.hadoopConfiguration());
+  public List<CloudObjectMetadata> getGcsObjectMetadata(Dataset<Row> cloudObjectMetadataDF) {
     return cloudObjectMetadataDF
         .select("bucket", "name", "size")
         .distinct()
-        .mapPartitions(getCloudObjectMetadataPerPartition(GCS_PREFIX, serializableHadoopConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
+        .mapPartitions(getCloudObjectMetadataPerPartition(GCS_PREFIX), Encoders.kryo(CloudObjectMetadata.class))
         .collectAsList();
   }
 
