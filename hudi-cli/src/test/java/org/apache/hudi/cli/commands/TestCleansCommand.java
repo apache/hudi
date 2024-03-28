@@ -143,7 +143,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
             .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_TIME_TAKEN);
     List<Comparable[]> rows = new ArrayList<>();
 
-    // EarliestCommandRetained should be 102, since hoodie.cleaner.commits.retained=2
+    // EarliestCommandRetained should be 102, since hoodie.clean.commits.retained=2
     // Total Time Taken need read from metadata
     rows.add(new Comparable[] {clean.getTimestamp(), "102", "2", getLatestCleanTimeTakenInMillis().toString()});
 

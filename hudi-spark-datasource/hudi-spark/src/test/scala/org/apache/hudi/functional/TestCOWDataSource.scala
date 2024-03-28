@@ -40,23 +40,22 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityException}
-import org.apache.hudi.functional.CommonOptionUtils._
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.hive.HiveSyncConfigHolder
-import org.apache.hudi.keygen._
+import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
-import org.apache.spark.sql._
-import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{DataFrame, DataFrameWriter, Dataset, Encoders, Row, SaveMode, SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.{ArrayType, BooleanType, DataTypes, DateType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
-import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -526,7 +525,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
                                                       recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType, enableFileIndex = enableFileIndex)
 
-    val options = commonOpts ++ Map(
+    val options = CommonOptionUtils.commonOpts ++ Map(
       "hoodie.compact.inline" -> "false",
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
@@ -602,7 +601,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         .options(writeOpts)
         .option("hoodie.keep.min.commits", "4")
         .option("hoodie.keep.max.commits", "5")
-        .option("hoodie.cleaner.commits.retained", "0")
+        .option("hoodie.clean.commits.retained", "0")
         .option("hoodie.datasource.write.row.writer.enable", "true")
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
         .mode(if (i == 0) SaveMode.Overwrite else SaveMode.Append)
@@ -613,7 +612,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertFalse(tableMetaClient.getArchivedTimeline.empty())
 
     val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false)
-    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(commonOpts(HoodieWriteConfig.TBL_NAME.key))
+    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(CommonOptionUtils.commonOpts(HoodieWriteConfig.TBL_NAME.key))
     spark.sparkContext.getConf.registerKryoClasses(
       Array(classOf[org.apache.avro.generic.GenericData],
         classOf[org.apache.avro.Schema]))
@@ -667,9 +666,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val records1 = recordsToStrings(dataGen.generateInserts("000", 1000)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
-      .options(commonOpts)
+      .options(CommonOptionUtils.commonOpts)
       .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
-      .option("hoodie.cleaner.policy.failed.writes", "LAZY")
+      .option("hoodie.clean.failed.writes.policy", "LAZY")
       .option("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider")
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -680,7 +679,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val countDownLatch = new CountDownLatch(2)
     for (x <- 1 to 2) {
-      val thread = new Thread(new UpdateThread(dataGen, spark, commonOpts, basePath, x + "00", countDownLatch, numRetries))
+      val thread = new Thread(new UpdateThread(dataGen, spark, CommonOptionUtils.commonOpts, basePath, x + "00", countDownLatch, numRetries))
       thread.setName(x + "00_THREAD")
       thread.start()
     }
@@ -709,7 +708,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         updateDf.union(insertDf).write.format("org.apache.hudi")
           .options(commonOpts)
           .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
-          .option("hoodie.cleaner.policy.failed.writes", "LAZY")
+          .option("hoodie.clean.failed.writes.policy", "LAZY")
           .option("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider")
           .option(HoodieWriteConfig.NUM_RETRIES_ON_CONFLICT_FAILURES.key(), numRetries.toString)
           .mode(SaveMode.Append)
@@ -1358,7 +1357,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @Test def testSchemaNotEqualData(): Unit = {
-    val opts = commonOpts ++ Map("hoodie.avro.schema.validate" -> "true")
+    val opts = CommonOptionUtils.commonOpts ++ Map("hoodie.avro.schema.validate" -> "true")
     val schema1 = StructType(StructField("_row_key", StringType, nullable = true) :: StructField("name", StringType, nullable = true) ::
       StructField("timestamp", IntegerType, nullable = true) :: StructField("age", StringType, nullable = true) :: StructField("partition", IntegerType, nullable = true) :: Nil)
     val records = Array("{\"_row_key\":\"1\",\"name\":\"lisi\",\"timestamp\":1,\"partition\":1}",
@@ -1536,7 +1535,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
   @Test
   def testSaveAsTableInDifferentModes(): Unit = {
-    val options = scala.collection.mutable.Map.empty ++ commonOpts ++ Map("path" -> basePath)
+    val options = scala.collection.mutable.Map.empty ++ CommonOptionUtils.commonOpts ++ Map("path" -> basePath)
     val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options.toMap)
 
     // first use the Overwrite mode
@@ -1641,7 +1640,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
           val records = List(Row("1", null, 1L, 1L))
           val inputDF = spark.createDataFrame(spark.sparkContext.parallelize(records, 2), schema1)
           inputDF.write.format("org.apache.hudi")
-            .options(commonOpts ++ writeOpts)
+            .options(CommonOptionUtils.commonOpts ++ writeOpts)
             .mode(SaveMode.Overwrite)
             .save(basePath)
 
@@ -1653,7 +1652,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
           val records2 = List(Row("1", null, 1L, 1L))
           val inputDF2 = spark.createDataFrame(spark.sparkContext.parallelize(records2, 2), schema2)
           inputDF2.write.format("org.apache.hudi")
-            .options(commonOpts ++ writeOpts)
+            .options(CommonOptionUtils.commonOpts ++ writeOpts)
             .mode(SaveMode.Append)
             .save(basePath)
         }
@@ -1677,7 +1676,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
           val records = List(Row("1", Map("foo"-> "bar"), Array(1L), 1L, 1L))
           val inputDF = spark.createDataFrame(spark.sparkContext.parallelize(records, 2), schema1)
           inputDF.write.format("org.apache.hudi")
-            .options(commonOpts ++ writeOpts)
+            .options(CommonOptionUtils.commonOpts ++ writeOpts)
             .mode(SaveMode.Overwrite)
             .save(basePath)
 
@@ -1689,7 +1688,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
           val records2 = List(Row("2", Map.empty, Array.empty, 1L, 1L))
           val inputDF2 = spark.createDataFrame(spark.sparkContext.parallelize(records2, 2), schema2)
           inputDF2.write.format("org.apache.hudi")
-            .options(commonOpts ++ writeOpts)
+            .options(CommonOptionUtils.commonOpts ++ writeOpts)
             .mode(SaveMode.Append)
             .save(basePath)
         }
@@ -1697,20 +1696,20 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   def getWriterReaderOpts(recordType: HoodieRecordType = HoodieRecordType.AVRO,
-                          opt: Map[String, String] = commonOpts,
+                          opt: Map[String, String] = CommonOptionUtils.commonOpts,
                           enableFileIndex: Boolean = DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.defaultValue()):
   (Map[String, String], Map[String, String]) = {
     val fileIndexOpt: Map[String, String] =
       Map(DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key -> enableFileIndex.toString)
 
     recordType match {
-      case HoodieRecordType.SPARK => (opt ++ sparkOpts, sparkOpts ++ fileIndexOpt)
+      case HoodieRecordType.SPARK => (opt ++ CommonOptionUtils.sparkOpts, CommonOptionUtils.sparkOpts ++ fileIndexOpt)
       case _ => (opt, fileIndexOpt)
     }
   }
 
   def getWriterReaderOptsLessPartitionPath(recordType: HoodieRecordType,
-                                           opt: Map[String, String] = commonOpts,
+                                           opt: Map[String, String] = CommonOptionUtils.commonOpts,
                                            enableFileIndex: Boolean = DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.defaultValue()):
   (Map[String, String], Map[String, String]) = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType, opt, enableFileIndex)

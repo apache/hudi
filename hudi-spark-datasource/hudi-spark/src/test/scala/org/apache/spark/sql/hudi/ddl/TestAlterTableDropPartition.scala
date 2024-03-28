@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -76,7 +76,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
          | tblproperties (
          |  primaryKey = 'id',
          |  preCombineField = 'ts',
-         |  hoodie.cleaner.commits.retained= '1'
+         |  hoodie.clean.commits.retained= '1'
          | )
          |""".stripMargin)
     // insert data
@@ -101,11 +101,11 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "dt")
-          .option(URL_ENCODE_PARTITIONING.key(), urlencode)
+          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "dt")
+          .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), urlencode)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -120,12 +120,12 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "dt")
-          .option(URL_ENCODE_PARTITIONING.key(), urlencode)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "dt")
+          .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), urlencode)
+          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Append)
@@ -177,11 +177,11 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "dt")
-          .option(URL_ENCODE_PARTITIONING.key(), urlencode)
+          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "dt")
+          .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), urlencode)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -195,7 +195,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey = 'id',
              |  preCombineField = 'ts',
-             |  hoodie.cleaner.commits.retained= '1'
+             |  hoodie.clean.commits.retained= '1'
              | )
              |""".stripMargin)
 
@@ -284,11 +284,11 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "year,month,day")
-          .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
+          .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -308,12 +308,12 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "year,month,day")
-          .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
+          .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Append)
@@ -361,11 +361,11 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "year,month,day")
-          .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
+          .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -379,18 +379,18 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey = 'id',
              |  preCombineField = 'ts',
-             |  hoodie.cleaner.commits.retained= '1'
+             |  hoodie.clean.commits.retained= '1'
              | )
              |""".stripMargin)
 
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "year,month,day")
-          .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
+          .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Append)
