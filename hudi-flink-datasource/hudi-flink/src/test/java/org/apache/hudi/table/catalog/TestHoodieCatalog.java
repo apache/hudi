@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
@@ -64,12 +65,14 @@ import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
+import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -170,8 +173,12 @@ public class TestHoodieCatalog {
     streamTableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 2);
 
-    File catalogPath = new File(tempFile.getPath());
-    catalogPath.mkdir();
+    try {
+      FileSystem fs = FileSystem.get(HadoopConfigurations.getHadoopConf(new Configuration()));
+      fs.mkdirs(new org.apache.hadoop.fs.Path(tempFile.getPath()));
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create tempFile dir.", e);
+    }
 
     catalog = new HoodieCatalog("hudi", Configuration.fromMap(getDefaultCatalogOption()));
     catalog.open();
@@ -263,7 +270,7 @@ public class TestHoodieCatalog {
 
     // validate key generator for partitioned table
     HoodieTableMetaClient metaClient =
-        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, tablePath), new org.apache.hadoop.conf.Configuration());
+        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, tablePath), HadoopConfigurations.getHadoopConf(new Configuration()));
     String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
 
@@ -280,7 +287,7 @@ public class TestHoodieCatalog {
 
     catalog.createTable(singleKeyMultiplePartitionPath, singleKeyMultiplePartitionTable, false);
     metaClient =
-        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath), new org.apache.hadoop.conf.Configuration());
+        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath), HadoopConfigurations.getHadoopConf(new Configuration()));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertThat(keyGeneratorClassName, is(ComplexAvroKeyGenerator.class.getName()));
 
@@ -297,7 +304,7 @@ public class TestHoodieCatalog {
 
     catalog.createTable(multipleKeySinglePartitionPath, multipleKeySinglePartitionTable, false);
     metaClient =
-        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath), new org.apache.hadoop.conf.Configuration());
+        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath), HadoopConfigurations.getHadoopConf(new Configuration()));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertThat(keyGeneratorClassName, is(ComplexAvroKeyGenerator.class.getName()));
 
@@ -315,7 +322,7 @@ public class TestHoodieCatalog {
     catalog.createTable(nonPartitionPath, nonPartitionCatalogTable, false);
 
     metaClient =
-        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, nonPartitionPath), new org.apache.hadoop.conf.Configuration());
+        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, nonPartitionPath), HadoopConfigurations.getHadoopConf(new Configuration()));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
   }
