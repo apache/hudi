@@ -39,6 +39,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.util.collection.BitSet
 
 import java.text.SimpleDateFormat
 import java.util.stream.Collectors
@@ -104,6 +105,12 @@ case class HoodieFileIndex(spark: SparkSession,
    * is handled by the Spark's driver
    */
   @transient private lazy val recordLevelIndex = new RecordLevelIndexSupport(spark, metadataConfig, metaClient)
+
+  /**
+   * NOTE: [[BucketIndexSupport]] is a transient state, since it's only relevant while logical plan
+   * is handled by the Spark's driver
+   */
+  @transient private lazy val bucketIndex = new BucketIndexSupport(metadataConfig, schema)
 
   /**
    * NOTE: [[FunctionalIndexSupport]] is a transient state, since it's only relevant while logical plan
@@ -343,8 +350,18 @@ case class HoodieFileIndex(spark: SparkSession,
     //       and candidate files are obtained from these file slices.
 
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
+    // bucket query index
+    var bucketIds = Option.empty[BitSet]
+    if (bucketIndex.isIndexAvailable && isDataSkippingEnabled) {
+      bucketIds = bucketIndex.filterQueriesWithBucketHashField(queryFilters)
+    }
+    // record index
     lazy val (_, recordKeys) = recordLevelIndex.filterQueriesWithRecordKey(queryFilters)
-    if (!isMetadataTableEnabled || !isDataSkippingEnabled) {
+
+    // index chose
+    if (bucketIndex.isIndexAvailable && bucketIds.isDefined && bucketIds.get.cardinality() > 0) {
+      Option.apply(bucketIndex.getCandidateFiles(allBaseFiles, bucketIds.get))
+    } else if (!isMetadataTableEnabled || !isDataSkippingEnabled) {
       validateConfig()
       Option.empty
     } else if (recordKeys.nonEmpty) {
