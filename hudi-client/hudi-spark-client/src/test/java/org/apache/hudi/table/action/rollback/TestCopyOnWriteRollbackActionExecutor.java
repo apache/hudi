@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
@@ -25,12 +26,16 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -472,5 +477,53 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutorForClustering = new CopyOnWriteRollbackActionExecutor(
         context, table.getConfig(), table, rollbackInstant, needRollBackInstant, true, false, true);
     copyOnWriteRollbackActionExecutorForClustering.execute();
+  }
+
+  /**
+   * This method tests rollback of completed ingestion commits and replacecommit inflight files
+   * when there is another replacecommit with greater timestamp already present in the timeline.
+   */
+  @Test
+  public void testDeletingInflightsWhichAreAlreadyRolledBack() throws Exception {
+    TimeGenerator timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(""), new Configuration());
+    // insert data
+    HoodieWriteConfig writeConfig = getConfigBuilder().withAutoCommit(false).build();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+
+    // Create a base commit.
+    int numRecords = 200;
+    String firstCommit = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+    String partitionStr = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    dataGen = new HoodieTestDataGenerator(new String[]{partitionStr});
+    writeBatch(writeClient, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
+        numRecords, dataGen::generateInserts, SparkRDDWriteClient::insert, true, numRecords, numRecords,
+        1, true);
+    // Create inflight commit.
+    String secondCommit = writeClient.startCommit();
+    // Insert completed commit
+    String thirdCommit = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+    writeBatch(writeClient, thirdCommit, firstCommit, Option.of(Arrays.asList("000")), "000",
+        numRecords, dataGen::generateInserts, SparkRDDWriteClient::insert, false, numRecords, numRecords,
+        1, true);
+    // Rollback secondCommit which is an inflight.
+    writeClient.rollback(secondCommit);
+    assertEquals(1, metaClient.reloadActiveTimeline()
+        .getRollbackTimeline().filterCompletedInstants().getInstants().size());
+    assertFalse(metaClient.getActiveTimeline().filterInflightsAndRequested().firstInstant().isPresent());
+
+    // Create inflight commit back into timeline for testing purposes.
+    writeClient.startCommitWithTime(secondCommit);
+    assertTrue(metaClient.reloadActiveTimeline().filterInflightsAndRequested().firstInstant().isPresent());
+
+    // Insert completed commit
+    String fourthCommit = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+    writeBatch(writeClient, fourthCommit, thirdCommit, Option.of(Arrays.asList("000")), "000",
+        numRecords, dataGen::generateInserts, SparkRDDWriteClient::insert, false, numRecords, numRecords,
+        1, true);
+    assertEquals(1, metaClient.reloadActiveTimeline()
+        .getRollbackTimeline().filterCompletedInstants().getInstants().size());
+    assertFalse(metaClient.getActiveTimeline().filterInflightsAndRequested().firstInstant().isPresent());
+    assertEquals(3, metaClient.getActiveTimeline().getCommitsTimeline().countInstants());
   }
 }
