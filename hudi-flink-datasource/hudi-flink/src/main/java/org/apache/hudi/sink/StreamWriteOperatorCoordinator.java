@@ -430,8 +430,11 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
+    boolean hasAnyEvent = Arrays.stream(this.eventBuffer).anyMatch(evt -> evt != null);
     this.eventBuffer[event.getTaskID()] = event;
-    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
+    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())
+        || !hasAnyEvent
+    ) {
       // start to initialize the instant.
       final String instant = Arrays.stream(eventBuffer)
           .filter(evt -> evt.getWriteStatuses().size() > 0)
@@ -531,6 +534,7 @@ public class StreamWriteOperatorCoordinator
    * @return true if the write statuses are committed successfully.
    */
   private boolean commitInstant(String instant, long checkpointId) {
+    this.ckpMetadata.startCommitInstant(instant);
     if (Arrays.stream(eventBuffer).allMatch(Objects::isNull)) {
       // The last checkpoint finished successfully.
       return false;
