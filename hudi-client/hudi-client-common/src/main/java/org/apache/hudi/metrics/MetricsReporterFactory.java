@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 import org.apache.hudi.metrics.m3.M3MetricsReporter;
@@ -88,7 +87,7 @@ public class MetricsReporterFactory {
         reporter = new ConsoleMetricsReporter(registry);
         break;
       case CLOUDWATCH:
-        reporter = new CloudWatchMetricsReporter(config, registry);
+        reporter = (MetricsReporter) ReflectionUtils.loadClass("org.apache.hudi.aws.cloudwatch.CloudWatchMetricsReporter", config, registry);
         break;
       case M3:
         reporter = new M3MetricsReporter(config, registry);
