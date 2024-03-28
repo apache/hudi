@@ -78,7 +78,7 @@ public class TestSqlQueryBasedTransformer {
         + "from\n"
         + "\t<SRC>";
     TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.transformer.sql", transSql);
+    props.put("hoodie.streamer.transformer.sql", transSql);
 
     // transform
     SqlQueryBasedTransformer transformer = new SqlQueryBasedTransformer();

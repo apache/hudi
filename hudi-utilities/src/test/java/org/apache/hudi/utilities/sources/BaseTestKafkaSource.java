@@ -169,7 +169,7 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, Long.MAX_VALUE, "earliest");
     SourceFormatAdapter kafkaSource = createSource(props);
-    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", "500");
+    props.setProperty("hoodie.streamer.kafka.source.maxEvents", "500");
 
     /*
      1. maxEventsFromKafkaSourceProp set to more than generated insert records

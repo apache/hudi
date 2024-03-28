@@ -51,8 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestSqlFileBasedSource extends UtilitiesTestBase {
 
   private final boolean useFlattenedSchema = false;
-  private final String sqlFileSourceConfig = "hoodie.deltastreamer.source.sql.file";
-  private final String sqlFileSourceConfigEmitChkPointConf = "hoodie.deltastreamer.source.sql.checkpoint.emit";
+  private final String sqlFileSourceConfig = "hoodie.streamer.source.sql.file";
+  private final String sqlFileSourceConfigEmitChkPointConf = "hoodie.streamer.source.sql.checkpoint.emit";
   protected FilebasedSchemaProvider schemaProvider;
   protected HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
   private String dfsRoot;
