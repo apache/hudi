@@ -9,7 +9,7 @@ navigate: "https://www.youtube.com/watch?v=lOQFUrfJFP4"
 tags:
 - guide
 - indexing
-- upserts
+- upsert
 - bucket index
 - apache hudi
 ---

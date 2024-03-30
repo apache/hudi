@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[88708],{48197:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/bulk-insert","name":"bulk insert","count":2,"permalink":"/videos/tags/bulk-insert"}')}}]);

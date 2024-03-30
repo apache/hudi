@@ -217,6 +217,16 @@ would ensure Map Reduce execution is chosen for a Hive query, which combines par
 separated) and calls InputFormat.listStatus() only once with all those partitions.
 :::
 
+## AWS Athena
+
+[AWS Athena](https://aws.amazon.com/athena/) is an interactive query service that makes it easy to analyze data in Amazon S3 using standard SQL.
+It supports [querying Hudi tables](https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html) using the Hive connector.
+Currently, it supports snapshot queries on COPY_ON_WRITE tables, and snapshot and read optimized queries on MERGE_ON_READ Hudi tables.
+
+:::note The most recent release of Athena that supports querying Hudi 0.14.0 tables has a bug that causes _ro query to return 0 records, and occasionally _rt the query to fail with class cast exception.
+The issue is tracked in [HUDI-7362](https://issues.apache.org/jira/browse/HUDI-7362) and is expected to be fixed in the next release.
+:::
+
 ## Presto
 
 [Presto](https://prestodb.io/) is a popular query engine for interactive query performance. Support for querying Hudi tables using PrestoDB is offered
@@ -322,14 +332,11 @@ for more details.
 
 ## Doris
 
-Copy on Write Tables in Hudi version 0.10.0 can be queried via Doris external tables starting from Doris version 1.1.
-Please refer
-to [Doris Hudi external table](https://doris.apache.org/docs/ecosystem/external-table/hudi-external-table/ )
-for more details on the setup.
+The Doris integration currently support Copy on Write and Merge On Read tables in Hudi since version 0.10.0. You can query Hudi tables via Doris from Doris version 2.0 Doris offers a multi-catalog, which is designed to make it easier to connect to external data catalogs to enhance Doris's data lake analysis and federated data query capabilities. Please refer
+to [Doris-Hudi external catalog](https://doris.apache.org/docs/lakehouse/multi-catalog/hudi/) for more details on the setup.
 
 :::note
-The current default supported version of Hudi is 0.10.0 and has not been tested in other versions. More versions
-will be supported in the future.
+The current default supported version of Hudi is 0.10.0 ~ 0.13.1, and has not been tested in other versions. More versions will be supported in the future.
 :::
 
 ## StarRocks
@@ -373,6 +380,7 @@ Following tables show whether a given query is supported on specific query engin
 | **ClickHouse**        | Y                | N                   |
 
 ### Merge-On-Read tables
+
 
 | Query Engine          | Snapshot Queries | Incremental Queries | Read Optimized Queries |
 |-----------------------|------------------|---------------------|------------------------|

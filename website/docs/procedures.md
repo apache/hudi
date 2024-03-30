@@ -1,16 +1,16 @@
 ---
-title: Procedures
-summary: "In this page, we introduce how to use procedures with Hudi."
+title: SQL Procedures
+summary: "In this page, we introduce how to use SQL procedures with Hudi."
 toc: true
 last_modified_at: 
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Stored procedures available when use Hudi SparkSQL extensions in all spark's version.
+Stored procedures are available when use Hudi SparkSQL extensions in all spark's version.
 
 ## Usage
-CALL supports passing arguments by name (recommended) or by position. Mixing position and named arguments is also supported.
+`CALL` supports passing arguments by name (recommended) or by position. Mixing position and named arguments is also supported.
 
 #### Named arguments
 All procedure arguments are named. When passing arguments by name, arguments can be in any order and any optional argument can be omitted.
@@ -24,7 +24,7 @@ CALL system.procedure_name(arg_1, arg_2, ... arg_n);
 ```
 *note:* The system here has no practical meaning, the complete procedure name is system.procedure_name.
 
-### Help Procedure
+### help
 
 Show parameters and outputTypes of a procedure.
 
@@ -40,7 +40,7 @@ Show parameters and outputTypes of a procedure.
 |--------------|--------|
 | result       | String |
 
-**Example**x
+**Example**
 
 ```
 call help(cmd => 'show_commits');
@@ -1235,7 +1235,7 @@ call show_fsview_latest(table => 'test_hudi_table'， partition => 'dt=2021-05-0
 |---------------|----------------------------------------|-------------------|--------------------------------------------------------------------------|----------------|-----------------|-----------------------|-------------------------------------------------------------------------|
 | dt=2021-05-03 | d0073a12-085d-4f49-83e9-402947e7e90a-0 | 20220109225319449 | 7fb52523-c7f6-41aa-84a6-629041477aeb-0_0-92-99_20220109225319449.parquet | 5319449        | 1               | 213193                | .7fb52523-c7f6-41aa-84a6-629041477aeb-0_20230205133217210.log.1_0-60-63 |
 
-## Optimization table
+## Table services
 
 ### run_clustering
 
@@ -1753,7 +1753,7 @@ call repair_corrupted_clean_files(table => 'test_hudi_table');
 
 ### repair_deduplicate
 
-Repair deduplicate records for a hudi table.
+Repair deduplicate records for a hudi table. The job dedupliates the data in the duplicated_partition_path and writes it into repaired_output_path. In the end of the job, the data in repaired_output_path is copied into the original path (duplicated_partition_path).
 
 **Input**
 
@@ -1774,12 +1774,12 @@ Repair deduplicate records for a hudi table.
 **Example**
 
 ```
-call repair_deduplicate(table => 'test_hudi_table', duplicated_partition_path => 'dt=2021-05-03', repaired_output_path => 'dt=2021-05-04');
+call repair_deduplicate(table => 'test_hudi_table', duplicated_partition_path => 'dt=2021-05-03', repaired_output_path => '/tmp/repair_path/');
 ```
 
 | result                                       | 
 |----------------------------------------------|
-| Reduplicated files placed in: dt=2021-05-04. | 
+| Reduplicated files placed in: /tmp/repair_path/. | 
 
 ### repair_migrate_partition_meta
 

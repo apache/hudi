@@ -204,7 +204,7 @@ Take a look at this blog for reference - (Apache Hudi vs Delta Lake vs Apache Ic
       - performance (involves performance related blogs)
       - blog (anything else such as announcements/release updates/insights/guides/tutorials/concepts overview etc)
    2. tag 2
-       - Represent individual features - clustering, compaction, ingestion, meta-sync etc.
+       - Represent individual features - clustering, compaction, ingestion, meta-sync etc. Make sure you keep the features **singular**, i.e., Use `upsert` not `upserts` or use `delete` not `deletes`
    3. tag 3
       - Source. This is usually the second level domain name for this article gathered from the url link.
        For example if the article is https://www.uber.com/blog/cost-efficiency-big-data/ we would use `uber` as the tag here. 

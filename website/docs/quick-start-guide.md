@@ -1,5 +1,5 @@
 ---
-title: "Spark Guide"
+title: "Spark Quick Start"
 sidebar_position: 2
 toc: true
 last_modified_at: 2023-08-23T21:14:52+09:00
@@ -54,16 +54,16 @@ From the extracted directory run spark-shell with Hudi:
 ```shell
 # For Spark versions: 3.2 - 3.4
 export SPARK_VERSION=3.4
-spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.1 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark versions: 3.0 - 3.1
 export SPARK_VERSION=3.1
-spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.1 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark version: 2.4
-spark-shell --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-shell --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.1 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 </TabItem>
 
@@ -75,18 +75,18 @@ From the extracted directory run pyspark with Hudi:
 # For Spark versions: 3.2 - 3.4
 export PYSPARK_PYTHON=$(which python3)
 export SPARK_VERSION=3.4
-pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.1 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark versions: 3.0 - 3.1
 export PYSPARK_PYTHON=$(which python3)
 export SPARK_VERSION=3.1
-pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.1 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark version: 2.4
 export PYSPARK_PYTHON=$(which python3)
-pyspark --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+pyspark --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.1 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 </TabItem>
 
@@ -98,16 +98,16 @@ From the extracted directory run Spark SQL with Hudi:
 ```shell
 # For Spark versions: 3.2 - 3.4
 export SPARK_VERSION=3.4
-spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.1 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark versions: 3.0 - 3.1
 export SPARK_VERSION=3.1
-spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.1 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark version: 2.4
-spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.1 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 
 </TabItem>
@@ -260,8 +260,8 @@ val data =
 
 var inserts = spark.createDataFrame(data).toDF(columns:_*)
 inserts.write.format("hudi").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.name", tableName).
   mode(Overwrite).
   save(basePath)
 ```
@@ -404,9 +404,9 @@ values={[
 val updatesDf = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-D").withColumn("fare", col("fare") * 10)
 
 updatesDf.write.format("hudi").
-  option(OPERATION_OPT_KEY, "upsert").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.operation", "upsert").
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.name", tableName).
   mode(Append).
   save(basePath)
 ```
@@ -539,7 +539,7 @@ MERGE statement either using `SET *` or using `SET column1 = expression1 [, colu
 ## Delete data {#deletes}
 
 Delete operation removes the records specified from the table. For example, this code snippet deletes records
-for the HoodieKeys passed in. Check out the [deletion section](/docs/next/writing_data#deletes) for more details.
+for the HoodieKeys passed in. Check out the [deletion section](/docs/writing_data#deletes) for more details.
 
 <Tabs
 groupId="programming-language"
@@ -560,9 +560,9 @@ values={[
 val deletesDF = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-F")
 
 deletesDF.write.format("hudi").
-  option(OPERATION_OPT_KEY, "delete").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.operation", "delete").
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.name", tableName).
   mode(Append).
   save(basePath)
 
@@ -717,8 +717,8 @@ val beginTime = commits(commits.length - 2) // commit time we are interested in
 
 // incrementally query data
 val tripsIncrementalDF = spark.read.format("hudi").
-  option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL).
-  option(BEGIN_INSTANTTIME.key(), 0).
+  option("hoodie.datasource.query.type", "incremental").
+  option("hoodie.datasource.read.begin.instanttime", 0).
   load(basePath)
 tripsIncrementalDF.createOrReplaceTempView("trips_incremental")
 
@@ -812,9 +812,9 @@ var df = spark.createDataFrame(data).toDF(columns:_*)
 
 // Insert data
 df.write.format("hudi").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(CDC_ENABLED.key(), "true").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.cdc.enabled", "true").
+  option("hoodie.table.name", tableName).
   mode(Overwrite).
   save(basePath)
 
@@ -822,18 +822,18 @@ df.write.format("hudi").
 val updatesDf = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-A" || $"rider" === "rider-B").withColumn("fare", col("fare") * 10)
 
 updatesDf.write.format("hudi").
-  option(OPERATION_OPT_KEY, "upsert").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(CDC_ENABLED.key(), "true").
-  option(TABLE_NAME, tableName).
+  option("hoodie.datasource.write.operation", "upsert").
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.cdc.enabled", "true").
+  option("hoodie.table.name", tableName).
   mode(Append).
   save(basePath)
 
 
 // Query CDC data
-spark.read.option(BEGIN_INSTANTTIME.key(), 0).
-  option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL).
-  option(INCREMENTAL_FORMAT.key(), "cdc").
+spark.read.option("hoodie.datasource.read.begin.instanttime", 0).
+  option("hoodie.datasource.query.type", "incremental").
+  option("hoodie.datasource.query.incremental.format", "cdc").
   format("hudi").load(basePath).show(false)
 ```
 </TabItem>
@@ -929,7 +929,7 @@ values={[
 // spark-shell
 inserts.write.format("hudi").
   ...
-  option(TABLE_TYPE.key(), "MERGE_ON_READ").
+  option("hoodie.datasource.write.table.type", "MERGE_ON_READ").
   ...
 ```
 </TabItem>
@@ -992,7 +992,7 @@ values={[
 // spark-shell
 inserts.write.format("hudi").
 ...
-option(RECORDKEY_FIELD.key(), "uuid").
+option("hoodie.datasource.write.recordkey.field", "uuid").
 ...
 ```
 
@@ -1063,7 +1063,7 @@ values={[
 // spark-shell 
 updatesDf.write.format("hudi").
   ...
-  option(PRECOMBINE_FIELD_NAME.key(), "ts").
+  option("hoodie.datasource.write.precombine.field", "ts").
   ...
 ```
 
@@ -1119,13 +1119,13 @@ For alter table commands, check out [this](/docs/next/sql_ddl#spark-alter-table)
 
 Hudi provides industry-leading performance and functionality for streaming data. 
 
-**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](/docs/next/hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
+**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](/docs/hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
 from various different sources in a streaming manner, with powerful built-in capabilities like auto checkpointing, schema enforcement via schema provider, 
 transformation support, automatic table services and so on.
 
-**Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](/docs/next/hoodie_streaming_ingestion#structured-streaming) for more.
+**Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](/docs/next/writing_tables_streaming_writes#spark-streaming) for more.
 
-Check out more information on [modeling data in Hudi](/docs/next/faq_general#how-do-i-model-the-data-stored-in-hudi) and different ways to [writing Hudi Tables](/docs/next/writing_data).
+Check out more information on [modeling data in Hudi](/docs/next/faq_general#how-do-i-model-the-data-stored-in-hudi) and different ways to perform [batch writes](/docs/writing_data) and [streaming writes](/docs/next/writing_tables_streaming_writes).
 
 ### Dockerized Demo
 Even as we showcased the core capabilities, Hudi supports a lot more advanced functionality that can make it easy

@@ -1,5 +1,5 @@
 ---
-title: "Flink Guide"
+title: "Flink Quick Start"
 toc: true
 last_modified_at: 2023-08-16T12:53:57+08:00
 ---
@@ -66,7 +66,7 @@ Now start the SQL CLI:
 ```bash
 # For Flink versions: 1.13 - 1.17
 export FLINK_VERSION=1.17 
-export HUDI_VERSION=0.14.0
+export HUDI_VERSION=0.14.1
 wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-flink${FLINK_VERSION}-bundle/${HUDI_VERSION}/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar -P $FLINK_HOME/lib/
 ./bin/sql-client.sh embedded -j lib/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar shell
 ```
@@ -84,7 +84,7 @@ dependency to your project:
 <properties>
     <flink.version>1.17.0</flink.version>
     <flink.binary.version>1.17</flink.binary.version>
-    <hudi.version>0.14.0</hudi.version>
+    <hudi.version>0.14.1</hudi.version>
 </properties>
 <dependency>
     <groupId>org.apache.hudi</groupId>
@@ -195,9 +195,9 @@ String targetTable = "hudi_table";
 String basePath = "file:///tmp/hudi_table";
 
 Map<String, String> options = new HashMap<>();
-options.put(FlinkOptions.PATH.key(), basePath);
-options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-options.put(FlinkOptions.PRECOMBINE_FIELD.key(), "ts");
+options.put("path", basePath);
+options.put("table.type", HoodieTableType.MERGE_ON_READ.name());
+options.put("precombine.field", "ts");
 
 DataStream<RowData> dataStream = env.addSource(...);
 HoodiePipeline.Builder builder = HoodiePipeline.builder(targetTable)
@@ -253,10 +253,10 @@ String targetTable = "hudi_table";
 String basePath = "file:///tmp/hudi_table";
 
 Map<String, String> options = new HashMap<>();
-options.put(FlinkOptions.PATH.key(), basePath);
-options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-options.put(FlinkOptions.READ_AS_STREAMING.key(), "true"); // this option enable the streaming read
-options.put(FlinkOptions.READ_START_COMMIT.key(), "20210316134557"); // specifies the start commit instant time
+options.put("path", basePath);
+options.put("table.type", HoodieTableType.MERGE_ON_READ.name());
+options.put("read.streaming.enabled", "true"); // this option enable the streaming read
+options.put("read.start-commit", "20210316134557"); // specifies the start commit instant time
     
 HoodiePipeline.Builder builder = HoodiePipeline.builder(targetTable)
     .column("uuid VARCHAR(20)")
@@ -399,13 +399,7 @@ WITH (
 
 -- Then query the table in stream mode
 select * from t1;
-``` 
-
-
-:::info Key requirements
-The bundle jar with **hive profile** is needed for streaming query, by default the officially released flink bundle is built **without**
-**hive profile**, the jar needs to be built manually, see [Build Flink Bundle Jar](/docs/syncing_metastore#install) for more details.
-:::
+```
 
 ## Change Data Capture Query
 
@@ -427,8 +421,7 @@ PARTITIONED BY (`city`)
 WITH (
   'connector' = 'hudi',
   'path' = 'file:///tmp/hudi_table',
-  'table.type' = 'MERGE_ON_READ',
-  'changelog.enabled' = 'true',  -- this option enable the change log enabled
+  'table.type' = 'COPY_ON_WRITE',
   'cdc.enabled' = 'true' -- this option enable the cdc log enabled
 );
 -- insert data using values
@@ -455,8 +448,8 @@ feature is that it now lets you author streaming pipelines on streaming or batch
 ## Where To Go From Here?
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
 - **Configuration** : For [Global Configuration](/docs/next/flink_tuning#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](/docs/next/flink_tuning#table-options).
-- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/hoodie_streaming_ingestion#cdc-ingestion), [Bulk Insert](/docs/hoodie_streaming_ingestion#bulk-insert), [Index Bootstrap](/docs/hoodie_streaming_ingestion#index-bootstrap), [Changelog Mode](/docs/hoodie_streaming_ingestion#changelog-mode) and [Append Mode](/docs/hoodie_streaming_ingestion#append-mode). Flink also supports multiple streaming writers with [non-blocking concurrency control](/docs/next/writing_data#non-blocking-concurrency-control-experimental).
-- **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](/docs/querying_data#streaming-query) and [Incremental Query](/docs/querying_data#incremental-query).
+- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/next/ingestion_flink#cdc-ingestion), [Bulk Insert](/docs/next/ingestion_flink#bulk-insert), [Index Bootstrap](/docs/next/ingestion_flink#index-bootstrap), [Changelog Mode](/docs/next/ingestion_flink#changelog-mode) and [Append Mode](/docs/next/ingestion_flink#append-mode). Flink also supports multiple streaming writers with [non-blocking concurrency control](/docs/next/sql_dml#non-blocking-concurrency-control-experimental).
+- **Reading Data** : Flink supports different modes for reading, such as [Streaming Query](/docs/sql_queries#streaming-query) and [Incremental Query](/docs/sql_queries#incremental-query).
 - **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/next/flink_tuning#memory-optimization) and [Write Rate Limit](/docs/next/flink_tuning#write-rate-limit).
 - **Optimization**: Offline compaction is supported [Offline Compaction](/docs/compaction#flink-offline-compaction).
 - **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](/docs/querying_data#prestodb).

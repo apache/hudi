@@ -1,6 +1,6 @@
 ---
 title: "Release 1.0.0-beta1"
-sidebar_position: 1
+sidebar_position: 3
 layout: releases
 toc: true
 ---
@@ -14,12 +14,15 @@ out the new features and provide feedback. The release is not meant for producti
 
 ## Migration Guide
 
-This release contains major format changes as we will see in highlights below. As such, migration would be required when
-the release is made generally available (GA). However, we encourage users to try out the features on new tables.
+This release contains major format changes as we will see in highlights below. We encourage users to try out the 
+**1.0.0-beta1** features on new tables. The 1.0 general availability (GA) release will support automatic table upgrades 
+from 0.x versions, while also ensuring full backward compatibility when reading 0.x Hudi tables using 1.0, ensuring a
+seamless migration experience. 
+
 
 :::caution
-Given that timeline format and log file format has changed in this beta release, it is recommended not to attempt to do
-rolling upgrades from older versions to this release.
+Given that timeline format and log file format has changed in this **beta release**, it is recommended not to attempt to do
+rolling upgrades from older versions to this release. 
 :::
 
 ## Highlights
@@ -66,7 +69,7 @@ OCC, multiple writers can operate on the table with non-blocking conflict resolu
 same file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency
 mode is currently available for preview in version 1.0.0-beta only. You can read more about it under
 section [Model C: Multi-writer](/docs/next/concurrency_control#non-blocking-concurrency-control-mode-experimental). A complete example with multiple 
-Flink streaming writers is available [here](/docs/next/writing_data#non-blocking-concurrency-control-experimental). You
+Flink streaming writers is available [here](/docs/next/sql_dml#non-blocking-concurrency-control-experimental). You
 can follow the [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md) and
 the [JIRA](https://issues.apache.org/jira/browse/HUDI-6640) for more details.
 

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[84794],{69750:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/medallion-architecture","name":"medallion architecture","count":1,"permalink":"/cn/blog/tags/medallion-architecture"}')}}]);

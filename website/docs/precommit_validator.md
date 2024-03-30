@@ -33,7 +33,7 @@ Example:
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
-  option(TABLE_NAME, tableName).
+  option("hoodie.table.name", tableName).
   option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator").
   option("hoodie.precommit.validators.single.value.sql.queries", "select count(*) from <TABLE_NAME> where col is null#0").
   save(basePath)
@@ -56,7 +56,7 @@ Example:
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
-  option(TABLE_NAME, tableName).
+  option("hoodie.table.name", tableName).
   option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator").
   option("hoodie.precommit.validators.equality.sql.queries", "select count(*) from <TABLE_NAME> where col is null").
   save(basePath)
@@ -74,7 +74,7 @@ Example:
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
-  option(TABLE_NAME, tableName).
+  option("hoodie.table.name", tableName).
   option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator").
   option("hoodie.precommit.validators.inequality.sql.queries", "select count(*) from <TABLE_NAME> where col is null").
   save(basePath)
@@ -91,7 +91,7 @@ void validateRecordsBeforeAndAfter(Dataset<Row> before,
 ```
 
 ## Additional Monitoring with Notifications
-Hudi offers a [commit notification service](https://hudi.apache.org/docs/next/writing_data/#commit-notifications) that can be configured to trigger notifications about write commits.
+Hudi offers a [commit notification service](/docs/next/platform_services_post_commit_callback) that can be configured to trigger notifications about write commits.
 
 The commit notification service can be combined with pre-commit validators to send a notification when a commit fails a validation. This is possible by passing details about the validation as a custom value to the HTTP endpoint.
 

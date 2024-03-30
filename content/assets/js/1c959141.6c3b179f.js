@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[50642],{23553:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/near-real-time-analytics","name":"near real-time analytics","count":5,"permalink":"/videos/tags/near-real-time-analytics"}')}}]);

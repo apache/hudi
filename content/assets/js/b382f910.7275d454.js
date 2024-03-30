@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[75556],{13122:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/datumagic","name":"datumagic","count":8,"permalink":"/blog/tags/datumagic"}')}}]);

@@ -11,8 +11,6 @@ of people and organizations from all around the globe. The following is a small 
 contributed to the Apache Hudi community! [Join us on slack](https://join.slack.com/t/apache-hudi/shared_invite/zt-20r833rxh-627NWYDUyR8jRtMa2mZ~gg), 
 or come to one of our [virtual community events](https://hudi.apache.org/community/syncs).
 
-<img src="/assets/images/powers/logo-wall.png" alt="drawing"/>
-
 ### 37 Interactive Entertainment
 [37 Interactive Entertainment](https://www.37wan.net/) is a global Top20 listed game company, and a leading company on A-shares market of China.
 Apache Hudi is integrated into our Data Middle Platform offering real-time data warehouse and solving the problem of frequent changes of data.
@@ -30,6 +28,9 @@ uses Apache Hudi for the backbone of their package delivery system, powering pet
 Amazon Web Services is the World's leading cloud services provider. Apache Hudi is [pre-installed](https://aws.amazon.com/emr/features/hudi/) with the AWS Elastic Map Reduce 
 offering, providing means for AWS users to perform record-level updates/deletes and manage storage efficiently.
 
+### Applied Intuition
+[Applied Intuition](https://www.appliedintuition.com/) accelerates the world’s adoption of safe and intelligent machines. Using Hudi, Applied supports querying across millions of simulations and hours of drive data for their customers. Its table features drastically improve querying performance while maintaining near real-time freshness.
+
 ### ByteDance
 [ByteDance](https://hudi.apache.org/blog/2021/09/01/building-eb-level-data-lake-using-hudi-at-bytedance/) 
 uses Apache Hudi to power their Exabyte scale TikTok #ForYouPage realtime recommendation engine.
@@ -46,6 +47,12 @@ uses Apache Hudi to power their Exabyte scale TikTok #ForYouPage realtime recomm
 ### EMIS Health 
 [EMIS Health](https://www.emishealth.com/) is the largest provider of Primary Care IT software in the UK with datasets including more than 500Bn healthcare records. HUDI is used to manage their analytics dataset in production and keeping them up-to-date with their upstream source. Presto is being used to query the data written in HUDI format.
 
+### Forethought AI
+[Forethought AI](https://forethought.ai/) is the Leading Generative AI for Customer Support Automation. It unlocks efficiency with the generative AI automation platform that lowers support costs while providing top-tier service in every customer interaction.
+
+### Funding Circle
+[Funding Circle](https://www.fundingcircle.com/us/) helps people invest in equipment or inventory, consolidate debt, grow their business, or pay business expenses by providing loans.
+
 ### GE Aviation
 [GE Aviation built cloud-native data pipelines at enterprise scale using Apache Hudi in AWS platform](https://aws.amazon.com/blogs/big-data/how-ge-aviation-built-cloud-native-data-pipelines-at-enterprise-scale-using-the-aws-platform/)
 
@@ -59,6 +66,9 @@ Apache Hudi is integrated in the digital platform to meet the real-time update n
 ### Halodoc
 [Lake House Architecture at Halodoc: Data Platform 2.0](https://blogs.halodoc.io/lake-house-architecture-halodoc-data-platform-2-0/)
 
+### Jobtarget
+[Jobtarget](https://www.jobtarget.com/) is a company dedicated to helping job seekers and employers connect. This focus has allowed us to earn the opportunity to serve thousands of companies and millions of job seekers each month.
+
 ### Kyligence 
 [Kyligence](https://kyligence.io/zh/) is the leading Big Data analytics platform company. We’ve built end to end solutions for various Global Fortune 500 companies in US and China. We adopted Apache Hudi in our Cloud solution on AWS in 2019. With the help of Hudi, we are able to process upserts and deletes easily and we use incremental views to build efficient data pipelines in AWS. The Hudi datasets can also be integrated to Kyligence Cloud directly for high concurrent OLAP access.
 
@@ -70,6 +80,12 @@ Apache Hudi is integrated in the digital platform to meet the real-time update n
 
 ### NerdWallet
 [NerdWallet uses AWS and Apache Hudi to build a serverless, real-time analytics platform](https://aws.amazon.com/blogs/big-data/how-nerdwallet-uses-aws-and-apache-hudi-to-build-a-serverless-real-time-analytics-platform/)
+
+### Notion
+[Notion](https://www.notion.so/) is the connected workspace where modern teams create and share docs, take notes, manage their projects and time, and organize knowledge — with AI integrated throughout. Notion uses Apache Hudi to power their core analytics datasets and AI features.
+
+### Penn Interactive
+The interactive arm of [Penn Entertainment](https://www.pennentertainment.com/), encompassing Penn Interactive and theScore, is a major player in online and retail sports betting markets in the U.S. and Canada, as well as the sports media sector.Apache Hudi's efficient processing helps them to keep  Spark resources reasonable while running hundreds of streaming jobs 24/7.
 
 ### Robinhood
 [Rds data lake at Robinhood using Apache Hudi](https://www.slideshare.net/BalajiVaradarajan13/rds-data-lake-robinhood)

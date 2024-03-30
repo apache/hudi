@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[61609],{10161:l=>{l.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/hudi-cli","name":"hudi cli","count":1,"permalink":"/cn/blog/tags/hudi-cli"}')}}]);

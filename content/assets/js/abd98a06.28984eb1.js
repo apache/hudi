@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[22084],{21952:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/leboncoin-tech-blog","name":"leboncoin-tech-blog","count":1,"permalink":"/blog/tags/leboncoin-tech-blog"}')}}]);

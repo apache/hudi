@@ -137,14 +137,14 @@ import org.apache.spark.sql.streaming.ProcessingTime;
 
 
  DataStreamWriter<Row> writer = streamingInput.writeStream().format("org.apache.hudi")
-        .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), operationType)
-        .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(), tableType)
-        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, "10")
-        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "true")
-        .option(HoodieWriteConfig.TABLE_NAME, tableName).option("checkpointLocation", checkpointLocation)
+        .option("hoodie.datasource.write.operation", operationType)
+        .option("hoodie.datasource.write.table.type", tableType)
+        .option("hoodie.datasource.write.recordkey.field", "_row_key")
+        .option("hoodie.datasource.write.partitionpath.field", "partition")
+        .option("hoodie.datasource.write.precombine.field"(), "timestamp")
+        .option("hoodie.compact.inline.max.delta.commits", "10")
+        .option("hoodie.datasource.compaction.async.enable", "true")
+        .option("hoodie.table.name", tableName).option("checkpointLocation", checkpointLocation)
         .outputMode(OutputMode.Append());
  writer.trigger(new ProcessingTime(30000)).start(tablePath);
 ```

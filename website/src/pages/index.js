@@ -2,6 +2,7 @@ import React from "react";
 import Layout from "@theme/Layout";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import DataLake from "@site/src/components/DataLakes";
+import Events from "@site/src/components/EventFeature";
 import HomepageFeatures from "@site/src/components/HomepageFeatures";
 import JoinCommunity from "@site/src/components/JoinCommunity";
 import WhyHudi from "@site/src/components/WhyHudi";
@@ -29,6 +30,7 @@ export default function Home() {
     >
       <NewReleaseMessage />
       <HomepageHeader />
+      {/* <Events /> */}
       <main>
         <DataLake />
         <HomepageFeatures />

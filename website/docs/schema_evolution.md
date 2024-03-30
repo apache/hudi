@@ -24,8 +24,7 @@ type reconciliations. The following table summarizes the schema changes compatib
 
 The incoming schema will automatically have missing columns added with null values from the table schema.
 For this we need to enable the following config
-`hoodie.write.handle.missing.cols.with.lossless.type.promotion`, otherwise the pipeline will fail. Note: This particular config will also do best effort to solve some of the backward incompatible
-type promotions eg., 'long' to 'int'.
+`hoodie.write.set.null.for.missing.columns`, otherwise the pipeline will fail.
 
 | Schema Change                                                   | COW | MOR | Remarks                                                                                                                                                                                                                                                                                       |
 |:----------------------------------------------------------------|:----|:----|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -43,18 +42,18 @@ type promotions eg., 'long' to 'int'.
 | Demote datatype for a nested field                              | No  | No  |                                                                                                                                                                                                                                                                                               |
 | Demote datatype for a complex type (value of map or array)      | No  | No  |                                                                                                                                                                                                                                                                                               |
 
-###Type Promotions
+### Type Promotions
 
-The incoming schema will automatically have types promoted to match the table schema
+This chart shows what the table schema will be when an incoming column type has changed (X means that it is not allowed):
 
-| Incoming Schema \ Table Schema  | int   | long  | float  | double | string  | bytes   |
-|---------------------------------|-------|-------|--------|--------|---------|---------|
-| int                             |   Y   |   Y   |    Y   |    Y   |    Y    |   N     |
-| long                            |   N   |   Y   |    Y   |    Y   |    Y    |   N     | 
-| float                           |   N   |   N   |    Y   |    Y   |    Y    |   N     |  
-| double                          |   N   |   N   |    N   |    Y   |    Y    |   N     |  
-| string                          |   N   |   N   |    N   |    N   |    Y    |   Y     | 
-| bytes                           |   N   |   N   |    N   |    N   |    Y    |   Y     |
+| Incoming Schema &#8595; \ Table Schema &#8594; | int    | long   | float  | double | string | bytes |
+|------------------------------------------------|--------|--------|--------|--------|--------|-------|
+| int                                            | int    | long   | float  | double | string | X     |
+| long                                           | long   | long   | float  | double | string | X     | 
+| float                                          | float  | float  | float  | double | string | X     |  
+| double                                         | double | double | double | double | string | X     |  
+| string                                         | string | string | string | string | string | bytes | 
+| bytes                                          | X      | X      | X      | X      | string | bytes |
 
 ## Schema Evolution on read
 
@@ -208,11 +207,11 @@ val data1 = Seq(Row("row_1", "part_0", 0L, "bob", "v_0", 0),
 var dfFromData1 = spark.createDataFrame(data1, schema)
 dfFromData1.write.format("hudi").
    options(getQuickstartWriteConfigs).
-   option(PRECOMBINE_FIELD_OPT_KEY.key, "preComb").
-   option(RECORDKEY_FIELD_OPT_KEY.key, "rowId").
-   option(PARTITIONPATH_FIELD_OPT_KEY.key, "partitionId").
+   option("hoodie.datasource.write.precombine.field", "preComb").
+   option("hoodie.datasource.write.recordkey.field", "rowId").
+   option("hoodie.datasource.write.partitionpath.field", "partitionId").
    option("hoodie.index.type","SIMPLE").
-   option(TABLE_NAME.key, tableName).
+   option("hoodie.table.name", tableName).
    mode(Overwrite).
    save(basePath)
 
@@ -267,11 +266,11 @@ val data2 = Seq(Row("row_2", "part_0", 5L, "john", "v_3", 3L, "newField_1"),
 var dfFromData2 = spark.createDataFrame(data2, newSchema)
 dfFromData2.write.format("hudi").
     options(getQuickstartWriteConfigs).
-    option(PRECOMBINE_FIELD_OPT_KEY.key, "preComb").
-    option(RECORDKEY_FIELD_OPT_KEY.key, "rowId").
-    option(PARTITIONPATH_FIELD_OPT_KEY.key, "partitionId").
+    option("hoodie.datasource.write.precombine.field", "preComb").
+    option("hoodie.datasource.write.recordkey.field", "rowId").
+    option("hoodie.datasource.write.partitionpath.field", "partitionId").
     option("hoodie.index.type","SIMPLE").
-    option(TABLE_NAME.key, tableName).
+    option("hoodie.table.name", tableName).
     mode(Append).
     save(basePath)
 

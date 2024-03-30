@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[488],{59556:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/use-case","name":"use-case","count":1,"permalink":"/cn/videos/tags/use-case"}')}}]);

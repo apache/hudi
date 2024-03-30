@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[50183],{27844:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/hive-sql","name":"hive sql","count":1,"permalink":"/videos/tags/hive-sql"}')}}]);

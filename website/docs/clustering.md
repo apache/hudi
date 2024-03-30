@@ -59,7 +59,7 @@ Clustering Service builds on Hudi’s MVCC based design to allow for writers to 
 
 NOTE: Clustering can only be scheduled for tables / partitions not receiving any concurrent updates. In the future, concurrent updates use-case will be supported as well.
 
-![Clustering example](/assets/images/blog/clustering/example_perf_improvement.png)
+![Clustering example](/assets/images/blog/clustering/clustering1_new.png)
 _Figure: Illustrating query performance improvements by clustering_
 
 ## Clustering Usecases
@@ -71,7 +71,7 @@ such small files could lead to higher query latency. From our experience support
 few users who are using Hudi just for small file handling capabilities. So, you could employ clustering to batch a lot
 of such small files into larger ones.
 
-![Batching small files](/assets/images/clustering_small_files.gif)
+![Batching small files](/assets/images/blog/clustering/clustering2_new.png)
 
 ### Cluster by sort key
 
@@ -80,7 +80,7 @@ arrival time, while query predicates do not sit well with it. With clustering, y
 based on query predicates and so, your data skipping will be very efficient and your query can ignore scanning a lot of
 unnecessary data.
 
-![Batching small files](/assets/images/clustering_sort.gif)
+![Batching small files](/assets/images/blog/clustering/clustering_3.png)
 
 ## Clustering Strategies
 
@@ -170,9 +170,14 @@ for inline or async clustering are shown below with code samples.
 
 ## Inline clustering
 
-Inline clustering happens synchronously with the regular ingestion writer, which means the next round of ingestion
-cannot proceed until the clustering is complete. Inline clustering can be setup easily using spark dataframe options.
-See sample below
+Inline clustering happens synchronously with the regular ingestion writer or as part of the data ingestion pipeline. This means the next round of ingestion cannot proceed until the clustering is complete With inline clustering, Hudi will schedule, plan clustering operations after each commit is completed and execute the clustering plans after it’s created. This is the simplest deployment model to run because it’s easier to manage than running different asynchronous Spark jobs. This mode is supported on Spark Datasource, Flink, Spark-SQL and DeltaStreamer in a sync-once mode.
+
+For this deployment mode, please enable and set: `hoodie.clustering.inline` 
+
+To choose how often clustering is triggered, also set: `hoodie.clustering.inline.max.commits`. 
+
+Inline clustering can be setup easily using spark dataframe options.
+See sample below:
 
 ```scala
 import org.apache.hudi.QuickstartUtils._
@@ -186,10 +191,10 @@ import org.apache.hudi.config.HoodieWriteConfig._
 val df =  //generate data frame
 df.write.format("org.apache.hudi").
         options(getQuickstartWriteConfigs).
-        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-        option(TABLE_NAME, "tableName").
+        option("hoodie.datasource.write.precombine.field", "ts").
+        option("hoodie.datasource.write.recordkey.field", "uuid").
+        option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+        option("hoodie.table.name", "tableName").
         option("hoodie.parquet.small.file.limit", "0").
         option("hoodie.clustering.inline", "true").
         option("hoodie.clustering.inline.max.commits", "4").
@@ -202,7 +207,12 @@ df.write.format("org.apache.hudi").
 
 ## Async Clustering
 
-Async clustering runs the clustering table service in the background without blocking the regular ingestions writers.
+Async clustering runs the clustering table service in the background without blocking the regular ingestions writers. There are three different ways to deploy an asynchronous clustering process: 
+
+- **Asynchronous execution within the same process**: In this deployment mode, Hudi will schedule and plan the clustering operations after each commit is completed as part of the ingestion pipeline. Separately, Hudi spins up another thread within the same job and executes the clustering table service. This is supported by Spark Streaming, Flink and DeltaStreamer in continuous mode. For this deployment mode, please enable `hoodie.clustering.async.enabled` and `hoodie.clustering.async.max.commits​`. 
+- **Asynchronous scheduling and execution by a separate process**: In this deployment mode, the application will write data to a Hudi table as part of the ingestion pipeline. A separate clustering job will schedule, plan and execute the clustering operation. By running a different job for the clustering operation, it rebalances how Hudi uses compute resources: fewer compute resources are needed for the ingestion, which makes ingestion latency stable, and an independent set of compute resources are reserved for the clustering process. Please configure the lock providers for the concurrency control among all jobs (both writer and table service jobs). In general, configure lock providers when there are two different jobs or two different processes occurring. All writers support this deployment model. For this deployment mode, no clustering configs should be set for the ingestion writer. 
+- **Scheduling inline and executing async**: In this deployment mode, the application ingests data and schedules the clustering in one job; in another, the application executes the clustering plan. The supported writers (see below) won’t be blocked from ingesting data. If the metadata table is enabled, a lock provider is not needed. However, if the metadata table is enabled, please ensure all jobs have the lock providers configured for concurrency control. All writers support this deployment option. For this deployment mode, please enable, `hoodie.clustering.schedule.inline` and `hoodie.clustering.async.enabled`.
+
 Hudi supports [multi-writers](https://hudi.apache.org/docs/concurrency_control#enabling-multi-writing) which provides
 snapshot isolation between multiple table services, thus allowing writers to continue with ingestion while clustering
 runs in the background.
@@ -283,10 +293,10 @@ We can also enable asynchronous clustering with Spark structured streaming sink 
 val commonOpts = Map(
    "hoodie.insert.shuffle.parallelism" -> "4",
    "hoodie.upsert.shuffle.parallelism" -> "4",
-   DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-   DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-   DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-   HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+   "hoodie.datasource.write.recordkey.field" -> "_row_key",
+   "hoodie.datasource.write.partitionpath.field" -> "partition",
+   "hoodie.datasource.write.precombine.field" -> "timestamp",
+   "hoodie.table.name" -> "hoodie_test"
 )
 
 def getAsyncClusteringOpts(isAsyncClustering: String, 
@@ -321,6 +331,12 @@ def structuredStreamingWithClustering(): Unit = {
    Await.result(f1, Duration.Inf)
 }
 ```
+
+## Java Client
+
+Clustering is also supported via Java client. Plan strategy `org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy`
+and execution strategy `org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy` are supported
+out-of-the-box. Note that as of now only linear sort is supported in Java execution strategy.
 
 ## Related Resources
 <h3>Videos</h3>

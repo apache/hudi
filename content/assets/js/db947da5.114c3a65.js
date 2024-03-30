@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[43553],{17067:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/hudi-streamer","name":"hudi streamer","count":1,"permalink":"/blog/tags/hudi-streamer"}')}}]);

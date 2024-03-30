@@ -6,8 +6,7 @@ last_modified_at:
 ---
 
 It may be helpful to understand the different write operations of Hudi and how best to leverage them. These operations
-can be chosen/changed across each commit/deltacommit issued against the table. See the [How To docs on Writing Data](/docs/writing_data) 
-to see more examples.
+can be chosen/changed across each commit/deltacommit issued against the table.
 
 ## Operation Types
 ### UPSERT 
@@ -29,8 +28,8 @@ of initial load. However, this just does a best-effort job at sizing files vs gu
 Hudi supports implementing two types of deletes on data stored in Hudi tables, by enabling the user to specify a different record payload implementation.
 - **Soft Deletes** : Retain the record key and just null out the values for all the other fields.
   This can be achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
-- **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways. 
-  - Using DataSource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted. 
+- **Hard Deletes** : This method entails completely eradicating all evidence of a record from the table, including any duplicates. There are three distinct approaches to accomplish this: 
+  - Using DataSource, set `"hoodie.datasource.write.operation"` to `"delete"`. This will remove all the records in the DataSet being submitted. 
   - Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
   - Using DataSource or Hudi Streamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
 
@@ -100,7 +99,7 @@ The following is an inside look on the Hudi write path and the sequence of event
 6. Update [Index](/docs/next/indexing)
    1. Now that the write is performed, we will go back and update the index.
 7. Commit
-   1. Finally we commit all of these changes atomically. (A [callback notification](/docs/next/writing_data#commit-notifications) is exposed)
+   1. Finally we commit all of these changes atomically. ([Post-commit callback](/docs/next/platform_services_post_commit_callback) can be configured.)
 8. [Clean](/docs/next/hoodie_cleaner) (if needed)
    1. Following the commit, cleaning is invoked if needed.
 9. [Compaction](/docs/next/compaction)

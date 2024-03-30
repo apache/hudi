@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[21323],{2038:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/sql-transformer","name":"sql transformer","count":1,"permalink":"/cn/videos/tags/sql-transformer"}')}}]);

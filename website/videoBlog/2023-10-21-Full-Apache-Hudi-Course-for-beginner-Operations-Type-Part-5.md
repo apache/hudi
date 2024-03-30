@@ -9,10 +9,10 @@ navigate: "https://www.youtube.com/watch?v=Nf-BgvEunaE"
 tags:
 - guide
 - write operations
-- deletes
-- bulk inserts
-- inserts
-- upserts
+- delete
+- bulk insert
+- insert
+- upsert
 - sort modes
 - apache hudi
 - beginner

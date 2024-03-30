@@ -8,7 +8,7 @@ image: /assets/images/video_blogs/2023-06-05-How_to_JOIN_Hudi_Tables_in_Incremen
 navigate: "https://www.youtube.com/watch?v=ALhk1vYAwLc"
 tags:
 - guide
-- incremental-query
+- incremental query
 - joins
 - amazon dynamodb
 - aws glue

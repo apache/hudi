@@ -77,7 +77,7 @@ Multiple writers can operate on the table with non-blocking conflict resolution.
 file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is
 currently available for preview in version 1.0.0-beta only with the caveat that conflict resolution is not supported yet
 between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with Flink
-writers [here](/docs/next/writing_data#non-blocking-concurrency-control-experimental).
+writers [here](/docs/next/sql_dml#non-blocking-concurrency-control-experimental).
 
 ## Enabling Multi Writing
 
@@ -215,15 +215,15 @@ Following is an example of how to use optimistic_concurrency_control via spark d
 ```java
 inputDF.write.format("hudi")
        .options(getQuickstartWriteConfigs)
-       .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
+       .option("hoodie.datasource.write.precombine.field", "ts")
        .option("hoodie.cleaner.policy.failed.writes", "LAZY")
        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
        .option("hoodie.write.lock.zookeeper.url", "zookeeper")
        .option("hoodie.write.lock.zookeeper.port", "2181")
        .option("hoodie.write.lock.zookeeper.base_path", "/test")
-       .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
-       .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
-       .option(TABLE_NAME, tableName)
+       .option("hoodie.datasource.write.recordkey.field", "uuid")
+       .option("hoodie.datasource.write.partitionpath.field", "partitionpath")
+       .option("hoodie.table.name", tableName)
        .mode(Overwrite)
        .save(basePath)
 ```

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[96760],{2554:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/incremental-updates","name":"incremental updates","count":1,"permalink":"/blog/tags/incremental-updates"}')}}]);

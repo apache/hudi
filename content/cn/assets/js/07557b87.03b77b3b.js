@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[40918],{87508:l=>{l.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/multi-modal-indexing","name":"multi modal indexing","count":3,"permalink":"/cn/blog/tags/multi-modal-indexing"}')}}]);

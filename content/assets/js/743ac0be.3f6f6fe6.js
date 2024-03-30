@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[41132],{21854:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/data-ingestion","name":"data ingestion","count":1,"permalink":"/videos/tags/data-ingestion"}')}}]);

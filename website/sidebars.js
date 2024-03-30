@@ -7,49 +7,85 @@
 
 module.exports = {
     docs: [
-        'overview',
         {
             type: 'category',
-            label: 'Quick Start',
+            label: 'Getting Started',
             collapsed: false,
             items: [
+                'overview',
                 'quick-start-guide',
                 'flink-quick-start-guide',
-                'docker_demo'
+                'docker_demo',
+                'use_cases',
             ],
         },
         {
             type: 'category',
-            label: 'Concepts',
+            label: 'Design & Concepts',
             items: [
+                'hudi_stack',
                 'timeline',
+                'file_layouts',
                 'table_types',
                 'indexing',
-                'file_layouts',
-                'metadata',
                 'write_operations',
-                'schema_evolution',
                 'key_generation',
+                'record_payload',
+                'schema_evolution',
+                'metadata',
                 'concurrency_control',
-                'record_payload'
             ],
         },
         {
             type: 'category',
-            label: 'How To',
+            label: 'Ingestion',
             items: [
-                {
-                    type: 'category',
-                    label: 'SQL',
-                    items: [
-                        'sql_ddl',
-                        'sql_dml',
-                        'sql_queries',
-                        'procedures'
-                    ],
-                },
-                'writing_data',
                 'hoodie_streaming_ingestion',
+                'ingestion_flink',
+                'ingestion_kafka_connect',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Writing Tables',
+            items: [
+                'sql_ddl',
+                'sql_dml',
+                'writing_data',
+                'writing_tables_streaming_writes',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Reading Tables',
+            items: [
+                'sql_queries',
+                'reading_tables_batch_reads',
+                'reading_tables_streaming_reads',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Table Services',
+            items: [
+                'migration_guide',
+                'compaction',
+                'clustering',
+                'metadata_indexing',
+                'hoodie_cleaner',
+                'rollbacks',
+                'markers',
+                'file_sizing',
+                'disaster_recovery',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Platform Services',
+            items: [
+                'snapshot_exporter',
+                'precommit_validator',
+                'platform_services_post_commit_callback',
                 {
                     type: 'category',
                     label: 'Syncing to Catalogs',
@@ -57,27 +93,25 @@ module.exports = {
                         'syncing_aws_glue_data_catalog',
                         'syncing_datahub',
                         'syncing_metastore',
-                        "gcp_bigquery"
+                        'gcp_bigquery',
+                        'syncing_xtable'
                     ],
                 }
             ],
         },
         {
             type: 'category',
-            label: 'Services',
+            label: 'Operations',
             items: [
-                'migration_guide',
-                'compaction',
-                'clustering',
-                'metadata_indexing',
-                'hoodie_cleaner',
-                'transforms',
-                'rollbacks',
-                'markers',
-                'file_sizing',
-                'disaster_recovery',
-                'snapshot_exporter',
-                'precommit_validator',
+                'performance',
+                'deployment',
+                'procedures',
+                'cli',
+                'metrics',
+                'encryption',
+                'troubleshooting',
+                'tuning-guide',
+                'flink_tuning',
             ],
         },
         {
@@ -86,20 +120,6 @@ module.exports = {
             items: [
                 'basic_configurations',
                 'configurations',
-            ],
-        },
-        {
-            type: 'category',
-            label: 'Guides',
-            items: [
-                'performance',
-                'deployment',
-                'cli',
-                'metrics',
-                'encryption',
-                'troubleshooting',
-                'tuning-guide',
-                'flink_tuning',
                 {
                     type: 'category',
                     label: 'Storage Configurations',
@@ -126,14 +146,12 @@ module.exports = {
                 'faq_general',
                 'faq_design_and_concepts',
                 'faq_writing_tables',
-                'faq_querying_tables',
+                'faq_reading_tables',
                 'faq_table_services',
                 'faq_storage',
                 'faq_integrations',
             ],
         },
-        'use_cases',
-        'faq',
         'privacy',
     ],
     quick_links: [

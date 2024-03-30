@@ -9,7 +9,7 @@ navigate: "https://www.youtube.com/watch?v=vimesCse7zE"
 tags:
 - guide
 - late arriving data
-- incremental-etl
-- upserts
+- incremental etl
+- upsert
 - apache hudi
 ---

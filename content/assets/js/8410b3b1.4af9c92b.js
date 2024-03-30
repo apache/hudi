@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[40238],{99649:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/space-filling-curves","name":"space filling curves","count":1,"permalink":"/blog/tags/space-filling-curves"}')}}]);

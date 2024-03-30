@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[88134],{82539:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/walmartglobaltech","name":"walmartglobaltech","count":3,"permalink":"/cn/blog/tags/walmartglobaltech"}')}}]);

@@ -9,6 +9,7 @@ navigate: "https://www.youtube.com/watch?v=5wiXfRyboio"
 tags:
 - guide
 - postgresql
+- postgres
 - apache hudi
 - beginner
 - apache flink

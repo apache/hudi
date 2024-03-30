@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[37738],{73444:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/data-upsert","name":"data upsert","count":1,"permalink":"/videos/tags/data-upsert"}')}}]);

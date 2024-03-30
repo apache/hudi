@@ -10,7 +10,7 @@ tags:
 - deep dive
 - elastic search
 - cdc
-- incremental-query
-- incremental-etl
+- incremental query
+- incremental etl
 - apache hudi
 ---

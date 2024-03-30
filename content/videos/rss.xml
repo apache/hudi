@@ -4,9 +4,111 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Tue, 19 Dec 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sun, 18 Feb 2024 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Build Incremental ETL pipeline with Hudi and Airflow and MinIO]]></title>
+            <link>https://hudi.apache.org/videos/2024/02/18/Build-Incremental-ETL-pipeline-with-Hudi-and-Airflow-and-MinIO</link>
+            <guid>/2024/02/18/Build-Incremental-ETL-pipeline-with-Hudi-and-Airflow-and-MinIO</guid>
+            <pubDate>Sun, 18 Feb 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Integerate Hudi Spark job with Airflow and MinIO | Hands on Labs]]></title>
+            <link>https://hudi.apache.org/videos/2024/02/17/Learn-How-to-Integerate-Hudi-Spark-job-with-Airflow-and-MinIO-Hands-on-Labs</link>
+            <guid>/2024/02/17/Learn-How-to-Integerate-Hudi-Spark-job-with-Airflow-and-MinIO-Hands-on-Labs</guid>
+            <pubDate>Sat, 17 Feb 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Data Ingestion to Visualization: Hudi + MinIO + StarRocks + HiveMetaStore + Apache SuperSet Hands on Guide]]></title>
+            <link>https://hudi.apache.org/videos/2024/02/10/Data-Ingestion-to-Visualization-Hudi-MinIO-StarRocks-HiveMetaStore-Apache-SuperSet-Hands-on-Guide</link>
+            <guid>/2024/02/10/Data-Ingestion-to-Visualization-Hudi-MinIO-StarRocks-HiveMetaStore-Apache-SuperSet-Hands-on-Guide</guid>
+            <pubDate>Sat, 10 Feb 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Building an Open Source Data Lake House with Hudi, Postgres Hive Metastore, Minio, and StarRocks]]></title>
+            <link>https://hudi.apache.org/videos/2024/02/07/Building-an-Open-Source-Data-Lake-House-with-Hudip-Postgres-Hive-Metastore-Minio-and-StarRocks</link>
+            <guid>/2024/02/07/Building-an-Open-Source-Data-Lake-House-with-Hudip-Postgres-Hive-Metastore-Minio-and-StarRocks</guid>
+            <pubDate>Wed, 07 Feb 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi Table Services | Export Services | HoodieSnapshotExporter | Hands on labs]]></title>
+            <link>https://hudi.apache.org/videos/2024/02/03/Apache-Hudi-Table-Services-Export-Services-HoodieSnapshotExporter-Hands-on-labs</link>
+            <guid>/2024/02/03/Apache-Hudi-Table-Services-Export-Services-HoodieSnapshotExporter-Hands-on-labs</guid>
+            <pubDate>Sat, 03 Feb 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi Table Services | Offline Compaction | HoodieCompactor | Hands on labs]]></title>
+            <link>https://hudi.apache.org/videos/2024/02/03/Apache-Hudi-Table-Services-Offline-Compaction-HoodieCompactor-Hands-on-labs</link>
+            <guid>/2024/02/03/Apache-Hudi-Table-Services-Offline-Compaction-HoodieCompactor-Hands-on-labs</guid>
+            <pubDate>Sat, 03 Feb 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Move Data From MongoDB to Apache Hudi Using PySpark]]></title>
+            <link>https://hudi.apache.org/videos/2024/01/21/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark</link>
+            <guid>/2024/01/21/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark</guid>
+            <pubDate>Sun, 21 Jan 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Delete Items from Hudi using Delta Streamer operating in UPSERT Mode with Kafka Avro MSG #12]]></title>
+            <link>https://hudi.apache.org/videos/2024/01/17/How-to-Delete-Items-from-Hudi-using-Delta-Streamer-operating-in-UPSERT-Mode-with-Kafka-Avro-MSG-12</link>
+            <guid>/2024/01/17/How-to-Delete-Items-from-Hudi-using-Delta-Streamer-operating-in-UPSERT-Mode-with-Kafka-Avro-MSG-12</guid>
+            <pubDate>Wed, 17 Jan 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Setup HUDI with AWS Glue and MINIO locally using Docker Container in Minutes]]></title>
+            <link>https://hudi.apache.org/videos/2024/01/13/Setup-HUDI-with-AWS-Glue-and-MINIO-locally-using-Docker-Container-in-Minutes</link>
+            <guid>/2024/01/13/Setup-HUDI-with-AWS-Glue-and-MINIO-locally-using-Docker-Container-in-Minutes</guid>
+            <pubDate>Sat, 13 Jan 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Dynamic Delta Streamer Jobs with JDBC Puller for Postgres | Bring all Tables from particular Schema- Full Video]]></title>
+            <link>https://hudi.apache.org/videos/2024/01/06/Dynamic-Delta-Streamer-Jobs-with-JDBC-Puller-for-Postgres-Bring-all-Tables-from-particular-Schema-full</link>
+            <guid>/2024/01/06/Dynamic-Delta-Streamer-Jobs-with-JDBC-Puller-for-Postgres-Bring-all-Tables-from-particular-Schema-full</guid>
+            <pubDate>Sat, 06 Jan 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Dynamic Delta Streamer Jobs with JDBC Puller for Postgres | Bring all Tables from particular Schema]]></title>
+            <link>https://hudi.apache.org/videos/2024/01/06/Dynamic-Delta-Streamer-Jobs-with-JDBC-Puller-for-Postgres-Bring-all-Tables-from-particular-Schema</link>
+            <guid>/2024/01/06/Dynamic-Delta-Streamer-Jobs-with-JDBC-Puller-for-Postgres-Bring-all-Tables-from-particular-Schema</guid>
+            <pubDate>Sat, 06 Jan 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Data Lake to Microservices: Apache Hudi's Record Index, FastAPI, Spark Connect with Swagger UI]]></title>
+            <link>https://hudi.apache.org/videos/2024/01/01/Data-Lake-to-Microservices-Apache-Hudi-Record-Index-FastAPI-Spark-Connect-with-Swagger-UI</link>
+            <guid>/2024/01/01/Data-Lake-to-Microservices-Apache-Hudi-Record-Index-FastAPI-Spark-Connect-with-Swagger-UI</guid>
+            <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[What is Spark Connect and Getting started Spark Connect Hello World]]></title>
+            <link>https://hudi.apache.org/videos/2023/12/31/What-is-Spark-Connect-and-Getting-started-Spark-Connect-Hello-World</link>
+            <guid>/2023/12/31/What-is-Spark-Connect-and-Getting-started-Spark-Connect-Hello-World</guid>
+            <pubDate>Sun, 31 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Step by step guide on How to Migrate legacy COW Table on S3 to MOR Table using Hudi CLI]]></title>
+            <link>https://hudi.apache.org/videos/2023/12/30/Step-by-step-guide-on-How-to-Migrate-legacy-COW-Table-on-S3-to-MOR-Table-using-Hudi-CLI</link>
+            <guid>/2023/12/30/Step-by-step-guide-on-How-to-Migrate-legacy-COW-Table-on-S3-to-MOR-Table-using-Hudi-CLI</guid>
+            <pubDate>Sat, 30 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Get Started with Hudi CLI Locally Using Docker in Minutes and Connect to Your S3 Data]]></title>
+            <link>https://hudi.apache.org/videos/2023/12/29/Get-Started-with-Hudi-CLI-Locally-Using-Docker-in-Minutes-and-Connect-to-Your-S3-Data</link>
+            <guid>/2023/12/29/Get-Started-with-Hudi-CLI-Locally-Using-Docker-in-Minutes-and-Connect-to-Your-S3-Data</guid>
+            <pubDate>Fri, 29 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi + DBT + Spark + Glue Hive MetaStore | Join two hudi tables Labs with Exercise Files]]></title>
+            <link>https://hudi.apache.org/videos/2023/12/25/Hudi-DBT-Spark-Glue-Hive-MetaStore-Join-two-hudi-tables-Labs-with-Exercise-Files</link>
+            <guid>/2023/12/25/Hudi-DBT-Spark-Glue-Hive-MetaStore-Join-two-hudi-tables-Labs-with-Exercise-Files</guid>
+            <pubDate>Mon, 25 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi, Spark, DBT, Glue Hive MetaStore Setup | Locally | in Minutes – Hands-On Exercise!]]></title>
+            <link>https://hudi.apache.org/videos/2023/12/24/Apache-Hudi-Spark-DBT-Glue-Hive-MetaStore-Setup-Locally-in-Minutes-Hands-On-Exercise</link>
+            <guid>/2023/12/24/Apache-Hudi-Spark-DBT-Glue-Hive-MetaStore-Setup-Locally-in-Minutes-Hands-On-Exercise</guid>
+            <pubDate>Sun, 24 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
         <item>
             <title><![CDATA[How to Use Apache Hudi 0.14 and RLI (record level index) on AWS Glue Step by Step Guide]]></title>
             <link>https://hudi.apache.org/videos/2023/12/19/How-to-Use-Apache-Hudi-0-14-and-RLI-on-AWS-Glue-Step-by-Step-Guide</link>

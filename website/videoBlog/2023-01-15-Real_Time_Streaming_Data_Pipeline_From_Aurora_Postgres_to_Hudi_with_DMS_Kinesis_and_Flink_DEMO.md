@@ -9,7 +9,7 @@ navigate: "https://youtu.be/ozRsX08cC98"
 tags:
 - guide
 - streaming ingestion
-- real-time-datalake
+- real time datalake
 - amazon aurora
 - aws dms
 - amazon kinesis

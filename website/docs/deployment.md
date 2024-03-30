@@ -136,7 +136,7 @@ Here is an example invocation for reading from kafka topic in a continuous mode 
 
 ### Spark Datasource Writer Jobs
 
-As described in [Writing Data](/docs/writing_data#spark-datasource-writer), you can use spark datasource to ingest to hudi table. This mechanism allows you to ingest any spark dataframe in Hudi format. Hudi Spark DataSource also supports spark streaming to ingest a streaming source to Hudi table. For Merge On Read table types, inline compaction is turned on by default which runs after every ingestion run. The compaction frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". 
+As described in [Batch Writes](/docs/next/writing_data#spark-datasource-api), you can use spark datasource to ingest to hudi table. This mechanism allows you to ingest any spark dataframe in Hudi format. Hudi Spark DataSource also supports spark streaming to ingest a streaming source to Hudi table. For Merge On Read table types, inline compaction is turned on by default which runs after every ingestion run. The compaction frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". 
 
 Here is an example invocation using spark datasource
 
@@ -144,10 +144,10 @@ Here is an example invocation using spark datasource
 inputDF.write()
        .format("org.apache.hudi")
        .options(clientOpts) // any of the Hudi client opts can be passed in as well
-       .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-       .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-       .option(HoodieWriteConfig.TABLE_NAME, tableName)
+       .option("hoodie.datasource.write.recordkey.field", "_row_key")
+       .option("hoodie.datasource.write.partitionpath.field", "partition")
+       .option("hoodie.datasource.write.precombine.field"(), "timestamp")
+       .option("hoodie.table.name", tableName)
        .mode(SaveMode.Append)
        .save(basePath);
 ```
@@ -205,11 +205,11 @@ val inserts = convertToStringList(dataGen.generateInserts(100)).toList
 val insertDf = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 insertDf.write.format("hudi").
         options(getQuickstartWriteConfigs).
-        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-        option(TABLE_NAME, tableName).
-        option(OPERATION.key(), INSERT_OPERATION_OPT_VAL).
+        option("hoodie.datasource.write.precombine.field", "ts").
+        option("hoodie.datasource.write.recordkey.field", "uuid").
+        option("hoodie.datasource.write.partitionpath.field", "partitionpath").
+        option("hoodie.table.name", tableName).
+        option("hoodie.datasource.write.operation", "insert").
         mode(Append).
         save(basePath)
 ```

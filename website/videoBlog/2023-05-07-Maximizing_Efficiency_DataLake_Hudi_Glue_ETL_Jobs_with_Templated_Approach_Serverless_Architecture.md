@@ -10,7 +10,7 @@ tags:
 - guide
 - apache hudi
 - aws glue
-- etl jobs
+- etl
 - templated architecture
 - serverless
 ---

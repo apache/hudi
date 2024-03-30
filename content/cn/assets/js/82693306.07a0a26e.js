@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[4243],{52236:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/storage-cost","name":"storage cost","count":1,"permalink":"/cn/videos/tags/storage-cost"}')}}]);

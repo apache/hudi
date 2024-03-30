@@ -14,5 +14,6 @@ tags:
 - spark sql
 - apache hudi
 - beeline
+- hive metastore
 ---
 

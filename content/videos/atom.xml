@@ -2,11 +2,164 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/videos</id>
     <title>Apache Hudi Blog</title>
-    <updated>2023-12-19T00:00:00.000Z</updated>
+    <updated>2024-02-18T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/videos"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Build Incremental ETL pipeline with Hudi and Airflow and MinIO]]></title>
+        <id>/2024/02/18/Build-Incremental-ETL-pipeline-with-Hudi-and-Airflow-and-MinIO</id>
+        <link href="https://hudi.apache.org/videos/2024/02/18/Build-Incremental-ETL-pipeline-with-Hudi-and-Airflow-and-MinIO"/>
+        <updated>2024-02-18T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn How to Integerate Hudi Spark job with Airflow and MinIO | Hands on Labs]]></title>
+        <id>/2024/02/17/Learn-How-to-Integerate-Hudi-Spark-job-with-Airflow-and-MinIO-Hands-on-Labs</id>
+        <link href="https://hudi.apache.org/videos/2024/02/17/Learn-How-to-Integerate-Hudi-Spark-job-with-Airflow-and-MinIO-Hands-on-Labs"/>
+        <updated>2024-02-17T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Data Ingestion to Visualization: Hudi + MinIO + StarRocks + HiveMetaStore + Apache SuperSet Hands on Guide]]></title>
+        <id>/2024/02/10/Data-Ingestion-to-Visualization-Hudi-MinIO-StarRocks-HiveMetaStore-Apache-SuperSet-Hands-on-Guide</id>
+        <link href="https://hudi.apache.org/videos/2024/02/10/Data-Ingestion-to-Visualization-Hudi-MinIO-StarRocks-HiveMetaStore-Apache-SuperSet-Hands-on-Guide"/>
+        <updated>2024-02-10T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Building an Open Source Data Lake House with Hudi, Postgres Hive Metastore, Minio, and StarRocks]]></title>
+        <id>/2024/02/07/Building-an-Open-Source-Data-Lake-House-with-Hudip-Postgres-Hive-Metastore-Minio-and-StarRocks</id>
+        <link href="https://hudi.apache.org/videos/2024/02/07/Building-an-Open-Source-Data-Lake-House-with-Hudip-Postgres-Hive-Metastore-Minio-and-StarRocks"/>
+        <updated>2024-02-07T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi Table Services | Export Services | HoodieSnapshotExporter | Hands on labs]]></title>
+        <id>/2024/02/03/Apache-Hudi-Table-Services-Export-Services-HoodieSnapshotExporter-Hands-on-labs</id>
+        <link href="https://hudi.apache.org/videos/2024/02/03/Apache-Hudi-Table-Services-Export-Services-HoodieSnapshotExporter-Hands-on-labs"/>
+        <updated>2024-02-03T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi Table Services | Offline Compaction | HoodieCompactor | Hands on labs]]></title>
+        <id>/2024/02/03/Apache-Hudi-Table-Services-Offline-Compaction-HoodieCompactor-Hands-on-labs</id>
+        <link href="https://hudi.apache.org/videos/2024/02/03/Apache-Hudi-Table-Services-Offline-Compaction-HoodieCompactor-Hands-on-labs"/>
+        <updated>2024-02-03T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn How to Move Data From MongoDB to Apache Hudi Using PySpark]]></title>
+        <id>/2024/01/21/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark</id>
+        <link href="https://hudi.apache.org/videos/2024/01/21/Learn-How-to-Move-Data-From-MongoDB-to-Apache-Hudi-Using-PySpark"/>
+        <updated>2024-01-21T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to Delete Items from Hudi using Delta Streamer operating in UPSERT Mode with Kafka Avro MSG #12]]></title>
+        <id>/2024/01/17/How-to-Delete-Items-from-Hudi-using-Delta-Streamer-operating-in-UPSERT-Mode-with-Kafka-Avro-MSG-12</id>
+        <link href="https://hudi.apache.org/videos/2024/01/17/How-to-Delete-Items-from-Hudi-using-Delta-Streamer-operating-in-UPSERT-Mode-with-Kafka-Avro-MSG-12"/>
+        <updated>2024-01-17T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Setup HUDI with AWS Glue and MINIO locally using Docker Container in Minutes]]></title>
+        <id>/2024/01/13/Setup-HUDI-with-AWS-Glue-and-MINIO-locally-using-Docker-Container-in-Minutes</id>
+        <link href="https://hudi.apache.org/videos/2024/01/13/Setup-HUDI-with-AWS-Glue-and-MINIO-locally-using-Docker-Container-in-Minutes"/>
+        <updated>2024-01-13T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Dynamic Delta Streamer Jobs with JDBC Puller for Postgres | Bring all Tables from particular Schema- Full Video]]></title>
+        <id>/2024/01/06/Dynamic-Delta-Streamer-Jobs-with-JDBC-Puller-for-Postgres-Bring-all-Tables-from-particular-Schema-full</id>
+        <link href="https://hudi.apache.org/videos/2024/01/06/Dynamic-Delta-Streamer-Jobs-with-JDBC-Puller-for-Postgres-Bring-all-Tables-from-particular-Schema-full"/>
+        <updated>2024-01-06T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Dynamic Delta Streamer Jobs with JDBC Puller for Postgres | Bring all Tables from particular Schema]]></title>
+        <id>/2024/01/06/Dynamic-Delta-Streamer-Jobs-with-JDBC-Puller-for-Postgres-Bring-all-Tables-from-particular-Schema</id>
+        <link href="https://hudi.apache.org/videos/2024/01/06/Dynamic-Delta-Streamer-Jobs-with-JDBC-Puller-for-Postgres-Bring-all-Tables-from-particular-Schema"/>
+        <updated>2024-01-06T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Data Lake to Microservices: Apache Hudi's Record Index, FastAPI, Spark Connect with Swagger UI]]></title>
+        <id>/2024/01/01/Data-Lake-to-Microservices-Apache-Hudi-Record-Index-FastAPI-Spark-Connect-with-Swagger-UI</id>
+        <link href="https://hudi.apache.org/videos/2024/01/01/Data-Lake-to-Microservices-Apache-Hudi-Record-Index-FastAPI-Spark-Connect-with-Swagger-UI"/>
+        <updated>2024-01-01T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[What is Spark Connect and Getting started Spark Connect Hello World]]></title>
+        <id>/2023/12/31/What-is-Spark-Connect-and-Getting-started-Spark-Connect-Hello-World</id>
+        <link href="https://hudi.apache.org/videos/2023/12/31/What-is-Spark-Connect-and-Getting-started-Spark-Connect-Hello-World"/>
+        <updated>2023-12-31T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Step by step guide on How to Migrate legacy COW Table on S3 to MOR Table using Hudi CLI]]></title>
+        <id>/2023/12/30/Step-by-step-guide-on-How-to-Migrate-legacy-COW-Table-on-S3-to-MOR-Table-using-Hudi-CLI</id>
+        <link href="https://hudi.apache.org/videos/2023/12/30/Step-by-step-guide-on-How-to-Migrate-legacy-COW-Table-on-S3-to-MOR-Table-using-Hudi-CLI"/>
+        <updated>2023-12-30T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Get Started with Hudi CLI Locally Using Docker in Minutes and Connect to Your S3 Data]]></title>
+        <id>/2023/12/29/Get-Started-with-Hudi-CLI-Locally-Using-Docker-in-Minutes-and-Connect-to-Your-S3-Data</id>
+        <link href="https://hudi.apache.org/videos/2023/12/29/Get-Started-with-Hudi-CLI-Locally-Using-Docker-in-Minutes-and-Connect-to-Your-S3-Data"/>
+        <updated>2023-12-29T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi + DBT + Spark + Glue Hive MetaStore | Join two hudi tables Labs with Exercise Files]]></title>
+        <id>/2023/12/25/Hudi-DBT-Spark-Glue-Hive-MetaStore-Join-two-hudi-tables-Labs-with-Exercise-Files</id>
+        <link href="https://hudi.apache.org/videos/2023/12/25/Hudi-DBT-Spark-Glue-Hive-MetaStore-Join-two-hudi-tables-Labs-with-Exercise-Files"/>
+        <updated>2023-12-25T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi, Spark, DBT, Glue Hive MetaStore Setup | Locally | in Minutes – Hands-On Exercise!]]></title>
+        <id>/2023/12/24/Apache-Hudi-Spark-DBT-Glue-Hive-MetaStore-Setup-Locally-in-Minutes-Hands-On-Exercise</id>
+        <link href="https://hudi.apache.org/videos/2023/12/24/Apache-Hudi-Spark-DBT-Glue-Hive-MetaStore-Setup-Locally-in-Minutes-Hands-On-Exercise"/>
+        <updated>2023-12-24T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[How to Use Apache Hudi 0.14 and RLI (record level index) on AWS Glue Step by Step Guide]]></title>
         <id>/2023/12/19/How-to-Use-Apache-Hudi-0-14-and-RLI-on-AWS-Glue-Step-by-Step-Guide</id>

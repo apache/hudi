@@ -197,7 +197,7 @@ DELETE from hudi_table where uuid = 'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa';
 These DML operations give you powerful tools for managing your tables using Spark SQL. 
 You can control the behavior of these operations using various configuration options, as explained in the documentation.
 
-## Flink 
+## Flink SQL
 
 Flink SQL provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. These operations allow you to insert, update and delete data from your Hudi tables. Let's explore them one by one.
 
@@ -269,3 +269,117 @@ INSERT INTO hudi_table/*+ OPTIONS('${hoodie.config.key1}'='${hoodie.config.value
 ```sql
 INSERT INTO hudi_table/*+ OPTIONS('hoodie.keep.max.commits'='true')*/
 ```
+
+## Flink SQL In Action
+
+The hudi-flink module defines the Flink SQL connector for both hudi source and sink.
+There are a number of options available for the sink table:
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| path | Y | N/A | Base path for the target hoodie table. The path would be created if it does not exist, otherwise a hudi table expects to be initialized successfully |
+| table.type  | N | COPY_ON_WRITE | Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ |
+| write.operation | N | upsert | The write operation, that this write should do (insert or upsert is supported) |
+| write.precombine.field | N | ts | Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..) |
+| write.payload.class | N | OverwriteWithLatestAvroPayload.class | Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for the option in-effective |
+| write.insert.drop.duplicates | N | false | Flag to indicate whether to drop duplicates upon insert. By default insert will accept duplicates, to gain extra performance |
+| write.ignore.failed | N | true | Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. By default true (in favor of streaming progressing over data integrity) |
+| hoodie.datasource.write.recordkey.field | N | uuid | Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c` |
+| hoodie.datasource.write.keygenerator.class | N | SimpleAvroKeyGenerator.class | Key generator class, that implements will extract the key out of incoming record |
+| write.tasks | N | 4 | Parallelism of tasks that do actual write, default is 4 |
+| write.batch.size.MB | N | 128 | Batch buffer size in MB to flush data into the underneath filesystem |
+
+If the table type is MERGE_ON_READ, you can also specify the asynchronous compaction strategy through options:
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| compaction.async.enabled | N | true | Async Compaction, enabled by default for MOR |
+| compaction.trigger.strategy | N | num_commits | Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits; 'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction; 'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied; 'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied. Default is 'num_commits' |
+| compaction.delta_commits | N | 5 | Max delta commits needed to trigger compaction, default 5 commits |
+| compaction.delta_seconds | N | 3600 | Max delta seconds time needed to trigger compaction, default 1 hour |
+
+You can write the data using the SQL `INSERT INTO` statements:
+```sql
+INSERT INTO hudi_table select ... from ...; 
+```
+
+**Note**: INSERT OVERWRITE is not supported yet but already on the roadmap.
+
+
+### Non-Blocking Concurrency Control (Experimental)
+
+Hudi Flink supports a new non-blocking concurrency control mode, where multiple writer tasks can be executed
+concurrently without blocking each other. One can read more about this mode in
+the [concurrency control](/docs/next/concurrency_control#model-c-multi-writer) docs. Let us see it in action here.
+
+In the below example, we have two streaming ingestion pipelines that concurrently update the same table. One of the
+pipeline is responsible for the compaction and cleaning table services, while the other pipeline is just for data
+ingestion.
+
+```sql
+-- set the interval as 30 seconds
+execution.checkpointing.interval: 30000
+state.backend: rocksdb
+
+-- This is a datagen source that can generates records continuously
+CREATE TABLE sourceT (
+    uuid varchar(20),
+    name varchar(10),
+    age int,
+    ts timestamp(3),
+    `partition` as 'par1'
+) WITH (
+    'connector' = 'datagen',
+    'rows-per-second' = '200'
+);
+
+-- pipeline1: by default enable the compaction and cleaning services
+CREATE TABLE t1(
+    uuid varchar(20),
+    name varchar(10),
+    age int,
+    ts timestamp(3),
+    `partition` varchar(20)
+) WITH (
+    'connector' = 'hudi',
+    'path' = '/Users/chenyuzhao/workspace/hudi-demo/t1',
+    'table.type' = 'MERGE_ON_READ',
+    'index.type' = 'BUCKET',
+    'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',
+    'write.tasks' = '2'
+);
+
+-- pipeline2: disable the compaction and cleaning services manually
+CREATE TABLE t1_2(
+    uuid varchar(20),
+    name varchar(10),
+    age int,
+    ts timestamp(3),
+    `partition` varchar(20)
+) WITH (
+    'connector' = 'hudi',
+    'path' = '/Users/chenyuzhao/workspace/hudi-demo/t1',
+    'table.type' = 'MERGE_ON_READ',
+    'index.type' = 'BUCKET',
+    'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',
+    'write.tasks' = '2',
+    'compaction.schedule.enabled' = 'false',
+    'compaction.async.enabled' = 'false',
+    'clean.async.enabled' = 'false'
+);
+
+-- submit the pipelines
+insert into t1 select * from sourceT;
+insert into t1_2 select * from sourceT;
+
+select * from t1 limit 20;
+```
+
+As you can see from the above example, we have two pipelines with multiple tasks that concurrently write to the
+same table. To use the new concurrency mode, all you need to do is set the `hoodie.write.concurrency.mode`
+to `NON_BLOCKING_CONCURRENCY_CONTROL`. The `write.tasks` option is used to specify the number of write tasks that will
+be used for writing to the table. The `compaction.schedule.enabled`, `compaction.async.enabled`
+and `clean.async.enabled` options are used to disable the compaction and cleaning services for the second pipeline.
+This is done to ensure that the compaction and cleaning services are not executed twice for the same table.
+
+

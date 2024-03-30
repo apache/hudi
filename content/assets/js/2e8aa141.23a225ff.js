@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[42684],{61729:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/timeline","name":"timeline","count":2,"permalink":"/blog/tags/timeline"}')}}]);

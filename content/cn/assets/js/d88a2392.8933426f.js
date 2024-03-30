@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[4726],{63698:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/external-locking","name":"external locking","count":1,"permalink":"/cn/videos/tags/external-locking"}')}}]);

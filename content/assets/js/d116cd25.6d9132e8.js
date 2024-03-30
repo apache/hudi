@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[82649],{81042:l=>{l.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/flink","name":"flink","count":1,"permalink":"/blog/tags/flink"}')}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[39294],{55698:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/aws-lake-formation","name":"aws lake formation","count":1,"permalink":"/blog/tags/aws-lake-formation"}')}}]);
