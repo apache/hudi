@@ -96,7 +96,8 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tablePath).build();
     assertFalse(metaClient.getTableConfig().getMetadataPartitions().isEmpty());
 
-    new TableCommand().connect(tablePath, null, false, 0, 0, 0);
+    new TableCommand().connect(tablePath, null, false, 0, 0, 0,
+        "WAIT_TO_ADJUST_SKEW", 200L, false);
     Object result = shell.evaluate(() -> "metadata delete");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
