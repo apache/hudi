@@ -435,11 +435,8 @@ will be supported in the future.
 
 ## StarRocks
 
-Copy on Write tables in Apache Hudi 0.10.0 and above can be queried via StarRocks external tables from StarRocks version
-2.2.0. Only snapshot queries are supported currently. In future releases Merge on Read tables will also be supported.
-Please refer
-to [StarRocks Hudi external table](https://docs.starrocks.io/en-us/latest/using_starrocks/External_table#hudi-external-table)
-for more details on the setup.
+For Copy-on-Write tables StarRocks provides support for Snapshot queries and for Merge-on-Read tables, StarRocks provides support for Snapshot and Read Optimized queries.
+Please refer [StarRocks docs](https://docs.starrocks.io/docs/data_source/catalog/hudi_catalog/) for more details.
 
 ## ClickHouse
 
@@ -482,16 +479,16 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 
 ### Merge-On-Read tables
 
-|Query Engine|Snapshot Queries|Incremental Queries|Read Optimized Queries|
-|------------|--------|-----------|--------------|
-|**Hive**|Y|Y|Y|
-|**Spark SQL**|Y|Y|Y|
-|**Spark Datasource**|Y|Y|Y|
-|**Flink SQL**|Y|Y|Y|
-|**PrestoDB**|Y|N|Y|
-|**Trino**|N|N|Y|
-|**Impala**|N|N|Y|
-| **Redshift Spectrum** |N|N|N|
-| **Doris**             |N|N|N|
-| **StarRocks**         |N|N|N|
+| Query Engine           | Snapshot Queries |Incremental Queries| Read Optimized Queries |
+|------------------------|-----------------|-----------|------------------------|
+| **Hive**               |Y|Y|Y|
+| **Spark SQL**          |Y|Y|Y|
+| **Spark Datasource**   |Y|Y|Y|
+| **Flink SQL**          |Y|Y|Y|
+| **PrestoDB**           |Y|N|Y|
+| **Trino**              |N|N|Y|
+| **Impala**             |N|N|Y|
+| **Redshift Spectrum**  |N|N|Y|
+| **Doris**              |N|N|N|
+| **StarRocks**          |Y|N|Y|
 | **ClickHouse**         |N|N|N|

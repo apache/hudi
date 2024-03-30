@@ -306,4 +306,6 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 |**PrestoDB**|Y|N|Y|
 |**Trino**|N|N|Y|
 |**Impala**|N|N|Y|
+|**Redshift Spectrum**|N|N|Y|
+|**StarRocks**|Y|N|Y|
 
