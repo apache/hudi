@@ -63,7 +63,12 @@ public class FlinkTaskContextSupplier extends TaskContextSupplier {
   }
 
   @Override
-  public Supplier<Integer> getAttemptNumberSupplier() {
+  public Supplier<Integer> getTaskAttemptNumberSupplier() {
+    return () -> -1;
+  }
+
+  @Override
+  public Supplier<Integer> getStageAttemptNumberSupplier() {
     return () -> -1;
   }
 
