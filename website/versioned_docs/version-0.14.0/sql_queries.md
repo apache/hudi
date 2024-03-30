@@ -334,8 +334,8 @@ will be supported in the future.
 
 ## StarRocks
 
-As of StarRocks v3.1, there's complete support for both Hudi Copy-on-Write and Merge-on-Read tables.
-Please refer [StarRocks docs](https://docs.starrocks.io/docs/data_source/catalog/hudi_catalog/) to get started.
+For Copy-on-Write tables StarRocks provides support for Snapshot queries and for Merge-on-Read tables, StarRocks provides support for Snapshot and Read Optimized queries.
+Please refer [StarRocks docs](https://docs.starrocks.io/docs/data_source/catalog/hudi_catalog/) for more details.
 
 ## ClickHouse
 
@@ -369,7 +369,7 @@ Following tables show whether a given query is supported on specific query engin
 | **Impala**            | Y                | N                   |
 | **Redshift Spectrum** | Y                | N                   |
 | **Doris**             | Y                | N                   |
-| **StarRocks**         | Y                | Y                   |
+| **StarRocks**         | Y                | N                   |
 | **ClickHouse**        | Y                | N                   |
 
 ### Merge-On-Read tables
@@ -387,7 +387,7 @@ Following tables show whether a given query is supported on specific query engin
 | **Impala**            | N                | N                   | Y                      |
 | **Redshift Spectrum** | N                | N                   | Y                      |
 | **Doris**             | N                | N                   | N                      |
-| **StarRocks**         | Y                | Y                   | Y                      |
+| **StarRocks**         | Y                | N                   | Y                      |
 | **ClickHouse**        | N                | N                   | N                      |
 
 

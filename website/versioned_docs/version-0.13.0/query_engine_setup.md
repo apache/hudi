@@ -136,5 +136,5 @@ The current default supported version of Hudi is 0.10.0 and has not been tested 
 :::
 
 ## StarRocks
-As of StarRocks v3.1, there's complete support for both Hudi Copy-on-Write and Merge-on-Read tables.
-Please refer [StarRocks docs](https://docs.starrocks.io/docs/data_source/catalog/hudi_catalog/) to get started.
+For Copy-on-Write tables StarRocks provides support for Snapshot queries and for Merge-on-Read tables, StarRocks provides support for Snapshot and Read Optimized queries.
+Please refer [StarRocks docs](https://docs.starrocks.io/docs/data_source/catalog/hudi_catalog/) for more details.

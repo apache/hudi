@@ -307,5 +307,5 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 | **Trino**             | N                | N                   | Y                      |
 | **Impala**            | N                | N                   | Y                      |
 | **Redshift Spectrum** | N                | N                   | Y                      |
-| **StarRocks**         | Y                | Y                   | Y                      |
+| **StarRocks**         | Y                | N                   | Y                      |
 
