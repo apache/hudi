@@ -44,4 +44,14 @@ public class JavaTaskContextSupplier extends TaskContextSupplier {
   public Option<String> getProperty(EngineProperty prop) {
     return Option.empty();
   }
+
+  @Override
+  public Supplier<Integer> getTaskAttemptNumberSupplier() {
+    return () -> -1;
+  }
+
+  @Override
+  public Supplier<Integer> getStageAttemptNumberSupplier() {
+    return () -> -1;
+  }
 }

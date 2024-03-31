@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metrics;
 
+import java.util.function.Supplier;
+
 /**
  * Used for testing.
  */
@@ -34,4 +36,5 @@ public class InMemoryMetricsReporter extends MetricsReporter {
   @Override
   public void stop() {
   }
+
 }

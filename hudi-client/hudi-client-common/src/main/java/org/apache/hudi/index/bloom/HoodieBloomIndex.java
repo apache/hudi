@@ -288,6 +288,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   HoodiePairData<HoodieFileGroupId, String> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       HoodiePairData<String, String> partitionRecordKeyPairs) {
+    LOG.info("Instantiating index file filter ");
     IndexFileFilter indexFileFilter =
         config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedIndexFileFilter(partitionToFileIndexInfo);
