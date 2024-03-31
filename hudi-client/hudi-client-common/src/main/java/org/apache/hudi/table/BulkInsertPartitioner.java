@@ -107,4 +107,8 @@ public interface BulkInsertPartitioner<I> extends Serializable {
     return prependColumnValues;
   }
 
+  static String[] getSortColumnName(HoodieWriteConfig config) {
+    return Arrays.stream(config.getUserDefinedBulkInsertPartitionerSortColumns().split(","))
+        .map(String::trim).toArray(String[]::new);
+  }
 }

@@ -47,8 +47,7 @@ import java.util.Properties;
  * support z-curve optimization, hilbert will come soon.
  * @param <T> HoodieRecordPayload type
  */
-public class RDDSpatialCurveSortPartitioner<T>
-    extends SpatialCurveSortPartitionerBase<JavaRDD<HoodieRecord<T>>> {
+public class RDDSpatialCurveSortPartitioner<T> extends SpatialCurveSortPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
   private final transient HoodieSparkEngineContext sparkEngineContext;
   private final SerializableSchema schema;

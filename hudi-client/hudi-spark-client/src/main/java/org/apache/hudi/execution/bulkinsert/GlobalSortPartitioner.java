@@ -34,8 +34,7 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.GLOBAL_SOR
  *
  * @param <T> HoodieRecordPayload type
  */
-public class GlobalSortPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class GlobalSortPartitioner<T> implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean shouldPopulateMetaFields;
 
@@ -44,8 +43,7 @@ public class GlobalSortPartitioner<T>
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitions) {
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
     if (!shouldPopulateMetaFields) {
       throw new HoodieException(GLOBAL_SORT.name() + " mode requires meta-fields to be enabled");
     }

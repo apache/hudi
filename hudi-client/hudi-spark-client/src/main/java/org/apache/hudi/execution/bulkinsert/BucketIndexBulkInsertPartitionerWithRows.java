@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.BucketPartitionUtils$;
@@ -32,9 +33,13 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
   private final String indexKeyFields;
   private final int bucketNum;
 
-  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum) {
-    this.indexKeyFields = indexKeyFields;
-    this.bucketNum = bucketNum;
+  /**
+   * Constructor to create as UserDefinedBulkInsertPartitioner class via reflection
+   * @param config HoodieWriteConfig
+   */
+  public BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig config) {
+    this.indexKeyFields = config.getBucketIndexHashFieldWithDefault();
+    this.bucketNum = config.getBucketIndexNumBuckets();
   }
 
   @Override

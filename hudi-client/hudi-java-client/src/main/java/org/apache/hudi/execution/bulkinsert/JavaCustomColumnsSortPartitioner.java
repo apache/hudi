@@ -36,8 +36,7 @@ import java.util.stream.Collectors;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class JavaCustomColumnsSortPartitioner<T>
-    implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
+public class JavaCustomColumnsSortPartitioner<T> implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
 
   private final String[] sortColumnNames;
   private final Schema schema;
@@ -49,9 +48,18 @@ public class JavaCustomColumnsSortPartitioner<T>
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
+  /**
+   * Constructor to create as UserDefinedBulkInsertPartitioner class via reflection
+   * @param config HoodieWriteConfig
+   */
+  public JavaCustomColumnsSortPartitioner(HoodieWriteConfig config) {
+    this.sortColumnNames = BulkInsertPartitioner.getSortColumnName(config);
+    this.schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
+    this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
+  }
+
   @Override
-  public List<HoodieRecord<T>> repartitionRecords(
-      List<HoodieRecord<T>> records, int outputPartitions) {
+  public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records, int outputPartitions) {
     return records.stream().sorted((o1, o2) -> {
       FlatLists.ComparableList<Comparable> values1 = FlatLists.ofComparableArray(
           BulkInsertPartitioner.prependPartitionPath(o1.getPartitionPath(), HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) o1, sortColumnNames, schema, consistentLogicalTimestampEnabled))

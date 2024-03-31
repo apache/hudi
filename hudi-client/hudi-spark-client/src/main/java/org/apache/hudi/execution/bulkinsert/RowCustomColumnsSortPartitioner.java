@@ -40,7 +40,7 @@ public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Da
   private final String[] sortColumnNames;
 
   public RowCustomColumnsSortPartitioner(HoodieWriteConfig config) {
-    this.sortColumnNames = tryPrependPartitionPathColumns(getSortColumnName(config), config);
+    this.sortColumnNames = tryPrependPartitionPathColumns(BulkInsertPartitioner.getSortColumnName(config), config);
   }
 
   public RowCustomColumnsSortPartitioner(String[] columnNames, HoodieWriteConfig config) {
@@ -59,8 +59,4 @@ public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Da
     return true;
   }
 
-  private String[] getSortColumnName(HoodieWriteConfig config) {
-    return Arrays.stream(config.getUserDefinedBulkInsertPartitionerSortColumns().split(","))
-        .map(String::trim).toArray(String[]::new);
-  }
 }

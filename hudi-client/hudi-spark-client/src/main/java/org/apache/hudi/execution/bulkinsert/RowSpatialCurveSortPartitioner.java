@@ -18,7 +18,6 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -26,13 +25,7 @@ import org.apache.spark.sql.Row;
 public class RowSpatialCurveSortPartitioner extends SpatialCurveSortPartitionerBase<Dataset<Row>> {
 
   public RowSpatialCurveSortPartitioner(HoodieWriteConfig config) {
-    super(config.getClusteringSortColumns(), config.getLayoutOptimizationStrategy(), config.getLayoutOptimizationCurveBuildMethod());
-  }
-
-  public RowSpatialCurveSortPartitioner(String[] orderByColumns,
-                                        HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
-                                        HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType) {
-    super(orderByColumns, layoutOptStrategy, curveCompositionStrategyType);
+    super(config);
   }
 
   @Override
