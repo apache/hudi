@@ -62,4 +62,14 @@ public class FlinkTaskContextSupplier extends TaskContextSupplier {
     return Option.empty();
   }
 
+  @Override
+  public Supplier<Integer> getTaskAttemptNumberSupplier() {
+    return () -> -1;
+  }
+
+  @Override
+  public Supplier<Integer> getStageAttemptNumberSupplier() {
+    return () -> -1;
+  }
+
 }

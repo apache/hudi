@@ -36,6 +36,8 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
+
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 
@@ -76,6 +78,8 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
         int minPartitions = (int) getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
         metrics.updateStreamerSourceParallelism(minPartitions);
         offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
+        LOG.info("About to read numEvents {} in {} spark partitions from kafka for topic {} with offset ranges {}", sourceLimit, minPartitions, offsetGen.getTopicName(),
+            Arrays.toString(offsetRanges));
       }
       return toInputBatch(offsetRanges);
     } catch (org.apache.kafka.common.errors.TimeoutException e) {
@@ -85,7 +89,7 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
 
   private InputBatch<JavaRDD<T>> toInputBatch(OffsetRange[] offsetRanges) {
     long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
-    LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
+    LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName() + " after offset generation");
     if (totalNewMsgs <= 0) {
       metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, 0);
       return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));

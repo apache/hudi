@@ -45,4 +45,15 @@ public class DummyTaskContextSupplier extends TaskContextSupplier {
   public Option<String> getProperty(EngineProperty prop) {
     return null;
   }
+
+  @Override
+  public Supplier<Integer> getTaskAttemptNumberSupplier() {
+    return null;
+  }
+
+  @Override
+  public Supplier<Integer> getStageAttemptNumberSupplier() {
+    return null;
+  }
+
 }

@@ -40,12 +40,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -59,6 +62,7 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
  * Read json kafka data.
  */
 public class JsonKafkaSource extends KafkaSource<String> {
+  private static final Logger LOG = LoggerFactory.getLogger(JsonKafkaSource.class);
 
   /**
    * Configs specific to {@link JsonKafkaSource}.
@@ -100,6 +104,10 @@ public class JsonKafkaSource extends KafkaSource<String> {
 
   protected  JavaRDD<String> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD, String deserializerClass) {
     return shouldAddOffsets ? kafkaRDD.mapPartitions(partitionIterator -> {
+      TaskContext taskContext = TaskContext.get();
+      LOG.info("Converting Kafka source objects to strings with stageId : {}, stage attempt no: {}, taskId : {}, task attempt no : {}, task attempt id : {} ",
+          taskContext.stageId(), taskContext.stageAttemptNumber(), taskContext.partitionId(), taskContext.attemptNumber(),
+          taskContext.taskAttemptId());
       return new CloseableMappingIterator<>(ClosableIterator.wrap(partitionIterator), consumerRecord -> {
         String recordKey;
         String record;

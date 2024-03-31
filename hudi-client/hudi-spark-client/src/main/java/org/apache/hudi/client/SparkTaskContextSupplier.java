@@ -51,6 +51,16 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
   }
 
   @Override
+  public Supplier<Integer> getTaskAttemptNumberSupplier() {
+    return () -> TaskContext.get().attemptNumber();
+  }
+
+  @Override
+  public Supplier<Integer> getStageAttemptNumberSupplier() {
+    return () -> TaskContext.get().stageAttemptNumber();
+  }
+
+  @Override
   public Option<String> getProperty(EngineProperty prop) {
     if (prop == EngineProperty.TOTAL_MEMORY_AVAILABLE) {
       // This is hard-coded in spark code {@link
