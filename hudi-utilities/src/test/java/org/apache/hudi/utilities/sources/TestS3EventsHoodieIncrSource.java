@@ -105,8 +105,8 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());
     String schemaFilePath = TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_gcs_data.avsc").getPath();
     TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
-    props.put("hoodie.deltastreamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
+    props.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
+    props.put("hoodie.streamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
     this.schemaProvider = Option.of(new FilebasedSchemaProvider(props, jsc));
   }
 
@@ -186,10 +186,10 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
 
   private TypedProperties setProps(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy) {
     Properties properties = new Properties();
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.path", basePath());
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy",
+    properties.setProperty("hoodie.streamer.source.hoodieincr.path", basePath());
+    properties.setProperty("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy",
         missingCheckpointStrategy.name());
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.file.format", "json");
+    properties.setProperty("hoodie.streamer.source.hoodieincr.file.format", "json");
     return new TypedProperties(properties);
   }
 
@@ -354,7 +354,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
 
     setMockQueryRunner(inputDs);
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
-    typedProperties.setProperty("hoodie.deltastreamer.source.s3incr.ignore.key.prefix", "path/to/skip");
+    typedProperties.setProperty("hoodie.streamer.source.s3incr.ignore.key.prefix", "path/to/skip");
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1"), 1000L, "2", typedProperties);
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file3.json"), 1000L, "2", typedProperties);
@@ -388,7 +388,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     when(mockCloudDataFetcher.getCloudObjectDataDF(Mockito.any(), Mockito.any(), Mockito.any(), eq(schemaProvider)))
         .thenReturn(Option.empty());
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
-    typedProperties.setProperty("hoodie.deltastreamer.source.s3incr.ignore.key.prefix", "path/to/skip");
+    typedProperties.setProperty("hoodie.streamer.source.s3incr.ignore.key.prefix", "path/to/skip");
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1"), 50L, "2#path/to/file4.json", typedProperties);
   }
@@ -420,7 +420,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     when(mockCloudDataFetcher.getCloudObjectDataDF(Mockito.any(), Mockito.any(), Mockito.any(), eq(schemaProvider)))
         .thenReturn(Option.empty());
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
-    typedProperties.setProperty("hoodie.deltastreamer.source.s3incr.ignore.key.prefix", "path/to/skip");
+    typedProperties.setProperty("hoodie.streamer.source.s3incr.ignore.key.prefix", "path/to/skip");
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file3.json"), 50L, "3#path/to/file4.json", typedProperties);
 
@@ -457,14 +457,14 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     when(mockCloudDataFetcher.getCloudObjectDataDF(Mockito.any(), Mockito.any(), Mockito.any(), eq(schemaProvider)))
         .thenReturn(Option.empty());
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
-    typedProperties.setProperty("hoodie.deltastreamer.source.s3incr.ignore.key.prefix", "path/to/skip");
+    typedProperties.setProperty("hoodie.streamer.source.s3incr.ignore.key.prefix", "path/to/skip");
     //1. snapshot query, read all records
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50000L, exptected1, typedProperties);
     //2. incremental query, as commit is present in timeline
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(exptected1), 10L, exptected2, typedProperties);
     //3. snapshot query with source limit less than first commit size
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected3, typedProperties);
-    typedProperties.setProperty("hoodie.deltastreamer.source.s3incr.ignore.key.prefix", "path/to");
+    typedProperties.setProperty("hoodie.streamer.source.s3incr.ignore.key.prefix", "path/to");
     //4. As snapshotQuery will return 1 -> same would be return as nextCheckpoint (dataset is empty due to ignore prefix).
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected4, typedProperties);
   }

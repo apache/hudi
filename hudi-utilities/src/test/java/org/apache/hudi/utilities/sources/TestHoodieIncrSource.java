@@ -330,8 +330,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
                              String expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt) {
 
     Properties properties = new Properties();
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.path", basePath());
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy", missingCheckpointStrategy.name());
+    properties.setProperty("hoodie.streamer.source.hoodieincr.path", basePath());
+    properties.setProperty("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy", missingCheckpointStrategy.name());
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
     TypedProperties typedProperties = new TypedProperties(properties);

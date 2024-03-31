@@ -114,8 +114,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     jsc = JavaSparkContext.fromSparkContext(spark().sparkContext());
     String schemaFilePath = TestGcsEventsHoodieIncrSource.class.getClassLoader().getResource("schema/sample_gcs_data.avsc").getPath();
     TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
-    props.put("hoodie.deltastreamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
+    props.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
+    props.put("hoodie.streamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
     this.schemaProvider = Option.of(new FilebasedSchemaProvider(props, jsc));
     MockitoAnnotations.initMocks(this);
   }
@@ -263,14 +263,14 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     setMockQueryRunner(inputDs, Option.of(snapshotCheckPoint));
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
-    typedProperties.setProperty("hoodie.deltastreamer.source.cloud.data.ignore.relpath.prefix", "path/to/skip");
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.ignore.relpath.prefix", "path/to/skip");
     //1. snapshot query, read all records
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50000L, exptected1, typedProperties);
     //2. incremental query, as commit is present in timeline
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(exptected1), 10L, exptected2, typedProperties);
     //3. snapshot query with source limit less than first commit size
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected3, typedProperties);
-    typedProperties.setProperty("hoodie.deltastreamer.source.cloud.data.ignore.relpath.prefix", "path/to");
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.ignore.relpath.prefix", "path/to");
     //4. As snapshotQuery will return 1 -> same would be return as nextCheckpoint (dataset is empty due to ignore prefix).
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected4, typedProperties);
   }
@@ -316,7 +316,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
                              Option<String> checkpointToPull, long sourceLimit, String expectedCheckpoint) {
     TypedProperties typedProperties = setProps(missingCheckpointStrategy);
-    typedProperties.put("hoodie.deltastreamer.source.hoodieincr.file.format", "json");
+    typedProperties.put("hoodie.streamer.source.hoodieincr.file.format", "json");
     readAndAssert(missingCheckpointStrategy, checkpointToPull, sourceLimit, expectedCheckpoint, typedProperties);
   }
 
@@ -388,10 +388,10 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   private TypedProperties setProps(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy) {
     Properties properties = new Properties();
     //String schemaFilePath = TestGcsEventsHoodieIncrSource.class.getClassLoader().getResource("schema/sample_gcs_data.avsc").getPath();
-    //properties.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
-    properties.put("hoodie.deltastreamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.path", basePath());
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy",
+    //properties.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
+    properties.put("hoodie.streamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
+    properties.setProperty("hoodie.streamer.source.hoodieincr.path", basePath());
+    properties.setProperty("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy",
         missingCheckpointStrategy.name());
     properties.setProperty(CloudSourceConfig.DATAFILE_FORMAT.key(), "json");
     return new TypedProperties(properties);
