@@ -20,7 +20,9 @@
 package org.apache.hudi.exception;
 
 /**
- * Exception thrown during hoodie record construction
+ * Exception thrown during hoodie record construction for any failure that
+ * that is not a KeyGeneration Failure. An example of a failure would be if the
+ * record is malformed.
  */
 public class HoodieRecordCreationException extends HoodieException {
 
