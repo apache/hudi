@@ -149,7 +149,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
           String indexUptoInstant = indexPartitionInfos.get(0).getIndexUptoInstant();
           LOG.info("Starting Index Building with base instant: " + indexUptoInstant);
           HoodieTimer timer = HoodieTimer.start();
-          metadataWriter.buildMetadataPartitions(context, indexPartitionInfos);
+          metadataWriter.buildMetadataPartitions(context, indexPartitionInfos, indexInstant.getTimestamp());
           metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
 
           // get remaining instants to catchup

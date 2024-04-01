@@ -57,6 +57,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLogCompactException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
@@ -910,7 +911,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   /**
    * Rolls back the failed delta commits corresponding to the indexing action.
-   * Such delta commits are identified based on the suffix `METADATA_INDEXER_TIME_SUFFIX` ("004").
    * <p>
    * TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks
    *  in the metadata table is landed.
@@ -919,17 +919,26 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    */
   protected boolean rollbackFailedIndexingCommits() {
     HoodieTable table = createTable(config, hadoopConf);
-    List<String> instantsToRollback = getFailedIndexingCommitsToRollback(table.getMetaClient());
+    List<String> instantsToRollback = getFailedIndexingCommitsToRollbackForMetadataTable(table.getMetaClient());
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
     rollbackFailedWrites(pendingRollbacks);
     return !pendingRollbacks.isEmpty();
   }
 
-  protected List<String> getFailedIndexingCommitsToRollback(HoodieTableMetaClient metaClient) {
+  private List<String> getFailedIndexingCommitsToRollbackForMetadataTable(HoodieTableMetaClient metaClient) {
+    if (!isMetadataTable(metaClient.getBasePathV2().toString())) {
+      return Collections.emptyList();
+    }
+    HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
+        .setBasePath(HoodieTableMetadata.getDatasetBasePath(config.getBasePath()))
+        .setConf(metaClient.getHadoopConf())
+        .build();
+    HoodieTimeline dataIndexTimeline = dataMetaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.INDEXING_ACTION));
+
     Stream<HoodieInstant> inflightInstantsStream = metaClient.getCommitsTimeline()
         .filter(instant -> !instant.isCompleted()
-            && isIndexingCommit(instant.getTimestamp()))
+            && isIndexingCommit(dataIndexTimeline, instant.getTimestamp()))
         .getInstantsAsStream();
     return inflightInstantsStream.filter(instant -> {
       try {
@@ -988,11 +997,16 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks in the
       //  metadata table is landed.
       if (metaClient.isMetadataTable()) {
+        HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
+            .setBasePath(HoodieTableMetadata.getDatasetBasePath(config.getBasePath()))
+            .setConf(metaClient.getHadoopConf())
+            .build();
+        HoodieTimeline dataIndexTimeline = dataMetaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.INDEXING_ACTION));
         return inflightInstantsStream.map(HoodieInstant::getTimestamp).filter(entry -> {
           if (curInstantTime.isPresent()) {
             return !entry.equals(curInstantTime.get());
           } else {
-            return !isIndexingCommit(entry);
+            return !isIndexingCommit(dataIndexTimeline, entry);
           }
         }).collect(Collectors.toList());
       }
