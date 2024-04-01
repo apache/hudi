@@ -107,7 +107,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
     initWriteConfigAndMetatableWriter(this.writeConfig, enableMetadataTable);
   }
 
-  protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) throws IOException {
+  protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
     this.writeConfig = writeConfig;
     if (enableMetadataTable) {
       metadataWriter = JavaHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context, Option.empty());

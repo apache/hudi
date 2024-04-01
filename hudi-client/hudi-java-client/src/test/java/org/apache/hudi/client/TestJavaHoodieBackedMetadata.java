@@ -59,6 +59,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -69,6 +70,7 @@ import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
@@ -110,7 +112,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.util.Time;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.AfterEach;
@@ -167,7 +168,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -578,8 +578,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000007", INSERT);
 
     tableMetadata = metadata(writeConfig, context);
-    // verify that compaction of metadata table does not kick in.
-    assertFalse(tableMetadata.getLatestCompactionTime().isPresent());
+    // verify that compaction of metadata table should kick in.
+    assertTrue(tableMetadata.getLatestCompactionTime().isPresent(), "Compaction of metadata table does not kick in");
 
     // move inflight to completed
     testTable.moveInflightCommitToComplete("0000003", inflightCommitMeta);
@@ -1051,7 +1051,6 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
    */
   @Test
   public void testManualRollbacks() throws Exception {
-    boolean populateMateFields = false;
     init(COPY_ON_WRITE, false);
     // Setting to archive more aggressively on the Metadata Table than the Dataset
     final int maxDeltaCommitsBeforeCompaction = 4;
@@ -1082,23 +1081,17 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     validateMetadata(testTable);
 
-    // We can only rollback those commits whose deltacommit have not been archived yet.
-    int numRollbacks = 0;
-    boolean exceptionRaised = false;
+    // We can only roll back those commits whose deltacommit have not been archived yet.
     List<HoodieInstant> allInstants = metaClient.reloadActiveTimeline().getCommitsTimeline().getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant instantToRollback : allInstants) {
       try {
-        testTable.doRollback(instantToRollback.getTimestamp(), String.valueOf(Time.now()));
+        testTable.doRollback(instantToRollback.getTimestamp(), metaClient.createNewInstantTime());
         validateMetadata(testTable);
-        ++numRollbacks;
       } catch (HoodieMetadataException e) {
         // This is expected since we are rolling back commits that are older than the latest compaction on the MDT
         break;
       }
     }
-    // Since each rollback also creates a deltacommit, we can only support rolling back of half of the original
-    // instants present before rollback started.
-    // assertTrue(numRollbacks >= minArchiveCommitsDataset / 2, "Rollbacks of non archived instants should work");
   }
 
   /**
@@ -1178,7 +1171,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         doCompaction(testTable, instantTime5, nonPartitionedDataset);
       }
       // added 60s to commitTime6 to make sure it is greater than compaction instant triggered by previous commit
-      String commitTime6 = metaClient.createNewInstantTime() + + 60000L;
+      String commitTime6 = HoodieInstantTimeGenerator.instantTimePlusMillis(InProcessTimeGenerator.createNewInstantTime(), 60000L);
       doWriteOperation(testTable, commitTime6, UPSERT, nonPartitionedDataset);
       String instantTime7 = metaClient.createNewInstantTime();
       doRollback(testTable, commitTime6, instantTime7);
@@ -2301,22 +2294,21 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testMetadataTableWithLongLog() throws Exception {
     init(COPY_ON_WRITE, false);
-    final int maxNumDeltacommits = 3;
+    final int maxNumDeltaCommits = 3;
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .enableMetrics(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltacommits + 100)
-            .withMaxNumDeltacommitsWhenPending(maxNumDeltacommits)
+            .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommits + 100)
+            .withMaxNumDeltacommitsWhenPending(maxNumDeltaCommits)
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
     testTable.addRequestedCommit(String.format("%016d", 0));
-    for (int i = 1; i <= maxNumDeltacommits; i++) {
+    for (int i = 1; i <= maxNumDeltaCommits; i++) {
       doWriteOperation(testTable, String.format("%016d", i));
     }
-    int instant = maxNumDeltacommits + 1;
-    Throwable t = assertThrows(HoodieMetadataException.class, () -> doWriteOperation(testTable, String.format("%016d", instant)));
-    assertTrue(t.getMessage().startsWith(String.format("Metadata table's deltacommits exceeded %d: ", maxNumDeltacommits)));
+    int instant = maxNumDeltaCommits + 1;
+    assertDoesNotThrow(() -> doWriteOperation(testTable, String.format("%016d", instant)));
   }
 
   @Test
