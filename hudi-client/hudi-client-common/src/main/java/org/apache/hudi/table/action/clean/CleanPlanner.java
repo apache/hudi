@@ -245,6 +245,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       Option<HoodieInstant> instantOption = hoodieTable.getCompletedCommitsTimeline().filter(instant -> instant.getTimestamp().equals(savepointCommit)).firstInstant();
       if (!instantOption.isPresent()) {
         LOG.warn("Skipping to process a commit for which savepoint was removed as the instant moved to archived timeline already");
+        return Stream.empty();
       }
       HoodieInstant instant = instantOption.get();
       return getPartitionsForInstants(instant);
