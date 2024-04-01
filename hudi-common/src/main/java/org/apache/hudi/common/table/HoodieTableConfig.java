@@ -24,12 +24,12 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -167,14 +167,14 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .defaultValue(DefaultHoodieRecordPayload.class.getName())
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
   public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
       .key("hoodie.compaction.payload.type")
-      .defaultValue(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())
+      .defaultValue(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())
       .sinceVersion("1.0.0")
       .withDocumentation(RecordPayloadType.class);
 
