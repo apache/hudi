@@ -81,15 +81,15 @@ public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
     InputBatch<Dataset<Row>> batch = sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
     corruptFile(file1Status.getPath());
     assertTrue(batch.getBatch().isPresent());
-    Throwable T = assertThrows(Exception.class,
+    Throwable t = assertThrows(Exception.class,
         () -> batch.getBatch().get().show(30));
-    while (T != null) {
-      if (T instanceof SchemaCompatibilityException) {
+    while (t != null) {
+      if (t instanceof SchemaCompatibilityException) {
         return;
       }
-      T = T.getCause();
+      t = t.getCause();
     }
-    throw new AssertionError("Exception does not have SchemaCompatibility in its trace", T);
+    throw new AssertionError("Exception does not have SchemaCompatibility in its trace", t);
   }
 
   protected void corruptFile(Path path) throws IOException {
