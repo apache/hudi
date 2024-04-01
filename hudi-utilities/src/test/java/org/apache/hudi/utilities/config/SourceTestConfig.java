@@ -21,29 +21,36 @@ package org.apache.hudi.utilities.config;
 
 import org.apache.hudi.common.config.ConfigProperty;
 
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+
 /**
  * Configurations for Test Data Sources.
  */
 public class SourceTestConfig {
 
   public static final ConfigProperty<Integer> NUM_SOURCE_PARTITIONS_PROP = ConfigProperty
-      .key("hoodie.deltastreamer.source.test.num_partitions")
+      .key(STREAMER_CONFIG_PREFIX + "source.test.num_partitions")
       .defaultValue(10)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.test.num_partitions")
       .withDocumentation("Used by DistributedTestDataSource only. Number of partitions where each partitions generates test-data");
 
   public static final ConfigProperty<Integer> MAX_UNIQUE_RECORDS_PROP = ConfigProperty
-      .key("hoodie.deltastreamer.source.test.max_unique_records")
+      .key(STREAMER_CONFIG_PREFIX + "source.test.max_unique_records")
       .defaultValue(Integer.MAX_VALUE)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.test.max_unique_records")
       .withDocumentation("Maximum number of unique records generated for the run");
 
   public static final ConfigProperty<Boolean> USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS = ConfigProperty
-      .key("hoodie.deltastreamer.source.test.datagen.use_rocksdb_for_storing_existing_keys")
+      .key(STREAMER_CONFIG_PREFIX + "source.test.datagen.use_rocksdb_for_storing_existing_keys")
       .defaultValue(false)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.test.datagen.use_rocksdb_for_storing_existing_keys")
       .withDocumentation("If true, uses Rocks DB for storing datagen keys");
 
   public static final ConfigProperty<String> ROCKSDB_BASE_DIR_FOR_TEST_DATAGEN_KEYS = ConfigProperty
-      .key("hoodie.deltastreamer.source.test.datagen.rocksdb_base_dir")
+      .key(STREAMER_CONFIG_PREFIX + "source.test.datagen.rocksdb_base_dir")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.test.datagen.rocksdb_base_dir")
       .withDocumentation("Base Dir for storing datagen keys");
 
 }

@@ -376,7 +376,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeDropAllConfig(tableBasePath, WriteOperationType.UPSERT);
     TypedProperties props =
         new DFSPropertiesConfiguration(fs.getConf(), new Path(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
-    props.put("hoodie.deltastreamer.checkpoint.provider.path", bootstrapPath);
+    props.put("hoodie.streamer.checkpoint.provider.path", bootstrapPath);
     cfg.initialCheckpointProvider = checkpointProviderClass;
     // create regular kafka connect hdfs dirs
     fs.mkdirs(new Path(bootstrapPath));
@@ -568,8 +568,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
         PROPS_FILENAME_TEST_SOURCE, false, true, false, null, tableType);
     addRecordMerger(recordType, cfg.configs);
-    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + basePath + "/source.avsc");
-    cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + basePath + "/source.avsc");
+    cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source.avsc");
+    cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source.avsc");
     cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
     if (!useSchemaPostProcessor) {
       cfg.configs.add(HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE.key() + "=false");
@@ -582,8 +582,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TripsWithEvolvedOptionalFieldTransformer.class.getName()),
         PROPS_FILENAME_TEST_SOURCE, false, true, false, null, tableType);
     addRecordMerger(recordType, cfg.configs);
-    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + basePath + "/source.avsc");
-    cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + basePath + "/source_evolved.avsc");
+    cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source.avsc");
+    cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source_evolved.avsc");
     cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
     if (!useSchemaPostProcessor) {
       cfg.configs.add(HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE.key() + "=false");
@@ -607,9 +607,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
         PROPS_FILENAME_TEST_SOURCE, false, true, false, null, tableType);
     addRecordMerger(recordType, cfg.configs);
-    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + basePath + "/source.avsc");
+    cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source.avsc");
     if (useUserProvidedSchema) {
-      cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + basePath + "/source_evolved.avsc");
+      cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source_evolved.avsc");
     }
     if (!useSchemaPostProcessor) {
       cfg.configs.add(HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE.key() + "=false");
@@ -1822,12 +1822,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     orcProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     orcProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
     if (useSchemaProvider) {
-      orcProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/" + "source.avsc");
+      orcProps.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/" + "source.avsc");
       if (transformerClassNames != null) {
-        orcProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", basePath + "/" + "target.avsc");
+        orcProps.setProperty("hoodie.streamer.schemaprovider.target.schema.file", basePath + "/" + "target.avsc");
       }
     }
-    orcProps.setProperty("hoodie.deltastreamer.source.dfs.root", ORC_SOURCE_ROOT);
+    orcProps.setProperty("hoodie.streamer.source.dfs.root", ORC_SOURCE_ROOT);
     UtilitiesTestBase.Helpers.savePropsToDFS(orcProps, fs, basePath + "/" + PROPS_FILENAME_TEST_ORC);
 
     String tableBasePath = basePath + "/test_orc_source_table" + testNum;
@@ -1852,11 +1852,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     props.setProperty("hoodie.embed.timeline.server", "false");
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     props.setProperty("hoodie.datasource.write.partitionpath.field", "driver");
-    props.setProperty("hoodie.deltastreamer.source.dfs.root", JSON_KAFKA_SOURCE_ROOT);
-    props.setProperty("hoodie.deltastreamer.source.kafka.topic", topicName);
-    props.setProperty("hoodie.deltastreamer.source.kafka.checkpoint.type", kafkaCheckpointType);
-    props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/source_uber.avsc");
-    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", basePath + "/target_uber.avsc");
+    props.setProperty("hoodie.streamer.source.dfs.root", JSON_KAFKA_SOURCE_ROOT);
+    props.setProperty("hoodie.streamer.source.kafka.topic", topicName);
+    props.setProperty("hoodie.streamer.source.kafka.checkpoint.type", kafkaCheckpointType);
+    props.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/source_uber.avsc");
+    props.setProperty("hoodie.streamer.schemaprovider.target.schema.file", basePath + "/target_uber.avsc");
     props.setProperty("auto.offset.reset", autoResetValue);
     if (extraProps != null && !extraProps.isEmpty()) {
       extraProps.forEach(props::setProperty);
@@ -2134,8 +2134,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     String tableBasePath = basePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer.Config config = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
-        null, PROPS_FILENAME_TEST_PARQUET, false,
-        false, 100000, false, null, null, "timestamp", null);
+        Collections.singletonList(TestIdentityTransformer.class.getName()), PROPS_FILENAME_TEST_PARQUET, false,
+        false, 100000, false, null, "MERGE_ON_READ", "timestamp", null);
 
     config.schemaProviderClassName = NullValueSchemaProvider.class.getName();
     config.sourceClassName = TestParquetDFSSourceEmptyBatch.class.getName();
@@ -2255,22 +2255,22 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     csvProps.setProperty("hoodie.datasource.write.recordkey.field", recordKeyField);
     csvProps.setProperty("hoodie.datasource.write.partitionpath.field", partitionPath);
     if (useSchemaProvider) {
-      csvProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/source-flattened.avsc");
+      csvProps.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/source-flattened.avsc");
       if (hasTransformer) {
-        csvProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", basePath + "/target-flattened.avsc");
+        csvProps.setProperty("hoodie.streamer.schemaprovider.target.schema.file", basePath + "/target-flattened.avsc");
       }
     }
-    csvProps.setProperty("hoodie.deltastreamer.source.dfs.root", sourceRoot);
+    csvProps.setProperty("hoodie.streamer.source.dfs.root", sourceRoot);
 
     if (sep != ',') {
       if (sep == '\t') {
-        csvProps.setProperty("hoodie.deltastreamer.csv.sep", "\\t");
+        csvProps.setProperty("hoodie.streamer.csv.sep", "\\t");
       } else {
-        csvProps.setProperty("hoodie.deltastreamer.csv.sep", Character.toString(sep));
+        csvProps.setProperty("hoodie.streamer.csv.sep", Character.toString(sep));
       }
     }
     if (hasHeader) {
-      csvProps.setProperty("hoodie.deltastreamer.csv.header", Boolean.toString(hasHeader));
+      csvProps.setProperty("hoodie.streamer.csv.header", Boolean.toString(hasHeader));
     }
 
     UtilitiesTestBase.Helpers.savePropsToDFS(csvProps, fs, basePath + "/" + PROPS_FILENAME_TEST_CSV);
@@ -2391,7 +2391,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     sqlSourceProps.setProperty("hoodie.embed.timeline.server", "false");
     sqlSourceProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     sqlSourceProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
-    sqlSourceProps.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from test_sql_table");
+    sqlSourceProps.setProperty("hoodie.streamer.source.sql.sql.query", "select * from test_sql_table");
 
     UtilitiesTestBase.Helpers.savePropsToDFS(sqlSourceProps, fs, basePath + "/" + PROPS_FILENAME_TEST_SQL_SOURCE);
 
@@ -2465,7 +2465,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config downstreamCfg =
         TestHelpers.makeConfigForHudiIncrSrc(tableBasePath, downstreamTableBasePath,
             WriteOperationType.BULK_INSERT, true, null);
-    downstreamCfg.configs.add("hoodie.deltastreamer.source.hoodieincr.num_instants=1");
+    downstreamCfg.configs.add("hoodie.streamer.source.hoodieincr.num_instants=1");
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
 
     insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
@@ -2481,7 +2481,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     downstreamCfg.configs.remove(downstreamCfg.configs.size() - 1);
     downstreamCfg.configs.add(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key() + "=true");
     //Adding this conf to make testing easier :)
-    downstreamCfg.configs.add("hoodie.deltastreamer.source.hoodieincr.num_instants=10");
+    downstreamCfg.configs.add("hoodie.streamer.source.hoodieincr.num_instants=10");
     downstreamCfg.operation = WriteOperationType.UPSERT;
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();

@@ -633,6 +633,61 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(deltaFile3, logFiles.get(0).getFileName(), "Log File Order check");
   }
 
+  @Test
+  void testLoadPartitions_unPartitioned() throws Exception {
+    String partitionPath = "";
+    Paths.get(basePath, partitionPath).toFile().mkdirs();
+    String fileId = UUID.randomUUID().toString();
+
+    String instantTime1 = "1";
+    String fileName1 =
+        FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 0, TEST_WRITE_TOKEN);
+
+    Paths.get(basePath, partitionPath, fileName1).toFile().createNewFile();
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
+
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    refreshFsView();
+
+    // Assert that no base files are returned without the partitions being loaded
+    assertEquals(0, fsView.getLatestFileSliceInRange(Collections.singletonList("1")).count());
+    // Assert that load does not fail for un-partitioned tables
+    fsView.loadPartitions(Collections.singletonList(partitionPath));
+    // Assert that base files are returned after the empty-string partition is loaded
+    assertEquals(1, fsView.getLatestFileSliceInRange(Collections.singletonList("1")).count());
+  }
+
+  @Test
+  void testLoadPartitions_partitioned() throws Exception {
+    String partitionPath1 = "2016/05/01";
+    String partitionPath2 = "2016/05/02";
+    Paths.get(basePath, partitionPath1).toFile().mkdirs();
+    Paths.get(basePath, partitionPath2).toFile().mkdirs();
+    String fileId1 = UUID.randomUUID().toString();
+    String fileId2 = UUID.randomUUID().toString();
+    String instantTime1 = "1";
+    String fileName1 =
+        FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, instantTime1, 0, TEST_WRITE_TOKEN);
+    String fileName2 =
+        FSUtils.makeLogFileName(fileId2, HoodieLogFile.DELTA_EXTENSION, instantTime1, 0, TEST_WRITE_TOKEN);
+
+    Paths.get(basePath, partitionPath1, fileName1).toFile().createNewFile();
+    Paths.get(basePath, partitionPath2, fileName2).toFile().createNewFile();
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
+
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    refreshFsView();
+
+    // Assert that no base files are returned without the partitions being loaded
+    assertEquals(0, fsView.getLatestFileSliceInRange(Collections.singletonList("1")).count());
+    // Only load a single partition path
+    fsView.loadPartitions(Collections.singletonList(partitionPath1));
+    // Assert that base file is returned for partitionPath1 only
+    assertEquals(1, fsView.getLatestFileSliceInRange(Collections.singletonList("1")).count());
+  }
+
   /**
    * Returns all file-slices including uncommitted ones.
    *
