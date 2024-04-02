@@ -132,21 +132,6 @@ object HoodieSparkSqlWriter {
     new HoodieSparkSqlWriterInternal().bootstrap(sqlContext, mode, optParams, df, hoodieTableConfigOpt, streamingWritesParamsOpt, hoodieWriteClient)
   }
 
-  /**
-   * Deduces writer's schema based on
-   * <ul>
-   * <li>Source's schema</li>
-   * <li>Target table's schema (including Hudi's [[InternalSchema]] representation)</li>
-   * </ul>
-   */
-  def deduceWriterSchema(sourceSchema: Schema,
-                         latestTableSchemaOpt: Option[Schema],
-                         internalSchemaOpt: Option[InternalSchema],
-                         props: TypedProperties): Schema = {
-    HoodieSchemaUtils.deduceWriterSchema(sourceSchema, latestTableSchemaOpt,
-      internalSchemaOpt, HoodieConversionUtils.fromProperties(props))
-  }
-
   def cleanup(): Unit = {
     Metrics.shutdownAllMetrics()
   }

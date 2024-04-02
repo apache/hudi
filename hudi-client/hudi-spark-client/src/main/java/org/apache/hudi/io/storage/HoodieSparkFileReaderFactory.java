@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -30,6 +31,7 @@ import java.io.IOException;
 
 public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
 
+  @Override
   public HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
     conf.setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
     conf.setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
@@ -42,12 +44,15 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
     return new HoodieSparkParquetReader(conf, path);
   }
 
-  protected HoodieFileReader newHFileFileReader(Configuration conf,
+  @Override
+  protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
+                                                Configuration conf,
                                                 Path path,
                                                 Option<Schema> schemaOption) throws IOException {
     throw new HoodieIOException("Not support read HFile");
   }
 
+  @Override
   protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
     throw new HoodieIOException("Not support read orc file");
   }

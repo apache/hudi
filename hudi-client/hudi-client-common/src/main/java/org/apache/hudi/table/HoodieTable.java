@@ -67,14 +67,17 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.hadoop.fs.ConsistencyGuard;
 import org.apache.hudi.hadoop.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
+import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.storage.HoodieLayoutFactory;
@@ -866,8 +869,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       Schema writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
       Schema tableSchema = HoodieAvroUtils.createHoodieWriteSchema(existingTableSchema.get());
       AvroSchemaUtils.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
+    } catch (SchemaCompatibilityException e) {
+      throw e;
     } catch (Exception e) {
-      throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
+      throw new SchemaCompatibilityException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
     }
   }
 
@@ -1089,5 +1094,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       return Collections.emptySet();
     }
     return new HashSet<>(Arrays.asList(partitionFields.get()));
+  }
+
+  public void runMerge(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime, String fileId) throws IOException {
+    if (upsertHandle.getOldFilePath() == null) {
+      throw new HoodieUpsertException("Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
+    } else {
+      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
+    }
   }
 }

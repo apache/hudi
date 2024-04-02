@@ -39,6 +39,7 @@ public class HoodieCLI {
 
   public static Configuration conf;
   public static ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
+  public static HoodieTimeGeneratorConfig timeGeneratorConfig;
   public static FileSystem fs;
   public static CLIState state = CLIState.INIT;
   public static String basePath;
@@ -56,6 +57,10 @@ public class HoodieCLI {
 
   public static void setConsistencyGuardConfig(ConsistencyGuardConfig config) {
     consistencyGuardConfig = config;
+  }
+
+  public static void setTimeGeneratorConfig(HoodieTimeGeneratorConfig config) {
+    timeGeneratorConfig = config;
   }
 
   private static void setTableMetaClient(HoodieTableMetaClient tableMetadata) {
@@ -88,8 +93,7 @@ public class HoodieCLI {
   public static void refreshTableMetadata() {
     setTableMetaClient(HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(basePath).setLoadActiveTimelineOnLoad(false)
         .setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
-        // TODO [HUDI-6884] Generate HoodieTimeGeneratorConfig from props user set
-        .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.defaultConfig(basePath))
+        .setTimeGeneratorConfig(timeGeneratorConfig == null ? HoodieTimeGeneratorConfig.defaultConfig(basePath) : timeGeneratorConfig)
         .setLayoutVersion(Option.of(layoutVersion)).build());
   }
 
