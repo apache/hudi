@@ -122,6 +122,13 @@ ON <merge_condition>
   INSERT (column1 [, column2 ...]) VALUES (value1 [, value2 ...])
 ```
 
+:::info
+`WHEN NOT MATCHED` clauses specify the action to perform if the values do not match.
+There are two kinds of `INSERT` clauses:
+1. `INSERT *` clauses require that the source table has the same columns as those in the target table.
+2. `INSERT (column1 [, column2 ...]) VALUES (value1 [, value2 ...])` clauses do not require to specify all the columns of the target table. For unspecified target columns, insert the `NULL` value.
+:::
+
 Examples below
 
 ```sql
