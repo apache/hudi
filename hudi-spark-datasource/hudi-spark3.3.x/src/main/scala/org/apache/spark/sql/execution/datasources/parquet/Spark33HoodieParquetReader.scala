@@ -32,7 +32,6 @@ import org.apache.parquet.hadoop._
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.internal.SQLConf
@@ -92,6 +91,7 @@ class Spark33HoodieParquetReader(enableVectorizedReader: Boolean,
     val filePath = new Path(new URI(file.filePath))
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
+    val schemaEvolutionUtils = new Spark33ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
 
     lazy val footerFileMetaData =
       ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
@@ -110,7 +110,7 @@ class Spark33HoodieParquetReader(enableVectorizedReader: Boolean,
         pushDownInFilterThreshold,
         isCaseSensitive,
         datetimeRebaseSpec)
-      filters
+      filters.map(schemaEvolutionUtils.rebuildFilterFromParquet)
         // Collects all converted Parquet filter predicates. Notice that not all predicates can be
         // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
         // is used here.
@@ -141,7 +141,7 @@ class Spark33HoodieParquetReader(enableVectorizedReader: Boolean,
 
     val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
     val hadoopAttemptContext =
-      new TaskAttemptContextImpl(sharedConf, attemptId)
+      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData, enableVectorizedReader), attemptId)
 
     // Try to push down filters when filter push-down is enabled.
     // Notice: This push-down is RowGroups level, not individual records.
@@ -150,14 +150,24 @@ class Spark33HoodieParquetReader(enableVectorizedReader: Boolean,
     }
     val taskContext = Option(TaskContext.get())
     if (enableVectorizedReader) {
-      val vectorizedReader = new VectorizedParquetRecordReader(
-        convertTz.orNull,
-        datetimeRebaseSpec.mode.toString,
-        datetimeRebaseSpec.timeZone,
-        int96RebaseSpec.mode.toString,
-        int96RebaseSpec.timeZone,
-        enableOffHeapColumnVector && taskContext.isDefined,
-        capacity)
+      val vectorizedReader = if (schemaEvolutionUtils.shouldUseInternalSchema) {
+        schemaEvolutionUtils.buildVectorizedReader(
+          convertTz,
+          datetimeRebaseSpec,
+          int96RebaseSpec,
+          enableOffHeapColumnVector,
+          taskContext,
+          capacity)
+      } else {
+        new VectorizedParquetRecordReader(
+          convertTz.orNull,
+          datetimeRebaseSpec.mode.toString,
+          datetimeRebaseSpec.timeZone,
+          int96RebaseSpec.mode.toString,
+          int96RebaseSpec.timeZone,
+          enableOffHeapColumnVector && taskContext.isDefined,
+          capacity)
+      }
       // SPARK-37089: We cannot register a task completion listener to close this iterator here
       // because downstream exec nodes have already registered their listeners. Since listeners
       // are executed in reverse order of registration, a listener registered here would close the
@@ -200,7 +210,7 @@ class Spark33HoodieParquetReader(enableVectorizedReader: Boolean,
         reader.initialize(split, hadoopAttemptContext)
 
         val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
-        val unsafeProjection = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
 
         if (partitionSchema.length == 0) {
           // There is no partition columns
