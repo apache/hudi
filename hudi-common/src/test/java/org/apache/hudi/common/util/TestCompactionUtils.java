@@ -276,6 +276,54 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testGetDeltaCommitsSinceLastCompactionWithCompletedReplaceCommits() {
+    // 4th replace commit.
+    HoodieActiveTimeline timeline = new MockHoodieActiveTimeline(
+        Stream.of("01", "02", "03", "04", "05", "07", "08"),
+        Stream.empty(),
+        Stream.of("06"),
+        Stream.of(Pair.of("09", HoodieTimeline.DELTA_COMMIT_ACTION)));
+
+    Pair<HoodieTimeline, HoodieInstant> actual =
+        CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline).get();
+    assertEquals(
+        Stream.of(
+                new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"),
+                new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "02"),
+                new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "03"),
+                new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "04"),
+                new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "05"),
+                new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
+                new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
+                new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
+            .collect(Collectors.toList()),
+        actual.getLeft().getInstants());
+    assertEquals(
+        new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"),
+        actual.getRight());
+
+    // mix of compaction commit and replace commit.
+    timeline = new MockHoodieActiveTimeline(
+        Stream.of("01", "02", "03", "04", "07", "08"),
+        Stream.of("05"),
+        Stream.of("06"),
+        Stream.of(Pair.of("09", HoodieTimeline.DELTA_COMMIT_ACTION)));
+
+    actual =
+        CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline).get();
+    assertEquals(
+        Stream.of(
+                new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
+                new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
+                new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
+            .collect(Collectors.toList()),
+        actual.getLeft().getInstants());
+    assertEquals(
+        new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "05"),
+        actual.getRight());
+  }
+
+  @Test
   public void testGetDeltaCommitsSinceLatestCompactionWithEmptyDeltaCommits() {
     HoodieActiveTimeline timeline = new MockHoodieActiveTimeline();
     assertEquals(Option.empty(), CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline));
@@ -374,10 +422,20 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
         Stream<String> completedDeltaCommits,
         Stream<String> completedCompactionCommits,
         Stream<Pair<String, String>> inflights) {
+      this(completedDeltaCommits, completedCompactionCommits, Stream.empty(), inflights);
+    }
+
+    public MockHoodieActiveTimeline(
+        Stream<String> completedDeltaCommits,
+        Stream<String> completedCompactionCommits,
+          Stream<String> completedReplaceCommits,
+        Stream<Pair<String, String>> inflights) {
       super();
+
       this.setInstants(Stream.concat(
           Stream.concat(completedDeltaCommits.map(s -> new HoodieInstant(false, DELTA_COMMIT_ACTION, s)),
-              completedCompactionCommits.map(s -> new HoodieInstant(false, COMMIT_ACTION, s))),
+              Stream.concat(completedCompactionCommits.map(s -> new HoodieInstant(false, COMMIT_ACTION, s)),
+              completedReplaceCommits.map(s -> new HoodieInstant(false, REPLACE_COMMIT_ACTION, s)))),
               inflights.map(s -> new HoodieInstant(true, s.getRight(), s.getLeft())))
           .sorted(Comparator.comparing(HoodieInstant::getFileName)).collect(Collectors.toList()));
     }
