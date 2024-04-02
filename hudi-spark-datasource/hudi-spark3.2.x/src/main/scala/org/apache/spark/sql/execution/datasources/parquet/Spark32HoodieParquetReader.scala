@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -31,7 +32,6 @@ import org.apache.parquet.hadoop._
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.internal.SQLConf
@@ -91,6 +91,8 @@ class Spark32HoodieParquetReader(enableVectorizedReader: Boolean,
     val filePath = new Path(new URI(file.filePath))
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
+    val schemaEvolutionUtils = new Spark32ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
+
     lazy val footerFileMetaData =
       ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
     val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(
@@ -99,16 +101,36 @@ class Spark32HoodieParquetReader(enableVectorizedReader: Boolean,
     // Try to push down filters when filter push-down is enabled.
     val pushed = if (enableParquetFilterPushDown) {
       val parquetSchema = footerFileMetaData.getSchema
-      val parquetFilters = new ParquetFilters(
-        parquetSchema,
-        pushDownDate,
-        pushDownTimestamp,
-        pushDownDecimal,
-        pushDownStringStartWith,
-        pushDownInFilterThreshold,
-        isCaseSensitive,
-        datetimeRebaseSpec)
-      filters
+      val parquetFilters = if (HoodieSparkUtils.gteqSpark3_2_1) {
+        // NOTE: Below code could only be compiled against >= Spark 3.2.1,
+        //       and unfortunately won't compile against Spark 3.2.0
+        //       However this code is runtime-compatible w/ both Spark 3.2.0 and >= Spark 3.2.1
+        val datetimeRebaseSpec =
+        DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+        new ParquetFilters(
+          parquetSchema,
+          pushDownDate,
+          pushDownTimestamp,
+          pushDownDecimal,
+          pushDownStringStartWith,
+          pushDownInFilterThreshold,
+          isCaseSensitive,
+          datetimeRebaseSpec)
+      } else {
+        // Spark 3.2.0
+        val datetimeRebaseMode =
+          Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+        createParquetFilters(
+          parquetSchema,
+          pushDownDate,
+          pushDownTimestamp,
+          pushDownDecimal,
+          pushDownStringStartWith,
+          pushDownInFilterThreshold,
+          isCaseSensitive,
+          datetimeRebaseMode)
+      }
+      filters.map(schemaEvolutionUtils.rebuildFilterFromParquet)
         // Collects all converted Parquet filter predicates. Notice that not all predicates can be
         // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
         // is used here.
@@ -139,7 +161,7 @@ class Spark32HoodieParquetReader(enableVectorizedReader: Boolean,
 
     val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
     val hadoopAttemptContext =
-      new TaskAttemptContextImpl(sharedConf, attemptId)
+      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData, enableVectorizedReader), attemptId)
 
     // Try to push down filters when filter push-down is enabled.
     // Notice: This push-down is RowGroups level, not individual records.
@@ -148,7 +170,15 @@ class Spark32HoodieParquetReader(enableVectorizedReader: Boolean,
     }
     val taskContext = Option(TaskContext.get())
     if (enableVectorizedReader) {
-      val vectorizedReader = new VectorizedParquetRecordReader(
+      val vectorizedReader = if (schemaEvolutionUtils.shouldUseInternalSchema) {
+        schemaEvolutionUtils.buildVectorizedReader(convertTz,
+          datetimeRebaseSpec,
+          int96RebaseSpec,
+          enableOffHeapColumnVector,
+          taskContext,
+          capacity)
+      } else {
+        new VectorizedParquetRecordReader(
         convertTz.orNull,
         datetimeRebaseSpec.mode.toString,
         datetimeRebaseSpec.timeZone,
@@ -156,6 +186,7 @@ class Spark32HoodieParquetReader(enableVectorizedReader: Boolean,
         int96RebaseSpec.timeZone,
         enableOffHeapColumnVector && taskContext.isDefined,
         capacity)
+      }
       // SPARK-37089: We cannot register a task completion listener to close this iterator here
       // because downstream exec nodes have already registered their listeners. Since listeners
       // are executed in reverse order of registration, a listener registered here would close the
@@ -182,11 +213,31 @@ class Spark32HoodieParquetReader(enableVectorizedReader: Boolean,
       }
     } else {
       // ParquetRecordReader returns InternalRow
-      val readSupport = new ParquetReadSupport(
-        convertTz,
-        enableVectorizedReader = false,
-        datetimeRebaseSpec,
-        int96RebaseSpec)
+      val readSupport = if (HoodieSparkUtils.gteqSpark3_2_1) {
+        // ParquetRecordReader returns InternalRow
+        // NOTE: Below code could only be compiled against >= Spark 3.2.1,
+        //       and unfortunately won't compile against Spark 3.2.0
+        //       However this code is runtime-compatible w/ both Spark 3.2.0 and >= Spark 3.2.1
+        val int96RebaseSpec =
+        DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+        val datetimeRebaseSpec =
+          DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+        new ParquetReadSupport(
+          convertTz,
+          enableVectorizedReader = false,
+          datetimeRebaseSpec,
+          int96RebaseSpec)
+      } else {
+        val datetimeRebaseMode =
+          Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+        val int96RebaseMode =
+          Spark32DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+        createParquetReadSupport(
+          convertTz,
+          /* enableVectorizedReader = */ false,
+          datetimeRebaseMode,
+          int96RebaseMode)
+      }
       val reader = if (pushed.isDefined && enableRecordFilter) {
         val parquetFilter = FilterCompat.get(pushed.get, null)
         new ParquetRecordReader[InternalRow](readSupport, parquetFilter)
@@ -198,7 +249,7 @@ class Spark32HoodieParquetReader(enableVectorizedReader: Boolean,
         reader.initialize(split, hadoopAttemptContext)
 
         val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
-        val unsafeProjection = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
 
         if (partitionSchema.length == 0) {
           // There is no partition columns
@@ -215,6 +266,30 @@ class Spark32HoodieParquetReader(enableVectorizedReader: Boolean,
           throw e
       }
     }
+  }
+
+  /**
+   * NOTE: This method is specific to Spark 3.2.0
+   */
+  private def createParquetFilters(args: Any*): ParquetFilters = {
+    // NOTE: ParquetFilters ctor args contain Scala enum, therefore we can't look it
+    //       up by arg types, and have to instead rely on the number of args based on individual class;
+    //       the ctor order is not guaranteed
+    val ctor = classOf[ParquetFilters].getConstructors.maxBy(_.getParameterCount)
+    ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
+      .asInstanceOf[ParquetFilters]
+  }
+
+  /**
+   * NOTE: This method is specific to Spark 3.2.0
+   */
+  private def createParquetReadSupport(args: Any*): ParquetReadSupport = {
+    // NOTE: ParquetReadSupport ctor args contain Scala enum, therefore we can't look it
+    //       up by arg types, and have to instead rely on the number of args based on individual class;
+    //       the ctor order is not guaranteed
+    val ctor = classOf[ParquetReadSupport].getConstructors.maxBy(_.getParameterCount)
+    ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
+      .asInstanceOf[ParquetReadSupport]
   }
 }
 
