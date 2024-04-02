@@ -56,6 +56,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -254,6 +255,31 @@ public class StreamSync implements Serializable, Closeable {
   private final boolean autoGenerateRecordKeys;
 
   private final boolean useRowWriter;
+
+  @VisibleForTesting
+  StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession,
+             TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
+             Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, SchemaProvider userProvidedSchemaProvider,
+             Option<BaseErrorTableWriter> errorTableWriter, SourceFormatAdapter formatAdapter, Option<Transformer> transformer,
+             boolean useRowWriter, boolean autoGenerateRecordKeys) {
+    this.cfg = cfg;
+    this.hoodieSparkContext = hoodieSparkContext;
+    this.sparkSession = sparkSession;
+    this.fs = fs;
+    this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
+    this.props = props;
+    this.userProvidedSchemaProvider = userProvidedSchemaProvider;
+    this.processedSchema = new SchemaSet();
+    this.autoGenerateRecordKeys = autoGenerateRecordKeys;
+    this.keyGenClassName = getKeyGeneratorClassName(new TypedProperties(props));
+    this.conf = conf;
+
+    this.errorTableWriter = errorTableWriter;
+    this.formatAdapter = formatAdapter;
+    this.transformer = transformer;
+    this.useRowWriter = useRowWriter;
+
+  }
 
   @Deprecated
   public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
@@ -549,7 +575,8 @@ public class StreamSync implements Serializable, Closeable {
    * @param resumeCheckpointStr checkpoint to resume from source.
    * @return {@link InputBatch} containing the new batch of data from source along with new checkpoint and schema provider instance to use.
    */
-  private InputBatch fetchNextBatchFromSource(Option<String> resumeCheckpointStr, HoodieTableMetaClient metaClient) {
+  @VisibleForTesting
+  InputBatch fetchNextBatchFromSource(Option<String> resumeCheckpointStr, HoodieTableMetaClient metaClient) {
     Option<JavaRDD<GenericRecord>> avroRDDOptional = null;
     String checkpointStr = null;
     SchemaProvider schemaProvider = null;
@@ -570,12 +597,12 @@ public class StreamSync implements Serializable, Closeable {
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null
           && this.userProvidedSchemaProvider.getTargetSchema() != InputBatch.NULL_SCHEMA) {
+        // Let's deduce the schema provider for writer side first!
+        schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetSchema(), this.userProvidedSchemaProvider, metaClient);
         if (useRowWriter) {
-          inputBatchForWriter = new InputBatch(transformed, checkpointStr, this.userProvidedSchemaProvider);
+          inputBatchForWriter = new InputBatch(transformed, checkpointStr, schemaProvider);
         } else {
           // non row writer path
-          // Let's deduce the schema provider for writer side first!
-          schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetSchema(), this.userProvidedSchemaProvider, metaClient);
           SchemaProvider finalSchemaProvider = schemaProvider;
           // If the target schema is specified through Avro schema,
           // pass in the schema for the Row-to-Avro conversion
@@ -603,11 +630,10 @@ public class StreamSync implements Serializable, Closeable {
       } else {
         // Deduce proper target (writer's) schema for the input dataset, reconciling its
         // schema w/ the table's one
-        Option<Schema> incomingSchemaOpt = transformed.map(df ->
-            AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), getAvroRecordQualifiedName(cfg.targetTableName)));
-
-        schemaProvider = incomingSchemaOpt.map(incomingSchema -> getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient))
-            .orElseGet(dataAndCheckpoint::getSchemaProvider);
+        Schema incomingSchema = transformed.map(df ->
+                AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), getAvroRecordQualifiedName(cfg.targetTableName)))
+            .orElseGet(dataAndCheckpoint.getSchemaProvider()::getTargetSchema);
+        schemaProvider = getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient);
 
         if (useRowWriter) {
           inputBatchForWriter = new InputBatch(transformed, checkpointStr, schemaProvider);
@@ -619,7 +645,9 @@ public class StreamSync implements Serializable, Closeable {
       }
     } else {
       if (useRowWriter) {
-        inputBatchForWriter = formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
+        InputBatch inputBatchNeedsDeduceSchema = formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
+        inputBatchForWriter = new InputBatch<>(inputBatchNeedsDeduceSchema.getBatch(), inputBatchNeedsDeduceSchema.getCheckpointForNextBatch(),
+            getDeducedSchemaProvider(inputBatchNeedsDeduceSchema.getSchemaProvider().getTargetSchema(), inputBatchNeedsDeduceSchema.getSchemaProvider(), metaClient));
       } else {
         // Pull the data from the source & prepare the write
         InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint = formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
@@ -658,7 +686,8 @@ public class StreamSync implements Serializable, Closeable {
    * @param sourceSchemaProvider Source schema provider.
    * @return the SchemaProvider that can be used as writer schema.
    */
-  private SchemaProvider getDeducedSchemaProvider(Schema incomingSchema, SchemaProvider sourceSchemaProvider, HoodieTableMetaClient metaClient) {
+  @VisibleForTesting
+  SchemaProvider getDeducedSchemaProvider(Schema incomingSchema, SchemaProvider sourceSchemaProvider, HoodieTableMetaClient metaClient) {
     Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), fs, cfg.targetBasePath, metaClient);
     Option<InternalSchema> internalSchemaOpt = HoodieConversionUtils.toJavaOption(
         HoodieSchemaUtils.getLatestTableInternalSchema(
