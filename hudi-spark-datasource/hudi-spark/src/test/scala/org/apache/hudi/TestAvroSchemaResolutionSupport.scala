@@ -146,11 +146,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
           upsertData(upsertDf, tempRecordPath, isCow)
 
           // read out the table
-          val readDf = spark.read.format("hudi")
-            // NOTE: type promotion is not supported for the custom file format and the filegroup reader
-            //       HUDI-7045 and PR#10007 in progress to fix the issue
-            .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-            .load(tempRecordPath)
+          val readDf = spark.read.format("hudi").load(tempRecordPath)
           readDf.printSchema()
           readDf.show(false)
           readDf.foreach(_ => {})
@@ -389,11 +385,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
       // read out the table
-      val readDf = spark.read.format("hudi")
-        // NOTE: long to int type change is not supported for the custom file format and the filegroup reader
-        //       HUDI-7045 and PR#10007 in progress to fix the issue
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-        .load(tempRecordPath)
+      val readDf = spark.read.format("hudi").load(tempRecordPath)
       readDf.printSchema()
       readDf.show(false)
       readDf.foreach(_ => {})
@@ -487,11 +479,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
       // read out the table
-      val readDf = spark.read.format("hudi")
-        // NOTE: type promotion is not supported for the custom file format and the filegroup reader
-        //       HUDI-7045 and PR#10007 in progress to fix the issue
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-        .load(tempRecordPath)
+      val readDf = spark.read.format("hudi").load(tempRecordPath)
       readDf.printSchema()
       readDf.show(false)
       readDf.foreach(_ => {})
@@ -555,11 +543,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
       // read out the table
-      val readDf = spark.read.format("hudi")
-        // NOTE: type promotion is not supported for the custom file format and the filegroup reader
-        //       HUDI-7045 and PR#10007 in progress to fix the issue
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-        .load(tempRecordPath)
+      val readDf = spark.read.format("hudi").load(tempRecordPath)
       readDf.printSchema()
       readDf.show(false)
       readDf.foreach(_ => {})
@@ -826,11 +810,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df7, tempRecordPath)
 
     // read out the table
-    val readDf = spark.read.format("hudi")
-      // NOTE: type promotion is not supported for the custom file format and the filegroup reader
-      //       HUDI-7045 and PR#10007 in progress to fix the issue
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-      .load(tempRecordPath)
+    val readDf = spark.read.format("hudi").load(tempRecordPath)
     readDf.printSchema()
     readDf.show(false)
     readDf.foreach(_ => {})

@@ -119,6 +119,8 @@ public class HoodieFileGroupReaderTestUtils {
           fileSlice,
           schema,
           schema,
+          Option.empty(),
+          null,
           props,
           tableConfig,
           start,

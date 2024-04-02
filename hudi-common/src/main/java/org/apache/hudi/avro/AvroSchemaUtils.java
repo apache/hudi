@@ -231,7 +231,13 @@ public class AvroSchemaUtils {
     if (!nestedPart.isPresent()) {
       return Option.empty();
     }
-    return nestedPart;
+    boolean isUnion = false;
+    if (foundSchema.getType().equals(Schema.Type.UNION)) {
+      isUnion = true;
+      foundSchema = resolveNullableSchema(foundSchema);
+    }
+    Schema newSchema = Schema.createRecord(foundSchema.getName(), foundSchema.getDoc(), foundSchema.getNamespace(), false, Collections.singletonList(nestedPart.get()));
+    return Option.of(new Schema.Field(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc(), foundField.defaultVal()));
   }
 
   public static Schema appendFieldsToSchemaDedupNested(Schema schema, List<Schema.Field> newFields) {
@@ -286,6 +292,16 @@ public class AvroSchemaUtils {
       fields.addAll(newFields);
     }
 
+    Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
+    newSchema.setFields(fields);
+    return newSchema;
+  }
+
+  public static Schema removeFieldsFromSchema(Schema schema, Set<String> fieldNames) {
+    List<Schema.Field> fields = schema.getFields().stream()
+        .filter(field -> !fieldNames.contains(field.name()))
+        .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
+        .collect(Collectors.toList());
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
     newSchema.setFields(fields);
     return newSchema;

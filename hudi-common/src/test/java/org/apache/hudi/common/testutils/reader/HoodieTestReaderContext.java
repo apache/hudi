@@ -76,7 +76,8 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       long length,
       Schema dataSchema,
       Schema requiredSchema,
-      Configuration conf
+      Configuration conf,
+      boolean isMerge
   ) throws IOException {
     HoodieAvroParquetReader reader = new HoodieAvroParquetReader(conf, filePath);
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
@@ -164,9 +165,10 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> mergeBootstrapReaders(
-      ClosableIterator<IndexedRecord> skeletonFileIterator,
-      ClosableIterator<IndexedRecord> dataFileIterator) {
+  public ClosableIterator<IndexedRecord> mergeBootstrapReaders(ClosableIterator<IndexedRecord> skeletonFileIterator,
+                                                               Schema skeletonRequiredSchema,
+                                                               ClosableIterator<IndexedRecord> dataFileIterator,
+                                                               Schema dataRequiredSchema) {
     return null;
   }
 
@@ -225,5 +227,10 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
     Schema.Field field = recordSchema.getField(fieldName);
     int pos = field.pos();
     return record.get(pos);
+  }
+
+  @Override
+  public boolean shouldUseRecordPositionMerging() {
+    return true;
   }
 }

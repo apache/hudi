@@ -138,6 +138,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sessionState.catalog.dropTable(TableIdentifier(tableName), true, true)
           spark.sessionState.catalog.refreshTable(TableIdentifier(tableName))
           spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
+          spark.sessionState.conf.unsetConf("spark.sql.storeAssignmentPolicy")
         }
       }
     })
@@ -175,6 +176,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           checkAnswer(spark.sql(s"select col0 from $tableName where id = 1").collect())(
             Seq("11")
           )
+          spark.sessionState.conf.unsetConf("spark.sql.storeAssignmentPolicy")
         }
       }
     }
@@ -336,6 +338,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 or id = 11 order by id").show(false)
         }
       }
+      spark.sessionState.conf.unsetConf("spark.sql.storeAssignmentPolicy")
       spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
     }
   }
@@ -706,6 +709,8 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   test("Test schema auto evolution") {
+    //This test will be flakey for mor until [HUDI-6798] is landed and we can set the merge mode
+    spark.sql("set hoodie.file.group.reader.enabled=false")
     withTempDir { tmp =>
       Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
         // for complex schema.
@@ -799,6 +804,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         }
       }
     }
+    spark.sqlContext.conf.unsetConf("hoodie.file.group.reader.enabled");
   }
 
   test("Test DATE to STRING conversions when vectorized reading is not enabled") {

@@ -21,22 +21,18 @@ package org.apache.hudi.common.table.read
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.config.HoodieStorageConfig
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-import org.apache.hudi.util.CloseableInternalRowIterator
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieFileGroupReaderBasedParquetFileFormat, ParquetFileFormat}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
-import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestHarness {
   private val PARQUET_FORMAT = "parquet"
-  private val ROW_INDEX_COLUMN = "_tmp_metadata_row_index"
   private val SPARK_MERGER = "org.apache.hudi.HoodieSparkRecordMerger"
 
   @BeforeEach
@@ -67,81 +63,49 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
 
   @Test
   def testRecordPositionColumn(): Unit = {
-    val _spark = spark
-    // Prepare the schema
-    val dataSchema = new StructType(
-      Array(
-        StructField("userid", IntegerType, nullable = false),
-        StructField("country", StringType, nullable = false),
-        StructField("ts", StringType, nullable = false)
-      )
-    )
-    val requiredSchema = HoodieFileGroupReaderBasedParquetFileFormat
-      .getAppliedRequiredSchema(
-        dataSchema,
-        shouldUseRecordPosition = true,
-        ROW_INDEX_COLUMN)
-
-    // Confirm if the schema is as expected.
     if (HoodieSparkUtils.gteqSpark3_5) {
+      val _spark = spark
+      // Prepare the schema
+      val dataSchema = new StructType(
+        Array(
+          StructField("userid", IntegerType, nullable = false),
+          StructField("country", StringType, nullable = false),
+          StructField("ts", StringType, nullable = false)
+        )
+      )
+      val hadoopConf = new Configuration(spark().sparkContext.hadoopConfiguration)
+      val props = Map("spark.sql.parquet.enableVectorizedReader" -> "false")
+      _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
+      val extraProps = sparkAdapter.getPropsForReadingParquet(vectorized = false, _spark.sessionState.conf, props, hadoopConf)
+      val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema, shouldUseRecordPosition = true)
+
+      // Confirm if the schema is as expected.
       assertEquals(4, requiredSchema.fields.length)
       assertEquals(
         "StructField(_tmp_metadata_row_index,LongType,false)",
         requiredSchema.fields(3).toString)
-    }
 
-    // Prepare the file and Parquet file reader.
-    _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
-    val metaClient = getHoodieMetaClient(
-      _spark.sparkContext.hadoopConfiguration, basePath)
-    val fileReader = new ParquetFileFormat().buildReaderWithPartitionValues(
-      _spark,
-      dataSchema,
-      StructType(Nil),
-      requiredSchema,
-      Nil,
-      Map.empty,
-      new Configuration(spark().sparkContext.hadoopConfiguration))
-    val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
-    assertTrue(allBaseFiles.nonEmpty)
+      // Prepare the file and Parquet file reader.
+      val metaClient = getHoodieMetaClient(
+        _spark.sparkContext.hadoopConfiguration, basePath)
+      val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
+      assertTrue(allBaseFiles.nonEmpty)
+      val readerContext = new SparkFileFormatInternalRowReaderContext(extraProps, HoodieRecord.RECORD_KEY_METADATA_FIELD, Seq.empty, true)
+      //dataschema param is set to null because it is not used
+      val fileRecordIterator = readerContext.getFileRecordIterator(allBaseFiles.head.getPath, 0, allBaseFiles.head.getLen, null,
+        sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), hadoopConf, true)
 
-    // Make sure we can read all the positions out from base file.
-    // Here we don't add filters since enabling filter push-down
-    // for parquet file is tricky.
-    if (HoodieSparkUtils.gteqSpark3_5) {
-      val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
-        .createPartitionedFile(
-          InternalRow.empty,
-          allBaseFiles.head.getPath,
-          0,
-          allBaseFiles.head.getLen)
-      val iterator = new CloseableInternalRowIterator(fileReader.apply(fileInfo))
+      // Make sure we can read all the positions out from base file.
+      // Here we don't add filters since enabling filter push-down
+      // for parquet file is tricky.
       var rowIndices: Set[Long] = Set()
-      while (iterator.hasNext) {
-        val row = iterator.next()
+      while (fileRecordIterator.hasNext) {
+        val row = fileRecordIterator.next()
         rowIndices += row.getLong(3)
       }
-      iterator.close()
+      fileRecordIterator.close()
       val expectedRowIndices: Set[Long] = Set(0L, 1L, 2L, 3L)
       assertEquals(expectedRowIndices, rowIndices)
     }
-  }
-
-  @Test
-  def testUseFileGroupReaderDirectly(): Unit = {
-    val _spark = spark
-    import _spark.implicits._
-
-    // Read the records out with record positions.
-    val allRecords = _spark.read.format("hudi")
-      .option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key, "true")
-      .load(basePath)
-
-    // Ensure the number of outcomes are correct for all Spark versions
-    // including Spark3.5.
-    val usRecords = allRecords
-      .select("userid")
-      .filter("country = 'US'").map(_.getInt(0)).collect()
-    assertArrayEquals(Array[Int](1, 3), usRecords)
   }
 }

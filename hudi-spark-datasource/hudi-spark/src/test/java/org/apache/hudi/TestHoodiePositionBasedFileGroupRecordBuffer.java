@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
@@ -98,9 +99,11 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         ? Option.empty() : Option.of(partitionPaths[0]);
 
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
-        getHoodieReaderContext(getBasePath(), avroSchema),
+        getHoodieReaderContext(getBasePath(), avroSchema, getHadoopConf()),
         avroSchema,
         avroSchema,
+        InternalSchema.getEmptyInternalSchema(),
+        metaClient,
         partitionNameOpt,
         partitionFields,
         useCustomMerger ? new CustomMerger() : new HoodieSparkRecordMerger(),
@@ -197,4 +200,3 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     }
   }
 }
-

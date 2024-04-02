@@ -156,7 +156,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(String[] transformerClasses, boolean nullForDeletedCols,
                                                               TypedProperties extraProps) throws IOException {
-    extraProps.setProperty(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
+    extraProps.setProperty(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
     extraProps.setProperty(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS().key(), Boolean.toString(nullForDeletedCols));

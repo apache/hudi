@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 
@@ -43,6 +45,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 /**
@@ -52,12 +55,15 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STR
  * {@link #hasNext} method is called.
  */
 public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
-  private static final String ROW_INDEX_COLUMN_NAME = "row_index";
+  public static final String ROW_INDEX_COLUMN_NAME = "row_index";
+  public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
   private long nextRecordPosition = 0L;
 
   public HoodiePositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                                   Schema readerSchema,
                                                   Schema baseFileSchema,
+                                                  InternalSchema internalSchema,
+                                                  HoodieTableMetaClient hoodieTableMetaClient,
                                                   Option<String> partitionNameOverrideOpt,
                                                   Option<String[]> partitionPathFieldOpt,
                                                   HoodieRecordMerger recordMerger,
@@ -66,7 +72,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
                                                   String spillableMapBasePath,
                                                   ExternalSpillableMap.DiskMapType diskMapType,
                                                   boolean isBitCaskDiskMapCompressionEnabled) {
-    super(readerContext, readerSchema, baseFileSchema, partitionNameOverrideOpt, partitionPathFieldOpt,
+    super(readerContext, readerSchema, baseFileSchema, internalSchema, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt,
         recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
@@ -92,9 +98,21 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
       // partial merging.
       enablePartialMerging = true;
     }
-    
+
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock);
+
+    Option<Pair<Function<T,T>, Schema>> schemaEvolutionTransformerOpt =
+        composeEvolvedSchemaTransformer(dataBlock);
+
+    // In case when schema has been evolved original persisted records will have to be
+    // transformed to adhere to the new schema
+    Function<T,T> transformer =
+        schemaEvolutionTransformerOpt.map(Pair::getLeft)
+            .orElse(Function.identity());
+
+    Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
+        .orElseGet(dataBlock::getSchema);
 
     // TODO: return an iterator that can generate sequence number with the record.
     //  Then we can hide this logic into data block.
@@ -110,9 +128,11 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
         }
 
         long recordPosition = recordPositions.get(recordIndex++);
+
+        T evolvedNextRecord = transformer.apply(nextRecord);
         processNextDataRecord(
-            nextRecord,
-            readerContext.generateMetadataForRecord(nextRecord, readerSchema),
+            evolvedNextRecord,
+            readerContext.generateMetadataForRecord(evolvedNextRecord, evolvedSchema),
             recordPosition
         );
       }

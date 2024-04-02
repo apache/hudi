@@ -18,12 +18,14 @@
 
 package org.apache.hudi.internal.schema.convert;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -39,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.avro.Schema.Type.STRING;
 import static org.apache.avro.Schema.Type.UNION;
 
 /**
@@ -68,6 +71,75 @@ public class AvroInternalSchemaConverter {
    */
   public static Schema convert(InternalSchema internalSchema, String name) {
     return buildAvroSchemaFromInternalSchema(internalSchema, name);
+  }
+
+  public static InternalSchema pruneAvroSchemaToInternalSchema(Schema schema, InternalSchema originSchema) {
+    List<String> pruneNames = collectColNamesFromSchema(schema);
+    return InternalSchemaUtils.pruneInternalSchema(originSchema, pruneNames);
+  }
+
+  /**
+   * Collect all the leaf nodes names.
+   *
+   * @param schema a avro schema.
+   * @return leaf nodes full names.
+   */
+  private static List<String> collectColNamesFromSchema(Schema schema) {
+    List<String> result = new ArrayList<>();
+    Deque<String> visited = new LinkedList<>();
+    collectColNamesFromAvroSchema(schema, visited, result);
+    return result;
+  }
+
+  private static void collectColNamesFromAvroSchema(Schema schema, Deque<String> visited, List<String> resultSet) {
+    switch (schema.getType()) {
+      case RECORD:
+        List<Schema.Field> fields = schema.getFields();
+        for (Schema.Field f : fields) {
+          visited.push(f.name());
+          collectColNamesFromAvroSchema(f.schema(), visited, resultSet);
+          visited.pop();
+          addFullName(f.schema(), f.name(), visited, resultSet);
+        }
+        return;
+
+      case UNION:
+        collectColNamesFromAvroSchema(AvroSchemaUtils.resolveNullableSchema(schema), visited, resultSet);
+        return;
+
+      case ARRAY:
+        visited.push("element");
+        collectColNamesFromAvroSchema(schema.getElementType(), visited, resultSet);
+        visited.pop();
+        addFullName(schema.getElementType(), "element", visited, resultSet);
+        return;
+
+      case MAP:
+        addFullName(STRING, "key", visited, resultSet);
+        visited.push("value");
+        collectColNamesFromAvroSchema(schema.getValueType(), visited, resultSet);
+        visited.pop();
+        addFullName(schema.getValueType(), "value", visited, resultSet);
+        return;
+
+      default:
+        return;
+    }
+  }
+
+  private static void addFullName(Schema schema, String name, Deque<String> visited, List<String> resultSet) {
+    addFullName(AvroSchemaUtils.resolveNullableSchema(schema).getType(), name, visited, resultSet);
+  }
+
+  private static void addFullName(Schema.Type type, String name, Deque<String> visited, List<String> resultSet) {
+    switch (type) {
+      case RECORD:
+      case ARRAY:
+      case MAP:
+        return;
+      default:
+        resultSet.add(InternalSchemaUtils.createFullName(name, visited));
+    }
   }
 
   /**
@@ -254,20 +326,20 @@ public class AvroInternalSchemaConverter {
       String name = logical.getName();
       if (logical instanceof LogicalTypes.Decimal) {
         return Types.DecimalType.get(
-                ((LogicalTypes.Decimal) logical).getPrecision(),
-                ((LogicalTypes.Decimal) logical).getScale());
+            ((LogicalTypes.Decimal) logical).getPrecision(),
+            ((LogicalTypes.Decimal) logical).getScale());
 
       } else if (logical instanceof LogicalTypes.Date) {
         return Types.DateType.get();
 
       } else if (
-              logical instanceof LogicalTypes.TimeMillis
-                      || logical instanceof LogicalTypes.TimeMicros) {
+          logical instanceof LogicalTypes.TimeMillis
+              || logical instanceof LogicalTypes.TimeMicros) {
         return Types.TimeType.get();
 
       } else if (
-              logical instanceof LogicalTypes.TimestampMillis
-                      || logical instanceof LogicalTypes.TimestampMicros) {
+          logical instanceof LogicalTypes.TimestampMillis
+              || logical instanceof LogicalTypes.TimestampMicros) {
         return Types.TimestampType.get();
       } else if (LogicalTypes.uuid().getName().equals(name)) {
         return Types.UUIDType.get();
@@ -492,10 +564,10 @@ public class AvroInternalSchemaConverter {
         return LogicalTypes.decimal(decimal.precision(), decimal.scale())
             .addToSchema(fixedSchema);
       }
-      
+
       default:
         throw new UnsupportedOperationException(
-                "Unsupported type ID: " + primitive.typeId());
+            "Unsupported type ID: " + primitive.typeId());
     }
   }
 

@@ -25,7 +25,7 @@ import org.apache.hudi.common.HoodieSchemaNotFoundException
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.model.{HoodieTableType, WriteConcurrencyMode}
+import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -47,9 +47,9 @@ import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
 /**
-  * Hoodie Spark Datasource, for reading and writing hoodie tables
-  *
-  */
+ * Hoodie Spark Datasource, for reading and writing hoodie tables
+ *
+ */
 class DefaultSource extends RelationProvider
   with SchemaRelationProvider
   with CreatableRelationProvider
@@ -263,7 +263,6 @@ object DefaultSource {
       val useNewParquetFileFormat = parameters.getOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
         HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean &&
         !metaClient.isMetadataTable && (globPaths == null || globPaths.isEmpty) &&
-        !parameters.getOrDefault(SCHEMA_EVOLUTION_ENABLED.key(), SCHEMA_EVOLUTION_ENABLED.defaultValue().toString).toBoolean &&
         parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue()).equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
       if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
         new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))

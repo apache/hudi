@@ -25,6 +25,7 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieFileIndex.getConfigProperties
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.HoodieMetadataConfig.{DEFAULT_METADATA_ENABLE_FOR_READERS, ENABLE}
 import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
@@ -35,6 +36,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -64,7 +66,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val schemaSpec: Option[StructType]
                                                 ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory {
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
-  protected lazy val optParams: Map[String, String] = options
+  protected var optParams: Map[String, String] = options
   protected lazy val hadoopConfig: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(hadoopConfig)
 
@@ -85,7 +87,13 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
         specifiedQueryTimestamp.map(schemaResolver.getTableInternalSchemaFromCommitMetadata)
           .getOrElse(schemaResolver.getTableInternalSchemaFromCommitMetadata)
       } match {
-        case Success(internalSchemaOpt) => toScalaOption(internalSchemaOpt)
+        case Success(internalSchemaOpt) =>
+          if (internalSchemaOpt.isPresent) {
+            optParams = optParams + (SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA -> SerDeHelper.toJson(internalSchemaOpt.get()))
+            optParams = optParams + (SparkInternalSchemaConverter.HOODIE_TABLE_PATH -> basePath.toString)
+            optParams = optParams + (SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST -> timeline.getInstants.iterator.asScala.map(_.getFileName).mkString(","))
+          }
+          toScalaOption(internalSchemaOpt)
         case Failure(e) =>
           None
       }
@@ -160,15 +168,13 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     val shouldExtractPartitionValueFromPath =
       optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
-    val shouldUseBootstrapFastRead = optParams.getOrElse(DATA_QUERIES_ONLY.key(), "false").toBoolean
-
-    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || shouldUseBootstrapFastRead
+    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
   }
 
   protected lazy val mandatoryFieldsForMerging: Seq[String] =
     Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
 
-  protected lazy val shouldUseRecordPosition: Boolean = checkIfAConfigurationEnabled(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS)
+  protected lazy val shouldUseRecordPosition: Boolean = checkIfAConfigurationEnabled(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS) && HoodieSparkUtils.gteqSpark3_5
 
   protected def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
@@ -180,13 +186,13 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
 
   protected def getConfigValue(config: ConfigProperty[String],
-                             defaultValueOption: Option[String] = Option.empty): String = {
+                               defaultValueOption: Option[String] = Option.empty): String = {
     optParams.getOrElse(config.key(),
       sqlContext.getConf(config.key(), defaultValueOption.getOrElse(config.defaultValue())))
   }
 
   protected def checkIfAConfigurationEnabled(config: ConfigProperty[java.lang.Boolean],
-                                           defaultValueOption: Option[String] = Option.empty): Boolean = {
+                                             defaultValueOption: Option[String] = Option.empty): Boolean = {
     optParams.getOrElse(config.key(),
       sqlContext.getConf(config.key(), defaultValueOption.getOrElse(String.valueOf(config.defaultValue())))).toBoolean
   }
@@ -289,10 +295,10 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
 }
 
 class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: SQLContext,
-                                                        override val metaClient: HoodieTableMetaClient,
-                                                        override val options: Map[String, String],
-                                                        override val schemaSpec: Option[StructType],
-                                                        isBootstrap: Boolean)
+                                                       override val metaClient: HoodieTableMetaClient,
+                                                       override val options: Map[String, String],
+                                                       override val schemaSpec: Option[StructType],
+                                                       isBootstrap: Boolean)
   extends HoodieMergeOnReadSnapshotHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   override val mandatoryFields: Seq[String] = Seq.empty
@@ -348,10 +354,10 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
 }
 
 class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
-                                                   override val metaClient: HoodieTableMetaClient,
-                                                   override val options: Map[String, String],
-                                                   override val schemaSpec: Option[StructType],
-                                                   isBootstrap: Boolean)
+                                                  override val metaClient: HoodieTableMetaClient,
+                                                  override val options: Map[String, String],
+                                                  override val schemaSpec: Option[StructType],
+                                                  isBootstrap: Boolean)
   extends HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
   override val fileIndex = new HoodieCDCFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), true, true)
@@ -374,5 +380,4 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
 
   override def buildPartitionSchema(): StructType = StructType(Nil)
 }
-
 

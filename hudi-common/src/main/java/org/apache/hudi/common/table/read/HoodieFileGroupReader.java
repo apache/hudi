@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.CachingIterator;
@@ -38,6 +39,7 @@ import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -50,11 +52,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -97,6 +100,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private final Option<UnaryOperator<T>> outputConverter;
 
+  private final InternalSchema internalSchema;
+
+  private boolean needMORMerge;
+  private boolean needMerge;
+
+  private final boolean shouldMergeWithPosition;
+
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
                                Configuration hadoopConf,
                                String tablePath,
@@ -104,6 +114,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                FileSlice fileSlice,
                                Schema dataSchema,
                                Schema requestedSchema,
+                               Option<InternalSchema> internalSchemaOpt,
+                               HoodieTableMetaClient hoodieTableMetaClient,
                                TypedProperties props,
                                HoodieTableConfig tableConfig,
                                long start,
@@ -113,6 +125,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                String spillableMapBasePath,
                                ExternalSpillableMap.DiskMapType diskMapType,
                                boolean isBitCaskDiskMapCompressionEnabled) {
+    this.internalSchema = internalSchemaOpt.orElse(InternalSchema.getEmptyInternalSchema());
     this.readerContext = readerContext;
     this.hadoopConf = hadoopConf;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
@@ -126,7 +139,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.dataSchema = dataSchema;
     this.requestedSchema = requestedSchema;
     this.hoodieTableConfig = tableConfig;
-    this.requiredSchema = generateRequiredSchema();
+    this.shouldMergeWithPosition = shouldUseRecordPosition && readerContext.shouldUseRecordPositionMerging();
+    this.requiredSchema = prepareSchema();
     if (!requestedSchema.equals(requiredSchema)) {
       this.outputConverter = Option.of(readerContext.projectRecord(requiredSchema, requestedSchema));
     } else {
@@ -137,12 +151,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readerState.mergeProps.putAll(props);
     this.recordBuffer = this.logFiles.isEmpty()
         ? null
-        : shouldUseRecordPosition
+        : this.shouldMergeWithPosition
         ? new HoodiePositionBasedFileGroupRecordBuffer<>(
-        readerContext, requiredSchema, requiredSchema, Option.empty(), Option.empty(),
+        readerContext, requiredSchema, requiredSchema, internalSchema, hoodieTableMetaClient, Option.empty(), Option.empty(),
         recordMerger, props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled)
         : new HoodieKeyBasedFileGroupRecordBuffer<>(
-        readerContext, requiredSchema, requiredSchema, Option.empty(), Option.empty(),
+        readerContext, requiredSchema, requiredSchema, internalSchema, hoodieTableMetaClient, Option.empty(), Option.empty(),
         recordMerger, props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
@@ -171,18 +185,18 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     return readerContext.getFileRecordIterator(baseFile.getHadoopPath(), start, length,
-         dataSchema, requiredSchema, hadoopConf);
+        dataSchema, requiredSchema, hadoopConf, this.needMerge);
   }
 
   private Schema generateRequiredSchema() {
     //might need to change this if other queries than mor have mandatory fields
-    if (logFiles.isEmpty()) {
+    if (!needMORMerge) {
       return requestedSchema;
     }
 
     List<Schema.Field> addedFields = new ArrayList<>();
     for (String field : recordMerger.getMandatoryFieldsForMerging(hoodieTableConfig)) {
-      if (requestedSchema.getField(field) == null) {
+      if (!findNestedField(requestedSchema, field).isPresent()) {
         Option<Schema.Field> foundFieldOpt  = findNestedField(dataSchema, field);
         if (!foundFieldOpt.isPresent()) {
           throw new IllegalArgumentException("Field: " + field + " does not exist in the table schema");
@@ -193,25 +207,40 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     if (addedFields.isEmpty()) {
-      return maybeReorderForBootstrap(requestedSchema);
+      return requestedSchema;
     }
 
-    return maybeReorderForBootstrap(appendFieldsToSchema(requestedSchema, addedFields));
+    return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
   }
 
-  private Schema maybeReorderForBootstrap(Schema input) {
-    if (this.hoodieBaseFileOption.isPresent() && this.hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent()) {
-      Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = getDataAndMetaCols(input);
-      if (!(requiredFields.getLeft().isEmpty() || requiredFields.getRight().isEmpty())) {
-        return createSchemaFromFields(Stream.concat(requiredFields.getLeft().stream(), requiredFields.getRight().stream())
-            .collect(Collectors.toList()));
-      }
-    }
-    return input;
+  private Schema prepareSchema() {
+    this.needMORMerge = !logFiles.isEmpty();
+    Schema preReorderRequiredSchema = generateRequiredSchema();
+    Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = getDataAndMetaCols(preReorderRequiredSchema);
+    boolean needBootstrapMerge = hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent()
+        && !requiredFields.getLeft().isEmpty() && !requiredFields.getRight().isEmpty();
+    this.needMerge = needBootstrapMerge || this.needMORMerge;
+    Schema preMergeSchema = needBootstrapMerge
+        ? createSchemaFromFields(Stream.concat(requiredFields.getLeft().stream(), requiredFields.getRight().stream()).collect(Collectors.toList()))
+        : preReorderRequiredSchema;
+    return this.shouldMergeWithPosition && this.needMerge
+        ? addPositionalMergeCol(preMergeSchema)
+        : preMergeSchema;
+  }
+
+  private Schema addPositionalMergeCol(Schema input) {
+    return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField()));
+  }
+
+  private Schema.Field getPositionalMergeField() {
+    return new Schema.Field(HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME,
+        Schema.create(Schema.Type.LONG), "", 0L);
   }
 
   private static Pair<List<Schema.Field>, List<Schema.Field>> getDataAndMetaCols(Schema schema) {
     Map<Boolean, List<Schema.Field>> fieldsByMeta = schema.getFields().stream()
+        //if there are no data fields, then we don't want to think the temp col is a data col
+        .filter(f -> !Objects.equals(f.name(), HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME))
         .collect(Collectors.partitioningBy(f -> HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name())));
     return Pair.of(fieldsByMeta.getOrDefault(true, Collections.emptyList()),
         fieldsByMeta.getOrDefault(false, Collections.emptyList()));
@@ -232,23 +261,34 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     BaseFile dataFile = baseFile.getBootstrapBaseFile().get();
     Pair<List<Schema.Field>,List<Schema.Field>> requiredFields = getDataAndMetaCols(requiredSchema);
     Pair<List<Schema.Field>,List<Schema.Field>> allFields = getDataAndMetaCols(dataSchema);
-
-    Option<ClosableIterator<T>> dataFileIterator = requiredFields.getRight().isEmpty() ? Option.empty() :
-        Option.of(readerContext.getFileRecordIterator(dataFile.getHadoopPath(), 0, dataFile.getFileLen(),
-            createSchemaFromFields(allFields.getRight()), createSchemaFromFields(requiredFields.getRight()), hadoopConf));
-
-    Option<ClosableIterator<T>> skeletonFileIterator = requiredFields.getLeft().isEmpty() ? Option.empty() :
-        Option.of(readerContext.getFileRecordIterator(baseFile.getHadoopPath(), 0, baseFile.getFileLen(),
-            createSchemaFromFields(allFields.getLeft()), createSchemaFromFields(requiredFields.getLeft()), hadoopConf));
+    Option<Pair<ClosableIterator<T>,Schema>> dataFileIterator =
+        makeBootstrapBaseFileIteratorHelper(requiredFields.getRight(), allFields.getRight(), dataFile);
+    Option<Pair<ClosableIterator<T>,Schema>> skeletonFileIterator =
+        makeBootstrapBaseFileIteratorHelper(requiredFields.getLeft(), allFields.getLeft(), baseFile);
     if (!dataFileIterator.isPresent() && !skeletonFileIterator.isPresent()) {
       throw new IllegalStateException("should not be here if only partition cols are required");
     } else if (!dataFileIterator.isPresent()) {
-      return skeletonFileIterator.get();
+      return skeletonFileIterator.get().getLeft();
     } else if (!skeletonFileIterator.isPresent()) {
-      return  dataFileIterator.get();
+      return  dataFileIterator.get().getLeft();
     } else {
-      return readerContext.mergeBootstrapReaders(skeletonFileIterator.get(), dataFileIterator.get());
+      return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
+          dataFileIterator.get().getLeft(), dataFileIterator.get().getRight());
     }
+  }
+
+  private Option<Pair<ClosableIterator<T>,Schema>> makeBootstrapBaseFileIteratorHelper(List<Schema.Field> requiredFields,
+                                                                                       List<Schema.Field> allFields,
+                                                                                       BaseFile file) throws IOException {
+    if (requiredFields.isEmpty()) {
+      return Option.empty();
+    }
+    if (needMerge && shouldMergeWithPosition) {
+      requiredFields.add(getPositionalMergeField());
+    }
+    Schema requiredSchema = createSchemaFromFields(requiredFields);
+    return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getHadoopPath(), 0, file.getFileLen(),
+        createSchemaFromFields(allFields), requiredSchema, hadoopConf, this.needMerge), requiredSchema));
   }
 
   /**
@@ -285,6 +325,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withLogFiles(logFiles)
         .withLatestInstantTime(readerState.latestCommitTime)
         .withReaderSchema(readerState.logRecordAvroSchema)
+        .withInternalSchema(internalSchema)
         .withReadBlocksLazily(getBooleanWithAltKeys(props, HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
         .withReverseReader(false)
         .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
