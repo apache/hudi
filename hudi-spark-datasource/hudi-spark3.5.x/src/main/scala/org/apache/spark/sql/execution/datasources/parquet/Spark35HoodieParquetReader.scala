@@ -29,7 +29,6 @@ import org.apache.parquet.hadoop.{ParquetInputFormat, ParquetRecordReader}
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator}
@@ -88,6 +87,8 @@ class Spark35HoodieParquetReader(enableVectorizedReader: Boolean,
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
+    val schemaEvolutionUtils = new Spark35ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
+
     val fileFooter = if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading
       // all row groups in advance and filter row groups according to filters that require
@@ -116,7 +117,7 @@ class Spark35HoodieParquetReader(enableVectorizedReader: Boolean,
         pushDownInFilterThreshold,
         isCaseSensitive,
         datetimeRebaseSpec)
-      filters
+      filters.map(schemaEvolutionUtils.rebuildFilterFromParquet)
         // Collects all converted Parquet filter predicates. Notice that not all predicates can be
         // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
         // is used here.
@@ -144,7 +145,7 @@ class Spark35HoodieParquetReader(enableVectorizedReader: Boolean,
 
     val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
     val hadoopAttemptContext =
-      new TaskAttemptContextImpl(sharedConf, attemptId)
+      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData, enableVectorizedReader), attemptId)
 
     // Try to push down filters when filter push-down is enabled.
     // Notice: This push-down is RowGroups level, not individual records.
@@ -153,14 +154,23 @@ class Spark35HoodieParquetReader(enableVectorizedReader: Boolean,
     }
     val taskContext = Option(TaskContext.get())
     if (enableVectorizedReader) {
-      val vectorizedReader = new VectorizedParquetRecordReader(
-        convertTz.orNull,
-        datetimeRebaseSpec.mode.toString,
-        datetimeRebaseSpec.timeZone,
-        int96RebaseSpec.mode.toString,
-        int96RebaseSpec.timeZone,
-        enableOffHeapColumnVector && taskContext.isDefined,
-        capacity)
+      val vectorizedReader = if (schemaEvolutionUtils.shouldUseInternalSchema) {
+        schemaEvolutionUtils.buildVectorizedReader(convertTz,
+          datetimeRebaseSpec,
+          int96RebaseSpec,
+          enableOffHeapColumnVector,
+          taskContext,
+          capacity)
+      } else {
+        new VectorizedParquetRecordReader(
+          convertTz.orNull,
+          datetimeRebaseSpec.mode.toString,
+          datetimeRebaseSpec.timeZone,
+          int96RebaseSpec.mode.toString,
+          int96RebaseSpec.timeZone,
+          enableOffHeapColumnVector && taskContext.isDefined,
+          capacity)
+      }
       // SPARK-37089: We cannot register a task completion listener to close this iterator here
       // because downstream exec nodes have already registered their listeners. Since listeners
       // are executed in reverse order of registration, a listener registered here would close the
@@ -205,7 +215,7 @@ class Spark35HoodieParquetReader(enableVectorizedReader: Boolean,
         readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
         val fullSchema = toAttributes(requiredSchema) ++ toAttributes(partitionSchema)
-        val unsafeProjection = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
 
         if (partitionSchema.length == 0) {
           // There is no partition columns
