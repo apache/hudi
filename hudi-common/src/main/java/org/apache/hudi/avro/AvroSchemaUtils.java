@@ -18,12 +18,12 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.exception.InvalidUnionTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
-import org.apache.hudi.exception.InvalidUnionTypeException;
 
-import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 
@@ -242,7 +242,7 @@ public class AvroSchemaUtils {
             .orElse(null);
 
     if (nonNullType == null) {
-      throw new AvroRuntimeException(
+      throw new HoodieAvroSchemaException(
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
 
@@ -274,14 +274,14 @@ public class AvroSchemaUtils {
     List<Schema> innerTypes = schema.getTypes();
 
     if (innerTypes.size() != 2) {
-      throw new AvroRuntimeException(
+      throw new HoodieAvroSchemaException(
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
     Schema firstInnerType = innerTypes.get(0);
     Schema secondInnerType = innerTypes.get(1);
     if ((firstInnerType.getType() != Schema.Type.NULL && secondInnerType.getType() != Schema.Type.NULL)
         || (firstInnerType.getType() == Schema.Type.NULL && secondInnerType.getType() == Schema.Type.NULL)) {
-      throw new AvroRuntimeException(
+      throw new HoodieAvroSchemaException(
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
     return firstInnerType.getType() == Schema.Type.NULL ? secondInnerType : firstInnerType;
