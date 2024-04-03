@@ -60,7 +60,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.INIT_INSTANT_TS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
