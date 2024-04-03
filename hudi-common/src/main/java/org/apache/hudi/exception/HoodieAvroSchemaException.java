@@ -21,8 +21,8 @@ package org.apache.hudi.exception;
 
 /**
  * Thrown when we detect in Hudi code that a record schema
- * will violate avro rules. This can happen even when using spark
- * because we use avro schema internally
+ * violates Avro rules. This can happen even when using Spark
+ * because we use Avro schema internally
  */
 public class HoodieAvroSchemaException extends SchemaCompatibilityException {
   public HoodieAvroSchemaException(String message) {
