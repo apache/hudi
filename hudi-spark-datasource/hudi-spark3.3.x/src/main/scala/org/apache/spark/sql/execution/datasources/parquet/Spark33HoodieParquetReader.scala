@@ -35,6 +35,7 @@ import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.hudi.execution.datasources.parquet.SparkHoodieParquetReaderProperties
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
@@ -55,7 +56,7 @@ object Spark33HoodieParquetReader {
   def getPropsForReadingParquet(vectorized: Boolean,
                                 sqlConf: SQLConf,
                                 options: Map[String, String],
-                                hadoopConf: Configuration): Map[String, String] = {
+                                hadoopConf: Configuration): SparkHoodieParquetReaderProperties = {
     //set hadoopconf
     hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
     hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
@@ -70,24 +71,22 @@ object Spark33HoodieParquetReader {
     )
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
-    Map(
-      "enableVectorizedReader" -> vectorized.toString,
-      "datetimeRebaseModeInRead" -> parquetOptions.datetimeRebaseModeInRead,
-      "int96RebaseModeInRead" -> parquetOptions.int96RebaseModeInRead,
-      "enableParquetFilterPushDown" -> sqlConf.parquetFilterPushDown.toString,
-      "pushDownDate" -> sqlConf.parquetFilterPushDownDate.toString,
-      "pushDownTimestamp" -> sqlConf.parquetFilterPushDownTimestamp.toString,
-      "pushDownDecimal" -> sqlConf.parquetFilterPushDownDecimal.toString,
-      "pushDownInFilterThreshold" -> sqlConf.parquetFilterPushDownInFilterThreshold.toString,
-      "pushDownStringStartWith" -> sqlConf.parquetFilterPushDownStringStartWith.toString,
-      "isCaseSensitive" -> sqlConf.caseSensitiveAnalysis.toString,
-      "timestampConversion" -> sqlConf.isParquetINT96TimestampConversion.toString,
-      "enableOffHeapColumnVector" -> sqlConf.offHeapColumnVectorEnabled.toString,
-      "capacity" -> sqlConf.parquetVectorizedReaderBatchSize.toString,
-      "returningBatch" -> sqlConf.parquetVectorizedReaderEnabled.toString,
-      "enableRecordFilter" -> sqlConf.parquetRecordFilterEnabled.toString,
-      "timeZoneId" -> sqlConf.sessionLocalTimeZone
-    )
+    new Spark33HoodieParquetReaderProperties(enableVectorizedReader = vectorized,
+      datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
+      int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,
+      enableParquetFilterPushDown = sqlConf.parquetFilterPushDown,
+      pushDownDate = sqlConf.parquetFilterPushDownDate,
+      pushDownTimestamp = sqlConf.parquetFilterPushDownTimestamp,
+      pushDownDecimal = sqlConf.parquetFilterPushDownDecimal,
+      pushDownInFilterThreshold = sqlConf.parquetFilterPushDownInFilterThreshold,
+      pushDownStringStartWith = sqlConf.parquetFilterPushDownStringStartWith,
+      isCaseSensitive = sqlConf.caseSensitiveAnalysis,
+      timestampConversion = sqlConf.isParquetINT96TimestampConversion,
+      enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled,
+      capacity = sqlConf.parquetVectorizedReaderBatchSize,
+      returningBatch = sqlConf.parquetVectorizedReaderEnabled,
+      enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
+      timeZoneId = Some(sqlConf.sessionLocalTimeZone))
   }
 
   /**
@@ -107,26 +106,27 @@ object Spark33HoodieParquetReader {
                       partitionSchema: StructType,
                       filters: Seq[Filter],
                       sharedConf: Configuration,
-                      extraProps: Map[String, String]): Iterator[InternalRow] = {
+                      props: SparkHoodieParquetReaderProperties): Iterator[InternalRow] = {
     sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
     sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
     ParquetWriteSupport.setSchema(requiredSchema, sharedConf)
-    val enableVectorizedReader = extraProps("enableVectorizedReader").toBoolean
-    val datetimeRebaseModeInRead = extraProps("datetimeRebaseModeInRead")
-    val int96RebaseModeInRead = extraProps("int96RebaseModeInRead")
-    val enableParquetFilterPushDown = extraProps("enableParquetFilterPushDown").toBoolean
-    val pushDownDate = extraProps("pushDownDate").toBoolean
-    val pushDownTimestamp = extraProps("pushDownTimestamp").toBoolean
-    val pushDownDecimal = extraProps("pushDownDecimal").toBoolean
-    val pushDownInFilterThreshold = extraProps("pushDownInFilterThreshold").toInt
-    val pushDownStringStartWith = extraProps("pushDownStringStartWith").toBoolean
-    val isCaseSensitive = extraProps("isCaseSensitive").toBoolean
-    val timestampConversion = extraProps("timestampConversion").toBoolean
-    val enableOffHeapColumnVector = extraProps("enableOffHeapColumnVector").toBoolean
-    val capacity = extraProps("capacity").toInt
-    val returningBatch = extraProps("returningBatch").toBoolean
-    val enableRecordFilter = extraProps("enableRecordFilter").toBoolean
-    val timeZoneId = Option(extraProps("timeZoneId"))
+    val properties = props.asInstanceOf[Spark33HoodieParquetReaderProperties]
+    val enableVectorizedReader = properties.enableVectorizedReader
+    val datetimeRebaseModeInRead = properties.datetimeRebaseModeInRead
+    val int96RebaseModeInRead = properties.int96RebaseModeInRead
+    val enableParquetFilterPushDown = properties.enableParquetFilterPushDown
+    val pushDownDate = properties.pushDownDate
+    val pushDownTimestamp = properties.pushDownTimestamp
+    val pushDownDecimal = properties.pushDownDecimal
+    val pushDownInFilterThreshold = properties.pushDownInFilterThreshold
+    val pushDownStringStartWith = properties.pushDownStringStartWith
+    val isCaseSensitive = properties.isCaseSensitive
+    val timestampConversion = properties.timestampConversion
+    val enableOffHeapColumnVector = properties.enableOffHeapColumnVector
+    val capacity = properties.capacity
+    val returningBatch = properties.returningBatch
+    val enableRecordFilter = properties.enableRecordFilter
+    val timeZoneId = properties.timeZoneId
     assert(file.partitionValues.numFields == partitionSchema.size)
 
     val filePath = new Path(new URI(file.filePath))

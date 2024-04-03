@@ -35,6 +35,7 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.hudi.execution.datasources.parquet.SparkHoodieParquetReaderProperties
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -229,7 +230,7 @@ trait SparkAdapter extends Serializable {
   def getPropsForReadingParquet(vectorized: Boolean,
                                 sqlConf: SQLConf,
                                 options: Map[String, String],
-                                hadoopConf: Configuration): Map[String, String]
+                                hadoopConf: Configuration): SparkHoodieParquetReaderProperties
 
   /**
    * Read an individual parquet file
@@ -246,5 +247,5 @@ trait SparkAdapter extends Serializable {
                       partitionSchema: StructType,
                       filters: Seq[Filter],
                       sharedConf: Configuration,
-                      extraProps: Map[String, String]): Iterator[InternalRow]
+                      props: SparkHoodieParquetReaderProperties): Iterator[InternalRow]
 }

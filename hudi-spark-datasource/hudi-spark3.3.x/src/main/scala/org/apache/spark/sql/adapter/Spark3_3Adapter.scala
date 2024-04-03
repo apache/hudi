@@ -35,6 +35,7 @@ import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Sp
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
+import org.apache.spark.sql.hudi.execution.datasources.parquet.SparkHoodieParquetReaderProperties
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_3ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
@@ -139,7 +140,7 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
   override def getPropsForReadingParquet(vectorized: Boolean,
                                          sqlConf: SQLConf,
                                          options: Map[String, String],
-                                         hadoopConf: Configuration): Map[String, String] = {
+                                         hadoopConf: Configuration): SparkHoodieParquetReaderProperties = {
     Spark33HoodieParquetReader.getPropsForReadingParquet(vectorized, sqlConf, options, hadoopConf)
   }
 
@@ -159,8 +160,8 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
                                partitionSchema: StructType,
                                filters: Seq[sources.Filter],
                                sharedConf: Configuration,
-                               extraProps: Map[String, String]): Iterator[InternalRow] = {
+                               props: SparkHoodieParquetReaderProperties): Iterator[InternalRow] = {
     Spark33HoodieParquetReader.readParquetFile(file, requiredSchema, partitionSchema, filters,
-      new Configuration(sharedConf), extraProps)
+      new Configuration(sharedConf), props)
   }
 }
