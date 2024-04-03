@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark32HoodieParquetReader, Spark32LegacyHoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark32HoodieParquetReader, Spark32LegacyHoodieParquetFileFormat, SparkHoodieParquetReaderProperties}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -138,7 +138,7 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
   override def getPropsForReadingParquet(vectorized: Boolean,
                                          sqlConf: SQLConf,
                                          options: Map[String, String],
-                                         hadoopConf: Configuration): Map[String, String] = {
+                                         hadoopConf: Configuration): SparkHoodieParquetReaderProperties = {
     Spark32HoodieParquetReader.getPropsForReadingParquet(vectorized, sqlConf, options, hadoopConf)
   }
 
@@ -158,8 +158,8 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
                                partitionSchema: StructType,
                                filters: Seq[sources.Filter],
                                sharedConf: Configuration,
-                               extraProps: Map[String, String]): Iterator[InternalRow] = {
+                               props: SparkHoodieParquetReaderProperties): Iterator[InternalRow] = {
     Spark32HoodieParquetReader.readParquetFile(file, requiredSchema, partitionSchema, filters,
-      new Configuration(sharedConf), extraProps)
+      new Configuration(sharedConf), props)
   }
 }

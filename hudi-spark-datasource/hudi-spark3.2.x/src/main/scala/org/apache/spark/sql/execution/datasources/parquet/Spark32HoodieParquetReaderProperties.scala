@@ -19,24 +19,23 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-
-abstract class Spark3HoodieParquetReaderProperties(enableVectorizedReader: Boolean,
-                                                       datetimeRebaseModeInRead: String,
-                                                       int96RebaseModeInRead: String,
-                                                       enableParquetFilterPushDown: Boolean,
-                                                       pushDownDate: Boolean,
-                                                       pushDownTimestamp: Boolean,
-                                                       pushDownDecimal: Boolean,
-                                                       pushDownInFilterThreshold: Int,
-                                                       pushDownStringStartWith: Boolean,
-                                                       isCaseSensitive: Boolean,
-                                                       timestampConversion: Boolean,
-                                                       enableOffHeapColumnVector: Boolean,
-                                                       capacity: Int,
-                                                       returningBatch: Boolean,
-                                                       enableRecordFilter: Boolean,
-                                                       timeZoneId: Option[String])
-  extends SparkHoodieParquetReaderProperties(
+case class Spark32HoodieParquetReaderProperties(enableVectorizedReader: Boolean,
+                                                datetimeRebaseModeInRead: String,
+                                                int96RebaseModeInRead: String,
+                                                enableParquetFilterPushDown: Boolean,
+                                                pushDownDate: Boolean,
+                                                pushDownTimestamp: Boolean,
+                                                pushDownDecimal: Boolean,
+                                                pushDownInFilterThreshold: Int,
+                                                pushDownStringStartWith: Boolean,
+                                                isCaseSensitive: Boolean,
+                                                timestampConversion: Boolean,
+                                                enableOffHeapColumnVector: Boolean,
+                                                capacity: Int,
+                                                returningBatch: Boolean,
+                                                enableRecordFilter: Boolean,
+                                                timeZoneId: Option[String])
+  extends Spark3HoodieParquetReaderProperties(
     enableVectorizedReader = enableVectorizedReader,
     datetimeRebaseModeInRead = datetimeRebaseModeInRead,
     int96RebaseModeInRead = int96RebaseModeInRead,
