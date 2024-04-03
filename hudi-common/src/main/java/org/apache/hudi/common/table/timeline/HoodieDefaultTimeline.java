@@ -129,12 +129,6 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public HoodieTimeline filterCompletedCommitInstants() {
-    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.isCompleted()
-        && s.getAction().equals(HoodieTimeline.COMMIT_ACTION)), details);
-  }
-
-  @Override
   public HoodieTimeline filterCompletedOrMajorOrMinorCompactionInstants() {
     return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.isCompleted()
         || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION) || s.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION)), details);
