@@ -184,7 +184,11 @@ public class IncrSourceHelper {
                                                                                                                     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
     if (sourceData.isEmpty()) {
       // There is no file matching the prefix.
-      return Pair.of(new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null), Option.empty());
+      CloudObjectIncrCheckpoint updatedCheckpoint =
+              queryInfo.getEndInstant() == cloudObjectIncrCheckpoint.getCommit()
+                      ? cloudObjectIncrCheckpoint
+                      : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
+      return Pair.of(updatedCheckpoint, Option.empty());
     }
     // Let's persist the dataset to avoid triggering the dag repeatedly
     sourceData.persist(StorageLevel.MEMORY_AND_DISK());
