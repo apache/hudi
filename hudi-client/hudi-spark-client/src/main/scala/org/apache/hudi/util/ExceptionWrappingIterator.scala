@@ -21,6 +21,12 @@ package org.apache.hudi.util
 
 import org.apache.hudi.common.util.ReflectionUtils
 
+/**
+ * Used to catch exceptions from an iterator
+ * @param in iterator to catch exceptions from
+ * @param exceptionClass name of exception class to throw when an exception is thrown during iteration
+ * @param msg message the thrown exception should have
+ */
 class ExceptionWrappingIterator[T](val in: Iterator[T], val exceptionClass: String, val msg: String) extends Iterator[T] {
   override def hasNext: Boolean = try in.hasNext
   catch {
