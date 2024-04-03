@@ -160,7 +160,10 @@ class RecordLevelIndexSupport(spark: SparkSession,
       case inQuery: In =>
         var validINQuery = true
         inQuery.value match {
-          case _: AttributeReference =>
+          case attribute: AttributeReference =>
+            if (!attributeMatchesRecordKey(attribute.name)) {
+              validINQuery = false
+            }
           case _ => validINQuery = false
         }
         var literals: List[String] = List.empty
