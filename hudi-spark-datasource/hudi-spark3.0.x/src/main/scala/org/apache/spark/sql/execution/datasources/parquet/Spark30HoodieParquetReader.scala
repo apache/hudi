@@ -39,7 +39,7 @@ import org.apache.spark.sql.types._
 
 import java.net.URI
 
-object Spark30HoodieParquetReader {
+object Spark30HoodieParquetReader extends SparkHoodieParquetReader {
 
   /**
    * Get properties needed to read a parquet file
