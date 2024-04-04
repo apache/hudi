@@ -358,6 +358,32 @@ public class TestPriorityBasedFileSystemView {
   }
 
   @Test
+  public void testGetLatestFileSlicesIncludingInflight() {
+    Stream<FileSlice> actual;
+    Stream<FileSlice> expected = testFileSliceStream;
+    String partitionPath = "/table2";
+
+    when(primary.getLatestFileSlicesIncludingInflight(partitionPath)).thenReturn(testFileSliceStream);
+    actual = fsView.getLatestFileSlicesIncludingInflight(partitionPath);
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(primary.getLatestFileSlicesIncludingInflight(partitionPath)).thenThrow(new RuntimeException());
+    when(secondary.getLatestFileSlicesIncludingInflight(partitionPath)).thenReturn(testFileSliceStream);
+    actual = fsView.getLatestFileSlicesIncludingInflight(partitionPath);
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getLatestFileSlicesIncludingInflight(partitionPath)).thenReturn(testFileSliceStream);
+    actual = fsView.getLatestFileSlicesIncludingInflight(partitionPath);
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getLatestFileSlicesIncludingInflight(partitionPath)).thenThrow(new RuntimeException());
+    assertThrows(RuntimeException.class, () -> fsView.getLatestFileSlicesIncludingInflight(partitionPath));
+  }
+
+  @Test
   public void testGetLatestUnCompactedFileSlices() {
     Stream<FileSlice> actual;
     Stream<FileSlice> expected = testFileSliceStream;

@@ -1082,7 +1082,7 @@ public class HoodieTableMetadataUtil {
                                                                               Option<HoodieTableFileSystemView> fileSystemView,
                                                                               String partition) {
     HoodieTableFileSystemView fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
-    Stream<FileSlice> fileSliceStream = fsView.fetchLatestFileSlicesIncludingInflight(partition);
+    Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partition);
     return fileSliceStream
         .sorted(Comparator.comparing(FileSlice::getFileId))
         .collect(Collectors.toList());

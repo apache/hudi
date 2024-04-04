@@ -736,6 +736,55 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     }
   }
 
+  @Test
+  public void testGetLatestFileSlicesIncludingInflight() throws Exception {
+    String partitionPath = "2016/05/01";
+    new File(basePath + "/" + partitionPath).mkdirs();
+    String fileId = UUID.randomUUID().toString();
+
+    String instantTime1 = "1";
+    String deltaInstantTime1 = "2";
+    String deltaInstantTime2 = "3";
+
+    String dataFileName = FSUtils.makeBaseFileName(instantTime1, TEST_WRITE_TOKEN, fileId);
+    new File(basePath + "/" + partitionPath + "/" + dataFileName).createNewFile();
+    String fileName1 =
+        FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, deltaInstantTime1, 0, TEST_WRITE_TOKEN);
+    String fileName2 =
+        FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, deltaInstantTime2, 1, TEST_WRITE_TOKEN);
+    new File(basePath + "/" + partitionPath + "/" + fileName1).createNewFile();
+    new File(basePath + "/" + partitionPath + "/" + fileName2).createNewFile();
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
+    HoodieInstant deltaInstant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
+    HoodieInstant deltaInstant3 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
+
+    // just commit instant1 and deltaInstant2, keep deltaInstant3 inflight
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
+    refreshFsView();
+
+    // getLatestFileSlices should return just 1 log file due to deltaInstant2
+    rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList()).forEach(fs -> {
+      assertEquals(fs.getBaseInstantTime(), instantTime1);
+      assertTrue(fs.getBaseFile().isPresent());
+      assertEquals(fs.getBaseFile().get().getCommitTime(), instantTime1);
+      assertEquals(fs.getBaseFile().get().getFileId(), fileId);
+      assertEquals(fs.getBaseFile().get().getPath(), "file:" + basePath + "/" + partitionPath + "/" + dataFileName);
+      assertEquals(fs.getLogFiles().count(), 1);
+    });
+
+    // getLatestFileSlicesIncludingInflight should return both the log files
+    rtView.getLatestFileSlicesIncludingInflight(partitionPath).collect(Collectors.toList()).forEach(fs -> {
+      assertEquals(fs.getBaseInstantTime(), instantTime1);
+      assertTrue(fs.getBaseFile().isPresent());
+      assertEquals(fs.getBaseFile().get().getCommitTime(), instantTime1);
+      assertEquals(fs.getBaseFile().get().getFileId(), fileId);
+      assertEquals(fs.getBaseFile().get().getPath(), "file:" + basePath + "/" + partitionPath + "/" + dataFileName);
+      assertEquals(fs.getLogFiles().count(), 2);
+    });
+  }
+
   /**
    * Helper method to test Views in the presence of concurrent compaction.
    *

@@ -851,6 +851,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  public Stream<FileSlice> getLatestFileSlicesIncludingInflight(String partitionPath) {
+    try {
+      readLock.lock();
+      ensurePartitionLoadedCorrectly(partitionPath);
+      return fetchAllStoredFileGroups(partitionPath)
+          .map(HoodieFileGroup::getLatestFileSlicesIncludingInflight)
+          .filter(Option::isPresent)
+          .map(Option::get);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   @Override
   public final Stream<FileSlice> getLatestFileSlicesStateless(String partitionStr) {
     String partition = formatPartitionKey(partitionStr);
