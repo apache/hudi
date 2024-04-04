@@ -37,63 +37,35 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
-object Spark35HoodieParquetReader {
-
-  /**
-   * Get properties needed to read a parquet file
-   *
-   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
-   * @param sqlConf    the [[SQLConf]] used for the read
-   * @param options    passed as a param to the file format
-   * @param hadoopConf some configs will be set for the hadoopConf
-   * @return properties needed for reading a parquet file
-   */
-  def getPropsForReadingParquet(vectorized: Boolean,
-                                sqlConf: SQLConf,
-                                options: Map[String, String],
-                                hadoopConf: Configuration): SparkHoodieParquetReaderProperties = {
-    //set hadoopconf
-    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
-    hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
-    hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, sqlConf.nestedSchemaPruningEnabled)
-    hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis)
-    hadoopConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, sqlConf.isParquetBinaryAsString)
-    hadoopConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, sqlConf.isParquetINT96AsTimestamp)
-    // Using string value of this conf to preserve compatibility across spark versions. See [HUDI-5868]
-    hadoopConf.setBoolean(
-      SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
-      sqlConf.getConfString(
-        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
-        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.defaultValueString).toBoolean
-    )
-    hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sqlConf.parquetInferTimestampNTZEnabled)
-
-    val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
-      options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
-        throw new IllegalArgumentException(
-          "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
-            "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false."))
-        .equals("true")
-
-    val parquetOptions = new ParquetOptions(options, sqlConf)
-    Spark35HoodieParquetReaderProperties(
-      enableVectorizedReader = vectorized,
-      datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
-      int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,
-      enableParquetFilterPushDown = sqlConf.parquetFilterPushDown,
-      pushDownDate = sqlConf.parquetFilterPushDownDate,
-      pushDownTimestamp = sqlConf.parquetFilterPushDownTimestamp,
-      pushDownDecimal = sqlConf.parquetFilterPushDownDecimal,
-      pushDownInFilterThreshold = sqlConf.parquetFilterPushDownInFilterThreshold,
-      pushDownStringPredicate = sqlConf.parquetFilterPushDownStringPredicate,
-      isCaseSensitive = sqlConf.caseSensitiveAnalysis,
-      timestampConversion = sqlConf.isParquetINT96TimestampConversion,
-      enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled,
-      capacity = sqlConf.parquetVectorizedReaderBatchSize,
-      returningBatch = returningBatch,
-      enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
-      timeZoneId = Some(sqlConf.sessionLocalTimeZone))
-  }
+class Spark35HoodieParquetReader(enableVectorizedReader: Boolean,
+                                 datetimeRebaseModeInRead: String,
+                                 int96RebaseModeInRead: String,
+                                 enableParquetFilterPushDown: Boolean,
+                                 pushDownDate: Boolean,
+                                 pushDownTimestamp: Boolean,
+                                 pushDownDecimal: Boolean,
+                                 pushDownInFilterThreshold: Int,
+                                 pushDownStringPredicate: Boolean,
+                                 isCaseSensitive: Boolean,
+                                 timestampConversion: Boolean,
+                                 enableOffHeapColumnVector: Boolean,
+                                 capacity: Int,
+                                 returningBatch: Boolean,
+                                 enableRecordFilter: Boolean,
+                                 timeZoneId: Option[String]) extends SparkHoodieParquetReaderBase(
+  enableVectorizedReader = enableVectorizedReader,
+  enableParquetFilterPushDown = enableParquetFilterPushDown,
+  pushDownDate = pushDownDate,
+  pushDownTimestamp = pushDownTimestamp,
+  pushDownDecimal = pushDownDecimal,
+  pushDownInFilterThreshold = pushDownInFilterThreshold,
+  isCaseSensitive = isCaseSensitive,
+  timestampConversion = timestampConversion,
+  enableOffHeapColumnVector = enableOffHeapColumnVector,
+  capacity = capacity,
+  returningBatch = returningBatch,
+  enableRecordFilter = enableRecordFilter,
+  timeZoneId = timeZoneId) {
 
   /**
    * Read an individual parquet file
@@ -104,36 +76,13 @@ object Spark35HoodieParquetReader {
    * @param partitionSchema schema of the partition columns. Partition values will be appended to the end of every row
    * @param filters         filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
    * @param sharedConf      the hadoop conf
-   * @param props           properties generated by [[getPropsForReadingParquet]] that are needed for reading
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
-  def readParquetFile(file: PartitionedFile,
+  protected def doRead(file: PartitionedFile,
                       requiredSchema: StructType,
                       partitionSchema: StructType,
                       filters: Seq[Filter],
-                      sharedConf: Configuration,
-                      props: SparkHoodieParquetReaderProperties): Iterator[InternalRow] = {
-    sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
-    sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
-    ParquetWriteSupport.setSchema(requiredSchema, sharedConf)
-    val properties = props.asInstanceOf[Spark35HoodieParquetReaderProperties]
-    val enableVectorizedReader = properties.enableVectorizedReader
-    val datetimeRebaseModeInRead = properties.datetimeRebaseModeInRead
-    val int96RebaseModeInRead = properties.int96RebaseModeInRead
-    val enableParquetFilterPushDown = properties.enableParquetFilterPushDown
-    val pushDownDate = properties.pushDownDate
-    val pushDownTimestamp = properties.pushDownTimestamp
-    val pushDownDecimal = properties.pushDownDecimal
-    val pushDownInFilterThreshold = properties.pushDownInFilterThreshold
-    val pushDownStringPredicate = properties.pushDownStringPredicate
-    val isCaseSensitive = properties.isCaseSensitive
-    val timestampConversion = properties.timestampConversion
-    val enableOffHeapColumnVector = properties.enableOffHeapColumnVector
-    val capacity = properties.capacity
-    val returningBatch = properties.returningBatch
-    val enableRecordFilter = properties.enableRecordFilter
-    val timeZoneId = properties.timeZoneId
-
+                      sharedConf: Configuration): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)
 
     val filePath = file.toPath
@@ -273,5 +222,63 @@ object Spark35HoodieParquetReader {
           throw e
       }
     }
+  }
+}
+
+object Spark35HoodieParquetReader extends SparkHoodieParquetReaderBuilder {
+  /**
+   * Get parquet file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return parquet file reader
+   */
+  def build(vectorized: Boolean,
+            sqlConf: SQLConf,
+            options: Map[String, String],
+            hadoopConf: Configuration): SparkHoodieParquetReader = {
+    //set hadoopconf
+    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
+    hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
+    hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, sqlConf.nestedSchemaPruningEnabled)
+    hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis)
+    hadoopConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, sqlConf.isParquetBinaryAsString)
+    hadoopConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, sqlConf.isParquetINT96AsTimestamp)
+    // Using string value of this conf to preserve compatibility across spark versions. See [HUDI-5868]
+    hadoopConf.setBoolean(
+      SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
+      sqlConf.getConfString(
+        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
+        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.defaultValueString).toBoolean
+    )
+    hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sqlConf.parquetInferTimestampNTZEnabled)
+
+    val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
+      options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
+        throw new IllegalArgumentException(
+          "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
+            "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false."))
+        .equals("true")
+
+    val parquetOptions = new ParquetOptions(options, sqlConf)
+    new Spark35HoodieParquetReader(
+      enableVectorizedReader = vectorized,
+      datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
+      int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,
+      enableParquetFilterPushDown = sqlConf.parquetFilterPushDown,
+      pushDownDate = sqlConf.parquetFilterPushDownDate,
+      pushDownTimestamp = sqlConf.parquetFilterPushDownTimestamp,
+      pushDownDecimal = sqlConf.parquetFilterPushDownDecimal,
+      pushDownInFilterThreshold = sqlConf.parquetFilterPushDownInFilterThreshold,
+      pushDownStringPredicate = sqlConf.parquetFilterPushDownStringPredicate,
+      isCaseSensitive = sqlConf.caseSensitiveAnalysis,
+      timestampConversion = sqlConf.isParquetINT96TimestampConversion,
+      enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled,
+      capacity = sqlConf.parquetVectorizedReaderBatchSize,
+      returningBatch = returningBatch,
+      enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
+      timeZoneId = Some(sqlConf.sessionLocalTimeZone))
   }
 }
