@@ -19,21 +19,21 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-
-abstract class Spark3HoodieParquetReaderProperties(enableVectorizedReader: Boolean,
-                                                   enableParquetFilterPushDown: Boolean,
-                                                   pushDownDate: Boolean,
-                                                   pushDownTimestamp: Boolean,
-                                                   pushDownDecimal: Boolean,
-                                                   pushDownInFilterThreshold: Int,
-                                                   isCaseSensitive: Boolean,
-                                                   timestampConversion: Boolean,
-                                                   enableOffHeapColumnVector: Boolean,
-                                                   capacity: Int,
-                                                   returningBatch: Boolean,
-                                                   enableRecordFilter: Boolean,
-                                                   timeZoneId: Option[String])
-  extends SparkHoodieParquetReaderProperties(
+case class Spark31HoodieParquetReaderProperties(enableVectorizedReader: Boolean,
+                                                enableParquetFilterPushDown: Boolean,
+                                                pushDownDate: Boolean,
+                                                pushDownTimestamp: Boolean,
+                                                pushDownDecimal: Boolean,
+                                                pushDownInFilterThreshold: Int,
+                                                pushDownStringStartWith: Boolean,
+                                                isCaseSensitive: Boolean,
+                                                timestampConversion: Boolean,
+                                                enableOffHeapColumnVector: Boolean,
+                                                capacity: Int,
+                                                returningBatch: Boolean,
+                                                enableRecordFilter: Boolean,
+                                                timeZoneId: Option[String])
+  extends Spark3HoodieParquetReaderProperties(
     enableVectorizedReader = enableVectorizedReader,
     enableParquetFilterPushDown = enableParquetFilterPushDown,
     pushDownDate = pushDownDate,

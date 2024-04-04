@@ -20,8 +20,6 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 abstract class SparkHoodieParquetReaderProperties(enableVectorizedReader: Boolean,
-                                         datetimeRebaseModeInRead: String,
-                                         int96RebaseModeInRead: String,
                                          enableParquetFilterPushDown: Boolean,
                                          pushDownDate: Boolean,
                                          pushDownTimestamp: Boolean,
