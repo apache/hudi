@@ -103,5 +103,10 @@ bd3525032 [HUDI-7528] Fixing RowCustomColumnsSortPartitioner to use repartition 
 ---[2024-03-27 19:27:12] [release-v1.7.4] Upgrade to version release-v1.7.4---
 2d8d7c718 [ENG-8111][INTERNAL] revert pr 608 (#621)
 
+---[2024-04-02 18:17:00] [release-v1.8.0] ---
+2d31a336545 [ENG-6179][HUDI-7500] fix gaps with deduce schema and null schema (#633)
+da43ca2d7eb [ENG-7800][HUDI-7532] Include only compaction instants for lastCompaction in getDeltaCommitsSinceLatestCompaction (#609)
+d40b79d9091 [ENG-8175][HUDI-7557] Fix incremental cleaner when commit for savepoint removed (#631)
+
 ---[2024-04-03 15:23:26] [release-v1.8.1] Upgrade to version release-v1.8.1---
 230c0371e54 [ENG-7800][HUDI-7532] Include only compaction instants for lastCompaction in getDeltaCommitsSinceLatestCompaction (#635)
