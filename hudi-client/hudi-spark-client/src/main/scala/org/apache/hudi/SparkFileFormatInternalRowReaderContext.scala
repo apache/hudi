@@ -36,7 +36,7 @@ import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkHoodieParquetReader}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
@@ -54,7 +54,7 @@ import scala.collection.mutable
  *                        not required for reading a file group with only log files.
  * @param partitionValues The values for a partition in which the file group lives.
  */
-class SparkFileFormatInternalRowReaderContext(extraProps: Map[String, String],
+class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParquetReader,
                                               recordKeyColumn: String,
                                               filters: Seq[Filter],
                                               shouldUseRecordPosition: Boolean) extends BaseSparkInternalRowReaderContext {
@@ -88,9 +88,9 @@ class SparkFileFormatInternalRowReaderContext(extraProps: Map[String, String],
       // each row if they are given. That is the only usage of the partition values in the reader.
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
-      new CloseableInternalRowIterator(sparkAdapter.readParquetFile(fileInfo,
+      new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
         getAppliedRequiredSchema(structType, shouldUseRecordPosition && isMerge), StructType(Seq.empty),
-        getFiltersForRead(isMerge), conf, extraProps))
+        getFiltersForRead(isMerge), conf))
     }
   }
 

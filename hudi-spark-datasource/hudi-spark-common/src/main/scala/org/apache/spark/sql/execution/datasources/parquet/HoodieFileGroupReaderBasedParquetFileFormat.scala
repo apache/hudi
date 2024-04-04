@@ -128,7 +128,7 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
 
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
-    val extraProps = spark.sparkContext.broadcast(sparkAdapter.getPropsForReadingParquet(supportBatchResult, spark.sessionState.conf, options, augmentedHadoopConf))
+    val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createHoodieParquetFileReader(supportBatchResult, spark.sessionState.conf, options, augmentedHadoopConf))
     val broadcastedHadoopConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedHadoopConf))
     val broadcastedDataSchema =  spark.sparkContext.broadcast(dataAvroSchema)
     val broadcastedRequestedSchema =  spark.sparkContext.broadcast(requestedAvroSchema)
@@ -146,7 +146,8 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
                 baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen))
               } else {
-                val readerContext = new SparkFileFormatInternalRowReaderContext(extraProps.value, tableState.recordKeyField, filters, shouldUseRecordPosition)
+                val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader.value,
+                  tableState.recordKeyField, filters, shouldUseRecordPosition)
                 val serializedHadoopConf = broadcastedHadoopConf.value.value
                 val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                   .builder().setConf(serializedHadoopConf).setBasePath(tableState.tablePath).build
@@ -179,8 +180,8 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
                   fileSliceMapping.getPartitionValues)
               }
 
-            case _ => sparkAdapter.readParquetFile(file, requiredSchema, partitionSchema, filters,
-              broadcastedHadoopConf.value.value, extraProps.value)
+            case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, filters,
+              broadcastedHadoopConf.value.value)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
@@ -189,8 +190,8 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
           buildCDCRecordIterator(
             fileGroupSplit, cdcFileReader, broadcastedHadoopConf.value.value, fileIndexProps, requiredSchema)
 
-        case _ => sparkAdapter.readParquetFile(file, requiredSchema, partitionSchema, filters,
-          broadcastedHadoopConf.value.value, extraProps.value)
+        case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, filters,
+          broadcastedHadoopConf.value.value)
       }
     }
   }
