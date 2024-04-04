@@ -117,7 +117,7 @@ jobs:
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$CLIENT_COMMON_MODULE,$SPARK_CLIENT_MODULE,$JAVA_CLIENT_MODULE,$HUDI_COMMON_MODULE" $MVN_ARGS
   spark-tests:
-    if: ${{ github.ref == 'refs/head/master' || contains(github.head_ref, 'release') || contains(github.head_ref, 'cherry') }}
+    if: ${{ github.ref == 'refs/heads/master' || contains(github.head_ref, 'release') || contains(github.head_ref, 'cherry') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
