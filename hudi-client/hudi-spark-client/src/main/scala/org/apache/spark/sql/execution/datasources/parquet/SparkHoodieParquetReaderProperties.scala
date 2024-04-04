@@ -32,3 +32,32 @@ abstract class SparkHoodieParquetReaderProperties(enableVectorizedReader: Boolea
                                          returningBatch: Boolean,
                                          enableRecordFilter: Boolean,
                                          timeZoneId: Option[String])
+
+abstract class Spark24To31HoodieParquetReaderProperties(enableVectorizedReader: Boolean,
+                                                        enableParquetFilterPushDown: Boolean,
+                                                        pushDownDate: Boolean,
+                                                        pushDownTimestamp: Boolean,
+                                                        pushDownDecimal: Boolean,
+                                                        pushDownInFilterThreshold: Int,
+                                                        pushDownStringStartWith: Boolean,
+                                                        isCaseSensitive: Boolean,
+                                                        timestampConversion: Boolean,
+                                                        enableOffHeapColumnVector: Boolean,
+                                                        capacity: Int,
+                                                        returningBatch: Boolean,
+                                                        enableRecordFilter: Boolean,
+                                                        timeZoneId: Option[String])
+  extends SparkHoodieParquetReaderProperties(
+    enableVectorizedReader = enableVectorizedReader,
+    enableParquetFilterPushDown = enableParquetFilterPushDown,
+    pushDownDate = pushDownDate,
+    pushDownTimestamp = pushDownTimestamp,
+    pushDownDecimal = pushDownDecimal,
+    pushDownInFilterThreshold = pushDownInFilterThreshold,
+    isCaseSensitive = isCaseSensitive,
+    timestampConversion = timestampConversion,
+    enableOffHeapColumnVector = enableOffHeapColumnVector,
+    capacity = capacity,
+    returningBatch = returningBatch,
+    enableRecordFilter = enableRecordFilter,
+    timeZoneId = timeZoneId)
