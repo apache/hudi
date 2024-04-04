@@ -27,7 +27,6 @@ abstract class SparkHoodieParquetReaderProperties(enableVectorizedReader: Boolea
                                          pushDownTimestamp: Boolean,
                                          pushDownDecimal: Boolean,
                                          pushDownInFilterThreshold: Int,
-                                         pushDownStringStartWith: Boolean,
                                          isCaseSensitive: Boolean,
                                          timestampConversion: Boolean,
                                          enableOffHeapColumnVector: Boolean,
