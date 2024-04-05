@@ -73,7 +73,6 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -188,13 +187,17 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Convert a given avro record to json and return the string
-   *
+   * Convert a given avro record to a JSON string. If the record contents are invalid, return the record.toString().
+   * Use this method when simply trying to print the record contents without any guarantees around their correctness.
    * @param record The GenericRecord to convert
-   * @param pretty Whether to pretty-print the json output
+   * @return a JSON string
    */
-  public static String avroToJsonString(GenericRecord record, boolean pretty) throws IOException {
-    return avroToJsonHelper(record, pretty).toString();
+  public static String safeAvroToJsonString(GenericRecord record) {
+    try {
+      return new String(avroToJson(record, false));
+    } catch (Exception e) {
+      return record.toString();
+    }
   }
 
   /**
@@ -210,18 +213,10 @@ public class HoodieAvroUtils {
   private static ByteArrayOutputStream avroToJsonHelper(GenericRecord record, boolean pretty) throws IOException {
     DatumWriter<Object> writer = new GenericDatumWriter<>(record.getSchema());
     ByteArrayOutputStream out = new ByteArrayOutputStream();
-    try {
-      JsonEncoder jsonEncoder = EncoderFactory.get().jsonEncoder(record.getSchema(), out, pretty);
-      writer.write(record, jsonEncoder);
-      jsonEncoder.flush();
-      return out;
-    } catch (ClassCastException | NullPointerException ex) {
-      // NullPointerException will be thrown in cases where the field values are missing
-      // ClassCastException will be thrown in cases where the field values do not match the schema type
-      // Fallback to using `toString` which also returns json but without a pretty-print option
-      out.write(record.toString().getBytes(StandardCharsets.UTF_8));
-      return out;
-    }
+    JsonEncoder jsonEncoder = EncoderFactory.get().jsonEncoder(record.getSchema(), out, pretty);
+    writer.write(record, jsonEncoder);
+    jsonEncoder.flush();
+    return out;
   }
 
   /**

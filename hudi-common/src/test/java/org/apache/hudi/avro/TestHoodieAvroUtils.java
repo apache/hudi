@@ -631,25 +631,25 @@ public class TestHoodieAvroUtils {
   }
 
   @Test
-  void testAvroToJsonStringMissingRequiredField() throws IOException {
+  void testSafeAvroToJsonStringMissingRequiredField() {
     Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
     GenericRecord record = new GenericData.Record(schema);
     record.put("non_pii_col", "val1");
     record.put("pii_col", "val2");
     record.put("timestamp", 3.5);
-    String jsonString = HoodieAvroUtils.avroToJsonString(record, false);
+    String jsonString = HoodieAvroUtils.safeAvroToJsonString(record);
     assertEquals("{\"timestamp\": 3.5, \"_row_key\": null, \"non_pii_col\": \"val1\", \"pii_col\": \"val2\"}", jsonString);
   }
 
   @Test
-  void testAvroToJsonStringBadDataType() throws IOException {
+  void testSafeAvroToJsonStringBadDataType() {
     Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
     GenericRecord record = new GenericData.Record(schema);
     record.put("non_pii_col", "val1");
     record.put("_row_key", "key");
     record.put("pii_col", "val2");
     record.put("timestamp", "foo");
-    String jsonString = HoodieAvroUtils.avroToJsonString(record, false);
+    String jsonString = HoodieAvroUtils.safeAvroToJsonString(record);
     assertEquals("{\"timestamp\": \"foo\", \"_row_key\": \"key\", \"non_pii_col\": \"val1\", \"pii_col\": \"val2\"}", jsonString);
   }
 }
