@@ -21,6 +21,7 @@ package org.apache.hudi.cli.functional;
 
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.providers.SparkProvider;
@@ -39,6 +40,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Paths;
 
 public class CLIFunctionalTestHarness implements SparkProvider {
+
+  protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   protected static int timelineServicePort =
       FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();

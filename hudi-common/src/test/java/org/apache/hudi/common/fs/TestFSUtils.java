@@ -21,7 +21,6 @@ package org.apache.hudi.common.fs;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -75,7 +74,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestFSUtils extends HoodieCommonTestHarness {
 
   private static final String TEST_WRITE_TOKEN = "1-0-1";
-  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   @Rule
   public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
@@ -94,7 +92,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testMakeDataFileName() {
     String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
-    assertEquals(FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + BASE_FILE_EXTENSION);
+    assertEquals(FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, BASE_FILE_EXTENSION),
+        fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + BASE_FILE_EXTENSION);
   }
 
   @Test
@@ -169,7 +168,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testGetCommitTime() {
     String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, BASE_FILE_EXTENSION);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
     // test log file name
     fullFileName = FSUtils.makeLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
@@ -180,7 +179,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testGetFileNameWithoutMeta() {
     String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, BASE_FILE_EXTENSION);
     assertEquals(fileName, FSUtils.getFileId(fullFileName));
   }
 
@@ -375,7 +374,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     final String LOG_EXTENSION = "." + LOG_STR;
 
     // data file name
-    String dataFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId);
+    String dataFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId, BASE_FILE_EXTENSION);
     assertEquals(instantTime, FSUtils.getCommitTime(dataFileName));
     assertEquals(fileId, FSUtils.getFileId(dataFileName));
 
