@@ -55,10 +55,11 @@ abstract class SparkHoodieParquetReaderBase(enableVectorizedReader: Boolean,
                  partitionSchema: StructType,
                  filters: Seq[Filter],
                  sharedConf: Configuration): Iterator[InternalRow] = {
-    sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
-    sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
-    ParquetWriteSupport.setSchema(requiredSchema, sharedConf)
-    doRead(file, requiredSchema, partitionSchema, filters, sharedConf)
+    val conf = new Configuration(sharedConf)
+    conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
+    conf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
+    ParquetWriteSupport.setSchema(requiredSchema, conf)
+    doRead(file, requiredSchema, partitionSchema, filters, conf)
   }
 
 
