@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase {
@@ -68,6 +69,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.validateAllFileGroups = true;
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
     assertTrue(validator.run());
+    assertFalse(validator.hasValidationFailure());
+    assertTrue(validator.getThrowables().isEmpty());
   }
 
   protected Dataset<Row> makeInsertDf(String instantTime, Integer n) {
