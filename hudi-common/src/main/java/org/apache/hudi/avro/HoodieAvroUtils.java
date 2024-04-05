@@ -73,6 +73,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -187,14 +188,24 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Convert a given avro record to json and return the string
+   *
+   * @param record The GenericRecord to convert
+   * @param pretty Whether to pretty-print the json output
+   */
+  public static String avroToJsonString(GenericRecord record, boolean pretty) throws IOException {
+    return avroToJsonHelper(record, pretty).toString();
+  }
+
+  /**
    * Convert a given avro record to a JSON string. If the record contents are invalid, return the record.toString().
-   * Use this method when simply trying to print the record contents without any guarantees around their correctness.
+   * Use this method over {@link HoodieAvroUtils#avroToJsonString} when simply trying to print the record contents without any guarantees around their correctness.
    * @param record The GenericRecord to convert
    * @return a JSON string
    */
   public static String safeAvroToJsonString(GenericRecord record) {
     try {
-      return new String(avroToJson(record, false));
+      return avroToJsonString(record, false);
     } catch (Exception e) {
       return record.toString();
     }
