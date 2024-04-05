@@ -51,10 +51,10 @@ abstract class SparkHoodieParquetReaderBase(enableVectorizedReader: Boolean,
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   final def read(file: PartitionedFile,
-           requiredSchema: StructType,
-           partitionSchema: StructType,
-           filters: Seq[Filter],
-           sharedConf: Configuration): Iterator[InternalRow] = {
+                 requiredSchema: StructType,
+                 partitionSchema: StructType,
+                 filters: Seq[Filter],
+                 sharedConf: Configuration): Iterator[InternalRow] = {
     sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
     sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
     ParquetWriteSupport.setSchema(requiredSchema, sharedConf)
