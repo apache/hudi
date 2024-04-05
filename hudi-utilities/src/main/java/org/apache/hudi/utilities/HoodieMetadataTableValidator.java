@@ -181,6 +181,8 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private final String taskLabels;
 
+  private List<Throwable> throwables = new ArrayList<>();
+
   public HoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;
     this.cfg = cfg;
@@ -196,6 +198,27 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
     this.taskLabels = generateValidationTaskLabels();
+  }
+
+  /**
+   * Returns list of Throwable which were encountered during validation. This method is useful
+   * when ignoreFailed parameter is set to true.
+   */
+  public List<Throwable> getThrowables() {
+    return throwables;
+  }
+
+  /**
+   * Returns true if there is a validation failure encountered during validation.
+   * This method is useful when ignoreFailed parameter is set to true.
+   */
+  public boolean hasValidationFailure() {
+    for (Throwable throwable : throwables) {
+      if (throwable instanceof HoodieValidationException) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private String generateValidationTaskLabels() {
@@ -438,6 +461,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       if (!cfg.ignoreFailed) {
         throw e;
       }
+      throwables.add(e);
       return false;
     }
   }
@@ -502,12 +526,12 @@ public class HoodieMetadataTableValidator implements Serializable {
          HoodieMetadataValidationContext fsBasedContext =
              new HoodieMetadataValidationContext(engineContext, props, metaClient, false)) {
       Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
-      List<Pair<Boolean, String>> result = new ArrayList<>(
+      List<Pair<Boolean, ? extends Exception>> result = new ArrayList<>(
           engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
             try {
               validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
               LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));
-              return Pair.of(true, "");
+              return Pair.<Boolean, Exception>of(true, null);
             } catch (HoodieValidationException e) {
               LOG.error(
                   String.format("Metadata table validation failed for partition %s due to HoodieValidationException (partition %s)",
@@ -515,26 +539,29 @@ public class HoodieMetadataTableValidator implements Serializable {
               if (!cfg.ignoreFailed) {
                 throw e;
               }
-              return Pair.of(false, e.getMessage() + " for partition: " + partitionPath);
+              return Pair.of(false, new HoodieValidationException(e.getMessage() + " for partition: " + partitionPath, e));
             }
           }).collectAsList());
 
       try {
         validateRecordIndex(engineContext, metaClient, metadataTableBasedContext.getTableMetadata());
-        result.add(Pair.of(true, ""));
+        result.add(Pair.of(true, null));
       } catch (HoodieValidationException e) {
         LOG.error(
             "Metadata table validation failed due to HoodieValidationException in record index validation for table: {} ", cfg.basePath, e);
         if (!cfg.ignoreFailed) {
           throw e;
         }
-        result.add(Pair.of(false, e.getMessage()));
+        result.add(Pair.of(false, e));
       }
 
-      for (Pair<Boolean, String> res : result) {
+      for (Pair<Boolean, ? extends Exception> res : result) {
         finalResult &= res.getKey();
         if (res.getKey().equals(false)) {
           LOG.error("Metadata Validation failed for table: " + cfg.basePath + " with error: " + res.getValue());
+          if (res.getRight() != null) {
+            throwables.add(res.getRight());
+          }
         }
       }
 
@@ -1253,6 +1280,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             if (!cfg.ignoreFailed) {
               throw e;
             }
+            throwables.add(e);
           } catch (InterruptedException e) {
             // ignore InterruptedException here.
           }
