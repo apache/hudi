@@ -116,7 +116,7 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
     val augmentedHadoopConf = FSUtils.buildInlineConf(hadoopConf)
     setSchemaEvolutionConfigs(augmentedHadoopConf, options)
     val baseFileReader = super.buildReaderWithPartitionValues(spark, dataSchema, partitionSchema, requiredSchema,
-      filters ++ requiredFilters, options, new Configuration(hadoopConf))
+      filters ++ requiredFilters, options, new Configuration(augmentedHadoopConf))
     val cdcFileReader = super.buildReaderWithPartitionValues(
       spark,
       tableSchema.structTypeSchema,
