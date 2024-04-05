@@ -140,12 +140,6 @@ public class FSUtils {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
   }
 
-  // TODO: this should be removed
-  public static String makeBaseFileName(String instantTime, String writeToken, String fileId) {
-    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime,
-        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
-  }
-
   public static String makeBaseFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, fileExtension);
   }

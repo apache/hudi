@@ -124,10 +124,10 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
 
     // Only one commit
     String commitTime1 = "1";
-    String fileName1 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
-    String fileName2 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
-    String fileName3 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId3);
-    String fileName4 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId4);
+    String fileName1 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1, BASE_FILE_EXTENSION);
+    String fileName2 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2, BASE_FILE_EXTENSION);
+    String fileName3 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId3, BASE_FILE_EXTENSION);
+    String fileName4 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId4, BASE_FILE_EXTENSION);
     new File(basePath + "/" + partitionPath1 + "/" + fileName1).createNewFile();
     new File(basePath + "/" + partitionPath1 + "/" + fileName2).createNewFile();
     new File(basePath + "/" + partitionPath2 + "/" + fileName3).createNewFile();

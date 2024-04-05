@@ -121,6 +121,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createRollbackFil
 import static org.apache.hudi.common.testutils.FileCreateUtils.createSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.deleteSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
+import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.BASE_FILE_EXTENSION;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
@@ -533,7 +534,7 @@ public class HoodieTestTable {
     if (newFileId.isPresent() && !StringUtils.isNullOrEmpty(newFileId.get())) {
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setPartitionPath(partition);
-      writeStat.setPath(partition + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", newFileId.get()));
+      writeStat.setPath(partition + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", newFileId.get(), BASE_FILE_EXTENSION));
       writeStat.setFileId(newFileId.get());
       writeStat.setTotalWriteBytes(1);
       writeStat.setFileSizeInBytes(1);

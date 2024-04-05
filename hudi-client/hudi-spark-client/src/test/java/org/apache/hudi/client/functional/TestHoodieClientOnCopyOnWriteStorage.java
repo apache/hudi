@@ -2638,7 +2638,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Option<Path> markerFilePath = WriteMarkersFactory.get(
             cfg.getMarkersType(), getHoodieTable(metaClient, cfg), instantTime)
         .create(partitionPath,
-            FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString()),
+            FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString(), BASE_FILE_EXTENSION),
             IOType.MERGE);
     if (!enableOptimisticConsistencyGuard) {
       Exception e = assertThrows(HoodieCommitException.class, () -> {
