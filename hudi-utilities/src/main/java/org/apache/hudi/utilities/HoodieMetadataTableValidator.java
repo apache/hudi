@@ -86,7 +86,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -182,7 +181,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private final String taskLabels;
 
-  private List<Throwable> throwables = new LinkedList<>();
+  private List<Throwable> throwables = new ArrayList<>();
 
   public HoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;
@@ -210,10 +209,10 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   /**
-   * Returns true if validation has failed. This method is useful when ignoreFailed
-   * parameter is set to true.
+   * Returns true if there is a validation failure encountered during validation.
+   * This method is useful when ignoreFailed parameter is set to true.
    */
-  public boolean isValidationFailed() {
+  public boolean hasValidationFailure() {
     for (Throwable throwable : throwables) {
       if (throwable instanceof HoodieValidationException) {
         return true;
