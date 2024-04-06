@@ -198,6 +198,20 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Convert a given avro record to a JSON string. If the record contents are invalid, return the record.toString().
+   * Use this method over {@link HoodieAvroUtils#avroToJsonString} when simply trying to print the record contents without any guarantees around their correctness.
+   * @param record The GenericRecord to convert
+   * @return a JSON string
+   */
+  public static String safeAvroToJsonString(GenericRecord record) {
+    try {
+      return avroToJsonString(record, false);
+    } catch (Exception e) {
+      return record.toString();
+    }
+  }
+
+  /**
    * Convert a given avro record to json and return the encoded bytes.
    *
    * @param record The GenericRecord to convert
