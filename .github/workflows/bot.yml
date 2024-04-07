@@ -40,7 +40,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Check Binary Files
@@ -92,7 +92,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Build Project
@@ -163,7 +163,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Build Project
@@ -205,7 +205,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Generate Maven Wrapper
@@ -247,7 +247,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Build Project
@@ -260,7 +260,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '17'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Quickstart Test
@@ -307,7 +307,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Build Project
@@ -320,7 +320,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '17'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Scala UT - Common & Spark
@@ -356,7 +356,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Build Project
@@ -398,7 +398,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: UT/FT - Docker Test - OpenJDK 17
@@ -447,7 +447,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Build Project
@@ -502,7 +502,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: Build Project

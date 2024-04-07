@@ -72,7 +72,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
       - name: IT - Bundle Validation - OpenJDK 8
