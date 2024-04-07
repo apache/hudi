@@ -90,7 +90,7 @@ public class MetricsReporterFactory {
             new Class[]{HoodieMetricsConfig.class, MetricRegistry.class}, metricsConfig, registry);
         break;
       case M3:
-        reporter = new M3MetricsReporter(config, registry);
+        reporter = new M3MetricsReporter(metricsConfig, registry);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");

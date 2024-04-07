@@ -214,6 +214,26 @@ public class HoodieMetricsConfig extends HoodieConfig {
     return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS);
   }
 
+  public String getM3ServerHost() {
+    return getString(HoodieMetricsM3Config.M3_SERVER_HOST_NAME);
+  }
+
+  public int getM3ServerPort() {
+    return getInt(HoodieMetricsM3Config.M3_SERVER_PORT_NUM);
+  }
+
+  public String getM3Tags() {
+    return getString(HoodieMetricsM3Config.M3_TAGS);
+  }
+
+  public String getM3Env() {
+    return getString(HoodieMetricsM3Config.M3_ENV);
+  }
+
+  public String getM3Service() {
+    return getString(HoodieMetricsM3Config.M3_SERVICE);
+  }
+
   public String getJmxHost() {
     return getString(HoodieMetricsJmxConfig.JMX_HOST_NAME);
   }

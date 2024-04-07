@@ -352,6 +352,16 @@
           <groupId>io.prometheus</groupId>
           <artifactId>simpleclient_pushgateway</artifactId>
       </dependency>
+    <dependency>
+      <groupId>com.uber.m3</groupId>
+      <artifactId>tally-m3</artifactId>
+      <version>${tally.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.uber.m3</groupId>
+      <artifactId>tally-core</artifactId>
+      <version>${tally.version}</version>
+    </dependency>
 
   </dependencies>
 </project>

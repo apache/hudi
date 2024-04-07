@@ -2237,23 +2237,23 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getM3ServerHost() {
-    return getString(HoodieMetricsM3Config.M3_SERVER_HOST_NAME);
+    return metricsConfig.getM3ServerHost();
   }
 
   public int getM3ServerPort() {
-    return getInt(HoodieMetricsM3Config.M3_SERVER_PORT_NUM);
+    return metricsConfig.getM3ServerPort();
   }
 
   public String getM3Tags() {
-    return getString(HoodieMetricsM3Config.M3_TAGS);
+    return metricsConfig.getM3Tags();
   }
 
   public String getM3Env() {
-    return getString(HoodieMetricsM3Config.M3_ENV);
+    return metricsConfig.getM3Env();
   }
 
   public String getM3Service() {
-    return getString(HoodieMetricsM3Config.M3_SERVICE);
+    return metricsConfig.getM3Service();
   }
 
   public String getJmxHost() {
