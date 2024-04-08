@@ -16,9 +16,9 @@ As we wrap up 2022 I want to take the opportunity to reflect on and highlight th
 project and most importantly, the community. First and foremost, I want to thank all of the contributors who have made 
 2022 the best year for the project ever. There were [over 2,200 PRs](https://ossinsight.io/analyze/apache/hudi#pull-requests) 
 created (+38% YoY) and over 600+ users engaged on [Github](https://github.com/apache/hudi/). The Apache Hudi community 
-[slack channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-20r833rxh-627NWYDUyR8jRtMa2mZ~gg) has grown to more 
+[slack channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g) has grown to more 
 than 2,600 users (+100% YoY growth) averaging nearly 200 messages per month! The most impressive stat is that with this 
-volume growth, the median response time to questions is ~3h. [Come join the community](https://join.slack.com/t/apache-hudi/shared_invite/zt-20r833rxh-627NWYDUyR8jRtMa2mZ~gg) 
+volume growth, the median response time to questions is ~3h. [Come join the community](https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g) 
 where people are sharing and helping each other!
 
 <img src="/assets/images/blog/Apache-Hudi-Pull-Request-History.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />
@@ -83,7 +83,7 @@ Check out [Hudi Roadmap](https://hudi.apache.org/roadmap) for more to come in 20
 If you haven't tried Apache Hudi yet, 2023 is your year! Here are a few useful links to help you get started:
  
 1. [Apache Hudi Docs](https://hudi.apache.org/docs/overview)
-2. [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-20r833rxh-627NWYDUyR8jRtMa2mZ~gg)
+2. [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g)
 3. [Hudi Weekly Office Hours](https://hudi.apache.org/community/office_hours) and [Monthly Meetup](https://hudi.apache.org/community/syncs#monthly-community-call)
 4. [Contributor Guide](https://hudi.apache.org/contribute/how-to-contribute)
 

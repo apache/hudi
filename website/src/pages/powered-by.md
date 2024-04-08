@@ -8,7 +8,7 @@ last_modified_at: 2019-12-31T15:59:57-04:00
 
 Apache Hudi is a [fast growing diverse community](https://hudi.apache.org/blog/2022/01/06/apache-hudi-2021-a-year-in-review) 
 of people and organizations from all around the globe. The following is a small sample of companies that have adopted or 
-contributed to the Apache Hudi community! [Join us on slack](https://join.slack.com/t/apache-hudi/shared_invite/zt-20r833rxh-627NWYDUyR8jRtMa2mZ~gg), 
+contributed to the Apache Hudi community! [Join us on slack](https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g), 
 or come to one of our [virtual community events](https://hudi.apache.org/community/syncs).
 
 ### 37 Interactive Entertainment
