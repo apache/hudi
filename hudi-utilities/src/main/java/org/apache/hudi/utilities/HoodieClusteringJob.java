@@ -44,6 +44,7 @@ import java.util.Date;
 import java.util.List;
 
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.PURGE_PENDING_INSTANT;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
@@ -191,6 +192,10 @@ public class HoodieClusteringJob {
           LOG.info("Running Mode: [" + EXECUTE + "]; Do cluster");
           return doCluster(jsc);
         }
+        case PURGE_PENDING_INSTANT: {
+          LOG.info("Running Mode: [" + PURGE_PENDING_INSTANT + "];");
+          return doPurgePendingInstant(jsc);
+        }
         default: {
           LOG.error("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
           return -1;
@@ -207,7 +212,7 @@ public class HoodieClusteringJob {
         // Instant time is not specified
         // Find the earliest scheduled clustering instant for execution
         Option<HoodieInstant> firstClusteringInstant =
-            metaClient.getActiveTimeline().getFirstPendingClusterCommit();
+            metaClient.getActiveTimeline().getFirstPendingClusterInstant();
         if (firstClusteringInstant.isPresent()) {
           cfg.clusteringInstantTime = firstClusteringInstant.get().getTimestamp();
           LOG.info("Found the earliest scheduled clustering instant which will be executed: "
@@ -253,7 +258,7 @@ public class HoodieClusteringJob {
 
       if (cfg.retryLastFailedClusteringJob) {
         HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
-        Option<HoodieInstant> lastClusterOpt = table.getActiveTimeline().getLastPendingClusterCommit();
+        Option<HoodieInstant> lastClusterOpt = table.getActiveTimeline().getLastPendingClusterInstant();
 
         if (lastClusterOpt.isPresent()) {
           HoodieInstant inflightClusteringInstant = lastClusterOpt.get();
@@ -280,6 +285,15 @@ public class HoodieClusteringJob {
       clean(client);
       return UtilHelpers.handleErrors(metadata.get(), instantTime.get());
     }
+  }
+
+  private int doPurgePendingInstant(JavaSparkContext jsc) throws Exception {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+      client.purgePendingClustering(cfg.clusteringInstantTime);
+    }
+    return 0;
   }
 
   private void clean(SparkRDDWriteClient<?> client) {

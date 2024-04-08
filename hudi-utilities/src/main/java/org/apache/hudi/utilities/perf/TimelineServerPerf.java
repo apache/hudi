@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.utilities.UtilHelpers;
 
@@ -40,7 +41,6 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
@@ -49,6 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,10 +79,10 @@ public class TimelineServerPerf implements Serializable {
     useExternalTimelineServer = (cfg.serverHost != null);
     TimelineService.Config timelineServiceConf = cfg.getTimelineServerConfig();
     this.timelineServer = new TimelineService(
-        new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
+        new HoodieLocalEngineContext(HadoopFSUtils.prepareHadoopConf(new Configuration())),
         new Configuration(), timelineServiceConf, FileSystem.get(new Configuration()),
         TimelineService.buildFileSystemViewManager(timelineServiceConf,
-            new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))));
+            new SerializableConfiguration(HadoopFSUtils.prepareHadoopConf(new Configuration()))));
   }
 
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {
@@ -188,7 +189,7 @@ public class TimelineServerPerf implements Serializable {
 
     private final Path dumpPath;
     private final FileSystem fileSystem;
-    private FSDataOutputStream outputStream;
+    private OutputStream outputStream;
 
     public Dumper(FileSystem fs, Path dumpPath) {
       this.dumpPath = dumpPath;

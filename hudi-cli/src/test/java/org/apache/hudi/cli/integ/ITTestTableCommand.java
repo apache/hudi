@@ -37,8 +37,8 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Test;
@@ -72,7 +72,7 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
   @Test
   public void testChangeTableCOW2MOR() throws IOException {
-    tablePath = basePath + Path.SEPARATOR + tableName + "_cow2mor";
+    tablePath = basePath + StoragePath.SEPARATOR + tableName + "_cow2mor";
     // Create table and connect
     new TableCommand().createTable(
         tablePath, "test_table", HoodieTableType.COPY_ON_WRITE.name(),
@@ -89,7 +89,7 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
   @Test
   public void testChangeTableMOR2COW() throws IOException {
-    tablePath = basePath + Path.SEPARATOR + tableName + "_mor2cow";
+    tablePath = basePath + StoragePath.SEPARATOR + tableName + "_mor2cow";
     // Create table and connect
     new TableCommand().createTable(
         tablePath, "test_table", HoodieTableType.MERGE_ON_READ.name(),
@@ -104,7 +104,7 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
   @Test
   public void testChangeTableMOR2COW_withPendingCompactions() throws Exception {
-    tablePath = basePath + Path.SEPARATOR + tableName + "_cow2mor";
+    tablePath = basePath + StoragePath.SEPARATOR + tableName + "_cow2mor";
     // Create table and connect
     new TableCommand().createTable(
         tablePath, "test_table", HoodieTableType.MERGE_ON_READ.name(),
@@ -136,7 +136,7 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
   @Test
   public void testChangeTableMOR2COW_withFullCompaction() throws Exception {
-    tablePath = basePath + Path.SEPARATOR + tableName + "_cow2mor";
+    tablePath = basePath + StoragePath.SEPARATOR + tableName + "_cow2mor";
     // Create table and connect
     new TableCommand().createTable(
         tablePath, "test_table", HoodieTableType.MERGE_ON_READ.name(),
@@ -161,7 +161,7 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
   @Test
   public void testChangeTableMOR2COW_withoutCompaction() throws Exception {
-    tablePath = basePath + Path.SEPARATOR + tableName + "_cow2mor";
+    tablePath = basePath + StoragePath.SEPARATOR + tableName + "_cow2mor";
     // Create table and connect
     new TableCommand().createTable(
         tablePath, "test_table", HoodieTableType.MERGE_ON_READ.name(),

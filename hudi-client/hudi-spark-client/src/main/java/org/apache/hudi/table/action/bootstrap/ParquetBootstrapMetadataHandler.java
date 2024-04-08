@@ -80,7 +80,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
 
     HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(recordType)
-            .getFileReader(table.getHadoopConf(), sourceFilePath);
+            .getFileReader(table.getConfig(), table.getHadoopConf(), sourceFilePath);
 
     HoodieExecutor<Void> executor = null;
     try {

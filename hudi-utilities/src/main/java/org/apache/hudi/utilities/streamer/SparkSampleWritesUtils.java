@@ -24,7 +24,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -33,7 +32,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.fs.CachingPath;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -138,8 +139,8 @@ public class SparkSampleWritesUtils {
   }
 
   private static String getSampleWritesBasePath(JavaSparkContext jsc, HoodieWriteConfig writeConfig, String instantTime) throws IOException {
-    Path basePath = new CachingPath(writeConfig.getBasePath(), SAMPLE_WRITES_FOLDER_PATH + Path.SEPARATOR + instantTime);
-    FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
+    Path basePath = new CachingPath(writeConfig.getBasePath(), SAMPLE_WRITES_FOLDER_PATH + StoragePath.SEPARATOR + instantTime);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
     if (fs.exists(basePath)) {
       fs.delete(basePath, true);
     }
@@ -159,7 +160,7 @@ public class SparkSampleWritesUtils {
   }
 
   private static HoodieTableMetaClient getMetaClient(JavaSparkContext jsc, String basePath) {
-    FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
     return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
   }
 }

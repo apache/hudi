@@ -62,10 +62,10 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.FileCreateUtils;
@@ -91,7 +91,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.io.storage.HoodieAvroHFileReader;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -103,6 +104,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -115,12 +117,9 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.util.Time;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.apache.spark.api.java.JavaRDD;
@@ -138,6 +137,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -167,6 +167,7 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_EXTENSION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_EXTENSION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.INFLIGHT_EXTENSION;
@@ -811,9 +812,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     table.getHoodieView().sync();
     List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
-    HoodieAvroHFileReader hoodieHFileReader = new HoodieAvroHFileReader(context.getHadoopConf().get(), new Path(baseFile.getPath()),
-        new CacheConfig(context.getHadoopConf().get()));
-    List<IndexedRecord> records = HoodieAvroHFileReader.readAllRecords(hoodieHFileReader);
+    HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
+        HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
+            table.getConfig(), context.getHadoopConf().get(), new Path(baseFile.getPath()));
+    List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (populateMetaFields) {
         assertNotNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
@@ -823,6 +825,43 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     });
   }
 
+  /**
+   * Test MDT compaction with delayed pending instants on DT(induced by multi-writer or async table services).
+   *
+   * <p>A demo:
+   * <pre>
+   *   Time t1
+   *
+   *   Main                 Metadata
+   *   c1.commit    ->   c1.deltacommit
+   *   c2.commit.   ->   c2.deltacommit
+   *   c3.inflight  ->
+   *   c4.commit    ->   c4.deltacommit
+   *
+   *   c5.requested ->   c6.compaction
+   *
+   *
+   *   MDT files:
+   *   F1.c1 (base) -> log(c2) -> log(c4)
+   *   F1.c6 (base)
+   *
+   *
+   *   Time t2 (Now c3 is completed)
+   *
+   *   Main                 Metadata
+   *   c1.commit    ->   c1.deltacommit
+   *   c2.commit.   ->   c2.deltacommit
+   *   c3.commit    ->   c3.deltacommit
+   *   c4.commit    ->   c4.deltacommit
+   *
+   *   c5.requested -> c6.compaction
+   *
+   *
+   *   MDT files:
+   *   F1.c1 (base) -> log(c2) -> log(c4)
+   *   F1.c6 (base) -> log(c3)
+   * </pre>
+   */
   @Test
   public void testMetadataTableCompactionWithPendingInstants() throws Exception {
     init(COPY_ON_WRITE, false);
@@ -852,8 +891,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000007", INSERT);
 
     tableMetadata = metadata(writeConfig, context);
-    // verify that compaction of metadata table does not kick in.
-    assertFalse(tableMetadata.getLatestCompactionTime().isPresent());
+    // verify that compaction of metadata table should kick in.
+    assertTrue(tableMetadata.getLatestCompactionTime().isPresent(), "Compaction of metadata table should kick in");
 
     // move inflight to completed
     testTable.moveInflightCommitToComplete("0000003", inflightCommitMeta);
@@ -1047,7 +1086,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
         context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-    Map<String, HoodieRecordGlobalLocation> result = metadataReader
+    Map<String, List<HoodieRecordGlobalLocation>> result = metadataReader
         .readRecordIndex(records1.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
     assertEquals(0, result.size(), "RI should not return entries that are rolled back.");
     result = metadataReader
@@ -1097,7 +1136,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Transition the second init commit for record_index partition to inflight in MDT
     deleteMetaFile(metaClient.getFs(), mdtBasePath, mdtInitCommit2, DELTA_COMMIT_EXTENSION);
     metaClient.getTableConfig().setMetadataPartitionState(
-        metaClient, MetadataPartitionType.RECORD_INDEX, false);
+        metaClient, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), false);
     metaClient.getTableConfig().setMetadataPartitionsInflight(
         metaClient, MetadataPartitionType.RECORD_INDEX);
     timeline = metaClient.getActiveTimeline().reload();
@@ -1350,10 +1389,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     final HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
 
-    HoodieAvroHFileReader hoodieHFileReader = new HoodieAvroHFileReader(context.getHadoopConf().get(),
-        new Path(baseFile.getPath()),
-        new CacheConfig(context.getHadoopConf().get()));
-    List<IndexedRecord> records = HoodieAvroHFileReader.readAllRecords(hoodieHFileReader);
+    HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
+        HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
+            table.getConfig(), context.getHadoopConf().get(), new Path(baseFile.getPath()));
+    List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (enableMetaFields) {
         assertNotNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
@@ -1444,7 +1483,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    */
   @Test
   public void testManualRollbacks() throws Exception {
-    boolean populateMateFields = false;
     init(COPY_ON_WRITE, false);
     // Setting to archive more aggressively on the Metadata Table than the Dataset
     final int maxDeltaCommitsBeforeCompaction = 4;
@@ -1475,23 +1513,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     validateMetadata(testTable);
 
-    // We can only rollback those commits whose deltacommit have not been archived yet.
-    int numRollbacks = 0;
-    boolean exceptionRaised = false;
+    // We can only roll back those commits whose deltacommit have not been archived yet.
     List<HoodieInstant> allInstants = metaClient.reloadActiveTimeline().getCommitsTimeline().getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant instantToRollback : allInstants) {
       try {
-        testTable.doRollback(instantToRollback.getTimestamp(), String.valueOf(Time.now()));
+        testTable.doRollback(instantToRollback.getTimestamp(), metaClient.createNewInstantTime());
         validateMetadata(testTable);
-        ++numRollbacks;
       } catch (HoodieMetadataException e) {
         // This is expected since we are rolling back commits that are older than the latest compaction on the MDT
         break;
       }
     }
-    // Since each rollback also creates a deltacommit, we can only support rolling back of half of the original
-    // instants present before rollback started.
-    // assertTrue(numRollbacks >= minArchiveCommitsDataset / 2, "Rollbacks of non archived instants should work");
   }
 
   /**
@@ -1558,23 +1590,18 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       testTable.setNonPartitioned();
     }
     for (int i = 1; i < 25; i += 7) {
-      long commitTime1 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-      long commitTime2 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-      long commitTime3 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-      long commitTime4 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-      doWriteOperation(testTable, Long.toString(commitTime1), INSERT, nonPartitionedDataset);
-      doWriteOperation(testTable, Long.toString(commitTime2), UPSERT, nonPartitionedDataset);
-      doClean(testTable, Long.toString(commitTime3), Arrays.asList(Long.toString(commitTime1)));
-      doWriteOperation(testTable, Long.toString(commitTime4), UPSERT, nonPartitionedDataset);
+      String commitTime1 = InProcessTimeGenerator.createNewInstantTime();
+      doWriteOperation(testTable, commitTime1, INSERT, nonPartitionedDataset);
+      doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(), UPSERT, nonPartitionedDataset);
+      doClean(testTable, InProcessTimeGenerator.createNewInstantTime(), Collections.singletonList(commitTime1));
+      doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(), UPSERT, nonPartitionedDataset);
       if (tableType == MERGE_ON_READ) {
-        long commitTime5 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-        doCompaction(testTable, Long.toString(commitTime5), nonPartitionedDataset);
+        doCompaction(testTable, InProcessTimeGenerator.createNewInstantTime(), nonPartitionedDataset);
       }
       // added 60s to commitTime6 to make sure it is greater than compaction instant triggered by previous commit
-      long commitTime6 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime()) + 60000L;
-      doWriteOperation(testTable, Long.toString(commitTime6), UPSERT, nonPartitionedDataset);
-      long commitTime7 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-      doRollback(testTable, Long.toString(commitTime6), Long.toString(commitTime7));
+      String commitTime6 = HoodieInstantTimeGenerator.instantTimePlusMillis(InProcessTimeGenerator.createNewInstantTime(), 60000L);
+      doWriteOperation(testTable, commitTime6, UPSERT, nonPartitionedDataset);
+      doRollback(testTable, commitTime6, InProcessTimeGenerator.createNewInstantTime());
     }
     validateMetadata(testTable, emptyList(), nonPartitionedDataset);
   }
@@ -1646,7 +1673,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // remove the MDT partition from dataset to simulate failed bootstrap
     Properties updateProperties = new Properties();
     updateProperties.setProperty(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), "");
-    HoodieTableConfig.update(fs, new Path(basePath + Path.SEPARATOR + METAFOLDER_NAME),
+    HoodieTableConfig.update(fs, new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME),
         updateProperties);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -1859,9 +1886,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // there are 3 partitions in total and 2 commits. total entries should be 6.
       assertEquals(result.size(), 6);
-      result.forEach(entry -> {
-        //LOG.warn("Prefix search entries just for record key col : " + entry.getRecordKey().toString() + " :: " + entry.getData().getColumnStatMetadata().get().toString());
-      });
 
       // prefix search for col(_hoodie_record_key) and first partition. only 2 files should be matched
       PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
@@ -1870,7 +1894,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
       result.forEach(entry -> {
-        // LOG.warn("Prefix search entries for record key col and first partition : " + entry.getRecordKey().toString() + " :: " + entry.getData().getColumnStatMetadata().get().toString());
         HoodieMetadataColumnStats metadataColumnStats = entry.getData().getColumnStatMetadata().get();
         String fileName = metadataColumnStats.getFileName();
         if (fileName.contains(firstCommit)) {
@@ -2646,7 +2669,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
       // instant so that only the inflight is left over.
       String commitInstantFileName = metaClient.getActiveTimeline().getReverseOrderedInstants().findFirst().get().getFileName();
-      assertTrue(fs.delete(new Path(basePath + Path.SEPARATOR + METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME,
           commitInstantFileName), false));
     }
 
@@ -2698,9 +2721,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // metadata table partitions are rebootstrapped.
     metadataWriter.dropMetadataPartitions(Arrays.asList(MetadataPartitionType.RECORD_INDEX, FILES));
     assertFalse(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + Path.SEPARATOR + FILES.getPartitionPath())));
+        + StoragePath.SEPARATOR + FILES.getPartitionPath())));
     assertFalse(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + Path.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
+        + StoragePath.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // Insert/upsert third batch of records
@@ -2717,14 +2740,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
     }
     assertNoWriteErrors(writeStatuses);
-    assertTrue(fs.exists(new Path(basePath + Path.SEPARATOR + METAFOLDER_NAME)));
+    assertTrue(fs.exists(new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME)));
     metaClient = HoodieTableMetaClient.reload(metaClient);
     assertFalse(metaClient.getActiveTimeline().filterCompletedInstants().filterCompletedInstants().findInstantsAfterOrEquals(commitTime, 1).empty());
 
     assertTrue(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + Path.SEPARATOR + FILES.getPartitionPath())));
+        + StoragePath.SEPARATOR + FILES.getPartitionPath())));
     assertTrue(fs.exists(new Path(getMetadataTableBasePath(basePath)
-        + Path.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
+        + StoragePath.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
   }
 
   /**
@@ -2865,7 +2888,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
       // instant so that only the inflight is left over.
       String commitInstantFileName = metaClient.getActiveTimeline().getReverseOrderedInstants().findFirst().get().getFileName();
-      assertTrue(fs.delete(new Path(basePath + Path.SEPARATOR + METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME,
           commitInstantFileName), false));
     }
 
@@ -2886,22 +2909,54 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testMetadataTableWithLongLog() throws Exception {
     init(COPY_ON_WRITE, false);
-    final int maxNumDeltacommits = 3;
+    final int maxNumDeltaCommits = 3;
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .enableMetrics(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltacommits + 100)
-            .withMaxNumDeltacommitsWhenPending(maxNumDeltacommits)
+            .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommits + 100)
+            .withMaxNumDeltacommitsWhenPending(maxNumDeltaCommits)
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
     testTable.addRequestedCommit(String.format("%016d", 0));
-    for (int i = 1; i <= maxNumDeltacommits; i++) {
+    for (int i = 1; i <= maxNumDeltaCommits; i++) {
       doWriteOperation(testTable, String.format("%016d", i));
     }
-    int instant = maxNumDeltacommits + 1;
-    Throwable t = assertThrows(HoodieMetadataException.class, () -> doWriteOperation(testTable, String.format("%016d", instant)));
-    assertTrue(t.getMessage().startsWith(String.format("Metadata table's deltacommits exceeded %d: ", maxNumDeltacommits)));
+    int instant = maxNumDeltaCommits + 1;
+    assertDoesNotThrow(() -> doWriteOperation(testTable, String.format("%016d", instant)));
+  }
+
+  @Test
+  public void testMORCheckNumDeltaCommits() throws Exception {
+    init(MERGE_ON_READ, true);
+    final int maxNumDeltaCommits = 3;
+    writeConfig = getWriteConfigBuilder(true, true, false)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                    .enable(true)
+                    .enableMetrics(false)
+                    .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommits - 1)
+                    .withMaxNumDeltacommitsWhenPending(maxNumDeltaCommits)
+                    .build())
+            .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    // write deltacommits to data-table and do compaction in metadata-table (with commit-instant)
+    doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1));
+    doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1));
+    // ensure the compaction is triggered and executed
+    try (HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true)) {
+      HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
+      final HoodieActiveTimeline activeTimeline = metadataMetaClient.reloadActiveTimeline();
+      Option<HoodieInstant> lastCompaction = activeTimeline.filterCompletedInstants()
+              .filter(s -> s.getAction().equals(COMMIT_ACTION)).lastInstant();
+      assertTrue(lastCompaction.isPresent());
+      // create pending instant in data table
+      testTable.addRequestedCommit(InProcessTimeGenerator.createNewInstantTime(1));
+      // continue writing
+      for (int i = 0; i <= maxNumDeltaCommits; i++) {
+        doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1));
+      }
+      assertDoesNotThrow(() -> doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1)));
+    }
   }
 
   @Test
@@ -3071,7 +3126,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // To simulate failed clean on the main dataset, we will delete the completed clean instant
       String cleanInstantFileName = metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants()
           .getReverseOrderedInstants().findFirst().get().getFileName();
-      assertTrue(fs.delete(new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
+      assertTrue(fs.delete(new Path(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
           cleanInstantFileName), false));
       assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflights().countInstants(), 1);
       assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants().countInstants(), 0);
@@ -3143,8 +3198,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
-            .withRemoteServerPort(timelineServicePort)
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build())
+            .withRemoteServerPort(timelineServicePort).build())
         .withProperties(properties);
   }
 
@@ -3318,9 +3372,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // RI should have created mappings for all the records inserted above
       HoodieTableMetadata metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      Map<String, HoodieRecordGlobalLocation> result = metadataReader
+      Map<String, List<HoodieRecordGlobalLocation>> result = metadataReader
           .readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
-      assertEquals(allRecords.size(), result.size(), "RI should have mapping for all the records in firstCommit");
+      assertEquals(allRecords.size(), (int) result.values().stream().flatMap(List::stream).count(), "RI should have mapping for all the records in firstCommit");
 
       // Delete some records from each commit. This should also remove the RI mapping.
       recordsToDelete = firstBatchOfrecords.subList(0, 3);
@@ -3350,7 +3404,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // RI should not return mappings for deleted records
       metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      Map<String, HoodieRecordGlobalLocation> result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      Map<String, List<HoodieRecordGlobalLocation>> result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
       assertEquals(allRecords.size() - keysToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
 
@@ -3361,9 +3415,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // New mappings should have been created for re-inserted records and should map to the new commit time
       metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
-      assertEquals(allRecords.size(), result.size(), "RI should have mappings for re-inserted records");
+      assertEquals(allRecords.size(), (int) result.values().stream().flatMap(List::stream).count(), "RI should have mappings for re-inserted records");
       for (String reInsertedKey : keysToDelete) {
-        assertEquals(reinsertTime, result.get(reInsertedKey).getInstantTime(), "RI mapping for re-inserted keys should have new commit time");
+        assertTrue(result.get(reInsertedKey).stream().anyMatch(location -> location.getInstantTime().equals(reinsertTime)), "RI mapping for re-inserted keys should have new commit time");
       }
     }
   }
@@ -3600,7 +3654,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     metaClient.getTableConfig().setTableVersion(version);
     Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
-    try (FSDataOutputStream os = metaClient.getFs().create(propertyFile)) {
+    try (OutputStream os = metaClient.getFs().create(propertyFile)) {
       metaClient.getTableConfig().getProps().store(os, "");
     }
   }

@@ -31,8 +31,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
@@ -49,25 +49,25 @@ import static org.mockito.Mockito.mock;
 public class TestKafkaOffsetGen {
 
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
-  private static KafkaTestUtils testUtils;
   private HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
+  private KafkaTestUtils testUtils;
 
-  @BeforeAll
-  public static void setup() throws Exception {
+  @BeforeEach
+  public void setup() throws Exception {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterAll
-  public static void teardown() throws Exception {
+  @AfterEach
+  public void teardown() throws Exception {
     testUtils.teardown();
   }
 
   private TypedProperties getConsumerConfigs(String autoOffsetReset, String kafkaCheckpointType) {
     TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.source.kafka.checkpoint.type", kafkaCheckpointType);
+    props.put("hoodie.streamer.source.kafka.checkpoint.type", kafkaCheckpointType);
     props.put("auto.offset.reset", autoOffsetReset);
-    props.put("hoodie.deltastreamer.source.kafka.topic", testTopicName);
+    props.put("hoodie.streamer.source.kafka.topic", testTopicName);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.setProperty("key.deserializer", StringDeserializer.class.getName());
     props.setProperty("value.deserializer", StringDeserializer.class.getName());
@@ -140,11 +140,13 @@ public class TestKafkaOffsetGen {
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", "string"));
     OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 499, metrics);
-    assertEquals(2, nextOffsetRanges.length);
+    assertEquals(3, nextOffsetRanges.length);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
-    assertEquals(250, nextOffsetRanges[0].untilOffset());
-    assertEquals(0, nextOffsetRanges[1].fromOffset());
-    assertEquals(249, nextOffsetRanges[1].untilOffset());
+    assertEquals(249, nextOffsetRanges[0].untilOffset());
+    assertEquals(249, nextOffsetRanges[1].fromOffset());
+    assertEquals(250, nextOffsetRanges[1].untilOffset());
+    assertEquals(0, nextOffsetRanges[2].fromOffset());
+    assertEquals(249, nextOffsetRanges[2].untilOffset());
   }
 
   @Test
@@ -248,7 +250,7 @@ public class TestKafkaOffsetGen {
     testUtils.createTopic(testTopicName, 1);
     boolean topicExists = kafkaOffsetGen.checkTopicExists(new KafkaConsumer(props));
     assertTrue(topicExists);
-    props.put("hoodie.deltastreamer.source.kafka.topic", "random");
+    props.put("hoodie.streamer.source.kafka.topic", "random");
     kafkaOffsetGen = new KafkaOffsetGen(props);
     topicExists = kafkaOffsetGen.checkTopicExists(new KafkaConsumer(props));
     assertFalse(topicExists);

@@ -40,7 +40,9 @@
     <module>hudi-client</module>
     <module>hudi-aws</module>
     <module>hudi-gcp</module>
+    <module>hudi-hadoop-common</module>
     <module>hudi-hadoop-mr</module>
+    <module>hudi-io</module>
     <module>hudi-spark-datasource</module>
     <module>hudi-timeline-service</module>
     <module>hudi-utilities</module>
@@ -100,7 +102,7 @@
     <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
     <kafka.version>2.0.0</kafka.version>
     <kafka.spark3.version>2.8.0</kafka.spark3.version>
-    <pulsar.version>2.10.2</pulsar.version>
+    <pulsar.version>3.0.2</pulsar.version>
     <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
     <pulsar.spark.scala11.version>2.4.5</pulsar.spark.scala11.version>
     <pulsar.spark.scala12.version>3.1.1.4</pulsar.spark.scala12.version>
@@ -111,7 +113,7 @@
     <junit.jupiter.version>5.7.2</junit.jupiter.version>
     <junit.vintage.version>5.7.2</junit.vintage.version>
     <junit.platform.version>1.7.2</junit.platform.version>
-    <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
+    <mockito.jupiter.version>3.12.4</mockito.jupiter.version>
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
@@ -127,7 +129,8 @@
     <orc.spark.version>1.6.0</orc.spark.version>
     <orc.flink.version>1.5.6</orc.flink.version>
     <roaringbitmap.version>0.9.47</roaringbitmap.version>
-    <airlift.version>0.16</airlift.version>
+    <airlift.version>0.25</airlift.version>
+    <tally.version>0.13.0</tally.version>
     <prometheus.version>0.8.0</prometheus.version>
     <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
     <aws.sdk.httpcore.version>4.4.13</aws.sdk.httpcore.version>
@@ -164,7 +167,7 @@
     <spark32.version>3.2.3</spark32.version>
     <spark33.version>3.3.1</spark33.version>
     <spark34.version>3.4.1</spark34.version>
-    <spark35.version>3.5.0</spark35.version>
+    <spark35.version>3.5.1</spark35.version>
     <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
     <!-- NOTE: Different Spark versions might require different number of shared
                modules being incorporated, hence we're creating multiple placeholders
@@ -187,9 +190,9 @@
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.13.0</thrift.version>
     <javalin.version>4.6.7</javalin.version>
-    <jetty.version>9.4.48.v20220622</jetty.version>
+    <jetty.version>9.4.53.v20231009</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
-    <hbase.version>2.4.9</hbase.version>
+    <hbase.version>2.4.13</hbase.version>
     <h2.version>1.4.199</h2.version>
     <awaitility.version>3.1.2</awaitility.version>
     <skipTests>false</skipTests>
@@ -205,7 +208,7 @@
     <spark.bundle.hive.shade.prefix/>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix/>
-    <argLine>-Xmx2g</argLine>
+    <argLine>-Xmx2g -Xms128m</argLine>
     <jacoco.version>0.8.8</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
@@ -222,9 +225,12 @@
     <zookeeper.version>3.5.7</zookeeper.version>
     <openjdk.jol.version>0.16</openjdk.jol.version>
     <google.cloud.pubsub.version>1.120.0</google.cloud.pubsub.version>
+    <gcp-libraries-bom.version>26.15.0</gcp-libraries-bom.version>
     <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
+    <moto.port>5000</moto.port>
+    <moto.endpoint>http://localhost:${moto.port}</moto.endpoint>
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.8.3</snappy.version>
@@ -453,6 +459,8 @@
           <!-- common to all bundles -->
           <artifactSet>
             <includes>
+              <include>org.apache.hudi:hudi-io</include>
+              <include>io.airlift:aircompressor</include>
               <!-- org.apache.httpcomponents -->
               <include>org.apache.httpcomponents:httpclient</include>
               <include>org.apache.httpcomponents:httpcore</include>
@@ -470,9 +478,13 @@
               <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
               <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
               <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+              <include>org.apache.hbase.thirdparty:hbase-unsafe</include>
               <include>org.apache.htrace:htrace-core4</include>
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>
+              <include>com.fasterxml.jackson.module:jackson-module-scala_${scala.binary.version}</include>
+              <!-- native HFile reader uses protobuf -->
+              <include>com.google.protobuf:protobuf-java</include>
             </includes>
           </artifactSet>
           <relocations>
@@ -573,6 +585,10 @@
               <shadedPattern>org.apache.hudi.com.fasterxml.jackson.module
               </shadedPattern>
             </relocation>
+            <relocation>
+              <pattern>com.google.protobuf.</pattern>
+              <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
+            </relocation>
           </relocations>
         </configuration>
       </plugin>
@@ -592,6 +608,7 @@
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
+            <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
           </configuration>
         </plugin>
         <plugin>
@@ -929,6 +946,13 @@
         <scope>provided</scope>
       </dependency>
 
+      <!-- airlift -->
+      <dependency>
+        <groupId>io.airlift</groupId>
+        <artifactId>aircompressor</artifactId>
+        <version>${airlift.version}</version>
+      </dependency>
+
       <!-- Snappy -->
       <dependency>
         <groupId>org.xerial.snappy</groupId>
@@ -1088,7 +1112,6 @@
         <artifactId>metrics-jmx</artifactId>
         <version>${metrics.version}</version>
       </dependency>
-
       <dependency>
         <groupId>io.prometheus</groupId>
         <artifactId>simpleclient</artifactId>
@@ -1108,6 +1131,16 @@
         <groupId>io.prometheus</groupId>
         <artifactId>simpleclient_pushgateway</artifactId>
         <version>${prometheus.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.uber.m3</groupId>
+        <artifactId>tally-m3</artifactId>
+        <version>${tally.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.uber.m3</groupId>
+        <artifactId>tally-core</artifactId>
+        <version>${tally.version}</version>
       </dependency>
 
       <dependency>

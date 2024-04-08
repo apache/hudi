@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.exception.HoodieTransformExecutionException;
@@ -77,7 +77,7 @@ public class SqlFileBasedTransformer implements Transformer {
           "Missing required configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL_FILE.key() + ")");
     }
 
-    final FileSystem fs = FSUtils.getFs(sqlFile, jsc.hadoopConfiguration(), true);
+    final FileSystem fs = HadoopFSUtils.getFs(sqlFile, jsc.hadoopConfiguration(), true);
     // tmp table name doesn't like dashes
     final String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
     LOG.info("Registering tmp table : " + tmpTable);

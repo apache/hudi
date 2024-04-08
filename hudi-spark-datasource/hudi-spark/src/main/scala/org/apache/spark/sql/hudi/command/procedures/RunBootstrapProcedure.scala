@@ -21,11 +21,13 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.cli.BootstrapExecutorUtils
 import org.apache.hudi.cli.HDFSParquetImporterUtils.{buildProperties, readConfig}
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -33,6 +35,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.Locale
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -112,7 +115,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, rowKeyField)
     properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, partitionPathField)
 
-    val fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration)
+    val fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration)
 
     val cfg = new BootstrapExecutorUtils.Config()
     cfg.setTableName(tableName)

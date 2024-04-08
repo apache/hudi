@@ -37,8 +37,9 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.hadoop.CachingPath;
-import org.apache.hudi.io.storage.HoodieAvroHFileReader;
+import org.apache.hudi.hadoop.fs.CachingPath;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -48,6 +49,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -70,7 +73,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
+import static org.apache.hudi.hadoop.fs.CachingPath.createRelativePathUnsafe;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 
 /**
@@ -98,7 +101,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_L
  * During compaction on the table, the deletions are merged with additions and hence records are pruned.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
-
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataPayload.class);
   /**
    * Type of the record. This can be an enum in the schema but Avro1.8
    * has a bug - https://issues.apache.org/jira/browse/AVRO-1810
@@ -112,7 +115,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * HoodieMetadata schema field ids
    */
-  public static final String KEY_FIELD_NAME = HoodieAvroHFileReader.KEY_FIELD_NAME;
+  public static final String KEY_FIELD_NAME = HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME;
   public static final String SCHEMA_FIELD_NAME_TYPE = "type";
   public static final String SCHEMA_FIELD_NAME_METADATA = "filesystemMetadata";
   public static final String SCHEMA_FIELD_ID_COLUMN_STATS = "ColumnStatsMetadata";
@@ -216,7 +219,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         //       Otherwise, it has to be present or the record would be considered invalid
         if (bloomFilterRecord == null) {
           checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_BLOOM_FILTER) == null,
-              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, METADATA_TYPE_COLUMN_STATS));
+              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, METADATA_TYPE_BLOOM_FILTER));
         } else {
           bloomFilterMetadata = new HoodieMetadataBloomFilter(
               (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE),
@@ -355,7 +358,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                     final String bloomFilterType,
                                                                                     final ByteBuffer bloomFilter,
                                                                                     final boolean isDeleted) {
-    checkArgument(!baseFileName.contains(Path.SEPARATOR)
+    checkArgument(!baseFileName.contains(StoragePath.SEPARATOR)
             && FSUtils.isBaseFile(new Path(baseFileName)),
         "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
     final String bloomFilterIndexKey = getBloomFilterRecordKey(partitionName, baseFileName);
@@ -549,27 +552,34 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             //          - First we merge records from all of the delta log-files
             //          - Then we merge records from base-files with the delta ones (coming as a result
             //          of the previous step)
-            (oldFileInfo, newFileInfo) ->
-                // NOTE: We can’t assume that MT update records will be ordered the same way as actual
-                //       FS operations (since they are not atomic), therefore MT record merging should be a
-                //       _commutative_ & _associative_ operation (ie one that would work even in case records
-                //       will get re-ordered), which is
-                //          - Possible for file-sizes (since file-sizes will ever grow, we can simply
-                //          take max of the old and new records)
-                //          - Not possible for is-deleted flags*
-                //
-                //       *However, we’re assuming that the case of concurrent write and deletion of the same
-                //       file is _impossible_ -- it would only be possible with concurrent upsert and
-                //       rollback operation (affecting the same log-file), which is implausible, b/c either
-                //       of the following have to be true:
-                //          - We’re appending to failed log-file (then the other writer is trying to
-                //          rollback it concurrently, before it’s own write)
-                //          - Rollback (of completed instant) is running concurrently with append (meaning
-                //          that restore is running concurrently with a write, which is also nut supported
-                //          currently)
-                newFileInfo.getIsDeleted()
-                    ? null
-                    : new HoodieMetadataFileInfo(Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false));
+            (oldFileInfo, newFileInfo) -> {
+              // NOTE: We can’t assume that MT update records will be ordered the same way as actual
+              //       FS operations (since they are not atomic), therefore MT record merging should be a
+              //       _commutative_ & _associative_ operation (ie one that would work even in case records
+              //       will get re-ordered), which is
+              //          - Possible for file-sizes (since file-sizes will ever grow, we can simply
+              //          take max of the old and new records)
+              //          - Not possible for is-deleted flags*
+              //
+              //       *However, we’re assuming that the case of concurrent write and deletion of the same
+              //       file is _impossible_ -- it would only be possible with concurrent upsert and
+              //       rollback operation (affecting the same log-file), which is implausible, b/c either
+              //       of the following have to be true:
+              //          - We’re appending to failed log-file (then the other writer is trying to
+              //          rollback it concurrently, before it’s own write)
+              //          - Rollback (of completed instant) is running concurrently with append (meaning
+              //          that restore is running concurrently with a write, which is also nut supported
+              //          currently)
+              if (newFileInfo.getIsDeleted()) {
+                if (oldFileInfo.getIsDeleted()) {
+                  LOG.warn("A file is repeatedly deleted in the files partition of the metadata table: " + key);
+                  return newFileInfo;
+                }
+                return null;
+              }
+              return new HoodieMetadataFileInfo(
+                  Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false);
+            });
       });
     }
 

@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -54,7 +55,7 @@ import java.util.stream.Stream;
  * frequently and incur unnecessary disk writes.
  */
 @NotThreadSafe
-public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Serializable {
+public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Serializable, Closeable {
 
   // Find the actual estimated payload size after inserting N records
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE = 100;
@@ -67,7 +68,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   private transient volatile DiskMap<T, R> diskBasedMap;
   // TODO(na) : a dynamic sizing factor to ensure we have space for other objects in memory and
   // incorrect payload estimation
-  private final Double sizingFactorForInMemoryMap = 0.8;
+  private static final double SIZING_FACTOR_FOR_IN_MEMORY_MAP = 0.8;
   // Size Estimator for key type
   private final SizeEstimator<T> keySizeEstimator;
   // Size Estimator for key types
@@ -77,27 +78,27 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   // Enables compression of values stored in disc
   private final boolean isCompressionEnabled;
   // current space occupied by this map in-memory
-  private Long currentInMemoryMapSize;
+  private long currentInMemoryMapSize;
   // An estimate of the size of each payload written to this map
   private volatile long estimatedPayloadSize = 0;
   // Base File Path
   private final String baseFilePath;
 
-  public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
+  public ExternalSpillableMap(long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
                               SizeEstimator<R> valueSizeEstimator) throws IOException {
     this(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator, valueSizeEstimator, DiskMapType.BITCASK);
   }
 
-  public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
+  public ExternalSpillableMap(long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
                               SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType) throws IOException {
     this(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator, valueSizeEstimator, diskMapType, false);
   }
 
-  public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
+  public ExternalSpillableMap(long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
                               SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException {
     this.inMemoryMap = new HashMap<>();
     this.baseFilePath = baseFilePath;
-    this.maxInMemorySizeInBytes = (long) Math.floor(maxInMemorySizeInBytes * sizingFactorForInMemoryMap);
+    this.maxInMemorySizeInBytes = (long) Math.floor(maxInMemorySizeInBytes * SIZING_FACTOR_FOR_IN_MEMORY_MAP);
     this.currentInMemoryMapSize = 0L;
     this.keySizeEstimator = keySizeEstimator;
     this.valueSizeEstimator = valueSizeEstimator;
@@ -105,7 +106,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     this.isCompressionEnabled = isCompressionEnabled;
   }
 
-  private DiskMap<T, R> getDiskBasedMap() {
+  private void initDiskBasedMap() {
     if (null == diskBasedMap) {
       synchronized (this) {
         if (null == diskBasedMap) {
@@ -116,7 +117,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
                 break;
               case BITCASK:
               default:
-                diskBasedMap =  new BitCaskDiskMap<>(baseFilePath, isCompressionEnabled);
+                diskBasedMap = new BitCaskDiskMap<>(baseFilePath, isCompressionEnabled);
             }
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
@@ -124,28 +125,28 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
         }
       }
     }
-    return diskBasedMap;
   }
 
   /**
    * A custom iterator to wrap over iterating in-memory + disk spilled data.
    */
   public Iterator<R> iterator() {
-    return new IteratorWrapper<>(inMemoryMap.values().iterator(), getDiskBasedMap().iterator());
+
+    return diskBasedMap == null ? inMemoryMap.values().iterator() : new IteratorWrapper<>(inMemoryMap.values().iterator(), diskBasedMap.iterator());
   }
 
   /**
    * Number of entries in BitCaskDiskMap.
    */
   public int getDiskBasedMapNumEntries() {
-    return getDiskBasedMap().size();
+    return diskBasedMap == null ? 0 : diskBasedMap.size();
   }
 
   /**
    * Number of bytes spilled to disk.
    */
   public long getSizeOfFileOnDiskInBytes() {
-    return getDiskBasedMap().sizeOfFileOnDiskInBytes();
+    return diskBasedMap == null ? 0 : diskBasedMap.sizeOfFileOnDiskInBytes();
   }
 
   /**
@@ -164,38 +165,38 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 
   @Override
   public int size() {
-    return inMemoryMap.size() + getDiskBasedMap().size();
+    return inMemoryMap.size() + getDiskBasedMapNumEntries();
   }
 
   @Override
   public boolean isEmpty() {
-    return inMemoryMap.isEmpty() && getDiskBasedMap().isEmpty();
+    return inMemoryMap.isEmpty() && getDiskBasedMapNumEntries() == 0;
   }
 
   @Override
   public boolean containsKey(Object key) {
-    return inMemoryMap.containsKey(key) || getDiskBasedMap().containsKey(key);
+    return inMemoryMap.containsKey(key) || inDiskContainsKey(key);
   }
 
   @Override
   public boolean containsValue(Object value) {
-    return inMemoryMap.containsValue(value) || getDiskBasedMap().containsValue(value);
+    return inMemoryMap.containsValue(value) || (diskBasedMap != null && diskBasedMap.containsValue(value));
   }
 
-  public boolean inMemoryContainsKey(Object key) {
+  private boolean inMemoryContainsKey(Object key) {
     return inMemoryMap.containsKey(key);
   }
 
-  public boolean inDiskContainsKey(Object key) {
-    return getDiskBasedMap().containsKey(key);
+  private boolean inDiskContainsKey(Object key) {
+    return diskBasedMap != null && diskBasedMap.containsKey(key);
   }
 
   @Override
   public R get(Object key) {
     if (inMemoryMap.containsKey(key)) {
       return inMemoryMap.get(key);
-    } else if (getDiskBasedMap().containsKey(key)) {
-      return getDiskBasedMap().get(key);
+    } else if (inDiskContainsKey(key)) {
+      return diskBasedMap.get(key);
     }
     return null;
   }
@@ -217,11 +218,14 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
       this.currentInMemoryMapSize += this.estimatedPayloadSize;
       // Remove the old version of the record from disk first to avoid data duplication.
       if (inDiskContainsKey(key)) {
-        getDiskBasedMap().remove(key);
+        diskBasedMap.remove(key);
       }
       this.inMemoryMap.put(key, value);
     } else {
-      getDiskBasedMap().put(key, value);
+      if (diskBasedMap == null) {
+        initDiskBasedMap();
+      }
+      diskBasedMap.put(key, value);
     }
     return value;
   }
@@ -232,8 +236,8 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     if (inMemoryMap.containsKey(key)) {
       currentInMemoryMapSize -= estimatedPayloadSize;
       return inMemoryMap.remove(key);
-    } else if (getDiskBasedMap().containsKey(key)) {
-      return getDiskBasedMap().remove(key);
+    } else if (inDiskContainsKey(key)) {
+      return diskBasedMap.remove(key);
     }
     return null;
   }
@@ -248,43 +252,63 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   @Override
   public void clear() {
     inMemoryMap.clear();
-    getDiskBasedMap().clear();
+    if (diskBasedMap != null) {
+      diskBasedMap.clear();
+    }
     currentInMemoryMapSize = 0L;
   }
 
   public void close() {
     inMemoryMap.clear();
-    getDiskBasedMap().close();
+    if (diskBasedMap != null) {
+      diskBasedMap.close();
+    }
     currentInMemoryMapSize = 0L;
   }
 
   @Override
   public Set<T> keySet() {
-    Set<T> keySet = new HashSet<T>();
+    if (diskBasedMap == null) {
+      return inMemoryMap.keySet();
+    }
+    Set<T> keySet = new HashSet<>(inMemoryMap.size() + diskBasedMap.size());
     keySet.addAll(inMemoryMap.keySet());
-    keySet.addAll(getDiskBasedMap().keySet());
+    keySet.addAll(diskBasedMap.keySet());
     return keySet;
   }
 
   @Override
   public Collection<R> values() {
-    if (getDiskBasedMap().isEmpty()) {
+    if (diskBasedMap == null) {
       return inMemoryMap.values();
     }
-    List<R> result = new ArrayList<>(inMemoryMap.values());
-    result.addAll(getDiskBasedMap().values());
+    List<R> result = new ArrayList<>(inMemoryMap.size() + diskBasedMap.size());
+    result.addAll(inMemoryMap.values());
+    Iterator<R> iterator = diskBasedMap.iterator();
+    while (iterator.hasNext()) {
+      result.add(iterator.next());
+    }
     return result;
   }
 
   public Stream<R> valueStream() {
-    return Stream.concat(inMemoryMap.values().stream(), getDiskBasedMap().valueStream());
+    if (diskBasedMap == null) {
+      return inMemoryMap.values().stream();
+    }
+    return Stream.concat(inMemoryMap.values().stream(), diskBasedMap.valueStream());
   }
 
   @Override
   public Set<Entry<T, R>> entrySet() {
-    Set<Entry<T, R>> entrySet = new HashSet<>();
-    entrySet.addAll(inMemoryMap.entrySet());
-    entrySet.addAll(getDiskBasedMap().entrySet());
+    if (diskBasedMap == null) {
+      return inMemoryMap.entrySet();
+    }
+    Set<Entry<T, R>> inMemory = inMemoryMap.entrySet();
+    Set<Entry<T, R>> onDisk = diskBasedMap.entrySet();
+
+    Set<Entry<T, R>> entrySet = new HashSet<>(inMemory.size() + onDisk.size());
+    entrySet.addAll(inMemory);
+    entrySet.addAll(onDisk);
     return entrySet;
   }
 

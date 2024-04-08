@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -107,7 +108,7 @@ public class TestUtils {
   public static String getSplitPartitionPath(MergeOnReadInputSplit split) {
     assertTrue(split.getLogPaths().isPresent());
     final String logPath = split.getLogPaths().get().get(0);
-    String[] paths = logPath.split(Path.SEPARATOR);
+    String[] paths = logPath.split(StoragePath.SEPARATOR);
     return paths[paths.length - 2];
   }
 
@@ -137,11 +138,13 @@ public class TestUtils {
         serializeCommitMetadata(metadata));
   }
 
-  public static void amendCompletionTimeToLatest(HoodieTableMetaClient metaClient, java.nio.file.Path sourcePath, String instantTime) throws IOException {
+  public static String amendCompletionTimeToLatest(HoodieTableMetaClient metaClient, java.nio.file.Path sourcePath, String instantTime) throws IOException {
     String fileExt = sourcePath.getFileName().toString().split("\\.")[1];
-    String newFileName = instantTime + "_" + metaClient.createNewInstantTime() + "." + fileExt;
+    String newCompletionTime = metaClient.createNewInstantTime();
+    String newFileName = instantTime + "_" + newCompletionTime + "." + fileExt;
 
     java.nio.file.Path newFilePath = sourcePath.getParent().resolve(newFileName);
     Files.move(sourcePath, newFilePath);
+    return newCompletionTime;
   }
 }

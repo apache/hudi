@@ -24,12 +24,12 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -45,14 +45,14 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -167,14 +167,14 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .defaultValue(DefaultHoodieRecordPayload.class.getName())
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
   public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
       .key("hoodie.compaction.payload.type")
-      .defaultValue(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())
+      .defaultValue(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())
       .sinceVersion("1.0.0")
       .withDocumentation(RecordPayloadType.class);
 
@@ -324,7 +324,7 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       if (needStore) {
         // FIXME(vc): wonder if this can be removed. Need to look into history.
-        try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+        try (OutputStream outputStream = fs.create(propertyPath)) {
           storeProperties(props, outputStream);
         }
       }
@@ -347,7 +347,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * @return return the table checksum
    * @throws IOException
    */
-  private static String storeProperties(Properties props, FSDataOutputStream outputStream) throws IOException {
+  private static String storeProperties(Properties props, OutputStream outputStream) throws IOException {
     final String checksum;
     if (isValidChecksum(props)) {
       checksum = props.getProperty(TABLE_CHECKSUM.key());
@@ -389,7 +389,7 @@ public class HoodieTableConfig extends HoodieConfig {
       TypedProperties props = fetchConfigs(fs, metadataFolder.toString(), HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
 
       // 2. backup the existing properties.
-      try (FSDataOutputStream out = fs.create(backupCfgPath, false)) {
+      try (OutputStream out = fs.create(backupCfgPath, false)) {
         storeProperties(props, out);
       }
 
@@ -398,13 +398,13 @@ public class HoodieTableConfig extends HoodieConfig {
 
       // 4. Upsert and save back.
       String checksum;
-      try (FSDataOutputStream out = fs.create(cfgPath, true)) {
+      try (OutputStream out = fs.create(cfgPath, true)) {
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
       }
 
       // 4. verify and remove backup.
-      try (FSDataInputStream in = fs.open(cfgPath)) {
+      try (InputStream in = fs.open(cfgPath)) {
         props.clear();
         props.load(in);
         if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
@@ -446,7 +446,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     HoodieConfig hoodieConfig = new HoodieConfig(properties);
     Path propertyPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
-    try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+    try (OutputStream outputStream = fs.create(propertyPath)) {
       if (!hoodieConfig.contains(NAME)) {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
       }
@@ -747,52 +747,52 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Enables or disables the specified metadata table partition.
    *
-   * @param partitionType The partition
+   * @param partitionPath The partition
    * @param enabled       If true, the partition is enabled, else disabled
    */
-  public void setMetadataPartitionState(HoodieTableMetaClient metaClient, MetadataPartitionType partitionType, boolean enabled) {
-    ValidationUtils.checkArgument(!partitionType.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),
-        "Metadata Table partition path cannot contain a comma: " + partitionType.getPartitionPath());
+  public void setMetadataPartitionState(HoodieTableMetaClient metaClient, String partitionPath, boolean enabled) {
+    ValidationUtils.checkArgument(!partitionPath.contains(CONFIG_VALUES_DELIMITER),
+        "Metadata Table partition path cannot contain a comma: " + partitionPath);
     Set<String> partitions = getMetadataPartitions();
     Set<String> partitionsInflight = getMetadataPartitionsInflight();
     if (enabled) {
-      partitions.add(partitionType.getPartitionPath());
-      partitionsInflight.remove(partitionType.getPartitionPath());
-    } else if (partitionType.equals(MetadataPartitionType.FILES)) {
+      partitions.add(partitionPath);
+      partitionsInflight.remove(partitionPath);
+    } else if (partitionPath.equals(MetadataPartitionType.FILES.getPartitionPath())) {
       // file listing partition is required for all other partitions to work
       // Disabling file partition will also disable all partitions
       partitions.clear();
       partitionsInflight.clear();
     } else {
-      partitions.remove(partitionType.getPartitionPath());
-      partitionsInflight.remove(partitionType.getPartitionPath());
+      partitions.remove(partitionPath);
+      partitionsInflight.remove(partitionPath);
     }
     setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
-    LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePathV2(), partitionType.name(), enabled ? "enabled" : "disabled"));
+    LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePathV2(), partitionPath, enabled ? "enabled" : "disabled"));
   }
 
   /**
    * Enables the specified metadata table partition as inflight.
    *
-   * @param partitionTypes The list of partitions to enable as inflight.
+   * @param partitionPaths The list of partitions to enable as inflight.
    */
-  public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, List<MetadataPartitionType> partitionTypes) {
+  public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, List<String> partitionPaths) {
     Set<String> partitionsInflight = getMetadataPartitionsInflight();
-    partitionTypes.forEach(t -> {
-      ValidationUtils.checkArgument(!t.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),
-          "Metadata Table partition path cannot contain a comma: " + t.getPartitionPath());
-      partitionsInflight.add(t.getPartitionPath());
+    partitionPaths.forEach(partitionPath -> {
+      ValidationUtils.checkArgument(!partitionPath.contains(CONFIG_VALUES_DELIMITER),
+          "Metadata Table partition path cannot contain a comma: " + partitionPath);
+      partitionsInflight.add(partitionPath);
     });
 
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
-    LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionTypes));
+    LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionPaths));
   }
 
   public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, MetadataPartitionType... partitionTypes) {
-    setMetadataPartitionsInflight(metaClient, Arrays.stream(partitionTypes).collect(Collectors.toList()));
+    setMetadataPartitionsInflight(metaClient, Arrays.stream(partitionTypes).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList()));
   }
 
   /**
@@ -800,7 +800,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS_INFLIGHT}.
    */
   public void clearMetadataPartitions(HoodieTableMetaClient metaClient) {
-    setMetadataPartitionState(metaClient, MetadataPartitionType.FILES, false);
+    setMetadataPartitionState(metaClient, MetadataPartitionType.FILES.getPartitionPath(), false);
   }
 
   /**

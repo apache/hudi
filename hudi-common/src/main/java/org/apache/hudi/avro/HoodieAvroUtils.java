@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -65,7 +66,6 @@ import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.avro.util.Utf8;
-import org.apache.hadoop.util.VersionUtil;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -188,18 +188,46 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Convert a given avro record to json and return the string
+   *
+   * @param record The GenericRecord to convert
+   * @param pretty Whether to pretty-print the json output
+   */
+  public static String avroToJsonString(GenericRecord record, boolean pretty) throws IOException {
+    return avroToJsonHelper(record, pretty).toString();
+  }
+
+  /**
+   * Convert a given avro record to a JSON string. If the record contents are invalid, return the record.toString().
+   * Use this method over {@link HoodieAvroUtils#avroToJsonString} when simply trying to print the record contents without any guarantees around their correctness.
+   * @param record The GenericRecord to convert
+   * @return a JSON string
+   */
+  public static String safeAvroToJsonString(GenericRecord record) {
+    try {
+      return avroToJsonString(record, false);
+    } catch (Exception e) {
+      return record.toString();
+    }
+  }
+
+  /**
    * Convert a given avro record to json and return the encoded bytes.
    *
    * @param record The GenericRecord to convert
    * @param pretty Whether to pretty-print the json output
    */
   public static byte[] avroToJson(GenericRecord record, boolean pretty) throws IOException {
+    return avroToJsonHelper(record, pretty).toByteArray();
+  }
+
+  private static ByteArrayOutputStream avroToJsonHelper(GenericRecord record, boolean pretty) throws IOException {
     DatumWriter<Object> writer = new GenericDatumWriter<>(record.getSchema());
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     JsonEncoder jsonEncoder = EncoderFactory.get().jsonEncoder(record.getSchema(), out, pretty);
     writer.write(record, jsonEncoder);
     jsonEncoder.flush();
-    return out.toByteArray();
+    return out;
   }
 
   /**
@@ -212,8 +240,18 @@ public class HoodieAvroUtils {
   /**
    * Convert serialized bytes back into avro record.
    */
-  public static GenericRecord bytesToAvro(byte[] bytes, Schema writerSchema, Schema readerSchema) throws IOException {
-    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, BINARY_DECODER.get());
+  public static GenericRecord bytesToAvro(byte[] bytes, Schema writerSchema, Schema readerSchema)
+      throws IOException {
+    return bytesToAvro(bytes, 0, bytes.length, writerSchema, readerSchema);
+  }
+
+  /**
+   * Convert serialized bytes back into avro record.
+   */
+  public static GenericRecord bytesToAvro(byte[] bytes, int offset, int length, Schema writerSchema,
+                                          Schema readerSchema) throws IOException {
+    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(
+        bytes, offset, length, BINARY_DECODER.get());
     BINARY_DECODER.set(decoder);
     GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     return reader.read(null, decoder);
@@ -309,7 +347,14 @@ public class HoodieAvroUtils {
     return mergedSchema;
   }
 
+  public static boolean isSchemaNull(Schema schema) {
+    return schema == null || schema.getType() == Schema.Type.NULL;
+  }
+
   public static Schema removeMetadataFields(Schema schema) {
+    if (isSchemaNull(schema)) {
+      return schema;
+    }
     return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
   }
 
@@ -326,6 +371,23 @@ public class HoodieAvroUtils {
 
   public static String addMetadataColumnTypes(String hiveColumnTypes) {
     return "string,string,string,string,string," + hiveColumnTypes;
+  }
+
+  public static Schema makeFieldNonNull(Schema schema, String fieldName, Object fieldDefaultValue) {
+    ValidationUtils.checkArgument(fieldDefaultValue != null);
+    List<Schema.Field> filteredFields = schema.getFields()
+        .stream()
+        .map(field -> {
+          if (Objects.equals(field.name(), fieldName)) {
+            return new Schema.Field(field.name(), AvroSchemaUtils.resolveNullableSchema(field.schema()), field.doc(), fieldDefaultValue);
+          } else {
+            return new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
+          }
+        })
+        .collect(Collectors.toList());
+    Schema withNonNullField = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
+    withNonNullField.setFields(filteredFields);
+    return withNonNullField;
   }
 
   private static Schema initRecordKeySchema() {
@@ -884,7 +946,9 @@ public class HoodieAvroUtils {
   private static Object rewriteRecordWithNewSchemaInternal(Object oldRecord, Schema oldSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
     switch (newSchema.getType()) {
       case RECORD:
-        ValidationUtils.checkArgument(oldRecord instanceof IndexedRecord, "cannot rewrite record with different type");
+        if (!(oldRecord instanceof IndexedRecord)) {
+          throw new SchemaCompatibilityException("cannot rewrite record with different type");
+        }
         IndexedRecord indexedRecord = (IndexedRecord) oldRecord;
         List<Schema.Field> fields = newSchema.getFields();
         GenericData.Record newRecord = new GenericData.Record(newSchema);
@@ -916,15 +980,17 @@ public class HoodieAvroUtils {
         }
         return newRecord;
       case ENUM:
-        ValidationUtils.checkArgument(
-            oldSchema.getType() == Schema.Type.STRING || oldSchema.getType() == Schema.Type.ENUM,
-            "Only ENUM or STRING type can be converted ENUM type");
+        if (oldSchema.getType() != Schema.Type.STRING && oldSchema.getType() != Schema.Type.ENUM) {
+          throw new SchemaCompatibilityException(String.format("Only ENUM or STRING type can be converted ENUM type. Schema type was %s", oldSchema.getType().getName()));
+        }
         if (oldSchema.getType() == Schema.Type.STRING) {
           return new GenericData.EnumSymbol(newSchema, oldRecord);
         }
         return oldRecord;
       case ARRAY:
-        ValidationUtils.checkArgument(oldRecord instanceof Collection, "cannot rewrite record with different type");
+        if (!(oldRecord instanceof Collection)) {
+          throw new SchemaCompatibilityException(String.format("Cannot rewrite %s as an array", oldRecord.getClass().getName()));
+        }
         Collection array = (Collection) oldRecord;
         List<Object> newArray = new ArrayList<>(array.size());
         fieldNames.push("element");
@@ -934,7 +1000,9 @@ public class HoodieAvroUtils {
         fieldNames.pop();
         return newArray;
       case MAP:
-        ValidationUtils.checkArgument(oldRecord instanceof Map, "cannot rewrite record with different type");
+        if (!(oldRecord instanceof Map)) {
+          throw new SchemaCompatibilityException(String.format("Cannot rewrite %s as a map", oldRecord.getClass().getName()));
+        }
         Map<Object, Object> map = (Map<Object, Object>) oldRecord;
         Map<Object, Object> newMap = new HashMap<>(map.size(), 1.0f);
         fieldNames.push("value");
@@ -982,7 +1050,7 @@ public class HoodieAvroUtils {
               BigDecimal bd = new BigDecimal(new BigInteger(bytes), decimal.getScale()).setScale(((Decimal) newSchema.getLogicalType()).getScale());
               return DECIMAL_CONVERSION.toFixed(bd, newSchema, newSchema.getLogicalType());
             } else {
-              throw new UnsupportedOperationException("Fixed type size change is not currently supported");
+              throw new HoodieAvroSchemaException("Fixed type size change is not currently supported");
             }
           }
 
@@ -998,7 +1066,7 @@ public class HoodieAvroUtils {
           }
 
         default:
-          throw new AvroRuntimeException("Unknown schema type: " + newSchema.getType());
+          throw new HoodieAvroSchemaException("Unknown schema type: " + newSchema.getType());
       }
     } else {
       return rewritePrimaryTypeWithDiffSchemaType(oldValue, oldSchema, newSchema);
@@ -1083,7 +1151,7 @@ public class HoodieAvroUtils {
         break;
       default:
     }
-    throw new AvroRuntimeException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
+    throw new HoodieAvroSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
   }
 
   /**
@@ -1262,11 +1330,11 @@ public class HoodieAvroUtils {
   }
 
   public static boolean gteqAvro1_9() {
-    return VersionUtil.compareVersions(AVRO_VERSION, "1.9") >= 0;
+    return StringUtils.compareVersions(AVRO_VERSION, "1.9") >= 0;
   }
 
   public static boolean gteqAvro1_10() {
-    return VersionUtil.compareVersions(AVRO_VERSION, "1.10") >= 0;
+    return StringUtils.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
 
   /**

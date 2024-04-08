@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.storage.StorageSchemes;
+
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 
@@ -53,6 +56,7 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAtomicCreationSupported("jfs"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("bos"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("ks3"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("nos"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("ofs"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("oci"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("tos"));

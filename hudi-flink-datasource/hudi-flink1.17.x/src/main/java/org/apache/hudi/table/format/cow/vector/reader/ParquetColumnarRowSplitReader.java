@@ -218,11 +218,17 @@ public class ParquetColumnarRowSplitReader implements Closeable {
     List<Type> types = requestedSchema.getFields();
     List<ColumnDescriptor> descriptors = requestedSchema.getColumns();
     for (int i = 0; i < requestedTypes.length; i++) {
-      columns[i] = createWritableColumnVector(
-          batchSize,
-          requestedTypes[i],
-          types.get(i),
-          descriptors);
+      try {
+        columns[i] = createWritableColumnVector(
+                batchSize,
+                requestedTypes[i],
+                types.get(i),
+                descriptors);
+      } catch (IllegalArgumentException e) {
+        String fieldName = requestedSchema.getFieldName(i);
+        String message = e.getMessage() + " Field name: " + fieldName;
+        throw new IllegalArgumentException(message);
+      }
     }
     return columns;
   }

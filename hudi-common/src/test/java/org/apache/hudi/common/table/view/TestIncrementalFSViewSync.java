@@ -631,7 +631,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     HoodieInstant cleanInflightInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);
-    HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(cleanInstant, Option.empty(), cleanStats);
+    HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(cleanInstant, Option.empty(), cleanStats, Collections.EMPTY_MAP);
     metaClient.getActiveTimeline().saveAsComplete(cleanInflightInstant,
         TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
   }
@@ -967,7 +967,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       try {
         java.nio.file.Path filePath = Paths.get(basePath, p, deltaCommit
             ? FSUtils.makeLogFileName(f, ".log", instant, 0, TEST_WRITE_TOKEN)
-            : FSUtils.makeBaseFileName(instant, TEST_WRITE_TOKEN, f));
+            : FSUtils.makeBaseFileName(instant, TEST_WRITE_TOKEN, f, BASE_FILE_EXTENSION));
         Files.createFile(filePath);
         HoodieWriteStat w = new HoodieWriteStat();
         w.setFileId(f);

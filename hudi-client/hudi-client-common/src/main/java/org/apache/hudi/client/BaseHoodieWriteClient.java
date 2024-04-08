@@ -348,30 +348,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Write the HoodieCommitMetadata to metadata table if available.
-   *
-   * @param table         {@link HoodieTable} of interest.
-   * @param instantTime   instant time of the commit.
-   * @param metadata      instance of {@link HoodieCommitMetadata}.
-   * @param writeStatuses WriteStatuses for the completed action.
-   */
-  protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
-    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
-    if (metadataWriterOpt.isPresent()) {
-      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-        metadataWriter.updateFromWriteStatuses(metadata, writeStatuses, instantTime);
-      } catch (Exception e) {
-        if (e instanceof HoodieException) {
-          throw (HoodieException) e;
-        } else {
-          throw new HoodieException("Failed to update metadata", e);
-        }
-      }
-    }
-  }
-
-  /**
    * Filter out HoodieRecords that already exists in the output folder. This is useful in deduplication.
    *
    * @param hoodieRecords Input Hoodie records.
@@ -987,10 +963,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param partitionTypes - list of {@link MetadataPartitionType} which needs to be indexed
    * @return instant time for the requested INDEX action
    */
-  public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes) {
+  public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes, List<String> partitionPaths) {
     String instantTime = createNewInstantTime();
     Option<HoodieIndexPlan> indexPlan = createTable(config, hadoopConf)
-        .scheduleIndexing(context, instantTime, partitionTypes);
+        .scheduleIndexing(context, instantTime, partitionTypes, partitionPaths);
     return indexPlan.isPresent() ? Option.of(instantTime) : Option.empty();
   }
 
@@ -1196,6 +1172,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable table = createTable(config, context.getHadoopConf().get());
     preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
     return tableServiceClient.cluster(clusteringInstant, shouldComplete);
+  }
+
+  public boolean purgePendingClustering(String clusteringInstant) {
+    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
+    return tableServiceClient.purgePendingClustering(clusteringInstant);
   }
 
   /**
@@ -1516,13 +1498,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     commitTableChange(newSchema, pair.getRight());
   }
 
-  private Pair<InternalSchema, HoodieTableMetaClient> getInternalSchemaAndMetaClient() {
+  public Pair<InternalSchema, HoodieTableMetaClient> getInternalSchemaAndMetaClient() {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     return Pair.of(getInternalSchema(schemaUtil), metaClient);
   }
 
-  private void commitTableChange(InternalSchema newSchema, HoodieTableMetaClient metaClient) {
+  public void commitTableChange(InternalSchema newSchema, HoodieTableMetaClient metaClient) {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElseGet(
         () -> SerDeHelper.inheritSchemas(getInternalSchema(schemaUtil), ""));

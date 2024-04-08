@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -167,12 +168,12 @@ public class TestInputPathHandler {
   static List<Path> generatePartitions(DistributedFileSystem dfs, String basePath)
       throws IOException {
     List<Path> paths = new ArrayList<>();
-    paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/21"));
-    paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/22"));
-    paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/23"));
-    paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/24"));
-    paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/25"));
-    for (Path path: paths) {
+    paths.add(new Path(basePath + StoragePath.SEPARATOR + "2019/05/21"));
+    paths.add(new Path(basePath + StoragePath.SEPARATOR + "2019/05/22"));
+    paths.add(new Path(basePath + StoragePath.SEPARATOR + "2019/05/23"));
+    paths.add(new Path(basePath + StoragePath.SEPARATOR + "2019/05/24"));
+    paths.add(new Path(basePath + StoragePath.SEPARATOR + "2019/05/25"));
+    for (Path path : paths) {
       dfs.mkdirs(path);
     }
     return paths;

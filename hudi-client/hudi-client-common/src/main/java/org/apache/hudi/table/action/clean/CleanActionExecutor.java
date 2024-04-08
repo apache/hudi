@@ -219,7 +219,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
           inflightInstant.getTimestamp(),
           Option.of(timer.endTimer()),
-          cleanStats
+          cleanStats,
+          cleanerPlan.getExtraMetadata()
       );
       if (!skipLocking) {
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
@@ -233,7 +234,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       throw new HoodieIOException("Failed to clean up after commit", e);
     } finally {
       if (!skipLocking) {
-        this.txnManager.endTransaction(Option.of(inflightInstant));
+        this.txnManager.endTransaction(Option.ofNullable(inflightInstant));
       }
     }
   }

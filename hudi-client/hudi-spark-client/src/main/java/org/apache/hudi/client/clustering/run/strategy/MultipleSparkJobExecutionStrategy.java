@@ -321,6 +321,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
               .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
               .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .withRecordMerger(config.getRecordMerger())
+              .withTableMetaClient(table.getMetaClient())
               .build();
 
           Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
@@ -385,7 +386,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
   private HoodieFileReader getBaseOrBootstrapFileReader(SerializableConfiguration hadoopConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp)
       throws IOException {
-    HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
+    HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType)
+        .getFileReader(writeConfig, hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
     // handle bootstrap path
     if (StringUtils.nonEmpty(clusteringOp.getBootstrapFilePath()) && StringUtils.nonEmpty(bootstrapBasePath)) {
       String bootstrapFilePath = clusteringOp.getBootstrapFilePath();
@@ -397,7 +399,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       }
       baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
           baseFileReader,
-          HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(bootstrapFilePath)), partitionFields,
+          HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(
+              writeConfig, hadoopConf.get(), new Path(bootstrapFilePath)), partitionFields,
           partitionValues);
     }
     return baseFileReader;

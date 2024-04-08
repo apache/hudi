@@ -44,7 +44,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
+import scala.collection.{JavaConverters, mutable}
 
 class FunctionalIndexSupport(spark: SparkSession,
                              metadataConfig: HoodieMetadataConfig,
@@ -178,8 +178,10 @@ class FunctionalIndexSupport(spark: SparkSession,
     val recordKeyLocationsMap = metadataTable.readRecordIndex(seqAsJavaListConverter(recordKeys).asJava)
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
-    for (location <- collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
-      fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
+    for (locations <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
+      for (location <- JavaConverters.collectionAsScalaIterableConverter(locations).asScala) {
+        fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
+      }
     }
     for (file <- allFiles) {
       val fileId = FSUtils.getFileIdFromFilePath(file.getPath)

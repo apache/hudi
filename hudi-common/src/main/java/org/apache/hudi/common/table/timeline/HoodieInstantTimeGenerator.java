@@ -108,6 +108,10 @@ public class HoodieInstantTimeGenerator {
   public static String instantTimeMinusMillis(String timestamp, long milliseconds) {
     try {
       String timestampInMillis = fixInstantTimeCompatibility(timestamp);
+      // To work with tests, that generate arbitrary timestamps, we need to pad the timestamp with 0s.
+      if (timestampInMillis.length() < MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
+        return String.format("%0" + timestampInMillis.length() + "d", 0);
+      }
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
       ZoneId zoneId = HoodieTimelineTimeZone.UTC.equals(commitTimeZone) ? ZoneId.of("UTC") : ZoneId.systemDefault();
       return MILLIS_INSTANT_TIME_FORMATTER.format(dt.atZone(zoneId).toInstant().minusMillis(milliseconds).atZone(zoneId).toLocalDateTime());
@@ -116,7 +120,7 @@ public class HoodieInstantTimeGenerator {
     }
   }
 
-  private static String fixInstantTimeCompatibility(String instantTime) {
+  public static String fixInstantTimeCompatibility(String instantTime) {
     // Enables backwards compatibility with non-millisecond granularity instants
     if (isSecondGranularity(instantTime)) {
       // Add milliseconds to the instant in order to parse successfully

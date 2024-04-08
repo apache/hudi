@@ -21,7 +21,6 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -37,6 +36,7 @@ import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
@@ -54,6 +54,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -89,6 +90,13 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * Test data uses a toy Uber trips, data model.
  */
 public class HoodieTestDataGenerator implements AutoCloseable {
+
+  /**
+   * You may get a different result due to the upgrading of Spark 3.0: reading dates before 1582-10-15 or timestamps before 1900-01-01T00:00:00Z from Parquet INT96 files can be ambiguous,
+   * as the files may be written by Spark 2.x or legacy versions of Hive, which uses a legacy hybrid calendar that is different from Spark 3.0+s Proleptic Gregorian calendar.
+   * See more details in SPARK-31404.
+   */
+  private boolean makeDatesAmbiguous = false;
 
   // based on examination of sample file, the schema produces the following per record size
   public static final int BYTES_PER_RECORD = (int) (1.2 * 1024);
@@ -205,6 +213,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   @Deprecated
   public HoodieTestDataGenerator() {
     this(DEFAULT_PARTITION_PATHS);
+  }
+
+  public HoodieTestDataGenerator(boolean makeDatesAmbiguous) {
+    this();
+    this.makeDatesAmbiguous = makeDatesAmbiguous;
   }
 
   @Deprecated
@@ -391,7 +404,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("nation", ByteBuffer.wrap(bytes));
     long randomMillis = genRandomTimeMillis(rand);
     Instant instant = Instant.ofEpochMilli(randomMillis);
-    rec.put("current_date", (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
+    rec.put("current_date", makeDatesAmbiguous ? -1000000 :
+        (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
     rec.put("current_ts", randomMillis);
 
     BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, "%5f", rand.nextFloat()));
@@ -523,6 +537,15 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
+  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, Configuration configuration) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    createOnlyCompletedCommitFile(basePath, instantTime, configuration, commitMetadata);
+  }
+
+  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    createMetadataFile(HoodieTimeline.makeCommitFileName(instantTime), basePath, configuration, commitMetadata);
+  }
+
   public static void createDeltaCommitFile(String basePath, String instantTime, Configuration configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createDeltaCommitFile(basePath, instantTime, configuration, commitMetadata);
@@ -546,9 +569,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   private static void createMetadataFile(String f, String basePath, Configuration configuration, byte[] content) {
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
-    FSDataOutputStream os = null;
+    OutputStream os = null;
     try {
-      FileSystem fs = FSUtils.getFs(basePath, configuration);
+      FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
       os = fs.create(commitFile, true);
       // Write empty commit metadata
       os.write(content);
@@ -598,8 +621,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private static void createEmptyFile(String basePath, Path filePath, Configuration configuration) throws IOException {
-    FileSystem fs = FSUtils.getFs(basePath, configuration);
-    FSDataOutputStream os = fs.create(filePath, true);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
+    OutputStream os = fs.create(filePath, true);
     os.close();
   }
 
@@ -614,8 +637,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
                                                        Configuration configuration) throws IOException {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
-    FileSystem fs = FSUtils.getFs(basePath, configuration);
-    try (FSDataOutputStream os = fs.create(commitFile, true)) {
+    FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
+    try (OutputStream os = fs.create(commitFile, true)) {
       HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
       // Write empty commit metadata
       os.write(TimelineMetadataUtils.serializeCompactionPlan(workload).get());
@@ -626,7 +649,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeSavePointFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
-    FileSystem fs = FSUtils.getFs(basePath, configuration);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
       // Write empty commit metadata

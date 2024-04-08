@@ -69,6 +69,7 @@
               </transformers>
               <artifactSet>
                 <includes combine.children="append">
+                  <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>
@@ -111,6 +112,9 @@
                   <include>io.prometheus:simpleclient_dropwizard</include>
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
+                  <include>com.uber.m3:tally-m3</include>
+                  <include>com.uber.m3:tally-core</include>
+
                   <include>com.yammer.metrics:metrics-core</include>
 
                   <include>org.apache.hive:hive-common</include>
@@ -200,6 +204,10 @@
                   <pattern>org.roaringbitmap.</pattern>
                   <shadedPattern>org.apache.hudi.org.roaringbitmap.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>com.uber.m3.</pattern>
+                  <shadedPattern>org.apache.hudi.com.uber.m3.</shadedPattern>
+                </relocation>
               </relocations>
               <filters>
                 <filter>
@@ -226,9 +234,6 @@
     <resources>
       <resource>
         <directory>src/main/resources</directory>
-      </resource>
-      <resource>
-        <directory>src/test/resources</directory>
       </resource>
     </resources>
   </build>

@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -46,6 +47,8 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
@@ -67,7 +70,6 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -263,7 +265,7 @@ public class StreamerUtil {
           .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
     } else {
-      LOG.info("Table [{}/{}] already exists, no need to initialize the table",
+      LOG.info("Table [path={}, name={}] already exists, no need to initialize the table",
           basePath, conf.getString(FlinkOptions.TABLE_NAME));
     }
 
@@ -278,7 +280,7 @@ public class StreamerUtil {
    */
   public static boolean tableExists(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
     // Hadoop FileSystem
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
     try {
       return fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
           && fs.exists(new Path(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableConfig.HOODIE_PROPERTIES_FILE));
@@ -296,7 +298,7 @@ public class StreamerUtil {
    */
   public static boolean partitionExists(String tablePath, String partitionPath, org.apache.hadoop.conf.Configuration hadoopConf) {
     // Hadoop FileSystem
-    FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(tablePath, hadoopConf);
     try {
       return fs.exists(new Path(tablePath, partitionPath));
     } catch (IOException e) {
@@ -362,7 +364,7 @@ public class StreamerUtil {
    * Returns the table config or empty if the table does not exist.
    */
   public static Option<HoodieTableConfig> getTableConfig(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
     Path metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     try {
       if (fs.exists(new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))) {
@@ -378,34 +380,30 @@ public class StreamerUtil {
    * Returns the median instant time between the given two instant time.
    */
   public static Option<String> medianInstantTime(String highVal, String lowVal) {
-    try {
-      long high = HoodieActiveTimeline.parseDateFromInstantTime(highVal).getTime();
-      long low = HoodieActiveTimeline.parseDateFromInstantTime(lowVal).getTime();
-      ValidationUtils.checkArgument(high > low,
-          "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
-      long median = low + (high - low) / 2;
-      final String instantTime = HoodieActiveTimeline.formatDate(new Date(median));
-      if (HoodieTimeline.compareTimestamps(lowVal, HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime)
-          || HoodieTimeline.compareTimestamps(highVal, HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime)) {
-        return Option.empty();
-      }
-      return Option.of(instantTime);
-    } catch (ParseException e) {
-      throw new HoodieException("Get median instant time with interval [" + lowVal + ", " + highVal + "] error", e);
+    long high = HoodieActiveTimeline.parseDateFromInstantTimeSafely(highVal)
+            .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + highVal + "] error")).getTime();
+    long low = HoodieActiveTimeline.parseDateFromInstantTimeSafely(lowVal)
+            .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + lowVal + "] error")).getTime();
+    ValidationUtils.checkArgument(high > low,
+            "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
+    long median = low + (high - low) / 2;
+    final String instantTime = HoodieActiveTimeline.formatDate(new Date(median));
+    if (HoodieTimeline.compareTimestamps(lowVal, HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime)
+            || HoodieTimeline.compareTimestamps(highVal, HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime)) {
+      return Option.empty();
     }
+    return Option.of(instantTime);
   }
 
   /**
    * Returns the time interval in seconds between the given instant time.
    */
   public static long instantTimeDiffSeconds(String newInstantTime, String oldInstantTime) {
-    try {
-      long newTimestamp = HoodieActiveTimeline.parseDateFromInstantTime(newInstantTime).getTime();
-      long oldTimestamp = HoodieActiveTimeline.parseDateFromInstantTime(oldInstantTime).getTime();
-      return (newTimestamp - oldTimestamp) / 1000;
-    } catch (ParseException e) {
-      throw new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error", e);
-    }
+    long newTimestamp = HoodieActiveTimeline.parseDateFromInstantTimeSafely(newInstantTime)
+            .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error")).getTime();
+    long oldTimestamp = HoodieActiveTimeline.parseDateFromInstantTimeSafely(oldInstantTime)
+            .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error")).getTime();
+    return (newTimestamp - oldTimestamp) / 1000;
   }
 
   public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
@@ -516,7 +514,7 @@ public class StreamerUtil {
   public static boolean isWriteCommit(HoodieTableType tableType, HoodieInstant instant, HoodieTimeline timeline) {
     return tableType == HoodieTableType.MERGE_ON_READ
         ? !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) // not a compaction
-        : !ClusteringUtil.isClusteringInstant(instant, timeline);   // not a clustering
+        : !ClusteringUtils.isCompletedClusteringInstant(instant, timeline);   // not a clustering
   }
 
   /**
@@ -535,6 +533,17 @@ public class StreamerUtil {
         throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
                 + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
       }
+    }
+  }
+
+  /**
+   * Validate keygen generator.
+   */
+  public static void checkKeygenGenerator(boolean isComplexHoodieKey, Configuration conf) {
+    if (isComplexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
+      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+      LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
+          FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
     }
   }
 }

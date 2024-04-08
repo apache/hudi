@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -88,7 +89,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private static final AtomicLong RECORD_COUNTER = new AtomicLong(1);
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE = 100;
 
-  protected final String fileId;
   private final boolean shouldWriteRecordPositions;
   // Buffer for holding records in memory before they are flushed to disk
   private final List<HoodieRecord> recordList = new ArrayList<>();
@@ -157,7 +157,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
             : Option.empty(),
         taskContextSupplier);
-    this.fileId = fileId;
     this.recordItr = recordItr;
     this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
@@ -172,50 +171,52 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void init(HoodieRecord record) {
-    if (doInit) {
-      String prevCommit = instantTime;
-      String baseFile = "";
-      List<String> logFiles = new ArrayList<>();
-      if (config.isCDCEnabled()) {
-        // the cdc reader needs the base file metadata to have deterministic update sequence.
-        TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-        Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
-        if (fileSlice.isPresent()) {
-          prevCommit = fileSlice.get().getBaseInstantTime();
-          baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
-          logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
-        }
-      }
-
-      // Prepare the first write status
-      HoodieDeltaWriteStat deltaWriteStat = new HoodieDeltaWriteStat();
-      writeStatus.setStat(deltaWriteStat);
-      writeStatus.setFileId(fileId);
-      writeStatus.setPartitionPath(partitionPath);
-      averageRecordSize = sizeEstimator.sizeEstimate(record);
-
-      deltaWriteStat.setPrevCommit(prevCommit);
-      deltaWriteStat.setPartitionPath(partitionPath);
-      deltaWriteStat.setFileId(fileId);
-      deltaWriteStat.setBaseFile(baseFile);
-      deltaWriteStat.setLogFiles(logFiles);
-
-      try {
-        // Save hoodie partition meta in the partition path
-        HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
-            new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
-            hoodieTable.getPartitionMetafileFormat());
-        partitionMetadata.trySave(getPartitionId());
-
-        this.writer = createLogWriter(getFileInstant(record));
-      } catch (Exception e) {
-        LOG.error("Error in update task at commit " + instantTime, e);
-        writeStatus.setGlobalError(e);
-        throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
-            + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePathV2() + "/" + partitionPath, e);
-      }
-      doInit = false;
+    if (!doInit) {
+      return;
     }
+
+    String prevCommit = instantTime;
+    String baseFile = "";
+    List<String> logFiles = new ArrayList<>();
+    if (config.isCDCEnabled()) {
+      // the cdc reader needs the base file metadata to have deterministic update sequence.
+      TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
+      Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+      if (fileSlice.isPresent()) {
+        prevCommit = fileSlice.get().getBaseInstantTime();
+        baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
+        logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
+      }
+    }
+
+    // Prepare the first write status
+    HoodieDeltaWriteStat deltaWriteStat = new HoodieDeltaWriteStat();
+    writeStatus.setStat(deltaWriteStat);
+    writeStatus.setFileId(fileId);
+    writeStatus.setPartitionPath(partitionPath);
+    averageRecordSize = sizeEstimator.sizeEstimate(record);
+
+    deltaWriteStat.setPrevCommit(prevCommit);
+    deltaWriteStat.setPartitionPath(partitionPath);
+    deltaWriteStat.setFileId(fileId);
+    deltaWriteStat.setBaseFile(baseFile);
+    deltaWriteStat.setLogFiles(logFiles);
+
+    try {
+      // Save hoodie partition meta in the partition path
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
+          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+          hoodieTable.getPartitionMetafileFormat());
+      partitionMetadata.trySave(getPartitionId());
+
+      this.writer = createLogWriter(getFileInstant(record));
+    } catch (Exception e) {
+      LOG.error("Error in update task at commit " + instantTime, e);
+      writeStatus.setGlobalError(e);
+      throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
+          + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePathV2() + "/" + partitionPath, e);
+    }
+    doInit = false;
   }
 
   /**
@@ -323,12 +324,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private void initNewStatus() {
     HoodieDeltaWriteStat prevStat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
     // Make a new write status and copy basic fields over.
-    HoodieDeltaWriteStat stat = new HoodieDeltaWriteStat();
-    stat.setFileId(fileId);
-    stat.setPartitionPath(partitionPath);
-    stat.setPrevCommit(prevStat.getPrevCommit());
-    stat.setBaseFile(prevStat.getBaseFile());
-    stat.setLogFiles(new ArrayList<>(prevStat.getLogFiles()));
+    HoodieDeltaWriteStat stat = prevStat.copy();
 
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
@@ -566,7 +562,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     return IOType.APPEND;
   }
 
-  public List<WriteStatus> writeStatuses() {
+  public List<WriteStatus> getWriteStatuses() {
     return statuses;
   }
 
@@ -682,7 +678,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         return new HoodieAvroDataBlock(records, shouldWriteRecordPositions, header, keyField);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(
-            records, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()));
+            records, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()),
+            writeConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,

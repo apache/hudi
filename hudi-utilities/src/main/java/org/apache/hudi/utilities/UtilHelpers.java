@@ -66,6 +66,7 @@ import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
+import org.apache.hudi.utilities.streamer.StreamContext;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -109,6 +110,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -121,6 +123,7 @@ public class UtilHelpers {
   public static final String EXECUTE = "execute";
   public static final String SCHEDULE = "schedule";
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
+  public static final String PURGE_PENDING_INSTANT = "purge_pending_instant";
 
   private static final Logger LOG = LoggerFactory.getLogger(UtilHelpers.class);
 
@@ -148,6 +151,24 @@ public class UtilHelpers {
             new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class},
             cfg, jssc, sparkSession, schemaProvider);
+      }
+    } catch (Throwable e) {
+      throw new IOException("Could not load source class " + sourceClass, e);
+    }
+  }
+
+  public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
+                                    SparkSession sparkSession, HoodieIngestionMetrics metrics, StreamContext streamContext)
+      throws IOException {
+    try {
+      try {
+        return (Source) ReflectionUtils.loadClass(sourceClass,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
+                SparkSession.class,
+                HoodieIngestionMetrics.class, StreamContext.class},
+            cfg, jssc, sparkSession, metrics, streamContext);
+      } catch (HoodieException e) {
+        return createSource(sourceClass, cfg, jssc, sparkSession, streamContext.getSchemaProvider(), metrics);
       }
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
@@ -206,13 +227,13 @@ public class UtilHelpers {
     return null;
   }
 
-  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Option<Schema> sourceSchema,
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Supplier<Option<Schema>> sourceSchemaSupplier,
                                                       boolean isErrorTableWriterEnabled) throws IOException {
 
     try {
       Function<List<String>, Transformer> chainedTransformerFunction = classNames ->
-          isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames, sourceSchema)
-              : new ChainedTransformer(classNames, sourceSchema);
+          isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames, sourceSchemaSupplier)
+              : new ChainedTransformer(classNames, sourceSchemaSupplier);
       return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : chainedTransformerFunction.apply(classNames));
     } catch (Throwable e) {
       throw new IOException("Could not load transformer class(es) " + classNamesOpt.get(), e);
@@ -606,6 +627,7 @@ public class UtilHelpers {
       } while (ret != 0 && maxRetryCount-- > 0);
     } catch (Throwable t) {
       LOG.error(errorMessage, t);
+      throw new RuntimeException("Failed in retry", t);
     }
     return ret;
   }

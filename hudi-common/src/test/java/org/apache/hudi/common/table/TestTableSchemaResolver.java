@@ -21,7 +21,7 @@ package org.apache.hudi.common.table;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieIncompatibleSchemaException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
@@ -61,7 +61,7 @@ public class TestTableSchemaResolver {
     String[] pts4 = {"user_partition", "partition_path"};
     try {
       TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts3));
-    } catch (HoodieIncompatibleSchemaException e) {
+    } catch (HoodieSchemaException e) {
       assertTrue(e.getMessage().contains("Partial partition fields are still in the schema"));
     }
   }

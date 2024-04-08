@@ -18,16 +18,16 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.expression.ArrayData;
-import org.apache.hudi.hadoop.CachingPath;
-import org.apache.hudi.hadoop.SerializablePath;
+import org.apache.hudi.hadoop.fs.CachingPath;
+import org.apache.hudi.hadoop.fs.SerializablePath;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.Collections;
 import java.util.List;
@@ -57,14 +57,14 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
 
     int level = 1;
     for (int i = 1; i < path.length() - 1; i++) {
-      if (path.charAt(i) == Path.SEPARATOR_CHAR) {
+      if (path.charAt(i) == StoragePath.SEPARATOR_CHAR) {
         level++;
       }
     }
-    if (path.startsWith(Path.SEPARATOR)) {
+    if (path.startsWith(StoragePath.SEPARATOR)) {
       level--;
     }
-    if (path.endsWith(Path.SEPARATOR)) {
+    if (path.endsWith(StoragePath.SEPARATOR)) {
       level--;
     }
     return level;

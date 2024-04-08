@@ -49,8 +49,10 @@ class RecordLevelIndexSupport(spark: SparkSession,
     val recordKeyLocationsMap = metadataTable.readRecordIndex(JavaConverters.seqAsJavaListConverter(recordKeys).asJava)
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
-    for (location <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
-      fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
+    for (locations <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
+      for (location <- JavaConverters.collectionAsScalaIterableConverter(locations).asScala) {
+        fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
+      }
     }
     for (file <- allFiles) {
       val fileId = FSUtils.getFileIdFromFilePath(file.getPath)
@@ -160,7 +162,10 @@ class RecordLevelIndexSupport(spark: SparkSession,
       case inQuery: In =>
         var validINQuery = true
         inQuery.value match {
-          case _: AttributeReference =>
+          case attribute: AttributeReference =>
+            if (!attributeMatchesRecordKey(attribute.name)) {
+              validINQuery = false
+            }
           case _ => validINQuery = false
         }
         var literals: List[String] = List.empty

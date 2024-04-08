@@ -90,7 +90,8 @@ public class HiveSyncConfigHolder {
       .defaultValue("false")
       .markAdvanced()
       .withDocumentation("‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. "
-          + "Disabled by default for backward compatibility.");
+          + "Disabled by default for backward compatibility. \n"
+          + "NOTE: On Spark entrypoints, this is defaulted to TRUE");
   public static final ConfigProperty<String> HIVE_TABLE_PROPERTIES = ConfigProperty
       .key("hoodie.datasource.hive_sync.table_properties")
       .noDefaultValue()

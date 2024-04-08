@@ -216,4 +216,27 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
 
     fileIdsToRemove.forEach(fileGroupId -> fgIdToReplaceInstants.remove(fileGroupId));
   }
+
+  @Override
+  public void close() {
+    super.close();
+    if (partitionToFileGroupsMap != null) {
+      ((ExternalSpillableMap) partitionToFileGroupsMap).close();
+    }
+    if (fgIdToPendingClustering != null) {
+      ((ExternalSpillableMap) fgIdToPendingClustering).close();
+    }
+    if (fgIdToPendingCompaction != null) {
+      ((ExternalSpillableMap) fgIdToPendingCompaction).close();
+    }
+    if (fgIdToPendingLogCompaction != null) {
+      ((ExternalSpillableMap) fgIdToPendingLogCompaction).close();
+    }
+    if (fgIdToBootstrapBaseFile != null) {
+      ((ExternalSpillableMap) fgIdToBootstrapBaseFile).close();
+    }
+    if (fgIdToReplaceInstants != null) {
+      ((ExternalSpillableMap) fgIdToReplaceInstants).close();
+    }
+  }
 }

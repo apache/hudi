@@ -397,21 +397,20 @@ public interface HoodieTimeline extends Serializable {
 
   /**
    * get the most recent cluster commit if present
-   *
    */
-  public Option<HoodieInstant> getLastClusterCommit();
+  public Option<HoodieInstant> getLastClusteringInstant();
 
   /**
    * get the most recent pending cluster commit if present
    *
    */
-  public Option<HoodieInstant> getLastPendingClusterCommit();
+  public Option<HoodieInstant> getLastPendingClusterInstant();
 
 
   /**
    * get the least recent pending cluster commit if present
    */
-  public Option<HoodieInstant> getFirstPendingClusterCommit();
+  public Option<HoodieInstant> getFirstPendingClusterInstant();
 
   /**
    * return true if instant is a pending clustering commit, otherwise false
