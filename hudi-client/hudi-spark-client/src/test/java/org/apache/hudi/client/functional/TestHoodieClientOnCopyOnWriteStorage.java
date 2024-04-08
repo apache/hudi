@@ -713,7 +713,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
           .flatMap(w -> w.stream()).filter(s -> s.getPath().endsWith(extension)).findAny()
           .map(ee -> ee.getPartitionPath()).orElse(null);
       Path baseFilePath = new Path(basePathStr, filePath);
-      HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath.toString());
+      HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath.toString(), partitionPath);
 
       HoodieMergeHandle handle = null;
       try {

@@ -36,10 +36,12 @@ public class LogFileDTO {
   private String pathStr;
   @JsonProperty("len")
   private long fileLen;
+  @JsonProperty("partitionPath")
+  private String partitionPath;
 
   public static HoodieLogFile toHoodieLogFile(LogFileDTO dto) {
     FileStatus status = FileStatusDTO.toFileStatus(dto.fileStatus);
-    HoodieLogFile logFile = (status == null) ? new HoodieLogFile(dto.pathStr) : new HoodieLogFile(status);
+    HoodieLogFile logFile = (status == null) ? new HoodieLogFile(dto.pathStr, dto.partitionPath) : new HoodieLogFile(status, dto.partitionPath);
     logFile.setFileLen(dto.fileLen);
     return logFile;
   }
@@ -49,6 +51,7 @@ public class LogFileDTO {
     logFile.fileLen = dataFile.getFileSize();
     logFile.pathStr = dataFile.getPath().toString();
     logFile.fileStatus = FileStatusDTO.fromFileStatus(dataFile.getFileStatus());
+    logFile.partitionPath = dataFile.getPartitionPath();
     return logFile;
   }
 }

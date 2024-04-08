@@ -426,7 +426,7 @@ public class ITTestHoodieFlinkCompactor {
             Arrays.stream(fs.listStatus(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition)))
                 .filter(f -> FSUtils.isBaseFile(f.getPath()))
                 .forEach(f -> {
-                  HoodieBaseFile baseFile = new HoodieBaseFile(f);
+                  HoodieBaseFile baseFile = new HoodieBaseFile(f, partition);
                   assertFalse(fileIdCommitTimeSet.contains(Pair.of(baseFile.getFileId(), baseFile.getCommitTime())));
                   fileIdCommitTimeSet.add(Pair.of(baseFile.getFileId(), baseFile.getCommitTime()));
                 });

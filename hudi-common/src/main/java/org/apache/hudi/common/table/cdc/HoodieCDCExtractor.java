@@ -290,7 +290,7 @@ public class HoodieCDCExtractor {
           );
           FileSlice beforeFileSlice = null;
           FileSlice currentFileSlice = new FileSlice(fileGroupId, instant.getTimestamp(),
-              new HoodieBaseFile(fs.getFileStatus(new Path(basePath, writeStat.getPath()))), new ArrayList<>());
+              new HoodieBaseFile(fs.getFileStatus(new Path(basePath, writeStat.getPath())), fileGroupId.getPartitionPath()), new ArrayList<>());
           if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY) {
             beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           }
@@ -322,13 +322,13 @@ public class HoodieCDCExtractor {
         Pair<String, List<String>> fileSlice = fileSliceOpt.get();
         try {
           HoodieBaseFile baseFile = new HoodieBaseFile(
-              fs.getFileStatus(new Path(partitionPath, fileSlice.getLeft())));
+              fs.getFileStatus(new Path(partitionPath, fileSlice.getLeft())), fgId.getPartitionPath());
           Path[] logFilePaths = fileSlice.getRight().stream()
               .filter(logFile -> !logFile.equals(currentLogFileName))
               .map(logFile -> new Path(partitionPath, logFile))
               .toArray(Path[]::new);
           List<HoodieLogFile> logFiles = Arrays.stream(fs.listStatus(logFilePaths))
-              .map(HoodieLogFile::new).collect(Collectors.toList());
+              .map(fileStatus -> new HoodieLogFile(fileStatus, fgId.getPartitionPath())).collect(Collectors.toList());
           return Option.of(new FileSlice(fgId, instant.getTimestamp(), baseFile, logFiles));
         } catch (Exception e) {
           throw new HoodieException("Fail to get the dependent file slice for a log file", e);

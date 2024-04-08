@@ -298,9 +298,9 @@ public class TestHoodieCompactionStrategy {
     List<HoodieCompactionOperation> operations = new ArrayList<>(sizesMap.size());
 
     sizesMap.forEach((k, v) -> {
-      HoodieBaseFile df = TestHoodieBaseFile.newDataFile(k);
       String partitionPath = keyToPartitionMap.get(k);
-      List<HoodieLogFile> logFiles = v.stream().map(TestHoodieLogFile::newLogFile).collect(Collectors.toList());
+      HoodieBaseFile df = TestHoodieBaseFile.newDataFile(k, partitionPath);
+      List<HoodieLogFile> logFiles = v.stream().map(size -> TestHoodieLogFile.newLogFile(size, partitionPath)).collect(Collectors.toList());
       FileSlice slice = new FileSlice(new HoodieFileGroupId(partitionPath, df.getFileId()), df.getCommitTime());
       slice.setBaseFile(df);
       logFiles.stream().forEach(f -> slice.addLogFile(f));
@@ -319,11 +319,11 @@ public class TestHoodieCompactionStrategy {
     List<HoodieCompactionOperation> operations = new ArrayList<>(sizesMap.size());
 
     sizesMap.forEach((k, v) -> {
-      HoodieBaseFile df = TestHoodieBaseFile.newDataFile(k);
       String partitionPath = keyToPartitionMap.get(k);
+      HoodieBaseFile df = TestHoodieBaseFile.newDataFile(k, partitionPath);
       // create operation for target partition
       if (filterPartitions.contains(partitionPath)) {
-        List<HoodieLogFile> logFiles = v.stream().map(TestHoodieLogFile::newLogFile).collect(Collectors.toList());
+        List<HoodieLogFile> logFiles = v.stream().map(size -> TestHoodieLogFile.newLogFile(size, partitionPath)).collect(Collectors.toList());
         FileSlice slice = new FileSlice(new HoodieFileGroupId(partitionPath, df.getFileId()), df.getCommitTime());
         slice.setBaseFile(df);
         logFiles.stream().forEach(f -> slice.addLogFile(f));
@@ -342,13 +342,13 @@ public class TestHoodieCompactionStrategy {
 
     private final long size;
 
-    public TestHoodieBaseFile(long size) {
-      super("/tmp/XYXYXYXYXYYX_11_20180918020003" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
+    public TestHoodieBaseFile(long size, String partitionPath) {
+      super("/tmp/XYXYXYXYXYYX_11_20180918020003" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension(), partitionPath);
       this.size = size;
     }
 
-    public static HoodieBaseFile newDataFile(long size) {
-      return new TestHoodieBaseFile(size);
+    public static HoodieBaseFile newDataFile(long size, String partitionPath) {
+      return new TestHoodieBaseFile(size, partitionPath);
     }
 
     @Override
@@ -377,13 +377,13 @@ public class TestHoodieCompactionStrategy {
     private static int version = 0;
     private final long size;
 
-    public TestHoodieLogFile(long size) {
-      super("/tmp/.ce481ee7-9e53-4a2e-999-f9e295fa79c0_20180919184844.log." + version++);
+    public TestHoodieLogFile(long size, String partitionPath) {
+      super("/tmp/.ce481ee7-9e53-4a2e-999-f9e295fa79c0_20180919184844.log." + version++, partitionPath);
       this.size = size;
     }
 
-    public static HoodieLogFile newLogFile(long size) {
-      return new TestHoodieLogFile(size);
+    public static HoodieLogFile newLogFile(long size, String partitionPath) {
+      return new TestHoodieLogFile(size, partitionPath);
     }
 
     @Override

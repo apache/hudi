@@ -371,7 +371,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       // inject a fake log file to test marker file for log file
       HoodieDeltaWriteStat correctWriteStat = (HoodieDeltaWriteStat) statuses.map(WriteStatus::getStat).take(1).get(0);
       assertTrue(FSUtils.isLogFile(new Path(correctWriteStat.getPath())));
-      HoodieLogFile correctLogFile = new HoodieLogFile(correctWriteStat.getPath());
+      HoodieLogFile correctLogFile = new HoodieLogFile(correctWriteStat.getPath(), correctWriteStat.getPartitionPath());
       String correctWriteToken = FSUtils.getWriteTokenFromLogPath(correctLogFile.getPath());
 
       final String fakeToken = generateFakeWriteToken(correctWriteToken);

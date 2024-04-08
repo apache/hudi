@@ -2255,7 +2255,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     // Create compaction commit
     List<HoodieLogFile> logFiles = Stream.of(
         basePath + "/" + partitionPath + "/" + logFileName1, basePath + "/" + partitionPath + "/" + logFileName3)
-        .map(HoodieLogFile::new)
+        .map(path -> new HoodieLogFile(path, partitionPath))
         .collect(Collectors.toList());
     CompactionOperation compactionOperation = new CompactionOperation(Option.empty(), partitionPath, logFiles, Collections.emptyMap());
     HoodieCompactionPlan compactionPlan = getHoodieCompactionPlan(Collections.singletonList(compactionOperation));
@@ -2274,7 +2274,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
 
     // Create log compaction commit
-    logFiles = Collections.singletonList(new HoodieLogFile(basePath + "/" + partitionPath + "/" + logFileName2));
+    logFiles = Collections.singletonList(new HoodieLogFile(basePath + "/" + partitionPath + "/" + logFileName2, partitionPath));
     CompactionOperation logCompactionOperation = new CompactionOperation(Option.empty(), partitionPath, logFiles, Collections.emptyMap());
     HoodieCompactionPlan logCompactionPlan = getHoodieCompactionPlan(Collections.singletonList(logCompactionOperation));
     expectedState.pendingLogCompactionFgIdsCurrentlyPresent.add(fileId2);

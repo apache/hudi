@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class TestHoodieBaseFile {
   private final String fileName = "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_100.parquet";
   private final String pathStr = "file:/tmp/hoodie/2021/01/01/" + fileName;
+  private final String partition = "2021/01/01";
   private final String fileId = "136281f3-c24e-423b-a65a-95dbfbddce1d";
   private final String baseCommitTime = "100";
   private final int length = 10;
@@ -36,35 +37,35 @@ public class TestHoodieBaseFile {
   @Test
   void createFromHoodieBaseFile() {
     FileStatus fileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(pathStr));
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileStatus);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileStatus, partition);
     assertFileGetters(fileStatus, new HoodieBaseFile(hoodieBaseFile), length, Option.empty());
   }
 
   @Test
   void createFromFileStatus() {
     FileStatus fileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(pathStr));
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileStatus);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileStatus, partition);
     assertFileGetters(fileStatus, hoodieBaseFile, length, Option.empty());
   }
 
   @Test
   void createFromFileStatusAndBootstrapBaseFile() {
-    HoodieBaseFile bootstrapBaseFile = new HoodieBaseFile(pathStr);
+    HoodieBaseFile bootstrapBaseFile = new HoodieBaseFile(pathStr, partition);
     FileStatus fileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(pathStr));
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileStatus, bootstrapBaseFile);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fileStatus, partition, bootstrapBaseFile);
     assertFileGetters(fileStatus, hoodieBaseFile, length, Option.of(bootstrapBaseFile));
   }
 
   @Test
   void createFromFilePath() {
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(pathStr);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(pathStr, partition);
     assertFileGetters(null, hoodieBaseFile, -1, Option.empty());
   }
 
   @Test
   void createFromFilePathAndBootstrapBaseFile() {
-    HoodieBaseFile bootstrapBaseFile = new HoodieBaseFile(pathStr);
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(pathStr, bootstrapBaseFile);
+    HoodieBaseFile bootstrapBaseFile = new HoodieBaseFile(pathStr, partition);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(pathStr, partition, bootstrapBaseFile);
     assertFileGetters(null, hoodieBaseFile, -1, Option.of(bootstrapBaseFile));
   }
 
@@ -75,7 +76,7 @@ public class TestHoodieBaseFile {
     String expectedPathString = "file:/tmp/hoodie/2021/01/01/" + fileName;
     FileStatus inputFileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(storedPathString));
     FileStatus expectedFileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(expectedPathString));
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(inputFileStatus);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(inputFileStatus, "2021/01/01");
 
     assertFileGetters(expectedFileStatus, hoodieBaseFile, length, Option.empty(), fileName, expectedPathString, fileName);
   }
@@ -93,5 +94,6 @@ public class TestHoodieBaseFile {
     assertEquals(new Path(pathStr), hoodieBaseFile.getHadoopPath());
     assertEquals(fileLength, hoodieBaseFile.getFileSize());
     assertEquals(fileStatus, hoodieBaseFile.getFileStatus());
+    assertEquals(partition, hoodieBaseFile.getPartitionPath());
   }
 }

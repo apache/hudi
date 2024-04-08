@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieLogFile {
   private final String pathStr = "file:///tmp/hoodie/2021/01/01/.136281f3-c24e-423b-a65a-95dbfbddce1d_100.log.2_1-0-1";
+  private final String partitionPath = "2021/01/01";
   private final String fileId = "136281f3-c24e-423b-a65a-95dbfbddce1d";
   private final String baseCommitTime = "100";
   private final int logVersion = 2;
@@ -37,32 +38,32 @@ public class TestHoodieLogFile {
   @Test
   void createFromLogFile() {
     FileStatus fileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(pathStr));
-    HoodieLogFile hoodieLogFile = new HoodieLogFile(fileStatus);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(fileStatus, partitionPath);
     assertFileGetters(fileStatus, new HoodieLogFile(hoodieLogFile), length);
   }
 
   @Test
   void createFromFileStatus() {
     FileStatus fileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(pathStr));
-    HoodieLogFile hoodieLogFile = new HoodieLogFile(fileStatus);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(fileStatus, partitionPath);
     assertFileGetters(fileStatus, hoodieLogFile, length);
   }
 
   @Test
   void createFromPath() {
-    HoodieLogFile hoodieLogFile = new HoodieLogFile(new Path(pathStr));
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(new Path(pathStr), partitionPath);
     assertFileGetters(null, hoodieLogFile, -1);
   }
 
   @Test
   void createFromPathAndLength() {
-    HoodieLogFile hoodieLogFile = new HoodieLogFile(new Path(pathStr), length);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(new Path(pathStr), length, partitionPath);
     assertFileGetters(null, hoodieLogFile, length);
   }
 
   @Test
   void createFromString() {
-    HoodieLogFile hoodieLogFile = new HoodieLogFile(pathStr);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(pathStr, partitionPath);
     assertFileGetters(null, hoodieLogFile, -1);
   }
 
@@ -70,7 +71,7 @@ public class TestHoodieLogFile {
   void createFromStringWithSuffix() {
     String suffix = ".cdc";
     String pathWithSuffix = pathStr + suffix;
-    HoodieLogFile hoodieLogFile = new HoodieLogFile(pathWithSuffix);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(pathWithSuffix, partitionPath);
     assertFileGetters(pathWithSuffix, null, hoodieLogFile, -1, suffix);
   }
 
@@ -88,5 +89,6 @@ public class TestHoodieLogFile {
     assertEquals(fileLength, hoodieLogFile.getFileSize());
     assertEquals(fileStatus, hoodieLogFile.getFileStatus());
     assertEquals(suffix, hoodieLogFile.getSuffix());
+    assertEquals(partitionPath, hoodieLogFile.getPartitionPath());
   }
 }

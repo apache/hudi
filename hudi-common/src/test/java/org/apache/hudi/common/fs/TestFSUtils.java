@@ -305,7 +305,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String log1Ver0 = makeOldLogFileName("file1", ".log", "1", 0);
     String log1Ver1 = makeOldLogFileName("file1", ".log", "1", 1);
     String log1base2 = makeOldLogFileName("file1", ".log", "2", 0);
-    List<HoodieLogFile> logFiles = Stream.of(log1base2, log1Ver1, log1Ver0).map(HoodieLogFile::new)
+    List<HoodieLogFile> logFiles = Stream.of(log1base2, log1Ver1, log1Ver0).map(path -> new HoodieLogFile(path, ""))
         .sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
     assertEquals(log1Ver0, logFiles.get(0).getFileName());
     assertEquals(log1Ver1, logFiles.get(1).getFileName());
@@ -326,7 +326,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     List<HoodieLogFile> logFiles =
         Stream.of(log1Ver1W1, log1base2W0, log1base2W1, log1Ver1W0, log1Ver0W1, log1Ver0W0)
-            .map(HoodieLogFile::new).sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+            .map(path -> new HoodieLogFile(path, "")).sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
     assertEquals(log1Ver0W0, logFiles.get(0).getFileName());
     assertEquals(log1Ver0W1, logFiles.get(1).getFileName());
     assertEquals(log1Ver1W0, logFiles.get(2).getFileName());
@@ -337,11 +337,11 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testLogFilesComparisonWithCDCFile() {
-    HoodieLogFile log1 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "1", 0, "0-0-1")));
-    HoodieLogFile log2 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 0, "0-0-1")));
-    HoodieLogFile log3 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 1, "0-0-1")));
-    HoodieLogFile log4 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 1, "1-1-1")));
-    HoodieLogFile log5 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 1, "1-1-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX));
+    HoodieLogFile log1 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "1", 0, "0-0-1")), "");
+    HoodieLogFile log2 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 0, "0-0-1")), "");
+    HoodieLogFile log3 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 1, "0-0-1")), "");
+    HoodieLogFile log4 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 1, "1-1-1")), "");
+    HoodieLogFile log5 = new HoodieLogFile(new Path(FSUtils.makeLogFileName("file1", ".log", "2", 1, "1-1-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX), "");
 
     TreeSet<HoodieLogFile> logFilesSet = new TreeSet<>(HoodieLogFile.getLogFileComparator());
     logFilesSet.add(log1);

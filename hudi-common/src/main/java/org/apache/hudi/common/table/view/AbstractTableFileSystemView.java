@@ -109,10 +109,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   private BootstrapIndex bootstrapIndex;
 
-  private String getPartitionPathFor(HoodieBaseFile baseFile) {
-    return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), baseFile.getHadoopPath().getParent());
-  }
-
   /**
    * Initialize the view.
    */
@@ -156,12 +152,24 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     return this.completionTimeQueryView.getCompletionTime(instantTime, instantTime);
   }
 
+
   /**
    * Adds the provided statuses into the file system view, and also caches it inside this object.
+   * If the file statuses are limited to a single partition, use {@link #addFilesToView(String, FileStatus[])} instead.
    */
   public List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
+    Map<String, List<FileStatus>> statusesByPartitionPath = Arrays.stream(statuses)
+        .collect(Collectors.groupingBy(fileStatus -> FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), fileStatus.getPath().getParent())));
+    return statusesByPartitionPath.entrySet().stream().map(entry -> addFilesToView(entry.getKey(), entry.getValue().toArray(new FileStatus[0])))
+        .flatMap(List::stream).collect(Collectors.toList());
+  }
+
+  /**
+   * Adds the provided statuses into the file system view for a single partition, and also caches it inside this object.
+   */
+  public List<HoodieFileGroup> addFilesToView(String partitionPath, FileStatus[] statuses) {
     HoodieTimer timer = HoodieTimer.start();
-    List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, true);
+    List<HoodieFileGroup> fileGroups = buildFileGroups(partitionPath, statuses, visibleCommitsAndCompactionTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
     timer.startTimer();
     // Group by partition for efficient updates for both InMemory and DiskBased structures.
@@ -190,9 +198,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Build FileGroups from passed in file-status.
    */
-  protected List<HoodieFileGroup> buildFileGroups(FileStatus[] statuses, HoodieTimeline timeline,
+  protected List<HoodieFileGroup> buildFileGroups(String partitionPath, FileStatus[] statuses, HoodieTimeline timeline,
                                                   boolean addPendingCompactionFileSlice) {
-    return buildFileGroups(convertFileStatusesToBaseFiles(statuses), convertFileStatusesToLogFiles(statuses), timeline,
+    return buildFileGroups(convertFileStatusesToBaseFiles(partitionPath, statuses), convertFileStatusesToLogFiles(partitionPath, statuses), timeline,
         addPendingCompactionFileSlice);
   }
 
@@ -200,20 +208,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
                                                   Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline, boolean addPendingCompactionFileSlice) {
     Map<Pair<String, String>, List<HoodieBaseFile>> baseFiles =
         baseFileStream.collect(Collectors.groupingBy(baseFile -> {
-          String partitionPathStr = getPartitionPathFor(baseFile);
+          String partitionPathStr = baseFile.getPartitionPath();
           return Pair.of(partitionPathStr, baseFile.getFileId());
         }));
 
     Map<Pair<String, String>, List<HoodieLogFile>> logFiles = logFileStream.collect(Collectors.groupingBy((logFile) -> {
-      String partitionPathStr =
-          FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), logFile.getPath().getParent());
+      String partitionPathStr = logFile.getPartitionPath();
       return Pair.of(partitionPathStr, logFile.getFileId());
     }));
 
     Set<Pair<String, String>> fileIdSet = new HashSet<>(baseFiles.keySet());
     fileIdSet.addAll(logFiles.keySet());
 
-    List<HoodieFileGroup> fileGroups = new ArrayList<>();
+    List<HoodieFileGroup> fileGroups = new ArrayList<>(fileIdSet.size());
     fileIdSet.forEach(pair -> {
       String fileId = pair.getValue();
       String partitionPath = pair.getKey();
@@ -377,7 +384,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           LOG.debug("Time taken to list partitions " + partitionSet + " =" + (endLsTs - beginLsTs));
           statusesMap.forEach((partitionPair, statuses) -> {
             String relativePartitionStr = partitionPair.getLeft();
-            List<HoodieFileGroup> groups = addFilesToView(statuses);
+            List<HoodieFileGroup> groups = addFilesToView(relativePartitionStr, statuses);
             if (groups.isEmpty()) {
               storePartitionView(relativePartitionStr, new ArrayList<>());
             }
@@ -462,7 +469,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         // Not loaded yet
         try {
           LOG.info("Building file system view for partition (" + partitionPathStr + ")");
-          List<HoodieFileGroup> groups = addFilesToView(getAllFilesInPartition(partitionPathStr));
+          List<HoodieFileGroup> groups = addFilesToView(partitionPathStr, getAllFilesInPartition(partitionPathStr));
           if (groups.isEmpty()) {
             storePartitionView(partitionPathStr, new ArrayList<>());
           }
@@ -502,9 +509,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Helper to convert file-status to base-files.
    *
+   * @param partitionPath the partition path for these files
    * @param statuses List of File-Status
    */
-  private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(FileStatus[] statuses) {
+  private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(String partitionPath, FileStatus[] statuses) {
     Predicate<FileStatus> roFilePredicate = fileStatus -> {
       String pathName = fileStatus.getPath().getName();
       // Filter base files if:
@@ -513,21 +521,22 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return pathName.contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension())
           && !pathName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
     };
-    return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieBaseFile::new);
+    return Arrays.stream(statuses).filter(roFilePredicate).map(fileStatus -> new HoodieBaseFile(fileStatus, partitionPath));
   }
 
   /**
    * Helper to convert file-status to log-files.
    *
+   * @param partitionPath the partition path for these files
    * @param statuses List of File-Status
    */
-  private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
+  private Stream<HoodieLogFile> convertFileStatusesToLogFiles(String partitionPath, FileStatus[] statuses) {
     Predicate<FileStatus> rtFilePredicate = fileStatus ->  {
       String fileName = fileStatus.getPath().getName();
       Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileName);
       return matcher.find() && fileName.contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
     };
-    return Arrays.stream(statuses).filter(rtFilePredicate).map(HoodieLogFile::new);
+    return Arrays.stream(statuses).filter(rtFilePredicate).map(fileStatus -> new HoodieLogFile(fileStatus, partitionPath));
   }
 
   /**
@@ -537,7 +546,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param baseFile base File
    */
   protected boolean isBaseFileDueToPendingCompaction(HoodieBaseFile baseFile) {
-    final String partitionPath = getPartitionPathFor(baseFile);
+    final String partitionPath = baseFile.getPartitionPath();
 
     Option<Pair<String, CompactionOperation>> compactionWithInstantTime =
         getPendingCompactionOperationWithInstant(new HoodieFileGroupId(partitionPath, baseFile.getFileId()));
@@ -858,7 +867,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return getLatestFileSlices(partition);
     } else {
       try {
-        Stream<FileSlice> fileSliceStream = buildFileGroups(getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
+        Stream<FileSlice> fileSliceStream = buildFileGroups(partition, getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
             .filter(fg -> !isFileGroupReplaced(fg))
             .map(HoodieFileGroup::getLatestFileSlice)
             .filter(Option::isPresent).map(Option::get)
@@ -1073,7 +1082,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return getAllFileGroups(partition);
     } else {
       try {
-        Stream<HoodieFileGroup> fileGroupStream = buildFileGroups(getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
+        Stream<HoodieFileGroup> fileGroupStream = buildFileGroups(partition, getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
             .filter(fg -> !isFileGroupReplaced(fg));
         if (bootstrapIndex.useIndex()) {
           final Map<HoodieFileGroupId, BootstrapBaseFileMapping> bootstrapBaseFileMappings = getBootstrapBaseFileMappings(partition);

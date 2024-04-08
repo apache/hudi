@@ -82,7 +82,7 @@ public class TestPriorityBasedFileSystemView {
   @BeforeEach
   public void setUp() {
     fsView = new PriorityBasedFileSystemView(primary, secondary);
-    testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
+    testBaseFileStream = Stream.of(new HoodieBaseFile("test", "table1"));
     testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
         "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
   }
@@ -215,8 +215,8 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testGetLatestBaseFile() {
     Option<HoodieBaseFile> actual;
-    Option<HoodieBaseFile> expected = Option.of(new HoodieBaseFile("test.file"));
     String partitionPath = "/table2";
+    Option<HoodieBaseFile> expected = Option.of(new HoodieBaseFile("test.file", partitionPath));
     String fileID = "file.123";
 
     when(primary.getLatestBaseFile(partitionPath, fileID)).thenReturn(expected);
@@ -244,8 +244,8 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testGetBaseFileOn() {
     Option<HoodieBaseFile> actual;
-    Option<HoodieBaseFile> expected = Option.of(new HoodieBaseFile("test.file"));
     String partitionPath = "/table2";
+    Option<HoodieBaseFile> expected = Option.of(new HoodieBaseFile("test.file", partitionPath));
     String instantTime = "2020-01-01";
     String fileID = "file.123";
 

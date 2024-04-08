@@ -92,7 +92,7 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
   private FileSlice generateFileSlice(String partitionPath, String fileId, String baseInstant) {
     FileSlice fs = new FileSlice(new HoodieFileGroupId(partitionPath, fileId), baseInstant);
     fs.setBaseFile(new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId,
-        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension())));
+        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()), partitionPath));
     return fs;
   }
 }

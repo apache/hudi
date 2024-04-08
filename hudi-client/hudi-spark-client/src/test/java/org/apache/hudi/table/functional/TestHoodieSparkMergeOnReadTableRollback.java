@@ -22,6 +22,7 @@ package org.apache.hudi.table.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -48,6 +49,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -305,7 +307,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
         final String compactedCommitTime = metaClient.getActiveTimeline().reload().lastInstant().get().getTimestamp();
         assertTrue(Arrays.stream(listAllBaseFilesInPath(hoodieTable))
-            .anyMatch(file -> compactedCommitTime.equals(new HoodieBaseFile(file).getCommitTime())));
+            .anyMatch(file -> compactedCommitTime.equals(new HoodieBaseFile(file, FSUtils.getRelativePartitionPath(new CachingPath(basePath()), file.getPath().getParent())).getCommitTime())));
         hoodieTable.rollbackInflightCompaction(new HoodieInstant(
             HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactedCommitTime));
         allFiles = listAllBaseFilesInPath(hoodieTable);

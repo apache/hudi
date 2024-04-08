@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.CachingPath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -281,10 +282,10 @@ public interface HoodieLogFormat {
         rolloverLogWriteToken = rolloverLogWriteToken + suffix;
       }
 
-      Path logPath = new Path(parentPath,
+      Path logPath = new CachingPath(parentPath,
           FSUtils.makeLogFileName(logFileId, fileExtension, instantTime, logVersion, logWriteToken));
       LOG.info("HoodieLogFile on path " + logPath);
-      HoodieLogFile logFile = new HoodieLogFile(logPath, fileLen);
+      HoodieLogFile logFile = new HoodieLogFile(logPath, fileLen, null);
 
       if (bufferSize == null) {
         bufferSize = FSUtils.getDefaultBufferSize(fs);

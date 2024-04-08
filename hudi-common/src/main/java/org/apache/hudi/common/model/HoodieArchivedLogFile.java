@@ -28,12 +28,12 @@ public class HoodieArchivedLogFile extends HoodieLogFile {
 
   public static final String ARCHIVE_EXTENSION = ".archive";
 
-  public HoodieArchivedLogFile(FileStatus fileStatus) {
-    super(fileStatus);
+  public HoodieArchivedLogFile(FileStatus fileStatus, String partitionPath) {
+    super(fileStatus, partitionPath);
   }
 
-  public HoodieArchivedLogFile(Path logPath) {
-    super(logPath);
+  public HoodieArchivedLogFile(Path logPath, String partitionPath) {
+    super(logPath, partitionPath);
   }
 
   @Override

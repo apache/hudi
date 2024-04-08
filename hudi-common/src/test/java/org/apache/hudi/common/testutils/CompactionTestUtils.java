@@ -33,8 +33,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.hadoop.fs.CachingPath;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -171,12 +170,12 @@ public class CompactionTestUtils {
         FileSlice slice = new FileSlice(partition, instantTime, fileId);
         if (createDataFile) {
           slice.setBaseFile(new DummyHoodieBaseFile(Paths.get(basePath, partition,
-              baseFileName(instantTime, fileId)).toString()));
+              baseFileName(instantTime, fileId)).toString(), partition));
         }
         String logFilePath1 = Paths.get(basePath, partition, logFileName(instantTime, fileId, 1)).toString();
         String logFilePath2 = Paths.get(basePath, partition, logFileName(instantTime, fileId, 2)).toString();
-        slice.addLogFile(new HoodieLogFile(new Path(logFilePath1)));
-        slice.addLogFile(new HoodieLogFile(new Path(logFilePath2)));
+        slice.addLogFile(new HoodieLogFile(new CachingPath(logFilePath1), partition));
+        slice.addLogFile(new HoodieLogFile(new CachingPath(logFilePath2), partition));
         HoodieCompactionOperation op =
             CompactionUtils.buildFromFileSlice(partition, slice, Option.empty());
         if (deltaCommitsAfterCompactionRequests) {
@@ -199,8 +198,8 @@ public class CompactionTestUtils {
 
     private final String path;
 
-    public DummyHoodieBaseFile(String path) {
-      super(path);
+    public DummyHoodieBaseFile(String path, String partition) {
+      super(path, partition);
       this.path = path;
     }
 

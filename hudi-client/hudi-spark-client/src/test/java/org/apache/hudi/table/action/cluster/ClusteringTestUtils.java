@@ -126,7 +126,7 @@ public class ClusteringTestUtils {
       createBaseFile(basePath, partition, instantTime, fileId, 1);
       FileSlice slice = new FileSlice(partition, instantTime, fileId);
       slice.setBaseFile(new CompactionTestUtils.DummyHoodieBaseFile(Paths.get(basePath, partition,
-          baseFileName(instantTime, fileId)).toString()));
+          baseFileName(instantTime, fileId)).toString(), partition));
       List<FileSlice>[] fileSliceGroups = new List[] {Collections.singletonList(slice)};
       HoodieClusteringPlan clusteringPlan = ClusteringUtils.createClusteringPlan("strategy", new HashMap<>(),
           fileSliceGroups, Collections.emptyMap());

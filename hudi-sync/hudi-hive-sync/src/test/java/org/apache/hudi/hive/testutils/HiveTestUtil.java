@@ -482,8 +482,8 @@ public class HiveTestUtil {
       String partitionPath = wEntry.getKey();
       for (HoodieWriteStat wStat : wEntry.getValue()) {
         Path path = new Path(wStat.getPath());
-        HoodieBaseFile dataFile = new HoodieBaseFile(fileSystem.getFileStatus(path));
-        HoodieLogFile logFile = generateLogData(path, isLogSchemaSimple);
+        HoodieBaseFile dataFile = new HoodieBaseFile(fileSystem.getFileStatus(path), partitionPath);
+        HoodieLogFile logFile = generateLogData(path, partitionPath, isLogSchemaSimple);
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
         writeStat.setFileId(dataFile.getFileId());
         writeStat.setPath(logFile.getPath().toString());
@@ -588,10 +588,10 @@ public class HiveTestUtil {
     writer.close();
   }
 
-  private static HoodieLogFile generateLogData(Path parquetFilePath, boolean isLogSchemaSimple)
+  private static HoodieLogFile generateLogData(Path parquetFilePath, String partitionPath, boolean isLogSchemaSimple)
       throws IOException, InterruptedException, URISyntaxException {
     Schema schema = getTestDataSchema(isLogSchemaSimple);
-    HoodieBaseFile dataFile = new HoodieBaseFile(fileSystem.getFileStatus(parquetFilePath));
+    HoodieBaseFile dataFile = new HoodieBaseFile(fileSystem.getFileStatus(parquetFilePath), partitionPath);
     // Write a log file for this parquet file
     Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())

@@ -113,13 +113,13 @@ public class TestSparkBuildClusteringGroupsForPartition {
 
   private FileSlice generateFileSlice(String partitionPath, String fileId, String baseInstant) {
     FileSlice fs = new FileSlice(new HoodieFileGroupId(partitionPath, fileId), baseInstant);
-    fs.setBaseFile(new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId, BASE_FILE_EXTENSION)));
+    fs.setBaseFile(new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId, BASE_FILE_EXTENSION), partitionPath));
     return fs;
   }
 
   private FileSlice generateFileSliceWithLen(String partitionPath, String fileId, String baseInstant, long fileLen) {
     FileSlice fs = new FileSlice(new HoodieFileGroupId(partitionPath, fileId), baseInstant);
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId, BASE_FILE_EXTENSION));
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId, BASE_FILE_EXTENSION), partitionPath);
     hoodieBaseFile.setFileLen(fileLen);
     fs.setBaseFile(hoodieBaseFile);
     return fs;

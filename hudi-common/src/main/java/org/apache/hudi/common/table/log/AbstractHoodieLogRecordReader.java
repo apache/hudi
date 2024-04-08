@@ -73,6 +73,7 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.COMMAND_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -240,7 +241,7 @@ public abstract class AbstractHoodieLogRecordReader {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream()
-              .map(filePath -> new HoodieLogFile(new CachingPath(filePath)))
+              .map(filePath -> new HoodieLogFile(new CachingPath(filePath), partitionNameOverrideOpt.orElse(EMPTY_STRING)))
               .collect(Collectors.toList()),
           readerSchema, true, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
@@ -253,7 +254,7 @@ public abstract class AbstractHoodieLogRecordReader {
         // Use the HoodieLogFileReader to iterate through the blocks in the log file
         HoodieLogBlock logBlock = logFormatReaderWrapper.next();
         final String instantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
-        final String blockIdentifier = logBlock.getLogBlockHeader().getOrDefault(BLOCK_IDENTIFIER, StringUtils.EMPTY_STRING);
+        final String blockIdentifier = logBlock.getLogBlockHeader().getOrDefault(BLOCK_IDENTIFIER, EMPTY_STRING);
         int blockSeqNumber = -1;
         long attemptNumber = -1L;
         if (!StringUtils.isNullOrEmpty(blockIdentifier)) {
@@ -547,7 +548,7 @@ public abstract class AbstractHoodieLogRecordReader {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream()
-              .map(logFile -> new HoodieLogFile(new CachingPath(logFile)))
+              .map(logFile -> new HoodieLogFile(new CachingPath(logFile), partitionNameOverrideOpt.orElse(EMPTY_STRING)))
               .collect(Collectors.toList()),
           readerSchema, true, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 

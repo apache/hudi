@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.CachingPath;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -269,11 +270,11 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
         LOG.info("Syncing partition (" + partition + ") of instant (" + instant + ")");
         FileStatus[] statuses = entry.getValue().stream().map(p -> {
           FileStatus status = new FileStatus(p.getFileSizeInBytes(), false, 0, 0, 0, 0, null, null, null,
-              new Path(String.format("%s/%s", metaClient.getBasePath(), p.getPath())));
+              new CachingPath(String.format("%s/%s", metaClient.getBasePath(), p.getPath())));
           return status;
         }).toArray(FileStatus[]::new);
         List<HoodieFileGroup> fileGroups =
-            buildFileGroups(statuses, timeline.filterCompletedAndCompactionInstants(), false);
+            buildFileGroups(partition, statuses, timeline.filterCompletedAndCompactionInstants(), false);
         applyDeltaFileSlicesToPartitionView(partition, fileGroups, DeltaApplyMode.ADD);
       } else {
         LOG.warn("Skipping partition (" + partition + ") when syncing instant (" + instant + ") as it is not loaded");
@@ -380,11 +381,11 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
       LOG.info("Removing file slices for partition (" + partition + ") for instant (" + instant + ")");
       FileStatus[] statuses = paths.stream().map(p -> {
         FileStatus status = new FileStatus();
-        status.setPath(new Path(p));
+        status.setPath(new CachingPath(p));
         return status;
       }).toArray(FileStatus[]::new);
       List<HoodieFileGroup> fileGroups =
-          buildFileGroups(statuses, timeline.filterCompletedAndCompactionInstants(), false);
+          buildFileGroups(partition, statuses, timeline.filterCompletedAndCompactionInstants(), false);
       applyDeltaFileSlicesToPartitionView(partition, fileGroups, DeltaApplyMode.REMOVE);
     } else {
       LOG.warn("Skipping partition (" + partition + ") when syncing instant (" + instant + ") as it is not loaded");

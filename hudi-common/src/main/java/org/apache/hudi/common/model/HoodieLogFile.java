@@ -53,6 +53,7 @@ public class HoodieLogFile implements Serializable {
   private transient FileStatus fileStatus;
   private transient Path path;
   private final String pathStr;
+  private final String partitionPath;
   private String fileId;
   private String deltaCommitTime;
   private int logVersion;
@@ -72,25 +73,26 @@ public class HoodieLogFile implements Serializable {
     this.fileExtension = logFile.getFileExtension();
     this.suffix = logFile.getSuffix();
     this.fileLen = logFile.getFileSize();
+    this.partitionPath = logFile.getPartitionPath();
   }
 
-  public HoodieLogFile(FileStatus fileStatus) {
-    this(fileStatus, fileStatus.getPath(), fileStatus.getPath().toString(), fileStatus.getLen());
+  public HoodieLogFile(FileStatus fileStatus, String partitionPath) {
+    this(fileStatus, fileStatus.getPath(), fileStatus.getPath().toString(), fileStatus.getLen(), partitionPath);
   }
 
-  public HoodieLogFile(Path logPath) {
-    this(null, logPath, logPath.toString(), -1);
+  public HoodieLogFile(Path logPath, String partitionPath) {
+    this(null, logPath, logPath.toString(), -1, partitionPath);
   }
 
-  public HoodieLogFile(Path logPath, long fileLen) {
-    this(null, logPath, logPath.toString(), fileLen);
+  public HoodieLogFile(Path logPath, long fileLen, String partitionPath) {
+    this(null, logPath, logPath.toString(), fileLen, partitionPath);
   }
 
-  public HoodieLogFile(String logPathStr) {
-    this(null, null, logPathStr, -1);
+  public HoodieLogFile(String logPathStr, String partitionPath) {
+    this(null, null, logPathStr, -1, partitionPath);
   }
 
-  private HoodieLogFile(FileStatus fileStatus, Path logPath, String logPathStr, long fileLen) {
+  private HoodieLogFile(FileStatus fileStatus, Path logPath, String logPathStr, long fileLen, String partitionPath) {
     this.fileStatus = fileStatus;
     this.pathStr = logPathStr;
     this.fileLen = fileLen;
@@ -98,6 +100,7 @@ public class HoodieLogFile implements Serializable {
     if (logPath instanceof CachingPath) {
       this.path = logPath;
     }
+    this.partitionPath = partitionPath;
   }
 
   private void parseFieldsFromPath() {
@@ -166,6 +169,10 @@ public class HoodieLogFile implements Serializable {
     return path;
   }
 
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
   public String getFileName() {
     return getPath().getName();
   }
@@ -192,7 +199,7 @@ public class HoodieLogFile implements Serializable {
     Path path = getPath();
     String extension = "." + fileExtension;
     return new HoodieLogFile(new CachingPath(path.getParent(),
-        FSUtils.makeLogFileName(fileId, extension, deltaCommitTime, logVersion + 1, logWriteToken)));
+        FSUtils.makeLogFileName(fileId, extension, deltaCommitTime, logVersion + 1, logWriteToken)), partitionPath);
   }
 
   public static Comparator<HoodieLogFile> getLogFileComparator() {

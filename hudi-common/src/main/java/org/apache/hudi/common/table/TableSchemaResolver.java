@@ -389,7 +389,7 @@ public class TableSchemaResolver {
    * @return
    */
   public static MessageType readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
-    try (Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null)) {
+    try (Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path, null), null)) {
       HoodieDataBlock lastBlock = null;
       while (reader.hasNext()) {
         HoodieLogBlock block = reader.next();

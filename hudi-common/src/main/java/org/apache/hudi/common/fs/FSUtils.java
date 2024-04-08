@@ -209,11 +209,13 @@ public class FSUtils {
           + "\" does not belong to base-path \"" + basePath + "\"");
     }
 
-    int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
-        basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
+    String basePathName = basePath.getName();
+    Path basePathParent = basePath.getParent();
+    int partitionStartIndex = fullPartitionPathStr.indexOf(basePathName,
+        basePathParent == null ? 0 : basePathParent.toString().length());
     // Partition-Path could be empty for non-partitioned tables
-    return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
-        : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
+    return partitionStartIndex + basePathName.length() == fullPartitionPathStr.length() ? ""
+        : fullPartitionPathStr.substring(partitionStartIndex + basePathName.length() + 1);
   }
 
   /**
@@ -494,7 +496,7 @@ public class FSUtils {
     try {
       PathFilter pathFilter = path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension);
       return Arrays.stream(fs.listStatus(partitionPath, pathFilter))
-          .map(HoodieLogFile::new)
+          .map(fileStatus -> new HoodieLogFile(fileStatus, partitionPath.toString()))
           .filter(s -> s.getDeltaCommitTime().equals(deltaCommitTime));
     } catch (FileNotFoundException e) {
       return Stream.of();

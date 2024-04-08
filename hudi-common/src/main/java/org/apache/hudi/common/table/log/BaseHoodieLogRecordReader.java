@@ -68,6 +68,7 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.COMMAND_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -235,7 +236,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReverseReader(fs,
-          logFilePaths.stream().map(logFile -> new HoodieLogFile(new CachingPath(logFile))).collect(Collectors.toList()),
+          logFilePaths.stream().map(logFile -> new HoodieLogFile(new CachingPath(logFile), partitionNameOverrideOpt.orElse(EMPTY_STRING))).collect(Collectors.toList()),
           readerSchema, true, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
@@ -525,7 +526,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
-          logFilePaths.stream().map(logFile -> new HoodieLogFile(new CachingPath(logFile))).collect(Collectors.toList()),
+          logFilePaths.stream().map(logFile -> new HoodieLogFile(new CachingPath(logFile), partitionNameOverrideOpt.orElse(EMPTY_STRING))).collect(Collectors.toList()),
           readerSchema, true, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       /**

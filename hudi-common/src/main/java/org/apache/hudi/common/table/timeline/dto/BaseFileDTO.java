@@ -43,6 +43,9 @@ public class BaseFileDTO {
   @JsonProperty("bootstrapBaseFile")
   private BaseFileDTO bootstrapBaseFile;
 
+  @JsonProperty("partitionPath")
+  private String partitionPath;
+
   public static HoodieBaseFile toHoodieBaseFile(BaseFileDTO dto) {
     if (null == dto) {
       return null;
@@ -50,9 +53,9 @@ public class BaseFileDTO {
 
     HoodieBaseFile baseFile;
     if (null != dto.fileStatus) {
-      baseFile = new HoodieBaseFile(FileStatusDTO.toFileStatus(dto.fileStatus), dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
+      baseFile = new HoodieBaseFile(FileStatusDTO.toFileStatus(dto.fileStatus), dto.partitionPath, dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
     } else {
-      baseFile = new HoodieBaseFile(dto.fullPath, dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
+      baseFile = new HoodieBaseFile(dto.fullPath, dto.partitionPath, dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
       baseFile.setFileLen(dto.fileLen);
     }
 
@@ -89,6 +92,7 @@ public class BaseFileDTO {
           .map(BaseFileDTO::fromHoodieBaseFile).orElse(null);
       dto.fileId = hoodieBaseFile.getFileId();
       dto.commitTime = hoodieBaseFile.getCommitTime();
+      dto.partitionPath = hoodieBaseFile.getPartitionPath();
     }
     return dto;
   }

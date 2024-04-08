@@ -37,6 +37,7 @@ public class HoodieBaseFile extends BaseFile {
   private static final char DOT = '.';
   private final String fileId;
   private final String commitTime;
+  private final String partitionPath;
 
   private Option<BaseFile> bootstrapBaseFile;
 
@@ -45,44 +46,48 @@ public class HoodieBaseFile extends BaseFile {
     this.bootstrapBaseFile = dataFile.bootstrapBaseFile;
     this.fileId = dataFile.getFileId();
     this.commitTime = dataFile.getCommitTime();
+    this.partitionPath = dataFile.getPartitionPath();
   }
 
-  public HoodieBaseFile(FileStatus fileStatus) {
-    this(fileStatus, null);
+  public HoodieBaseFile(FileStatus fileStatus, String partitionPath) {
+    this(fileStatus, partitionPath, null);
   }
 
-  public HoodieBaseFile(FileStatus fileStatus, BaseFile bootstrapBaseFile) {
-    this(fileStatus, getFileIdAndCommitTimeFromFileName(fileStatus.getPath().getName()), bootstrapBaseFile);
+  public HoodieBaseFile(FileStatus fileStatus, String partitionPath, BaseFile bootstrapBaseFile) {
+    this(fileStatus, partitionPath, getFileIdAndCommitTimeFromFileName(fileStatus.getPath().getName()), bootstrapBaseFile);
   }
 
-  public HoodieBaseFile(String filePath) {
-    this(filePath, null);
+  public HoodieBaseFile(String filePath, String partitionPath) {
+    this(filePath, partitionPath, null);
   }
 
-  public HoodieBaseFile(String filePath, BaseFile bootstrapBaseFile) {
+  public HoodieBaseFile(String filePath, String partitionPath, BaseFile bootstrapBaseFile) {
     super(filePath);
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     String[] fileIdAndCommitTime = getFileIdAndCommitTimeFromFileName(getFileName());
     this.fileId = fileIdAndCommitTime[0];
     this.commitTime = fileIdAndCommitTime[1];
+    this.partitionPath = partitionPath;
   }
 
-  public HoodieBaseFile(String filePath, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
+  public HoodieBaseFile(String filePath, String partitionPath, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
     super(filePath);
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
     this.commitTime = commitTime;
+    this.partitionPath = partitionPath;
   }
 
-  private HoodieBaseFile(FileStatus fileStatus, String[] fileIdAndCommitTime, BaseFile bootstrapBaseFile) {
-    this(fileStatus, fileIdAndCommitTime[0], fileIdAndCommitTime[1], bootstrapBaseFile);
+  private HoodieBaseFile(FileStatus fileStatus, String partitionPath, String[] fileIdAndCommitTime, BaseFile bootstrapBaseFile) {
+    this(fileStatus, partitionPath, fileIdAndCommitTime[0], fileIdAndCommitTime[1], bootstrapBaseFile);
   }
 
-  public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
+  public HoodieBaseFile(FileStatus fileStatus, String partitionPath, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
     super(maybeHandleExternallyGeneratedFileName(fileStatus, fileId));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
     this.commitTime = commitTime;
+    this.partitionPath = partitionPath;
   }
 
   /**
@@ -161,6 +166,10 @@ public class HoodieBaseFile extends BaseFile {
 
   public Option<BaseFile> getBootstrapBaseFile() {
     return bootstrapBaseFile;
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
   }
 
   public void setBootstrapBaseFile(BaseFile bootstrapBaseFile) {

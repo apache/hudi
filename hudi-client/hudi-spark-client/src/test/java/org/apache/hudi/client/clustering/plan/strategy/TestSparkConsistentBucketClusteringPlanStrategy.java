@@ -186,9 +186,10 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
 
   private FileSlice createFileSliceWithSize(String fileIdPfx, long baseFileSize, long totalLogFileSize) {
     String fileId = FSUtils.createNewFileId(fileIdPfx, 0);
-    FileSlice fs = new FileSlice("partition", "001", fileId);
+    String partitionPath = "partition";
+    FileSlice fs = new FileSlice(partitionPath, "001", fileId);
     if (baseFileSize > 0) {
-      HoodieBaseFile f = new HoodieBaseFile(fileId);
+      HoodieBaseFile f = new HoodieBaseFile(fileId, partitionPath);
       f.setFileLen(baseFileSize);
       fs.setBaseFile(f);
     }
@@ -199,7 +200,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
     }
     long logFileSize = (totalLogFileSize + numLogFiles - 1) / Math.max(numLogFiles, 1);
     for (int i = 0; i < numLogFiles; ++i) {
-      HoodieLogFile f = new HoodieLogFile(String.format(".%s_%s.log.%d", fileId, "12345678", i));
+      HoodieLogFile f = new HoodieLogFile(String.format(".%s_%s.log.%d", fileId, "12345678", i), partitionPath);
       f.setFileLen(logFileSize);
       fs.addLogFile(f);
     }

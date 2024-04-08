@@ -55,7 +55,7 @@ public class TestHoodieFileGroup {
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data",
         activeTimeline.getCommitsTimeline().filterCompletedInstants());
     for (int i = 0; i < 3; i++) {
-      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i);
+      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i, "");
       fileGroup.addBaseFile(baseFile);
     }
     assertEquals(2, fileGroup.getAllFileSlices().count());
@@ -76,7 +76,7 @@ public class TestHoodieFileGroup {
     ).collect(Collectors.toList()));
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
     for (int i = 0; i < 7; i++) {
-      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_0" + i);
+      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_0" + i, "");
       fileGroup.addBaseFile(baseFile);
     }
     List<FileSlice> allFileSlices = fileGroup.getAllFileSlices().collect(Collectors.toList());
@@ -100,13 +100,13 @@ public class TestHoodieFileGroup {
 
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
 
-    HoodieLogFile logFile1 = new HoodieLogFile(new Path(getLogFileName("001")));
+    HoodieLogFile logFile1 = new HoodieLogFile(new Path(getLogFileName("001")), "");
     fileGroup.addLogFile(queryView, logFile1);
     assertThat("no base file in the file group, returns the delta commit instant itself",
         fileGroup.getBaseInstantTime(queryView, logFile1), is("001"));
     assertThat(collectFileSlices(fileGroup), is("001"));
 
-    HoodieLogFile logFile2 = new HoodieLogFile(new Path(getLogFileName("002")));
+    HoodieLogFile logFile2 = new HoodieLogFile(new Path(getLogFileName("002")), "");
     fileGroup.addLogFile(queryView, logFile2);
     assertThat("no base file in the file group, returns the earliest delta commit instant",
         fileGroup.getBaseInstantTime(queryView, logFile2), is("001"));
@@ -116,15 +116,15 @@ public class TestHoodieFileGroup {
     assertThat("Include the pending compaction instant time as constitute of the file slice base instant time list",
         collectFileSlices(fileGroup), is("001,003"));
 
-    HoodieLogFile logFile3 = new HoodieLogFile(new Path(getLogFileName("004")));
+    HoodieLogFile logFile3 = new HoodieLogFile(new Path(getLogFileName("004")), "");
     fileGroup.addLogFile(queryView, logFile3);
     assertThat("Assign the log file to maximum base instant time that less than or equals its completion time",
         fileGroup.getBaseInstantTime(queryView, logFile2), is("003"));
     assertThat(collectFileSlices(fileGroup), is("001,003"));
 
     // now add the base files
-    fileGroup.addBaseFile(new HoodieBaseFile(getBaseFileName("003")));
-    fileGroup.addBaseFile(new HoodieBaseFile(getBaseFileName("005")));
+    fileGroup.addBaseFile(new HoodieBaseFile(getBaseFileName("003"), ""));
+    fileGroup.addBaseFile(new HoodieBaseFile(getBaseFileName("005"), ""));
 
     assertThat(collectFileSlices(fileGroup), is("001,003,005"));
 

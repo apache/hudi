@@ -121,10 +121,8 @@ public class CompactionOperation implements Serializable {
   public Option<HoodieBaseFile> getBaseFile(String basePath, String partitionPath) {
     Option<BaseFile> externalBaseFile = bootstrapFilePath.map(BaseFile::new);
     Path dirPath = FSUtils.getPartitionPath(basePath, partitionPath);
-    return dataFileName.map(df -> {
-      return externalBaseFile.map(ext -> new HoodieBaseFile(new Path(dirPath, df).toString(), ext))
-          .orElseGet(() -> new HoodieBaseFile(new Path(dirPath, df).toString()));
-    });
+    return dataFileName.map(df -> externalBaseFile.map(ext -> new HoodieBaseFile(new Path(dirPath, df).toString(), partitionPath, ext))
+        .orElseGet(() -> new HoodieBaseFile(new Path(dirPath, df).toString(), partitionPath)));
   }
 
   /**

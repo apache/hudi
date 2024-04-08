@@ -122,6 +122,15 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
     return this.afterFileSlice;
   }
 
+  public String getPartitionPath() {
+    if (beforeFileSlice.isPresent()) {
+      return beforeFileSlice.get().getFileGroupId().getPartitionPath();
+    } else if (afterFileSlice.isPresent()) {
+      return afterFileSlice.get().getFileGroupId().getPartitionPath();
+    }
+    return null;
+  }
+
   @Override
   public int compareTo(HoodieCDCFileSplit o) {
     return this.instant.compareTo(o.instant);

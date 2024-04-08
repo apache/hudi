@@ -100,7 +100,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         String fileId = UUID.randomUUID().toString();
         FileSlice fileSlice = new FileSlice(p, instant, fileId);
         writeParquetFile(instant, hoodieTestTable.getBaseFilePath(p, fileId), hoodieRecords, metaClient, engineContext);
-        HoodieBaseFile baseFile = new HoodieBaseFile(hoodieTestTable.getBaseFilePath(p, fileId).toString(), fileId, instant, null);
+        HoodieBaseFile baseFile = new HoodieBaseFile(hoodieTestTable.getBaseFilePath(p, fileId).toString(), p, fileId, instant, null);
         fileSlice.setBaseFile(baseFile);
         partitionFileSlicePairs.add(Pair.of(p, fileSlice));
         recordKeys.addAll(hoodieRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet()));

@@ -120,7 +120,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
     //       further
     Path updatedPath = FSUtils.makeQualified(fs, logFile.getPath());
-    this.logFile = updatedPath.equals(logFile.getPath()) ? logFile : new HoodieLogFile(updatedPath, logFile.getFileSize());
+    this.logFile = updatedPath.equals(logFile.getPath()) ? logFile : new HoodieLogFile(updatedPath, logFile.getFileSize(), logFile.getPartitionPath());
     this.bufferSize = bufferSize;
     this.inputStream = getDataInputStream(fs, this.logFile, bufferSize);
     this.readerSchema = readerSchema;

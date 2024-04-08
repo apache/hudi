@@ -88,16 +88,17 @@ public class TestFileSliceMetricUtils {
 
   private FileSlice buildFileSlice(long baseFileLen, List<Long> logFileLens) {
     final String baseFilePath = ".b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1";
-    FileSlice slice = new FileSlice("partition_0",
+    String partition = "partition_0";
+    FileSlice slice = new FileSlice(partition,
         InProcessTimeGenerator.createNewInstantTime(),
         UUID.randomUUID().toString());
-    HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath);
+    HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath, partition);
     baseFile.setFileLen(baseFileLen);
     slice.setBaseFile(baseFile);
     int logVersion = 1;
     for (long logFileLen : logFileLens) {
       String logFilePath = "." + UUID.randomUUID().toString() + "_20170101134598.log." + logVersion;
-      HoodieLogFile logFile = new HoodieLogFile(logFilePath);
+      HoodieLogFile logFile = new HoodieLogFile(logFilePath, partition);
       logFile.setFileLen(logFileLen);
       slice.addLogFile(logFile);
       logVersion++;

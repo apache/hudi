@@ -486,7 +486,7 @@ public class TestCleanPlanner {
     HoodieFileGroup group = new HoodieFileGroup(fileGroupId, timeline);
     for (String baseFileCommitTime : baseFileCommitTimes) {
       when(timeline.containsOrBeforeTimelineStarts(baseFileCommitTime)).thenReturn(true);
-      HoodieBaseFile baseFile = new HoodieBaseFile(String.format("file:///tmp/base/%s_1-0-1_%s.parquet", fileGroup, baseFileCommitTime));
+      HoodieBaseFile baseFile = new HoodieBaseFile(String.format("file:///tmp/base/%s_1-0-1_%s.parquet", fileGroup, baseFileCommitTime), partition);
       group.addBaseFile(baseFile);
     }
     return group;

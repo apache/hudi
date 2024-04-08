@@ -239,6 +239,7 @@ public class HoodieFileSliceTestUtils {
 
   public static HoodieBaseFile createBaseFile(
       String baseFilePath,
+      String partitionPath,
       List<IndexedRecord> records,
       Schema schema,
       String baseInstantTime
@@ -277,12 +278,13 @@ public class HoodieFileSliceTestUtils {
             (String) record.get(schema.getField(ROW_KEY).pos()), record);
       }
     }
-    return new HoodieBaseFile(baseFilePath);
+    return new HoodieBaseFile(baseFilePath, partitionPath);
   }
 
   public static HoodieLogFile createLogFile(
       FileSystem fileSystem,
       String logFilePath,
+      String partitionPath,
       List<IndexedRecord> records,
       Schema schema,
       String fileId,
@@ -312,7 +314,7 @@ public class HoodieFileSliceTestUtils {
         writer.appendBlock(deleteBlock);
       }
     }
-    return new HoodieLogFile(logFilePath);
+    return new HoodieLogFile(logFilePath, partitionPath);
   }
 
   /**
@@ -339,6 +341,7 @@ public class HoodieFileSliceTestUtils {
       List<IndexedRecord> records = generateRecords(baseFilePlan);
       baseFile = createBaseFile(
           baseFilePath.toString(),
+          partitionPath,
           records,
           schema,
           baseFilePlan.getInstantTime());
@@ -359,6 +362,7 @@ public class HoodieFileSliceTestUtils {
       logFiles.add(createLogFile(
           fileSystem,
           logFile.toString(),
+          partitionPath,
           records,
           schema,
           fileId,
