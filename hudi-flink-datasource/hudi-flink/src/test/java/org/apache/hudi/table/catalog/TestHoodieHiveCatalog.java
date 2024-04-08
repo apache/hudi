@@ -29,11 +29,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.TableSchema;
@@ -71,6 +73,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.hudi.configuration.FlinkOptions.PRECOMBINE_FIELD;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
 import static org.apache.hudi.table.catalog.HoodieCatalogTestUtils.createHiveConf;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -97,6 +100,26 @@ public class TestHoodieHiveCatalog {
           .primaryKey("uuid")
           .build();
   List<String> partitions = Collections.singletonList("par1");
+
+  TableSchema multiKeySinglePartitionTableSchema =
+      TableSchema.builder()
+          .field("uuid", DataTypes.INT().notNull())
+          .field("name", DataTypes.STRING().notNull())
+          .field("age", DataTypes.INT())
+          .field("par1", DataTypes.STRING())
+          .primaryKey("uuid", "name")
+          .build();
+
+  TableSchema singleKeyMultiPartitionTableSchema =
+      TableSchema.builder()
+          .field("uuid", DataTypes.INT().notNull())
+          .field("name", DataTypes.STRING())
+          .field("par1", DataTypes.STRING())
+          .field("par2", DataTypes.STRING())
+          .primaryKey("uuid")
+          .build();
+  List<String> multiPartitions = Lists.newArrayList("par1", "par2");
+
   private static HoodieHiveCatalog hoodieCatalog;
   private final ObjectPath tablePath = new ObjectPath("default", "test");
 
@@ -200,6 +223,28 @@ public class TestHoodieHiveCatalog {
         StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(tablePath, table), createHiveConf());
     String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
+
+    // validate single key and multiple partition for partitioned table
+    ObjectPath singleKeyMultiPartitionPath = new ObjectPath("default", "tb_skmp_" + System.currentTimeMillis());
+    CatalogTable singleKeyMultiPartitionTable =
+        new CatalogTableImpl(singleKeyMultiPartitionTableSchema, multiPartitions, options, "hudi table");
+    hoodieCatalog.createTable(singleKeyMultiPartitionPath, singleKeyMultiPartitionTable, false);
+
+    HoodieTableMetaClient singleKeyMultiPartitionTableMetaClient =
+        StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(singleKeyMultiPartitionPath, singleKeyMultiPartitionTable), createHiveConf());
+    assertThat(singleKeyMultiPartitionTableMetaClient.getTableConfig().getKeyGeneratorClassName(), is(ComplexAvroKeyGenerator.class.getName()));
+
+    // validate multiple key and single partition for partitioned table
+    ObjectPath multiKeySinglePartitionPath = new ObjectPath("default", "tb_mksp_" + System.currentTimeMillis());
+
+    options.remove(RECORDKEY_FIELD_NAME.key());
+    CatalogTable multiKeySinglePartitionTable =
+        new CatalogTableImpl(multiKeySinglePartitionTableSchema, partitions, options, "hudi table");
+    hoodieCatalog.createTable(multiKeySinglePartitionPath, multiKeySinglePartitionTable, false);
+
+    HoodieTableMetaClient multiKeySinglePartitionTableMetaClient =
+        StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(multiKeySinglePartitionPath, multiKeySinglePartitionTable), createHiveConf());
+    assertThat(multiKeySinglePartitionTableMetaClient.getTableConfig().getKeyGeneratorClassName(), is(ComplexAvroKeyGenerator.class.getName()));
 
     // validate key generator for non partitioned table
     ObjectPath nonPartitionPath = new ObjectPath("default", "tb_" + tableType);
@@ -368,6 +413,19 @@ public class TestHoodieHiveCatalog {
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
     assertThat(replaceCommitMetadata.getPartitionToReplaceFileIds().size(), is(1));
     assertThrows(NoSuchObjectException.class, () -> getHivePartition(partitionSpec));
+  }
+
+  @Test
+  public void testMappingHiveConfPropsToHiveTableParams() throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
+    HoodieHiveCatalog catalog = HoodieCatalogTestUtils.createHiveCatalog("myCatalog", true);
+    catalog.open();
+    Map<String, String> originOptions = new HashMap<>();
+    originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    CatalogTable table = new CatalogTableImpl(schema, originOptions, "hudi table");
+    catalog.createTable(tablePath, table, false);
+
+    Table hiveTable = hoodieCatalog.getHiveTable(tablePath);
+    assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.schema.verification"));
   }
 
   private Partition getHivePartition(CatalogPartitionSpec partitionSpec) throws Exception {

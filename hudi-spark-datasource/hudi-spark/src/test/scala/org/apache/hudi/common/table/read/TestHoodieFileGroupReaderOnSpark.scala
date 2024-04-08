@@ -23,9 +23,9 @@ import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.{AvroConversionUtils, SparkFileFormatInternalRowReaderContext}
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -50,7 +50,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   def setup() {
     val sparkConf = new SparkConf
     sparkConf.set("spark.app.name", getClass.getName)
-    sparkConf.set("spark.master", "local[*]")
+    sparkConf.set("spark.master", "local[8]")
     sparkConf.set("spark.default.parallelism", "4")
     sparkConf.set("spark.sql.shuffle.partitions", "4")
     sparkConf.set("spark.driver.maxResultSize", "2g")

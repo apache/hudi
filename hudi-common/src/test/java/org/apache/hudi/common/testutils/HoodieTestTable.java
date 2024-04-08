@@ -120,6 +120,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createRollbackFil
 import static org.apache.hudi.common.testutils.FileCreateUtils.createSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.deleteSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
+import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.BASE_FILE_EXTENSION;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
@@ -555,7 +556,7 @@ public class HoodieTestTable {
     if (newFileId.isPresent() && !StringUtils.isNullOrEmpty(newFileId.get())) {
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setPartitionPath(partition);
-      writeStat.setPath(partition + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", newFileId.get()));
+      writeStat.setPath(partition + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", newFileId.get(), BASE_FILE_EXTENSION));
       writeStat.setFileId(newFileId.get());
       writeStat.setTotalWriteBytes(1);
       writeStat.setFileSizeInBytes(1);
@@ -960,6 +961,19 @@ public class HoodieTestTable {
     Pair<HoodieCleanerPlan, HoodieCleanMetadata> cleanerMeta = getHoodieCleanMetadata(commitTime, testTableState);
     addClean(commitTime, cleanerMeta.getKey(), cleanerMeta.getValue());
     return cleanerMeta.getValue();
+  }
+
+  /**
+   * Repeats the same cleaning based on the cleaner plan and clean commit metadata.
+   *
+   * @param cleanCommitTime new clean commit time to use.
+   * @param cleanerPlan     cleaner plan to write to the metadata.
+   * @param cleanMetadata   clean metadata in data table to use.
+   */
+  public void repeatClean(String cleanCommitTime,
+                          HoodieCleanerPlan cleanerPlan,
+                          HoodieCleanMetadata cleanMetadata) throws IOException {
+    addClean(cleanCommitTime, cleanerPlan, cleanMetadata);
   }
 
   public HoodieCleanMetadata doCleanBasedOnCommits(String cleanCommitTime, List<String> commitsToClean) throws IOException {

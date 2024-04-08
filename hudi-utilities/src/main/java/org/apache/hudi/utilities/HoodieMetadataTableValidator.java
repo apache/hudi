@@ -103,6 +103,7 @@ import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hadoop.fs.CachingPath.getPathWithoutSchemeAndAuthority;
@@ -180,6 +181,8 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private final String taskLabels;
 
+  private List<Throwable> throwables = new ArrayList<>();
+
   public HoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;
     this.cfg = cfg;
@@ -197,8 +200,30 @@ public class HoodieMetadataTableValidator implements Serializable {
     this.taskLabels = generateValidationTaskLabels();
   }
 
+  /**
+   * Returns list of Throwable which were encountered during validation. This method is useful
+   * when ignoreFailed parameter is set to true.
+   */
+  public List<Throwable> getThrowables() {
+    return throwables;
+  }
+
+  /**
+   * Returns true if there is a validation failure encountered during validation.
+   * This method is useful when ignoreFailed parameter is set to true.
+   */
+  public boolean hasValidationFailure() {
+    for (Throwable throwable : throwables) {
+      if (throwable instanceof HoodieValidationException) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private String generateValidationTaskLabels() {
     List<String> labelList = new ArrayList<>();
+    labelList.add(cfg.basePath);
     if (cfg.validateLatestBaseFiles) {
       labelList.add("validate-latest-base-files");
     }
@@ -411,10 +436,10 @@ public class HoodieMetadataTableValidator implements Serializable {
     try {
       LOG.info(cfg.toString());
       if (cfg.continuous) {
-        LOG.info(" ****** do hoodie metadata table validation in CONTINUOUS mode ******");
+        LOG.info(" ****** do hoodie metadata table validation in CONTINUOUS mode - {} ******", taskLabels);
         doHoodieMetadataTableValidationContinuous();
       } else {
-        LOG.info(" ****** do hoodie metadata table validation once ******");
+        LOG.info(" ****** do hoodie metadata table validation once - {} ******", taskLabels);
         result = doHoodieMetadataTableValidationOnce();
       }
     } catch (Exception e) {
@@ -432,10 +457,11 @@ public class HoodieMetadataTableValidator implements Serializable {
     try {
       return doMetadataTableValidation();
     } catch (Throwable e) {
-      LOG.error("Metadata table validation failed to HoodieValidationException", e);
+      LOG.error("Metadata table validation failed to HoodieValidationException {} {}", taskLabels, e);
       if (!cfg.ignoreFailed) {
         throw e;
       }
+      throwables.add(e);
       return false;
     }
   }
@@ -491,7 +517,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     List<String> allPartitions = validatePartitions(engineContext, basePath);
 
     if (allPartitions.isEmpty()) {
-      LOG.warn("The result of getting all partitions is null or empty, skip current validation.");
+      LOG.warn("The result of getting all partitions is null or empty, skip current validation. {}", taskLabels);
       return true;
     }
 
@@ -500,12 +526,12 @@ public class HoodieMetadataTableValidator implements Serializable {
          HoodieMetadataValidationContext fsBasedContext =
              new HoodieMetadataValidationContext(engineContext, props, metaClient, false)) {
       Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
-      List<Pair<Boolean, String>> result = new ArrayList<>(
+      List<Pair<Boolean, ? extends Exception>> result = new ArrayList<>(
           engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
             try {
               validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
               LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));
-              return Pair.of(true, "");
+              return Pair.<Boolean, Exception>of(true, null);
             } catch (HoodieValidationException e) {
               LOG.error(
                   String.format("Metadata table validation failed for partition %s due to HoodieValidationException (partition %s)",
@@ -513,26 +539,29 @@ public class HoodieMetadataTableValidator implements Serializable {
               if (!cfg.ignoreFailed) {
                 throw e;
               }
-              return Pair.of(false, e.getMessage() + " for partition: " + partitionPath);
+              return Pair.of(false, new HoodieValidationException(e.getMessage() + " for partition: " + partitionPath, e));
             }
           }).collectAsList());
 
       try {
         validateRecordIndex(engineContext, metaClient, metadataTableBasedContext.getTableMetadata());
-        result.add(Pair.of(true, ""));
+        result.add(Pair.of(true, null));
       } catch (HoodieValidationException e) {
         LOG.error(
-            "Metadata table validation failed due to HoodieValidationException in record index validation", e);
+            "Metadata table validation failed due to HoodieValidationException in record index validation for table: {} ", cfg.basePath, e);
         if (!cfg.ignoreFailed) {
           throw e;
         }
-        result.add(Pair.of(false, e.getMessage()));
+        result.add(Pair.of(false, e));
       }
 
-      for (Pair<Boolean, String> res : result) {
+      for (Pair<Boolean, ? extends Exception> res : result) {
         finalResult &= res.getKey();
         if (res.getKey().equals(false)) {
           LOG.error("Metadata Validation failed for table: " + cfg.basePath + " with error: " + res.getValue());
+          if (res.getRight() != null) {
+            throwables.add(res.getRight());
+          }
         }
       }
 
@@ -563,19 +592,19 @@ public class HoodieMetadataTableValidator implements Serializable {
       int finishedInstants = mdtMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
       if (finishedInstants == 0) {
         if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
-          LOG.info("There is no completed commit in both metadata table and corresponding data table.");
+          LOG.info("There is no completed commit in both metadata table and corresponding data table: {}", taskLabels);
           return false;
         } else {
-          throw new HoodieValidationException("There is no completed instant for metadata table.");
+          throw new HoodieValidationException("There is no completed instant for metadata table: " + cfg.basePath);
         }
       }
       return true;
     } catch (TableNotFoundException tbe) {
       // Suppress the TableNotFound exception if Metadata table is not available to read for now
-      LOG.warn("Metadata table is not found. Skip current validation.");
+      LOG.warn("Metadata table is not found for table: {}. Skip current validation.", cfg.basePath);
       return false;
     } catch (Exception ex) {
-      LOG.warn("Metadata table is not available to read for now, ", ex);
+      LOG.warn("Metadata table is not available to read for now for table: {}, ", cfg.basePath, ex);
       return false;
     }
   }
@@ -622,9 +651,43 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     if (allPartitionPathsFromFS.size() != allPartitionPathsMeta.size()
         || !allPartitionPathsFromFS.equals(allPartitionPathsMeta)) {
-      String message = "Compare Partitions Failed! " + "AllPartitionPathsFromFS : " + allPartitionPathsFromFS + " and allPartitionPathsMeta : " + allPartitionPathsMeta;
-      LOG.error(message);
-      throw new HoodieValidationException(message);
+      List<String> additionalFromFS = new ArrayList<>(allPartitionPathsFromFS);
+      additionalFromFS.remove(allPartitionPathsMeta);
+      List<String> additionalFromMDT = new ArrayList<>(allPartitionPathsMeta);
+      additionalFromMDT.remove(allPartitionPathsFromFS);
+      boolean misMatch = true;
+      List<String> actualAdditionalPartitionsInMDT = new ArrayList<>(additionalFromMDT);
+      if (additionalFromFS.isEmpty() && !additionalFromMDT.isEmpty()) {
+        // there is a chance that when we polled MDT there could have been a new completed commit which was not complete when we polled FS based
+        // listing. let's rule that out.
+        additionalFromMDT.forEach(partitionFromDMT -> {
+
+          HoodiePartitionMetadata hoodiePartitionMetadata =
+              new HoodiePartitionMetadata(metaClient.getFs(), FSUtils.getPartitionPath(basePath, partitionFromDMT));
+          Option<String> partitionCreationTimeOpt = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
+          // if creation time is greater than last completed instant in active timeline, we can ignore the additional partition from MDT.
+          if (partitionCreationTimeOpt.isPresent() && !completedTimeline.containsInstant(partitionCreationTimeOpt.get())) {
+            Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
+            if (lastInstant.isPresent()
+                && HoodieTimeline.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().getTimestamp())) {
+              LOG.warn("Ignoring additional partition " + partitionFromDMT + ", as it was deduced to be part of a "
+                  + "latest completed commit which was inflighht when FS based listing was polled.");
+              actualAdditionalPartitionsInMDT.remove(partitionFromDMT);
+            }
+          }
+        });
+        // if there is no additional partitions from FS listing and only additional partitions from MDT based listing is due to a new commit, we are good
+        if (actualAdditionalPartitionsInMDT.isEmpty()) {
+          misMatch = false;
+        }
+      }
+      if (misMatch) {
+        String message = "Compare Partitions Failed! " + " Additional partitions from FS, but missing from MDT : \"" + additionalFromFS
+            + "\" and additional partitions from MDT, but missing from FS listing : \"" + actualAdditionalPartitionsInMDT
+            + "\".\n All partitions from FS listing " + allPartitionPathsFromFS;
+        LOG.error(message);
+        throw new HoodieValidationException(message);
+      }
     }
 
     return allPartitionPathsMeta;
@@ -835,13 +898,13 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     if (countKeyFromTable != countKeyFromRecordIndex) {
       String message = String.format("Validation of record index count failed: "
-              + "%s entries from record index metadata, %s keys from the data table.",
+              + "%s entries from record index metadata, %s keys from the data table: " + cfg.basePath,
           countKeyFromRecordIndex, countKeyFromTable);
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
       LOG.info(String.format(
-          "Validation of record index count succeeded: %s entries.", countKeyFromRecordIndex));
+          "Validation of record index count succeeded: %s entries. Table: %s", countKeyFromRecordIndex, cfg.basePath));
     }
   }
 
@@ -950,13 +1013,13 @@ public class HoodieMetadataTableValidator implements Serializable {
     if (diffCount > 0) {
       String message = String.format("Validation of record index content failed: "
               + "%s keys (total %s) from the data table have wrong location in record index "
-              + "metadata. Sample mismatches: %s",
-          diffCount, countKey, String.join(";", result.getRight()));
+              + "metadata. Table: %s   Sample mismatches: %s",
+          diffCount, countKey, cfg.basePath, String.join(";", result.getRight()));
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
       LOG.info(String.format(
-          "Validation of record index content succeeded: %s entries.", countKey));
+          "Validation of record index content succeeded: %s entries. Table: %s", countKey, cfg.basePath));
     }
   }
 
@@ -995,13 +1058,13 @@ public class HoodieMetadataTableValidator implements Serializable {
       List<T> infoListFromMetadataTable, List<T> infoListFromFS, String partitionPath, String label) {
     if (infoListFromMetadataTable.size() != infoListFromFS.size()
         || !infoListFromMetadataTable.equals(infoListFromFS)) {
-      String message = String.format("Validation of %s for partition %s failed."
+      String message = String.format("Validation of %s for partition %s failed for table: %s "
               + "\n%s from metadata: %s\n%s from file system and base files: %s",
-          label, partitionPath, label, infoListFromMetadataTable, label, infoListFromFS);
+          label, partitionPath, cfg.basePath, label, infoListFromMetadataTable, label, infoListFromFS);
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
-      LOG.info(String.format("Validation of %s succeeded for partition %s", label, partitionPath));
+      LOG.info(String.format("Validation of %s succeeded for partition %s for table: %s", label, partitionPath, cfg.basePath));
     }
   }
 
@@ -1035,13 +1098,13 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     if (mismatch) {
-      String message = String.format("Validation of %s for partition %s failed."
+      String message = String.format("Validation of %s for partition %s failed for table: %s "
               + "\n%s from metadata: %s\n%s from file system and base files: %s",
-          label, partitionPath, label, fileSliceListFromMetadataTable, label, fileSliceListFromFS);
+          label, partitionPath, cfg.basePath, label, fileSliceListFromMetadataTable, label, fileSliceListFromFS);
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
-      LOG.info(String.format("Validation of %s succeeded for partition %s", label, partitionPath));
+      LOG.info(String.format("Validation of %s succeeded for partition %s for table: %s ", label, partitionPath, cfg.basePath));
     }
   }
 
@@ -1217,6 +1280,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             if (!cfg.ignoreFailed) {
               throw e;
             }
+            throwables.add(e);
           } catch (InterruptedException e) {
             // ignore InterruptedException here.
           }

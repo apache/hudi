@@ -21,18 +21,19 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
-
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-
 import org.apache.spark.sql.RowFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 
 public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness {
@@ -68,7 +69,7 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
 
     TypedProperties properties = new TypedProperties();
-    properties.put("hoodie.deltastreamer.source.cloud.data.partition.fields.from.path", "country,state");
+    properties.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "country,state");
     Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, properties, "json");
     Assertions.assertTrue(result.isPresent());
     Assertions.assertEquals(1, result.get().count());
@@ -81,9 +82,9 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     TypedProperties props = new TypedProperties();
     TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc");
     String schemaFilePath = TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc").getPath();
-    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
-    props.put("hoodie.deltastreamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
-    props.put("hoodie.deltastreamer.source.cloud.data.partition.fields.from.path", "country,state");
+    props.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
+    props.put("hoodie.streamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
+    props.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "country,state");
     List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
     Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, props, "json", Option.of(new FilebasedSchemaProvider(props, jsc)));
     Assertions.assertTrue(result.isPresent());
@@ -96,12 +97,34 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
   public void partitionKeyNotPresentInPath() {
     List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
     TypedProperties properties = new TypedProperties();
-    properties.put("hoodie.deltastreamer.source.cloud.data.reader.comma.separated.path.format", "false");
-    properties.put("hoodie.deltastreamer.source.cloud.data.partition.fields.from.path", "unknown");
+    properties.put("hoodie.streamer.source.cloud.data.reader.comma.separated.path.format", "false");
+    properties.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "unknown");
     Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, properties, "json");
     Assertions.assertTrue(result.isPresent());
     Assertions.assertEquals(1, result.get().count());
     Row expected = RowFactory.create("some data", null);
     Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
+  }
+
+  @Test
+  public void loadDatasetWithSchemaAndRepartition() {
+    TypedProperties props = new TypedProperties();
+    TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc");
+    String schemaFilePath = TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc").getPath();
+    props.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
+    props.put("hoodie.streamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
+    props.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "country,state");
+    // Setting this config so that dataset repartition happens inside `loadAsDataset`
+    props.put("hoodie.streamer.source.cloud.data.partition.max.size", "1");
+    List<CloudObjectMetadata> input = Arrays.asList(
+        new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1000),
+        new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=TX/data.json", 1000),
+        new CloudObjectMetadata("src/test/resources/data/partitioned/country=IND/state=TS/data.json", 1000)
+    );
+    Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, props, "json", Option.of(new FilebasedSchemaProvider(props, jsc)));
+    Assertions.assertTrue(result.isPresent());
+    List<Row> expected = Arrays.asList(RowFactory.create("some data", "US", "CA"), RowFactory.create("some data", "US", "TX"), RowFactory.create("some data", "IND", "TS"));
+    List<Row> actual = result.get().collectAsList();
+    Assertions.assertEquals(new HashSet<>(expected), new HashSet<>(actual));
   }
 }

@@ -320,7 +320,8 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
   }
 
   private void connectTableAndReloadMetaClient(String tablePath) throws IOException {
-    new TableCommand().connect(tablePath, TimelineLayoutVersion.VERSION_1, false, 0, 0, 0);
+    new TableCommand().connect(tablePath, TimelineLayoutVersion.VERSION_1, false, 0, 0, 0,
+        "WAIT_TO_ADJUST_SKEW", 200L, false);
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
   }
 

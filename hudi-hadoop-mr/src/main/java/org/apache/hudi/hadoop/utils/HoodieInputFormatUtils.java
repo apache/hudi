@@ -514,19 +514,6 @@ public class HoodieInputFormatUtils {
     return fullPathToFileStatus.values().toArray(new FileStatus[0]);
   }
 
-  /**
-   * Returns all the incremental write partition paths as a set with the given commits metadata.
-   *
-   * @param metadataList The commits metadata
-   * @return the partition path set
-   */
-  public static Set<String> getWritePartitionPaths(List<HoodieCommitMetadata> metadataList) {
-    return metadataList.stream()
-        .map(HoodieCommitMetadata::getWritePartitionPaths)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toSet());
-  }
-
   public static HoodieRealtimeFileSplit createRealtimeFileSplit(HoodieRealtimePath path, long start, long length, String[] hosts) {
     try {
       return new HoodieRealtimeFileSplit(new FileSplit(path, start, length, hosts), path);

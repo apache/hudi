@@ -18,11 +18,10 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -34,12 +33,6 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.util.List;
 
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition;
 
 /**
@@ -51,10 +44,6 @@ import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorComm
  */
 public class GcsObjectMetadataFetcher implements Serializable {
 
-  /**
-   * The default file format to assume if {@link GcsIngestionConfig#GCS_INCR_DATAFILE_EXTENSION} is not given.
-   */
-  private final String fileFormat;
   private final TypedProperties props;
 
   private static final String GCS_PREFIX = "gs://";
@@ -62,13 +51,8 @@ public class GcsObjectMetadataFetcher implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(GcsObjectMetadataFetcher.class);
 
-  /**
-   * @param fileFormat The default file format to assume if {@link GcsIngestionConfig#GCS_INCR_DATAFILE_EXTENSION}
-   *                   is not given.
-   */
-  public GcsObjectMetadataFetcher(TypedProperties props, String fileFormat) {
+  public GcsObjectMetadataFetcher(TypedProperties props) {
     this.props = props;
-    this.fileFormat = fileFormat;
   }
 
   /**
@@ -92,35 +76,9 @@ public class GcsObjectMetadataFetcher implements Serializable {
    * @return Dataset<Row> after apply the filtering.
    */
   public Dataset<Row> applyFilter(Dataset<Row> cloudObjectMetadataDF) {
-    String filter = createFilter();
+    String filter = CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.GCS, props);
     LOG.info("Adding filter string to Dataset: " + filter);
 
     return cloudObjectMetadataDF.filter(filter);
-  }
-
-  /**
-   * Add optional filters that narrow down the list of GCS objects to fetch.
-   */
-  private String createFilter() {
-    StringBuilder filter = new StringBuilder("size > 0");
-
-    getPropVal(SELECT_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name like '" + val + "%'"));
-    getPropVal(IGNORE_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name not like '" + val + "%'"));
-    getPropVal(IGNORE_RELATIVE_PATH_SUBSTR).ifPresent(val -> filter.append(" and name not like '%" + val + "%'"));
-
-    // Match files with a given extension, or use the fileFormat as the default.
-    getPropVal(CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
-        .map(val -> filter.append(" and name like '%" + val + "'"));
-
-    return filter.toString();
-  }
-
-  private Option<String> getPropVal(ConfigProperty<String> configProperty) {
-    String value = getStringWithAltKeys(props, configProperty, true);
-    if (!isNullOrEmpty(value)) {
-      return Option.of(value);
-    }
-
-    return Option.empty();
   }
 }

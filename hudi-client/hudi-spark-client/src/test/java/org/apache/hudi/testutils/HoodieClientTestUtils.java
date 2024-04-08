@@ -87,7 +87,7 @@ public class HoodieClientTestUtils {
    */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
-        .setMaster("local[4]")
+        .setMaster("local[8]")
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
         .set("spark.sql.shuffle.partitions", "4")
@@ -281,8 +281,7 @@ public class HoodieClientTestUtils {
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           FileSystem.get(new Configuration()),
-          FileSystemViewManager.createViewManager(context, config.getMetadataConfig(),
-              config.getViewStorageConfig(), config.getCommonConfig()));
+          FileSystemViewManager.createViewManager(context, config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();
       LOG.info("Timeline service server port: " + timelineServicePort);
       return timelineService;

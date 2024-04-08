@@ -53,7 +53,7 @@ public abstract class HoodieBaseListData<T> {
 
   protected boolean isEmpty() {
     if (lazy) {
-      return data.asLeft().findAny().isPresent();
+      return !data.asLeft().findAny().isPresent();
     } else {
       return data.asRight().isEmpty();
     }

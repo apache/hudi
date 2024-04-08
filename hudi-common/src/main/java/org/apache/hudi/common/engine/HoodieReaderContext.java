@@ -245,4 +245,11 @@ public abstract class HoodieReaderContext<T> {
     }
     return providedPositionIfNeeded;
   }
+
+  /**
+   * Constructs engine specific delete record.
+   */
+  public T constructRawDeleteRecord(Map<String, Object> metadata) {
+    return null;
+  }
 }

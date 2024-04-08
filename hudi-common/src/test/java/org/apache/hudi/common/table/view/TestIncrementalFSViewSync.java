@@ -967,7 +967,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       try {
         java.nio.file.Path filePath = Paths.get(basePath, p, deltaCommit
             ? FSUtils.makeLogFileName(f, ".log", instant, 0, TEST_WRITE_TOKEN)
-            : FSUtils.makeBaseFileName(instant, TEST_WRITE_TOKEN, f));
+            : FSUtils.makeBaseFileName(instant, TEST_WRITE_TOKEN, f, BASE_FILE_EXTENSION));
         Files.createFile(filePath);
         HoodieWriteStat w = new HoodieWriteStat();
         w.setFileId(f);

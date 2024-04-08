@@ -70,7 +70,7 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
       throw new HoodieException(e.getMessage(), e);
     }
 
-    BootstrapWriteStatus writeStatus = (BootstrapWriteStatus) bootstrapHandle.writeStatuses().get(0);
+    BootstrapWriteStatus writeStatus = (BootstrapWriteStatus) bootstrapHandle.getWriteStatuses().get(0);
     BootstrapFileMapping bootstrapFileMapping = new BootstrapFileMapping(
         config.getBootstrapSourceBasePath(), srcPartitionPath, partitionPath,
         srcFileStatus, writeStatus.getFileId());

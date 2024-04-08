@@ -46,6 +46,10 @@ import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
+import org.apache.hudi.source.filedistribution.partitioner.StreamReadAppendPartitioner;
+import org.apache.hudi.source.filedistribution.partitioner.StreamReadBucketIndexPartitioner;
+import org.apache.hudi.source.filedistribution.selector.StreamReadAppendKeySelector;
+import org.apache.hudi.source.filedistribution.selector.StreamReadBucketIndexKeySelector;
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
@@ -204,24 +208,18 @@ public class HoodieTableSource implements
               conf, FilePathUtils.toFlinkPath(path), tableRowType, maxCompactionMemoryInBytes, partitionPruner);
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
-          DataStream<MergeOnReadInputSplit> monitorOperatorStream = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
+          SingleOutputStreamOperator<MergeOnReadInputSplit> monitorOperatorStream = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
               .uid(Pipelines.opUID("split_monitor", conf))
               .setParallelism(1)
               .setMaxParallelism(1);
-          SingleOutputStreamOperator<RowData> source;
-          if (OptionsResolver.isAppendMode(HoodieTableSource.this.conf)) {
-            source = monitorOperatorStream
-                .transform("split_reader", typeInfo, factory)
-                .uid(Pipelines.opUID("split_reader", conf))
-                .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
-          } else {
-            source = monitorOperatorStream
-                .keyBy(MergeOnReadInputSplit::getFileId)
-                .transform("split_reader", typeInfo, factory)
-                .uid(Pipelines.opUID("split_reader", conf))
-                .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
-          }
-          return new DataStreamSource<>(source);
+
+          DataStream<MergeOnReadInputSplit> sourceWithKey = addFileDistributionStrategy(monitorOperatorStream);
+
+          SingleOutputStreamOperator<RowData> streamReadSource = sourceWithKey
+              .transform("split_reader", typeInfo, factory)
+              .uid(Pipelines.opUID("split_reader", conf))
+              .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+          return new DataStreamSource<>(streamReadSource);
         } else {
           InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
           DataStreamSource<RowData> source = execEnv.addSource(func, asSummaryString(), typeInfo);
@@ -229,6 +227,20 @@ public class HoodieTableSource implements
         }
       }
     };
+  }
+
+  /**
+   * Specify the file distribution strategy based on different upstream writing mechanisms,
+   *  to prevent hot spot issues during stream reading.
+   */
+  private DataStream<MergeOnReadInputSplit> addFileDistributionStrategy(SingleOutputStreamOperator<MergeOnReadInputSplit> source) {
+    if (OptionsResolver.isMorWithBucketIndexUpsert(conf)) {
+      return source.partitionCustom(new StreamReadBucketIndexPartitioner(conf.getInteger(FlinkOptions.READ_TASKS)), new StreamReadBucketIndexKeySelector());
+    } else if (OptionsResolver.isAppendMode(conf)) {
+      return source.partitionCustom(new StreamReadAppendPartitioner(conf.getInteger(FlinkOptions.READ_TASKS)), new StreamReadAppendKeySelector());
+    } else {
+      return source.keyBy(MergeOnReadInputSplit::getFileId);
+    }
   }
 
   @Override
@@ -548,7 +560,7 @@ public class HoodieTableSource implements
         this.predicates,
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf),
-        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
+        this.conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE),
         this.internalSchemaManager
     );
   }

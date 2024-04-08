@@ -35,7 +35,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
@@ -91,6 +91,8 @@ public class IncrementalInputSplits implements Serializable {
   private final boolean skipCompaction;
   // skip clustering
   private final boolean skipClustering;
+  // skip insert overwrite
+  private final boolean skipInsertOverwrite;
 
   private IncrementalInputSplits(
       Configuration conf,
@@ -99,7 +101,8 @@ public class IncrementalInputSplits implements Serializable {
       long maxCompactionMemoryInBytes,
       @Nullable PartitionPruners.PartitionPruner partitionPruner,
       boolean skipCompaction,
-      boolean skipClustering) {
+      boolean skipClustering,
+      boolean skipInsertOverwrite) {
     this.conf = conf;
     this.path = path;
     this.rowType = rowType;
@@ -107,6 +110,7 @@ public class IncrementalInputSplits implements Serializable {
     this.partitionPruner = partitionPruner;
     this.skipCompaction = skipCompaction;
     this.skipClustering = skipClustering;
+    this.skipInsertOverwrite = skipInsertOverwrite;
   }
 
   /**
@@ -135,6 +139,7 @@ public class IncrementalInputSplits implements Serializable {
         .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
+        .skipInsertOverwrite(skipInsertOverwrite)
         .build();
 
     IncrementalQueryAnalyzer.QueryContext analyzingResult = analyzer.analyze();
@@ -241,6 +246,7 @@ public class IncrementalInputSplits implements Serializable {
         .rangeType(issuedOffset != null ? InstantRange.RangeType.OPEN_CLOSED : InstantRange.RangeType.CLOSED_CLOSED)
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
+        .skipInsertOverwrite(skipInsertOverwrite)
         .limit(OptionsResolver.getReadCommitsLimit(conf))
         .build();
 
@@ -412,7 +418,7 @@ public class IncrementalInputSplits implements Serializable {
    * @return the set of read partitions
    */
   private Set<String> getReadPartitions(List<HoodieCommitMetadata> metadataList) {
-    Set<String> partitions = HoodieInputFormatUtils.getWritePartitionPaths(metadataList);
+    Set<String> partitions = HoodieTableMetadataUtil.getWritePartitionPaths(metadataList);
     // apply partition push down
     if (this.partitionPruner != null) {
       Set<String> selectedPartitions = this.partitionPruner.filter(partitions);
@@ -498,6 +504,8 @@ public class IncrementalInputSplits implements Serializable {
     private boolean skipCompaction = false;
     // skip clustering
     private boolean skipClustering = false;
+    // skip insert overwrite
+    private boolean skipInsertOverwrite = false;
 
     public Builder() {
     }
@@ -537,10 +545,15 @@ public class IncrementalInputSplits implements Serializable {
       return this;
     }
 
+    public Builder skipInsertOverwrite(boolean skipInsertOverwrite) {
+      this.skipInsertOverwrite = skipInsertOverwrite;
+      return this;
+    }
+
     public IncrementalInputSplits build() {
       return new IncrementalInputSplits(
           Objects.requireNonNull(this.conf), Objects.requireNonNull(this.path), Objects.requireNonNull(this.rowType),
-          this.maxCompactionMemoryInBytes, this.partitionPruner, this.skipCompaction, this.skipClustering);
+          this.maxCompactionMemoryInBytes, this.partitionPruner, this.skipCompaction, this.skipClustering, this.skipInsertOverwrite);
     }
   }
 }
