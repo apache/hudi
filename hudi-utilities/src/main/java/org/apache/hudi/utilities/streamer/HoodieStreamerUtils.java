@@ -165,7 +165,7 @@ public class HoodieStreamerUtils {
    */
   private static Either<HoodieRecord, String> generateErrorRecord(GenericRecord genRec) {
     try {
-      return Either.right(HoodieAvroUtils.avroToJsonString(genRec, false));
+      return Either.right(HoodieAvroUtils.safeAvroToJsonString(genRec));
     } catch (Exception ex) {
       throw new HoodieException("Failed to convert illegal record to json", ex);
     }

@@ -210,7 +210,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         val transform: GenericRecord => Either[GenericRecord, String] = record => try {
           Left(HoodieAvroUtils.rewriteRecordDeep(record, schema, true))
         } catch {
-          case _: Throwable => Right(HoodieAvroUtils.avroToJsonString(record, false))
+          case _: Throwable => Right(HoodieAvroUtils.safeAvroToJsonString(record))
         }
         recs.map(transform)
       }
