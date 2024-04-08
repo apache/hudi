@@ -114,7 +114,7 @@ public class HoodieLogFileCommand {
       MessageType schema = TableSchemaResolver.readSchemaFromLogFile(fs, path);
       Schema writerSchema = schema != null
           ? new AvroSchemaConverter().convert(Objects.requireNonNull(schema)) : null;
-      Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema);
+      Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath(), ""), writerSchema);
 
       // read the avro blocks
       while (reader.hasNext()) {
@@ -264,7 +264,7 @@ public class HoodieLogFileCommand {
         Schema writerSchema = schema != null
             ? new AvroSchemaConverter().convert(Objects.requireNonNull(schema)) : null;
         HoodieLogFormat.Reader reader =
-            HoodieLogFormat.newReader(fs, new HoodieLogFile(new CachingPath(logFile)), writerSchema);
+            HoodieLogFormat.newReader(fs, new HoodieLogFile(new CachingPath(logFile), ""), writerSchema);
         // read the avro blocks
         while (reader.hasNext()) {
           HoodieLogBlock n = reader.next();

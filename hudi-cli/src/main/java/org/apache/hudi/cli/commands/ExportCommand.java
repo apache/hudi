@@ -125,7 +125,7 @@ public class ExportCommand {
 
     for (FileStatus fs : statuses) {
       // read the archived file
-      Reader reader = HoodieLogFormat.newReader(fileSystem, new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+      Reader reader = HoodieLogFormat.newReader(fileSystem, new HoodieLogFile(fs.getPath(), ""), HoodieArchivedMetaEntry.getClassSchema());
 
       // read the avro blocks
       while (reader.hasNext() && copyCount++ < limit) {

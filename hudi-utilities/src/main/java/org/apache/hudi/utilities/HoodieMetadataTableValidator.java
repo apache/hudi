@@ -57,6 +57,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -1166,8 +1167,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     for (String logFilePathStr : logFilePathSet) {
       HoodieLogFormat.Reader reader = null;
       try {
+        Path logFilePath = new CachingPath(logFilePathStr);
         MessageType messageType =
-            TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePathStr));
+            TableSchemaResolver.readSchemaFromLogFile(fs, logFilePath);
         if (messageType == null) {
           LOG.warn(String.format("Cannot read schema from log file %s. "
               + "Skip the check as it's likely being written by an inflight instant.", logFilePathStr));
@@ -1175,7 +1177,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         }
         Schema readerSchema = converter.convert(messageType);
         reader =
-            HoodieLogFormat.newReader(fs, new HoodieLogFile(logFilePathStr), readerSchema);
+            HoodieLogFormat.newReader(fs, new HoodieLogFile(logFilePath, ""), readerSchema);
         // read the avro blocks
         if (reader.hasNext()) {
           HoodieLogBlock block = reader.next();
