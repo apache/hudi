@@ -124,6 +124,7 @@ public class StreamReadMonitoringFunction
         .partitionPruner(partitionPruner)
         .skipCompaction(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
         .skipClustering(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
+        .skipInsertOverwrite(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_INSERT_OVERWRITE))
         .build();
   }
 
