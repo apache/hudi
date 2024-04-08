@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[60491],{77997:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/upstox-engineering","name":"upstox-engineering","count":1,"permalink":"/cn/blog/tags/upstox-engineering"}')}}]);

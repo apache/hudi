@@ -5,6 +5,72 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2024/04/03/hands-on-guide-reading-data-from-hudi-tables-joining-delta",
+            "content_html": "<div url=\"https://www.linkedin.com/pulse/hands-on-guide-reading-data-from-hudi-tables-joining-delta-shah-vqivf/?trk=public_post_main-feed-card_feed-article-content\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/04/03/hands-on-guide-reading-data-from-hudi-tables-joining-delta",
+            "title": "Hands-On Guide: Reading Data from Hudi Tables Incrementally, Joining with Delta Tables using HudiStreamer and SQL-Based Transformer",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-04-03T00:00:00.000Z",
+            "author": {
+                "name": "Soumil Shah"
+            }
+        },
+        {
+            "id": "/2024/03/30/record-level-indexing-apache-hudi-delivers-70-faster-point",
+            "content_html": "<div url=\"https://www.linkedin.com/pulse/record-level-indexing-apache-hudi-delivers-70-faster-point-shah-hlite/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/03/30/record-level-indexing-apache-hudi-delivers-70-faster-point",
+            "title": "Record Level Indexing in Apache Hudi Delivers 70% Faster Point Lookups",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-03-30T00:00:00.000Z",
+            "author": {
+                "name": "Soumil Shah"
+            }
+        },
+        {
+            "id": "/2024/03/23/options-on-kafka-sink-to-open-table-formats-apache-iceberg-and-apache-hudi",
+            "content_html": "<div url=\"https://blog.devgenius.io/options-on-kafka-sink-to-open-table-formats-apache-iceberg-and-apache-hudi-f6839ddad978\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/03/23/options-on-kafka-sink-to-open-table-formats-apache-iceberg-and-apache-hudi",
+            "title": "Options on Kafka sink to open table Formats: Apache Iceberg and Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-03-23T00:00:00.000Z",
+            "author": {
+                "name": "Albert Wong"
+            }
+        },
+        {
+            "id": "/2024/03/22/data-lake-cost-optimisation-strategies",
+            "content_html": "<div url=\"https://blogs.halodoc.io/data-lake-cost-optimisation-strategies/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/03/22/data-lake-cost-optimisation-strategies",
+            "title": "Cost Optimization Strategies for scalable Data Lakehouse",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-03-22T00:00:00.000Z",
+            "author": {
+                "name": "Suresh Hasundi"
+            }
+        },
+        {
+            "id": "/2024/03/14/Modern-Datalakes-with-Hudi--MinIO--and-HMS",
+            "content_html": "<div url=\"https://blog.min.io/datalakes-with-hudi-and-hms/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/03/14/Modern-Datalakes-with-Hudi--MinIO--and-HMS",
+            "title": "Modern Datalakes with Hudi, MinIO, and HMS",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-03-14T00:00:00.000Z",
+            "author": {
+                "name": "Brenna Buuck"
+            }
+        },
+        {
+            "id": "/2024/03/10/navigating-the-future-the-evolutionary-journey-of-upstoxs-data-platform",
+            "content_html": "<div url=\"https://medium.com/upstox-engineering/navigating-the-future-the-evolutionary-journey-of-upstoxs-data-platform-92dc10ff22ae\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/03/10/navigating-the-future-the-evolutionary-journey-of-upstoxs-data-platform",
+            "title": "Navigating the Future: The Evolutionary Journey of Upstox’s Data Platform",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-03-10T00:00:00.000Z",
+            "author": {
+                "name": "Manish Gaurav"
+            }
+        },
+        {
             "id": "/2024/03/05/Apache-Hudi-From-Zero-To-One-blog-9",
             "content_html": "<div url=\"https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-910?r=2fl10k&amp;utm_campaign=post&amp;utm_medium=web\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/cn/blog/2024/03/05/Apache-Hudi-From-Zero-To-One-blog-9",
