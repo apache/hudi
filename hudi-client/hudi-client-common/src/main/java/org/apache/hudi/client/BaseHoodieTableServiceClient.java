@@ -43,7 +43,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -446,16 +445,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
     if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
-      try {
-        HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(inflightInstant, pendingClusteringTimeline);
-        if (metadata.getOperationType().equals(WriteOperationType.CLUSTER)) {
-          table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
-          table.getMetaClient().reloadActiveTimeline();
-        } else {
-          throw new HoodieClusteringException("Non clustering replace-commit inflight at timestamp " + clusteringInstant);
-        }
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+      if (pendingClusteringTimeline.isPendingClusterInstant(inflightInstant.getTimestamp())) {
+        table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+        table.getMetaClient().reloadActiveTimeline();
+      } else {
+        throw new HoodieClusteringException("Non clustering replace-commit inflight at timestamp " + clusteringInstant);
       }
     }
     clusteringTimer = metrics.getClusteringCtx();
