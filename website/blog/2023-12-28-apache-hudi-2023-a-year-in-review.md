@@ -165,7 +165,7 @@ and Data Council.
 
 As we reflect on an eventful 2023, the Hudi community continues to thrive and welcomes diverse forms 
 of engagement. For those looking to connect, our 
-[Slack group](https://join.slack.com/t/apache-hudi/shared_invite/zt-20r833rxh-627NWYDUyR8jRtMa2mZ~gg) 
+[Slack group](https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g) 
 is an excellent place for general inquiries, being watched out by Hudi experts and an LLM-backed
 question bot. You can also participate in our 
 [weekly office hours](https://hudi.apache.org/community/office_hours) 
