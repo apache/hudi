@@ -329,6 +329,24 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read "
           + "to improve read performance.");
 
+  @AdvancedConfig
+  // this option is experimental
+  public static final ConfigOption<Boolean> READ_BATCH_SKIP_COMPACT = ConfigOptions
+      .key("read.batch.skip_compaction")
+      .booleanType()
+      .defaultValue(false)// default read as batch
+      .withDescription("Whether to skip compaction instants and avoid reading compacted base files for batch read to improve read performance.\n"
+          + "This option can be used to avoid reading duplicates when changelog mode is enabled, it is a solution to keep data integrity\n");
+
+  @AdvancedConfig
+  // this option is experimental
+  public static final ConfigOption<Boolean> READ_BATCH_SKIP_CLUSTERING = ConfigOptions
+      .key("read.batch.skip_clustering")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for batch read "
+          + "to improve read performance.");
+
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
       .key("read.start-commit")

@@ -424,6 +424,8 @@ public class HoodieTableSource implements
             .rowType(this.tableRowType)
             .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
             .partitionPruner(partitionPruner)
+            .skipCompaction(conf.getBoolean(FlinkOptions.READ_BATCH_SKIP_COMPACT))
+            .skipClustering(conf.getBoolean(FlinkOptions.READ_BATCH_SKIP_CLUSTERING))
             .build();
         final boolean cdcEnabled = this.conf.getBoolean(FlinkOptions.CDC_ENABLED);
         final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, cdcEnabled);
