@@ -28,10 +28,13 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
+
 import java.util.Objects
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.hadoop.fs.CachingPath
+
 import scala.collection.JavaConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter}
 
 class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBuilder {
@@ -54,20 +57,23 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     val table = getArgValueOrDefault(args, parameters(0))
     val logFilePathPattern: String = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
     val limit: Int = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Int]
-    val basePath = getBasePath(table)
-    val fs = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build.getFs
+    val basePathStr = getBasePath(table)
+    val fs = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePathStr).build.getFs
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
     val commitCountAndMetadata =
       new java.util.HashMap[String, java.util.List[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[HeaderMetadataType, String]), Int)]]()
     var numCorruptBlocks = 0
     var dummyInstantTimeCount = 0
+    val basePath = new CachingPath(basePathStr)
     logFilePaths.foreach {
       logFilePath => {
-        val statuses = fs.listStatus(new Path(logFilePath))
+        val path = new CachingPath(logFilePath)
+        val partitionPath = FSUtils.getRelativePartitionPath(basePath, path.getParent)
+        val statuses = fs.listStatus(path)
         val schema = new AvroSchemaConverter()
-          .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))))
-        val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(statuses(0).getPath), schema)
+          .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, path)))
+        val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(statuses(0).getPath, partitionPath), schema)
 
         // read the avro blocks
         while (reader.hasNext) {

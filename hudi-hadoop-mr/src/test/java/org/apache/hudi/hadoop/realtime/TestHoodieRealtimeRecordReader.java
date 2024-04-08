@@ -860,7 +860,7 @@ public class TestHoodieRealtimeRecordReader {
           schema.toString(), HoodieTimeline.COMMIT_ACTION);
       FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime, commitMetadata);
       // create a split with new log file(s)
-      fileSlice.addLogFile(new HoodieLogFile(writer.getLogFile().getPath(), size));
+      fileSlice.addLogFile(new HoodieLogFile(writer.getLogFile().getPath(), size, ""));
       RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(
           new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0, writer.getLogFile().getPath()),
           baseUri.toString(),

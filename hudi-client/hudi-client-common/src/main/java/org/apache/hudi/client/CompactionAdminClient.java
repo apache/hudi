@@ -252,7 +252,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
               FileStatus[] fileStatuses = metaClient.getFs().listStatus(new Path(
                   FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), new Path(dp)));
               ValidationUtils.checkArgument(fileStatuses.length == 1, "Expect only 1 file-status");
-              return new HoodieLogFile(fileStatuses[0]);
+              return new HoodieLogFile(fileStatuses[0], operation.getPartitionPath());
             } catch (FileNotFoundException fe) {
               throw new CompactionValidationException(fe.getMessage());
             } catch (IOException ioe) {

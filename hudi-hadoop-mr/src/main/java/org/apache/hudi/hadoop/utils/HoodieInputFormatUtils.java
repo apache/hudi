@@ -486,7 +486,7 @@ public class HoodieInputFormatUtils {
       if (dataFile.getFileSize() == 0) {
         FileSystem fs = dataPath.getFileSystem(conf);
         LOG.info("Refreshing file status " + dataFile.getPath());
-        return new HoodieBaseFile(fs.getFileStatus(dataPath), dataFile.getBootstrapBaseFile().orElse(null));
+        return new HoodieBaseFile(fs.getFileStatus(dataPath), dataFile.getPartitionPath(), dataFile.getBootstrapBaseFile().orElse(null));
       }
       return dataFile;
     } catch (IOException e) {

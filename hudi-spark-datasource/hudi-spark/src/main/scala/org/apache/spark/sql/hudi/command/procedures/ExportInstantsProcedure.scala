@@ -119,7 +119,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
     val fileSystem = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration())
     for (fs <- statuses) {
       // read the archived file
-      val reader = HoodieLogFormat.newReader(fileSystem, new HoodieLogFile(fs.getPath), HoodieArchivedMetaEntry.getClassSchema)
+      val reader = HoodieLogFormat.newReader(fileSystem, new HoodieLogFile(fs.getPath, ""), HoodieArchivedMetaEntry.getClassSchema)
       // read the avro blocks
       while ( {
         reader.hasNext && copyCount < limit

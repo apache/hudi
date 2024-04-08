@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{FileIOUtils, ValidationUtils}
+import org.apache.hudi.hadoop.fs.CachingPath
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -53,8 +54,8 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     val logFilePathPattern: String = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
     val merge: Boolean = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Boolean]
     val limit: Int = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Int]
-    val basePath = getBasePath(table)
-    val client = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val basePathStr = getBasePath(table)
+    val client = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePathStr).build
     val fs = client.getFs
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
@@ -65,7 +66,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
       val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.last))))
       val scanner = HoodieMergedLogRecordScanner.newBuilder
         .withFileSystem(fs)
-        .withBasePath(basePath)
+        .withBasePath(basePathStr)
         .withLogFilePaths(logFilePaths.asJava)
         .withReaderSchema(schema)
         .withLatestInstantTime(client.getActiveTimeline.getCommitTimeline.lastInstant.get.getTimestamp)
@@ -84,10 +85,13 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         }
       })
     } else {
+      val basePath = new CachingPath(basePathStr)
       logFilePaths.toStream.takeWhile(_ => allRecords.size() < limit).foreach {
         logFilePath => {
-          val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))))
-          val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(logFilePath), schema)
+          val path = new CachingPath(logFilePath)
+          val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, path)))
+          val partitionPath = FSUtils.getRelativePartitionPath(basePath, path.getParent)
+          val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path, partitionPath), schema)
           while (reader.hasNext) {
             val block = reader.next()
             block match {

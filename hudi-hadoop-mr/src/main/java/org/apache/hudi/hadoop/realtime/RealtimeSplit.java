@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.InputSplitUtils;
@@ -125,10 +126,12 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
 
     int totalLogFiles = in.readInt();
     List<HoodieLogFile> deltaLogPaths = new ArrayList<>(totalLogFiles);
+    Path basePath = new CachingPath(getBasePath());
     for (int i = 0; i < totalLogFiles; i++) {
-      String logFilePath = InputSplitUtils.readString(in);
+      Path logFilePath = new CachingPath(InputSplitUtils.readString(in));
       long logFileSize = in.readLong();
-      deltaLogPaths.add(new HoodieLogFile(new CachingPath(logFilePath), logFileSize));
+
+      deltaLogPaths.add(new HoodieLogFile(logFilePath, logFileSize, FSUtils.getRelativePartitionPath(basePath, logFilePath.getParent())));
     }
     setDeltaLogFiles(deltaLogPaths);
 

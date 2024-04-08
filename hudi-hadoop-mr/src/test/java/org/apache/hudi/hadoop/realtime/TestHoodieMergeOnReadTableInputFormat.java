@@ -22,6 +22,7 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.PathWithBootstrapFileStatus;
+import org.apache.hudi.hadoop.fs.CachingPath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -74,7 +75,7 @@ public class TestHoodieMergeOnReadTableInputFormat {
     assertTrue(new HoodieMergeOnReadTableInputFormat().isSplitable(fs, rtPath), "Path only contains the base file should be splittable");
 
     URI logPath = Files.createTempFile(tempDir, ".test", ".log.4_1-149-180").toUri();
-    HoodieLogFile logFile = new HoodieLogFile(fs.getFileStatus(new Path(logPath)));
+    HoodieLogFile logFile = new HoodieLogFile(fs.getFileStatus(new CachingPath(logPath)), "");
     rtPath = new HoodieRealtimePath(new Path("foo"), "bar", basePath.toString(), Collections.singletonList(logFile), "000", false, Option.empty());
     assertFalse(new HoodieMergeOnReadTableInputFormat().isSplitable(fs, rtPath), "Path contains log files should not be splittable.");
   }

@@ -132,7 +132,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
     FileSlice fileSlice = new FileSlice(
         new HoodieFileGroupId(partitionPath, FILE_ID),
         baseInstant,
-        new HoodieBaseFile(fs.getFileStatus(new Path(baseFilePath))),
+        new HoodieBaseFile(fs.getFileStatus(new Path(baseFilePath)), partitionPath),
         new ArrayList<>());
     logVersionsWithAction.forEach(logVersionWithAction -> {
       try {

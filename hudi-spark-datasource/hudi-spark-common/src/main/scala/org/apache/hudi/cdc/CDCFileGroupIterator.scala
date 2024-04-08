@@ -383,7 +383,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
             && currentCDCFileSplit.getBeforeFileSlice.isPresent)
           loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)
           val absLogPath = new Path(basePath, currentCDCFileSplit.getCdcFiles.get(0))
-          val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(fs.getFileStatus(absLogPath))))
+          val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(fs.getFileStatus(absLogPath), currentCDCFileSplit.getPartitionPath)))
           val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
           logRecordIter = logFileIterator.logRecordsPairIterator
         case AS_IS =>
@@ -403,7 +403,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
           }
 
           val cdcLogFiles = currentCDCFileSplit.getCdcFiles.asScala.map { cdcFile =>
-            new HoodieLogFile(fs.getFileStatus(new Path(basePath, cdcFile)))
+            new HoodieLogFile(fs.getFileStatus(new Path(basePath, cdcFile)), currentCDCFileSplit.getPartitionPath)
           }.toArray
           cdcLogRecordIterator = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcAvroSchema)
         case REPLACE_COMMIT =>

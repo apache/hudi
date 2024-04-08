@@ -244,7 +244,7 @@ public class LegacyArchivedMetaEntryReader {
           FileStatus fs = fsItr.next();
           try {
             reader = HoodieLogFormat.newReader(metaClient.getFs(),
-                new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+                new HoodieLogFile(fs.getPath(), ""), HoodieArchivedMetaEntry.getClassSchema());
           } catch (IOException ioe) {
             throw new HoodieIOException("Error initializing the reader for archived log: " + fs.getPath(), ioe);
           }

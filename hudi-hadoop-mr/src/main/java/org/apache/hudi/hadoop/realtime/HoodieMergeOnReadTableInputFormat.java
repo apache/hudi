@@ -41,6 +41,7 @@ import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configurable;
@@ -53,7 +54,6 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.SplitLocationInfo;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -279,7 +279,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
         if (f.getLatestFileSlice().isPresent() && baseFiles.isEmpty()) {
           List<FileStatus> logFileStatus = f.getLatestFileSlice().get().getLogFiles().map(logFile -> logFile.getFileStatus()).collect(Collectors.toList());
           if (logFileStatus.size() > 0) {
-            List<HoodieLogFile> deltaLogFiles = logFileStatus.stream().map(l -> new HoodieLogFile(l.getPath(), l.getLen())).collect(Collectors.toList());
+            List<HoodieLogFile> deltaLogFiles = logFileStatus.stream().map(l -> new HoodieLogFile(l.getPath(), l.getLen(), f.getPartitionPath())).collect(Collectors.toList());
             RealtimeFileStatus fileStatus = new RealtimeFileStatus(logFileStatus.get(0), basePath,
                 deltaLogFiles, true, virtualKeyInfoOpt);
             fileStatus.setMaxCommitTime(maxCommitTime);
