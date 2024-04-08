@@ -289,8 +289,8 @@ In comparison to the static hashing index (BUCKET index), the consistent hashing
 data buckets for the writer. To utilize this feature, configure the option `index.type` as `BUCKET` and set 
 `hoodie.index.bucket.engine` to `CONSISTENT_HASHING`.
 
-When enabling the consistent hashing index, it's important to activate asynchronous clustering scheduling within the writer. 
-The clustering plan should be executed through an offline job. During this process, the writer will perform dual writes 
+When enabling the consistent hashing index, it's important to activate clustering scheduling within the writer. 
+The clustering plan should be executed through an offline Spark job. During this process, the writer will perform dual writes 
 for both the old and new data buckets while the clustering is pending. Although the dual write does not impact correctness, 
 it is strongly recommended to execute clustering as quickly as possible.
 
