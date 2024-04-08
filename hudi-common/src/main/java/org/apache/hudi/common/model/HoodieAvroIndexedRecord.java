@@ -119,6 +119,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
+  public void updateMetaFields(Schema recordSchema, MetadataValues metadataValues, Properties props) {
+    updateMetadataValuesInternal((GenericRecord) data, metadataValues);
+  }
+
+  @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     GenericRecord record = HoodieAvroUtils.rewriteRecordWithNewSchema(data, newSchema, renameCols);
     return new HoodieAvroIndexedRecord(key, record, operation, metaData);

@@ -138,6 +138,18 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
+  public void updateMetaFields(Schema recordSchema, MetadataValues metadataValues, Properties props) {
+    try {
+      Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema, props);
+      GenericRecord avroRecord = (GenericRecord) avroRecordOpt.get();
+      updateMetadataValuesInternal(avroRecord, metadataValues);
+      this.data = (T) new RewriteAvroPayload(avroRecord);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to deserialize record!", e);
+    }
+  }
+
+  @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     try {
       GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema, props).get();

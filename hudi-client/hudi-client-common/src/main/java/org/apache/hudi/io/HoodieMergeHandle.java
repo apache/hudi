@@ -118,6 +118,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   protected Option<String[]> partitionFields = Option.empty();
   protected Object[] partitionValues = new Object[0];
+  private Consumer4<HoodieKey, HoodieRecord<T>, Schema, Properties> copyOldFunc;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
@@ -133,6 +134,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     init(fileId, recordItr);
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+    copyOldFunc = (key, record, schema, prop) -> this.writeToFile(key, record, schema, prop, true);
   }
 
   /**
@@ -147,6 +149,13 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     this.preserveMetadata = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+    // The compactor avoids heavy rewriting when copy the old record from old base file into new base file
+    if (config.populateMetaFields()) {
+      LOG.info("Using update instead rewriting during compaction");
+      copyOldFunc = (key, record, schema, prop) -> this.updateMetadataToOldRecord(key, record, schema, prop);
+    } else {
+      copyOldFunc = (key, record, schema, prop) -> this.writeToFile(key, record, schema, prop, true);
+    }
   }
 
   private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
@@ -377,7 +386,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (copyOldRecord) {
       try {
         // NOTE: We're enforcing preservation of the record metadata to keep existing semantic
-        writeToFile(new HoodieKey(key, partitionPath), oldRecord, oldSchema, props, true);
+        copyOldFunc.accept(new HoodieKey(key, partitionPath), oldRecord, oldSchema, props);
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
                 key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
@@ -386,6 +395,12 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       }
       recordsWritten++;
     }
+  }
+
+  private void updateMetadataToOldRecord(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop) throws IOException {
+    MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
+    record.updateMetaFields(schema, metadataValues, prop);
+    fileWriter.write(key.getRecordKey(), record, writeSchemaWithMetaFields);
   }
 
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {

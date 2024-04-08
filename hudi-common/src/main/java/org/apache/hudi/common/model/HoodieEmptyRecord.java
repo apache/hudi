@@ -105,6 +105,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
+  public void updateMetaFields(Schema recordSchema, MetadataValues metadataValues, Properties props) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     throw new UnsupportedOperationException();
   }

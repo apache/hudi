@@ -216,6 +216,14 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
+  public void updateMetaFields(Schema recordSchema, MetadataValues metadataValues, Properties props) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
+    HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(this.data, structType);
+    updateMetadataValuesInternal(updatableRow, metadataValues);
+    this.data = updatableRow;
+  }
+
+  @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
