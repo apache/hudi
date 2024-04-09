@@ -451,7 +451,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param partition partition to be loaded if not present
    */
-  private void ensurePartitionLoadedCorrectly(String partition) {
+  protected void ensurePartitionLoadedCorrectly(String partition) {
 
     ValidationUtils.checkArgument(!isClosed(), "View is already closed");
 
@@ -846,6 +846,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
           .flatMap(slice -> this.filterUncommittedFiles(slice, true))
           .map(this::addBootstrapBaseFileIfPresent);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  public Stream<FileSlice> getLatestFileSlicesIncludingInflight(String partitionPath) {
+    try {
+      readLock.lock();
+      ensurePartitionLoadedCorrectly(partitionPath);
+      return fetchAllStoredFileGroups(partitionPath)
+          .map(HoodieFileGroup::getLatestFileSlicesIncludingInflight)
+          .filter(Option::isPresent)
+          .map(Option::get);
     } finally {
       readLock.unlock();
     }

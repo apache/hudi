@@ -737,11 +737,13 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Checks if metadata table is enabled and the specified partition has been initialized.
    *
-   * @param partition The partition to check
+   * @param metadataPartitionType The metadata table partition type to check
    * @returns true if the specific partition has been initialized, else returns false.
    */
-  public boolean isMetadataPartitionAvailable(MetadataPartitionType partition) {
-    return getMetadataPartitions().contains(partition.getPartitionPath());
+  public boolean isMetadataPartitionAvailable(MetadataPartitionType metadataPartitionType) {
+    /*return getMetadataPartitions().stream().anyMatch(metadataPartition ->
+        metadataPartition.equals(metadataPartitionType.getPartitionPath()) || (FUNCTIONAL_INDEX.equals(metadataPartitionType) && metadataPartition.startsWith(FUNCTIONAL_INDEX.getPartitionPath())));*/
+    return getMetadataPartitions().contains(metadataPartitionType.getPartitionPath());
   }
 
   /**

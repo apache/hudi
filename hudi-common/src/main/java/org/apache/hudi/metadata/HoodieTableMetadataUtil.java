@@ -125,6 +125,7 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
+import static org.apache.hudi.avro.HoodieAvroUtils.getSchemaForFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
@@ -1081,7 +1082,7 @@ public class HoodieTableMetadataUtil {
                                                                               Option<HoodieTableFileSystemView> fileSystemView,
                                                                               String partition) {
     HoodieTableFileSystemView fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
-    Stream<FileSlice> fileSliceStream = fsView.fetchLatestFileSlicesIncludingInflight(partition);
+    Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partition);
     return fileSliceStream
         .sorted(Comparator.comparing(FileSlice::getFileId))
         .collect(Collectors.toList());
@@ -1919,7 +1920,7 @@ public class HoodieTableMetadataUtil {
   public static Schema getProjectedSchemaForFunctionalIndex(HoodieFunctionalIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
     Schema tableSchema = schemaResolver.getTableAvroSchema();
-    return HoodieAvroUtils.getSchemaForFields(tableSchema, indexDefinition.getSourceFields());
+    return addMetadataFields(getSchemaForFields(tableSchema, indexDefinition.getSourceFields()));
   }
 
   private static Path filePath(String basePath, String partition, String filename) {
