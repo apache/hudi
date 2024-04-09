@@ -151,7 +151,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
     // The compactor avoids heavy rewriting when copy the old record from old base file into new base file
     if (config.populateMetaFields()) {
-      LOG.info("Using update instead rewriting during compaction");
+      LOG.info("Using update instead of rewriting during compaction");
       copyOldFunc = (key, record, schema, prop) -> this.updateMetadataToOldRecord(key, record, schema, prop);
     } else {
       copyOldFunc = (key, record, schema, prop) -> this.writeToFile(key, record, schema, prop, true);
