@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -100,24 +101,26 @@ public class HoodiePartitionMetadata {
     String extension = getMetafileExtension();
     Path metaPath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + extension);
 
-    try {
-      if (!fs.exists(metaPath)) {
-        if (format.isPresent()) {
-          Path tmpMetaPath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + "_" + writeToken + extension);
-          writeMetafileInFormat(metaPath, tmpMetaPath, format.get());
-        } else {
-          // Backwards compatible properties file format
-          try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
-            props.store(os, "partition metadata");
-            Option content = Option.of(os.toByteArray());
-            HadoopFSUtils.createImmutableFileInPath(fs, metaPath, content, true, "_" + writeToken);
+    // This retry mechanism enables an exit-fast in metaPath exists check, which avoid the
+    // tasks failures when there are two or more tasks trying to create the same metaPath.
+    RetryHelper<Void, IOException>  retryHelper = new RetryHelper(1000, 3, 1000, IOException.class.getName())
+        .tryWith(() -> {
+          if (!fs.exists(metaPath)) {
+            if (format.isPresent()) {
+              Path tmpMetaPath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + "_" + writeToken + extension);
+              writeMetafileInFormat(metaPath, tmpMetaPath, format.get());
+            } else {
+              // Backwards compatible properties file format
+              try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+                props.store(os, "partition metadata");
+                Option content = Option.of(os.toByteArray());
+                HadoopFSUtils.createImmutableFileInPath(fs, metaPath, content, true, "_" + writeToken);
+              }
+            }
           }
-        }
-      }
-    } catch (IOException ioe) {
-      LOG.error("Error trying to save partition metadata, " + partitionPath);
-      throw ioe;
-    }
+          return null;
+        });
+    retryHelper.start();
   }
 
   private String getMetafileExtension() {
