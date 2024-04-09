@@ -97,7 +97,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParq
   private def getFiltersForRead(isMerge: Boolean): Seq[Filter] = {
     if (!isMerge) {
       filters
-    } else if (!shouldUseRecordPosition) {
+    } else if (shouldUseRecordPosition) {
       recordKeyFilters
     } else {
       Seq.empty
