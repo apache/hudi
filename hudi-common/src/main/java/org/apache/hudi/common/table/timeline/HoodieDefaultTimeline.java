@@ -526,10 +526,10 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return getLastOrFirstPendingClusterInstant(true);
   }
 
-  protected Option<HoodieInstant> getLastOrFirstPendingClusterInstant(boolean getLast) {
+  private Option<HoodieInstant> getLastOrFirstPendingClusterInstant(boolean isLast) {
     HoodieTimeline replaceTimeline = filterPendingReplaceTimeline();
     Stream<HoodieInstant> replaceStream;
-    if (getLast) {
+    if (isLast) {
       replaceStream = replaceTimeline.getReverseOrderedInstants();
     } else {
       replaceStream = replaceTimeline.getInstantsAsStream();
