@@ -2696,7 +2696,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
   }
 
-  private static HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<IndexedRecord> records,
+  public static HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<IndexedRecord> records,
                                               Map<HeaderMetadataType, String> header) {
     return getDataBlock(dataBlockType, records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, new Path("dummy_path"));
   }
