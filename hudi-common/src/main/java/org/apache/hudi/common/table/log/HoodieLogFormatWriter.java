@@ -294,7 +294,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
         try {
           LOG.warn("running logformatwriter hook");
           if (output != null) {
-            close();
+            closeStream();
           }
         } catch (Exception e) {
           LOG.warn("unable to close output stream for log file " + logFile, e);
