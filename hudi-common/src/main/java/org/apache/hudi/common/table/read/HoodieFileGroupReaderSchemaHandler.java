@@ -153,7 +153,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     Schema preReorderRequiredSchema = generateRequiredSchema();
     Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = getDataAndMetaCols(preReorderRequiredSchema);
     readerState.needsBootstrapMerge = readerState.hasBootstrapBaseFile && !requiredFields.getLeft().isEmpty() && !requiredFields.getRight().isEmpty();
-    return needsBootstrapMerge
+    return readerState.needsBootstrapMerge
         ? createSchemaFromFields(Stream.concat(requiredFields.getLeft().stream(), requiredFields.getRight().stream()).collect(Collectors.toList()))
         : preReorderRequiredSchema;
   }
