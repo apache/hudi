@@ -110,3 +110,15 @@ d40b79d9091 [ENG-8175][HUDI-7557] Fix incremental cleaner when commit for savepo
 
 ---[2024-04-03 15:23:26] [release-v1.8.1] Upgrade to version release-v1.8.1---
 230c0371e54 [ENG-7800][HUDI-7532] Include only compaction instants for lastCompaction in getDeltaCommitsSinceLatestCompaction (#635)
+
+---[2024-04-10 14:10:38] [release-v1.9.0] Upgrade to version release-v1.9.0---
+82686f69137 [ENG-6690][HUDI-7486] Classify schema exceptions when converting from avro to spark row representation (#637)
+2167be53923 [ENG-7810][HUDI-7571] Add api to get exception details in HoodieMetadataTableValidator with ignoreFailed mode (#646)
+e63df27e97c [ENG-7532][HUDI-7556] Fixing false positive validation with MDT validator (#643)
+e6768880874 [ENG-8499][HUDI-7597] Add logs of Kafka offsets when the checkpoint is out of bound (#644)
+83ff715913e [ENG-8478][HUDI-7583] Read log block header only for the schema and instant time (#642)
+3043f933126 [ENG-8410][MINOR] Handle cases of malformed records when converting to json (#641)
+f5916bb302e [ENG-8344][INTERNAL] Fix typo in workflow (#640)
+b3286a546dc [ENG-8344][INTERNAL] fix name of ref in workflow (#639)
+af2a99fe2bb [ENG-8344][INTERNAL] Update CI to run spark tests on merge to master (#638)
+d506f4b9608 [AUDIT-726] Upgrade to version release-v1.8.1 (#636)
