@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
@@ -212,6 +213,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private void scanLogFiles() {
+    ValidationUtils.checkNotNull(readerState.tablePath);
     String path = readerState.tablePath;
     FileSystem fs = readerContext.getFs(path, hadoopConf);
 
@@ -223,7 +225,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withReverseReader(false)
         .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
         .withPartition(getRelativePartitionPath(
-            new Path(readerState.tablePath), logFiles.get(0).getPath().getParent()))
+            new Path(path), logFiles.get(0).getPath().getParent()))
         .withRecordMerger(recordMerger)
         .withRecordBuffer(recordBuffer)
         .build();

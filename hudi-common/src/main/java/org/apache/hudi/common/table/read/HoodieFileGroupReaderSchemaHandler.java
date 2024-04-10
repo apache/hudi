@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
@@ -74,12 +75,16 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
                                             HoodieTableConfig hoodieTableConfig) {
     this.readerContext = readerContext;
     this.readerState = readerContext.getReaderState();
+    ValidationUtils.checkNotNull(readerState.hasBootstrapBaseFile);
+    ValidationUtils.checkNotNull(readerState.hasLogFiles);
+    ValidationUtils.checkNotNull(readerState.recordMerger);
     this.dataSchema = dataSchema;
     this.requestedSchema = requestedSchema;
     this.hoodieTableConfig = hoodieTableConfig;
     this.hasBootstrapBaseFile = readerState.hasBootstrapBaseFile;
     this.needsMORMerge = readerState.hasLogFiles;
     this.requiredSchema = prepareSchema();
+    ValidationUtils.checkNotNull(readerState.needsBootstrapMerge);
     this.needsBootstrapMerge = readerState.needsBootstrapMerge;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
   }
