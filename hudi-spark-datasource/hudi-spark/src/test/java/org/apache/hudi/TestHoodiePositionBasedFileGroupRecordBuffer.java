@@ -21,6 +21,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -29,7 +30,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.HoodieFileGroupReaderState;
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.HoodiePositionBasedSchemaHandler;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -97,12 +100,19 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     Option<String> partitionNameOpt = StringUtils.isNullOrEmpty(partitionPaths[0])
         ? Option.empty() : Option.of(partitionPaths[0]);
 
+    HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getHadoopConf());
+    HoodieFileGroupReaderState state = ctx.getReaderState();
+    state.hasBootstrapBaseFile = false;
+    state.hasLogFiles = true;
+    state.needsBootstrapMerge = false;
+    state.recordMerger = useCustomMerger ? new CustomMerger() : new HoodieSparkRecordMerger();
+    state.schemaHandler = new HoodiePositionBasedSchemaHandler(ctx, avroSchema, avroSchema, Option.empty(), metaClient.getTableConfig());
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
-        getHoodieReaderContext(getBasePath(), avroSchema, getHadoopConf()),
+        ctx,
         metaClient,
         partitionNameOpt,
         partitionFields,
-        useCustomMerger ? new CustomMerger() : new HoodieSparkRecordMerger(),
+        state.recordMerger,
         new TypedProperties(),
         1024 * 1024 * 1000,
         metaClient.getTempFolderPath(),

@@ -90,10 +90,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       checkState(keyFields.length == 1)
       keyFields.head
     }
-    val ctx = new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty, false)
-    val readerState = ctx.getReaderState
-    readerState.schemaHandler = new HoodiePositionBasedSchemaHandler[InternalRow](ctx, avroSchema, avroSchema, Option.empty(), metaClient.getTableConfig)
-    ctx
+    new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty, false)
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {

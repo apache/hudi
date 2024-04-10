@@ -88,7 +88,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                          boolean isBitCaskDiskMapCompressionEnabled) {
     this.readerContext = readerContext;
     this.readerState = readerContext.getReaderState();
-    this.readerSchema = readerState.schemaHandler.requiredSchema;
+    this.readerSchema = readerState.schemaHandler.getRequiredSchema();
     this.partitionNameOverrideOpt = partitionNameOverrideOpt;
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMerger = recordMerger;
