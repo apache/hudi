@@ -76,12 +76,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final long length;
   // Core structure to store and process records.
   private final HoodieFileGroupRecordBuffer<T> recordBuffer;
-  private final HoodieFileGroupReaderState readerState;
+  private final HoodieFileGroupReaderState<T> readerState;
   private ClosableIterator<T> baseFileIterator;
-  private HoodieRecordMerger recordMerger;
+  private final HoodieRecordMerger recordMerger;
   private final Option<UnaryOperator<T>> outputConverter;
-  private final HoodieFileGroupReaderSchemaHandler schemaHandler;
-  private final boolean shouldMergeWithPosition;
+  private final HoodieFileGroupReaderSchemaHandler<T> schemaHandler;
 
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
                                Configuration hadoopConf,
@@ -110,9 +109,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.start = start;
     this.length = length;
     this.recordMerger = readerContext.getRecordMerger(tableConfig.getRecordMergerStrategy());
+    this.readerState.recordMerger = this.recordMerger;
     this.readerState.tablePath = tablePath;
     this.readerState.latestCommitTime = latestCommitTime;
-    this.shouldMergeWithPosition = shouldUseRecordPosition && readerContext.shouldUseRecordPositionMerging();
+    boolean shouldMergeWithPosition = shouldUseRecordPosition && readerContext.shouldUseRecordPositionMerging();
+    readerState.hasLogFiles = !this.logFiles.isEmpty();
     readerState.hasBootstrapBaseFile = hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent();
     readerState.schemaHandler = shouldMergeWithPosition
         ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
@@ -121,7 +122,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.outputConverter = schemaHandler.getOutputConverter();
     this.recordBuffer = this.logFiles.isEmpty()
         ? null
-        : this.shouldMergeWithPosition
+        : shouldMergeWithPosition
         ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(),
         Option.empty(), recordMerger, props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled)
         : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(),

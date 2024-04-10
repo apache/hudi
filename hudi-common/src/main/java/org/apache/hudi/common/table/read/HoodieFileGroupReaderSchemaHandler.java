@@ -43,7 +43,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
 
 public class HoodieFileGroupReaderSchemaHandler<T> {
 
-  protected HoodieFileGroupReaderState readerState;
+  protected HoodieFileGroupReaderState<T> readerState;
 
 
 
@@ -78,9 +78,9 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     this.requestedSchema = requestedSchema;
     this.hoodieTableConfig = hoodieTableConfig;
     this.hasBootstrapBaseFile = readerState.hasBootstrapBaseFile;
-    this.needsBootstrapMerge = readerState.needsBootstrapMerge;
     this.needsMORMerge = readerState.hasLogFiles;
     this.requiredSchema = prepareSchema();
+    this.needsBootstrapMerge = readerState.needsBootstrapMerge;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
   }
 

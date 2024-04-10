@@ -26,14 +26,11 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
  * e.g., schema, merging strategy, etc.
  */
 public class HoodieFileGroupReaderState<T> {
-  public HoodieFileGroupReaderSchemaHandler<T> schemaHandler;
-  public String tablePath;
-  public String latestCommitTime;
-  public HoodieRecordMerger recordMerger;
-  public boolean hasLogFiles;
-  public boolean hasBootstrapBaseFile;
-  public boolean needsBootstrapMerge;
-
-
-
+  public HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
+  public String tablePath = null;
+  public String latestCommitTime = null;
+  public HoodieRecordMerger recordMerger = null;
+  public Boolean hasLogFiles = null;
+  public Boolean hasBootstrapBaseFile = null;
+  public Boolean needsBootstrapMerge = null;
 }

@@ -94,7 +94,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParq
   }
 
   private def getSchemaAndFiltersForRead(structType: StructType): (StructType, Seq[Filter]) = {
-    (readerState.hasLogFiles, readerState.needsBootstrapMerge, shouldUseRecordPosition) match {
+    (readerState.hasLogFiles.booleanValue(), readerState.needsBootstrapMerge.booleanValue(), shouldUseRecordPosition) match {
       case (false, false, _) =>
         (structType, filters)
       case (false, true, true) if shouldUseRecordPosition =>
