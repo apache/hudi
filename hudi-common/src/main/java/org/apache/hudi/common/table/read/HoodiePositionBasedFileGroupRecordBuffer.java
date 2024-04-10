@@ -118,7 +118,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
         T nextRecord = recordIterator.next();
 
         // Skip a record if it is not contained in the specified keys.
-        if (shouldSkip(nextRecord, dataBlock.getKeyFieldName(), isFullKey, keys)) {
+        if (shouldSkip(nextRecord, dataBlock.getKeyFieldName(), isFullKey, keys, dataBlock.getSchema())) {
           recordIndex++;
           continue;
         }
