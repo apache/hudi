@@ -158,26 +158,21 @@ public class Metrics {
     metricsMap.forEach((k, v) -> registerGauge(metricPrefix + k, v));
   }
 
-  public void registerGauge(String metricName, final long value) {
+  public Option<HoodieGauge<Long>> registerGauge(String metricName, final long value) {
+    HoodieGauge<Long> gauge = null;
     try {
-      HoodieGauge guage = (HoodieGauge) registry.gauge(metricName, () -> new HoodieGauge<>(value));
-      guage.setValue(value);
+      gauge = (HoodieGauge) registry.gauge(metricName, () -> new HoodieGauge<>(value));
+      gauge.setValue(value);
     } catch (Exception e) {
       // Here we catch all exception, so the major upsert pipeline will not be affected if the
       // metrics system has some issues.
       LOG.error("Failed to send metrics: ", e);
     }
+    return Option.ofNullable(gauge);
   }
 
-  public HoodieGauge<Long> registerGauge(String metricName) {
-    try {
-      return (HoodieGauge<Long>) registry.gauge(metricName, () -> new HoodieGauge<>(0L));
-    } catch (Exception e) {
-      // Here we catch all exception, so the major upsert pipeline will not be affected if the
-      // metrics system has some issues.
-      LOG.error("Failed to send metrics: ", e);
-    }
-    return null;
+  public Option<HoodieGauge<Long>> registerGauge(String metricName) {
+    return registerGauge(metricName, 0);
   }
 
   public MetricRegistry getRegistry() {

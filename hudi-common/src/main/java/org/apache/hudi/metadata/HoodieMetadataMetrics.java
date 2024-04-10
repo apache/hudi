@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metrics.HoodieGauge;
@@ -153,8 +154,8 @@ public class HoodieMetadataMetrics implements Serializable {
 
   protected void incrementMetric(String action, long value) {
     LOG.info(String.format("Updating metadata metrics (%s=%d) in %s", action, value, metricsRegistry));
-    HoodieGauge<Long> gauge = metrics.registerGauge(action);
-    gauge.setValue(gauge.getValue() + value);
+    Option<HoodieGauge<Long>> gaugeOpt = metrics.registerGauge(action);
+    gaugeOpt.ifPresent(gauge -> gauge.setValue(gauge.getValue() + value));
   }
 
   protected void setMetric(String action, long value) {
