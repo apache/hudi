@@ -51,6 +51,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -86,6 +87,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.validateAllFileGroups = true;
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
     assertTrue(validator.run());
+    assertFalse(validator.hasValidationFailure());
+    assertTrue(validator.getThrowables().isEmpty());
   }
 
   @ParameterizedTest
