@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
@@ -89,7 +90,10 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       checkState(keyFields.length == 1)
       keyFields.head
     }
-    new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty, false)
+    val ctx = new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty, false)
+    val readerState = ctx.getReaderState
+    readerState.schemaHandler = new HoodiePositionBasedSchemaHandler[InternalRow](ctx, avroSchema, avroSchema, Option.empty(), metaClient.getTableConfig)
+    ctx
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {

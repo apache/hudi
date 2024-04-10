@@ -23,7 +23,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{ROW_INDEX_TEMPORARY_COLUMN_NAME, getAppliedRequiredSchema}
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{ROW_INDEX_TEMPORARY_COLUMN_NAME, getAppliedRequiredSchema, hasIndexTempColumn}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
@@ -68,8 +68,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParq
                                      length: Long,
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
-                                     conf: Configuration,
-                                     isMerge: Boolean): ClosableIterator[InternalRow] = {
+                                     conf: Configuration): ClosableIterator[InternalRow] = {
     val structType: StructType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
       val projection: UnsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
@@ -88,20 +87,23 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParq
       // each row if they are given. That is the only usage of the partition values in the reader.
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
+      val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType)
       new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
-        getAppliedRequiredSchema(structType, shouldUseRecordPosition && isMerge), StructType(Seq.empty),
-        getFiltersForRead(isMerge), conf))
+        readSchema, StructType(Seq.empty), readFilters, conf))
     }
   }
 
-  private def getFiltersForRead(isMerge: Boolean): Seq[Filter] = {
-    if (!isMerge) {
-      filters
-    } else if (shouldUseRecordPosition) {
-      recordKeyFilters
-    } else {
-      Seq.empty
-    }
+  private def getSchemaAndFiltersForRead(structType: StructType): (StructType, Seq[Filter]) = {
+    (readerState.hasLogFiles, readerState.needsBootstrapMerge, shouldUseRecordPosition) match {
+      case (false, false, _) =>
+        (structType, filters)
+      case (false, true, true) if shouldUseRecordPosition =>
+        (getAppliedRequiredSchema(structType), filters)
+      case (true, _, true) if shouldUseRecordPosition =>
+        (getAppliedRequiredSchema(structType), recordKeyFilters)
+      case (_, _, _) =>
+        (structType, Seq.empty)
+      }
   }
 
   /**
@@ -133,10 +135,20 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParq
                                  dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
     if (shouldUseRecordPosition) {
       assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
+      assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       val javaSet = new java.util.HashSet[String]()
       javaSet.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
       val skeletonProjection = projectRecord(skeletonRequiredSchema,
         AvroSchemaUtils.removeFieldsFromSchema(skeletonRequiredSchema, javaSet))
+      //If we have log files, we will want to do position based merging with those as well,
+      //so leave a temporary column at the end
+      val dataProjection = if (readerState.hasLogFiles) {
+        getIdentityProjection
+      } else {
+        projectRecord(dataRequiredSchema,
+          AvroSchemaUtils.removeFieldsFromSchema(dataRequiredSchema, javaSet))
+      }
+
       new CachingIterator[InternalRow] {
         val combinedRow = new JoinedRow()
 
@@ -180,7 +192,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParq
                 }
               }
             }
-            nextRecord = combinedRow(skeletonProjection.apply(nextSkeleton._1), nextData._1)
+            nextRecord = combinedRow(skeletonProjection.apply(nextSkeleton._1), dataProjection.apply(nextData._1))
             true
           }
         }
@@ -245,18 +257,21 @@ object SparkFileFormatInternalRowReaderContext {
     filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
   }
 
-  def getAppliedRequiredSchema(requiredSchema: StructType,
-                               shouldUseRecordPosition: Boolean): StructType = {
-    if (shouldUseRecordPosition) {
+  def hasIndexTempColumn(structType: StructType): Boolean = {
+    structType.fields.exists(isIndexTempColumn)
+  }
+
+  def isIndexTempColumn(field: StructField): Boolean = {
+    field.name.equals(ROW_INDEX_TEMPORARY_COLUMN_NAME)
+  }
+
+  def getAppliedRequiredSchema(requiredSchema: StructType): StructType = {
       val metadata = new MetadataBuilder()
         .putString(METADATA_COL_ATTR_KEY, ROW_INDEX_TEMPORARY_COLUMN_NAME)
         .putBoolean(FILE_SOURCE_METADATA_COL_ATTR_KEY, value = true)
         .putString(FILE_SOURCE_GENERATED_METADATA_COL_ATTR_KEY, ROW_INDEX_TEMPORARY_COLUMN_NAME)
         .build()
       val rowIndexField = StructField(ROW_INDEX_TEMPORARY_COLUMN_NAME, LongType, nullable = false, metadata)
-      StructType(requiredSchema.fields :+ rowIndexField)
-    } else {
-      requiredSchema
-    }
+      StructType(requiredSchema.fields.filterNot(isIndexTempColumn) :+ rowIndexField)
   }
 }

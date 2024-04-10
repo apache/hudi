@@ -77,7 +77,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
       val props = Map("spark.sql.parquet.enableVectorizedReader" -> "false")
       _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
       val reader = sparkAdapter.createHoodieParquetFileReader(vectorized = false, _spark.sessionState.conf, props, hadoopConf)
-      val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema, shouldUseRecordPosition = true)
+      val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema)
 
       // Confirm if the schema is as expected.
       assertEquals(4, requiredSchema.fields.length)
@@ -91,9 +91,12 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
       val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
       assertTrue(allBaseFiles.nonEmpty)
       val readerContext = new SparkFileFormatInternalRowReaderContext(reader, HoodieRecord.RECORD_KEY_METADATA_FIELD, Seq.empty, true)
+      val readerState = readerContext.getReaderState
+      readerState.hasLogFiles = true
+      readerState.needsBootstrapMerge
       //dataschema param is set to null because it is not used
       val fileRecordIterator = readerContext.getFileRecordIterator(allBaseFiles.head.getPath, 0, allBaseFiles.head.getLen, null,
-        sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), hadoopConf, true)
+        sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), hadoopConf)
 
       // Make sure we can read all the positions out from base file.
       // Here we don't add filters since enabling filter push-down

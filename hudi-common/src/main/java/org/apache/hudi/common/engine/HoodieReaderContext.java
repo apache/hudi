@@ -22,6 +22,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.read.HoodieFileGroupReaderState;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
@@ -48,6 +49,12 @@ import java.util.function.UnaryOperator;
  *            and {@code RowData} in Flink.
  */
 public abstract class HoodieReaderContext<T> {
+  protected HoodieFileGroupReaderState<T> readerState = new HoodieFileGroupReaderState<>();
+
+  public HoodieFileGroupReaderState<T> getReaderState() {
+    return readerState;
+  }
+
   // These internal key names are only used in memory for record metadata and merging,
   // and should not be persisted to storage.
   public static final String INTERNAL_META_RECORD_KEY = "_0";
@@ -79,7 +86,7 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf, boolean isMerge) throws IOException;
+      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf) throws IOException;
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.

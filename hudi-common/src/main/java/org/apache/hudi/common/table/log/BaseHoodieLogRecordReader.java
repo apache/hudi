@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.HoodieFileGroupReaderState;
 import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -86,6 +87,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // Log-Blocks belonging to inflight delta-instants are filtered-out using this high-watermark.
   private final String latestInstantTime;
   protected final HoodieReaderContext<T> readerContext;
+  protected final HoodieFileGroupReaderState readerState;
   protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
@@ -141,20 +143,21 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected HoodieFileGroupRecordBuffer<T> recordBuffer;
 
   protected BaseHoodieLogRecordReader(HoodieReaderContext readerContext,
-                                      FileSystem fs, String basePath, List<String> logFilePaths,
-                                      Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
+                                      FileSystem fs,
+                                      List<String> logFilePaths,
+                                      boolean readBlocksLazily,
                                       boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan,
                                       Option<String> partitionNameOverride,
-                                      InternalSchema internalSchema,
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
                                       HoodieRecordMerger recordMerger,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
     this.readerContext = readerContext;
-    this.readerSchema = readerSchema;
-    this.latestInstantTime = latestInstantTime;
-    this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
+    this.readerState = readerContext.getReaderState();
+    this.readerSchema = readerState.schemaHandler.getRequiredSchema();
+    this.latestInstantTime = readerState.latestCommitTime;
+    this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(readerState.tablePath).build();
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
@@ -174,7 +177,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.forceFullScan = forceFullScan;
-    this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.internalSchema = readerState.schemaHandler.getInternalSchema();
     this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
 
     if (keyFieldOverride.isPresent()) {
@@ -841,15 +844,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
 
     public abstract Builder withFileSystem(FileSystem fs);
 
-    public abstract Builder withBasePath(String basePath);
-
     public abstract Builder withLogFiles(List<HoodieLogFile> hoodieLogFiles);
-
-    public abstract Builder withReaderSchema(Schema schema);
-
-    public abstract Builder withInternalSchema(InternalSchema internalSchema);
-
-    public abstract Builder withLatestInstantTime(String latestInstantTime);
 
     public abstract Builder withReadBlocksLazily(boolean readBlocksLazily);
 

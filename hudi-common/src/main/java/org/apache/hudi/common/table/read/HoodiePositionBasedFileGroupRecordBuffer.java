@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 
@@ -60,9 +59,6 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
   private long nextRecordPosition = 0L;
 
   public HoodiePositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                  Schema readerSchema,
-                                                  Schema baseFileSchema,
-                                                  InternalSchema internalSchema,
                                                   HoodieTableMetaClient hoodieTableMetaClient,
                                                   Option<String> partitionNameOverrideOpt,
                                                   Option<String[]> partitionPathFieldOpt,
@@ -72,7 +68,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
                                                   String spillableMapBasePath,
                                                   ExternalSpillableMap.DiskMapType diskMapType,
                                                   boolean isBitCaskDiskMapCompressionEnabled) {
-    super(readerContext, readerSchema, baseFileSchema, internalSchema, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt,
+    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt,
         recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
@@ -200,7 +196,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
 
       Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-          baseRecord, baseFileSchema);
+          baseRecord, readerSchema);
 
       Option<T> resultRecord = logRecordInfo != null
           ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())

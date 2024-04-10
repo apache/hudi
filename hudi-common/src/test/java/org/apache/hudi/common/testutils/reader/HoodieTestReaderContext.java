@@ -76,8 +76,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       long length,
       Schema dataSchema,
       Schema requiredSchema,
-      Configuration conf,
-      boolean isMerge
+      Configuration conf
   ) throws IOException {
     HoodieAvroParquetReader reader = new HoodieAvroParquetReader(conf, filePath);
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);

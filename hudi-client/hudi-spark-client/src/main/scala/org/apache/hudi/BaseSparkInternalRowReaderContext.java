@@ -43,6 +43,7 @@ import org.apache.spark.sql.types.StructType;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import scala.Function1;
@@ -153,5 +154,9 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
         HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renamedColumns);
     return row -> (InternalRow) unsafeRowWriter.apply(row);
+  }
+
+  protected UnaryOperator<InternalRow> getIdentityProjection() {
+    return row -> row;
   }
 }

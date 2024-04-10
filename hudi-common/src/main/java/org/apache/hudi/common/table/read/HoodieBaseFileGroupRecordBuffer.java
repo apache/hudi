@@ -62,8 +62,8 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 
 public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
+  protected final HoodieFileGroupReaderState<T> readerState;
   protected final Schema readerSchema;
-  protected final Schema baseFileSchema;
   protected final Option<String> partitionNameOverrideOpt;
   protected final Option<String[]> partitionPathFieldOpt;
   protected final HoodieRecordMerger recordMerger;
@@ -77,9 +77,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected HoodieTableMetaClient hoodieTableMetaClient;
 
   public HoodieBaseFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                         Schema readerSchema,
-                                         Schema baseFileSchema,
-                                         InternalSchema internalSchema,
                                          HoodieTableMetaClient hoodieTableMetaClient,
                                          Option<String> partitionNameOverrideOpt,
                                          Option<String[]> partitionPathFieldOpt,
@@ -90,14 +87,13 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled) {
     this.readerContext = readerContext;
-    this.readerSchema = readerSchema;
-    this.baseFileSchema = baseFileSchema;
+    this.readerState = readerContext.getReaderState();
+    this.readerSchema = readerState.schemaHandler.requiredSchema;
     this.partitionNameOverrideOpt = partitionNameOverrideOpt;
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMerger = recordMerger;
     this.payloadProps = payloadProps;
-    this.internalSchema = internalSchema == null || internalSchema.isEmptySchema()
-        ? InternalSchema.getEmptyInternalSchema() : AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(readerSchema, internalSchema);
+    this.internalSchema = readerState.schemaHandler.getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize

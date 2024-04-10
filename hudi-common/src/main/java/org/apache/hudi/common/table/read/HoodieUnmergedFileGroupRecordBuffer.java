@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 
@@ -50,9 +49,6 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
   public HoodieUnmergedFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
-      Schema readerSchema,
-      Schema baseFileSchema,
-      InternalSchema internalSchema,
       HoodieTableMetaClient hoodieTableMetaClient,
       Option<String> partitionNameOverrideOpt,
       Option<String[]> partitionPathFieldOpt,
@@ -62,8 +58,8 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
       String spillableMapBasePath,
       ExternalSpillableMap.DiskMapType diskMapType,
       boolean isBitCaskDiskMapCompressionEnabled) {
-    super(readerContext, readerSchema, baseFileSchema, internalSchema, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt,
-        recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
+    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt, recordMerger,
+        payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
   @Override

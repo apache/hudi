@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 
@@ -50,10 +49,8 @@ import java.util.Map;
  * {@link #hasNext} method is called.
  */
 public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
+
   public HoodieKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                             Schema readerSchema,
-                                             Schema baseFileSchema,
-                                             InternalSchema internalSchema,
                                              HoodieTableMetaClient hoodieTableMetaClient,
                                              Option<String> partitionNameOverrideOpt,
                                              Option<String[]> partitionPathFieldOpt,
@@ -63,7 +60,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
                                              String spillableMapBasePath,
                                              ExternalSpillableMap.DiskMapType diskMapType,
                                              boolean isBitCaskDiskMapCompressionEnabled) {
-    super(readerContext, readerSchema, baseFileSchema, internalSchema, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt,
+    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt,
         recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
@@ -138,10 +135,10 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     while (baseFileIterator.hasNext()) {
       T baseRecord = baseFileIterator.next();
 
-      String recordKey = readerContext.getRecordKey(baseRecord, baseFileSchema);
+      String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
       Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-          baseRecord, baseFileSchema);
+          baseRecord, readerSchema);
 
       Option<T> resultRecord = logRecordInfo != null
           ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
