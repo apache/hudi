@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.hadoop.fs.HoodieSerializableFileStatus;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
@@ -45,7 +43,6 @@ import java.util.List;
 @TestInstance(Lifecycle.PER_CLASS)
 public class TestHoodieSerializableFileStatus extends HoodieSparkClientTestHarness {
 
-  HoodieEngineContext engineContext;
   List<Path> testPaths;
 
   @BeforeAll
@@ -55,7 +52,6 @@ public class TestHoodieSerializableFileStatus extends HoodieSparkClientTestHarne
     for (int i = 0; i < 5; i++) {
       testPaths.add(new Path("s3://table-bucket/"));
     }
-    engineContext = new HoodieSparkEngineContext(jsc);
   }
 
   @AfterAll
@@ -67,7 +63,7 @@ public class TestHoodieSerializableFileStatus extends HoodieSparkClientTestHarne
   public void testNonSerializableFileStatus() {
     Exception e = Assertions.assertThrows(SparkException.class,
         () -> {
-          List<FileStatus> statuses = engineContext.flatMap(testPaths, path -> {
+          List<FileStatus> statuses = context.flatMap(testPaths, path -> {
             FileSystem fileSystem = new NonSerializableFileSystem();
             return Arrays.stream(fileSystem.listStatus(path));
           }, 5);
@@ -78,7 +74,7 @@ public class TestHoodieSerializableFileStatus extends HoodieSparkClientTestHarne
 
   @Test
   public void testHoodieFileStatusSerialization() {
-    Assertions.assertDoesNotThrow(() -> engineContext.flatMap(testPaths, path -> {
+    Assertions.assertDoesNotThrow(() -> context.flatMap(testPaths, path -> {
       FileSystem fileSystem = new NonSerializableFileSystem();
       return Arrays.stream(HoodieSerializableFileStatus.fromFileStatuses(fileSystem.listStatus(path)));
     }, 5));
