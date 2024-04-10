@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -63,8 +64,10 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
 
   protected final HoodieReaderContext<T> readerContext;
 
+  protected final HoodieRecordMerger recordMerger;
+
   protected final boolean hasBootstrapBaseFile;
-  protected final boolean needsBootstrapMerge;
+  protected boolean needsBootstrapMerge;
 
   protected final boolean needsMORMerge;
 
@@ -76,17 +79,17 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     this.readerContext = readerContext;
     this.readerState = readerContext.getReaderState();
     ValidationUtils.checkNotNull(readerState.hasBootstrapBaseFile);
+    this.hasBootstrapBaseFile = readerState.hasBootstrapBaseFile;
     ValidationUtils.checkNotNull(readerState.hasLogFiles);
+    this.needsMORMerge = readerState.hasLogFiles;
     ValidationUtils.checkNotNull(readerState.recordMerger);
+    this.recordMerger = readerState.recordMerger;
     this.dataSchema = dataSchema;
     this.requestedSchema = requestedSchema;
     this.hoodieTableConfig = hoodieTableConfig;
-    this.hasBootstrapBaseFile = readerState.hasBootstrapBaseFile;
-    this.needsMORMerge = readerState.hasLogFiles;
     this.requiredSchema = prepareSchema();
-    ValidationUtils.checkNotNull(readerState.needsBootstrapMerge);
-    this.needsBootstrapMerge = readerState.needsBootstrapMerge;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
+    readerState.needsBootstrapMerge = this.needsBootstrapMerge;
   }
 
   public Schema getDataSchema() {
@@ -131,7 +134,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     }
 
     List<Schema.Field> addedFields = new ArrayList<>();
-    for (String field : readerState.recordMerger.getMandatoryFieldsForMerging(hoodieTableConfig)) {
+    for (String field : recordMerger.getMandatoryFieldsForMerging(hoodieTableConfig)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
         Option<Schema.Field> foundFieldOpt  = findNestedField(dataSchema, field);
         if (!foundFieldOpt.isPresent()) {
@@ -152,8 +155,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
   protected Schema prepareSchema() {
     Schema preReorderRequiredSchema = generateRequiredSchema();
     Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = getDataAndMetaCols(preReorderRequiredSchema);
-    readerState.needsBootstrapMerge = readerState.hasBootstrapBaseFile && !requiredFields.getLeft().isEmpty() && !requiredFields.getRight().isEmpty();
-    return readerState.needsBootstrapMerge
+    this.needsBootstrapMerge = hasBootstrapBaseFile && !requiredFields.getLeft().isEmpty() && !requiredFields.getRight().isEmpty();
+    return needsBootstrapMerge
         ? createSchemaFromFields(Stream.concat(requiredFields.getLeft().stream(), requiredFields.getRight().stream()).collect(Collectors.toList()))
         : preReorderRequiredSchema;
   }
