@@ -50,6 +50,7 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -495,7 +496,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    List<String> allPartitions = validatePartitions(engineContext, basePath);
+    // compare partitions
+
+    List<String> allPartitions = validatePartitions(engineContext, basePath, metaClient);
 
     if (allPartitions.isEmpty()) {
       LOG.warn("The result of getting all partitions is null or empty, skip current validation. {}", taskLabels);
@@ -590,17 +593,79 @@ public class HoodieMetadataTableValidator implements Serializable {
   /**
    * Compare the listing partitions result between metadata table and fileSystem.
    */
-  private List<String> validatePartitions(HoodieSparkEngineContext engineContext, String basePath) {
+  @VisibleForTesting
+  List<String> validatePartitions(HoodieSparkEngineContext engineContext, String basePath, HoodieTableMetaClient metaClient) {
     // compare partitions
-    HoodieTableMetaClient metaClient = this.metaClientOpt.orElseThrow(() -> new HoodieValidationException("Data table metaClient is not available for: " + cfg.basePath));
-    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, cfg.assumeDatePartitioning);
     HoodieTimeline completedTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+    List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, basePath, cfg.assumeDatePartitioning, metaClient.getFs(),
+        completedTimeline);
+
+    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, basePath, cfg.assumeDatePartitioning);
+
+    Collections.sort(allPartitionPathsFromFS);
+    Collections.sort(allPartitionPathsMeta);
+
+    if (allPartitionPathsFromFS.size() != allPartitionPathsMeta.size()
+        || !allPartitionPathsFromFS.equals(allPartitionPathsMeta)) {
+      List<String> additionalFromFS = new ArrayList<>(allPartitionPathsFromFS);
+      additionalFromFS.removeAll(allPartitionPathsMeta);
+      List<String> additionalFromMDT = new ArrayList<>(allPartitionPathsMeta);
+      additionalFromMDT.removeAll(allPartitionPathsFromFS);
+      boolean misMatch = true;
+      List<String> actualAdditionalPartitionsInMDT = new ArrayList<>(additionalFromMDT);
+      if (additionalFromFS.isEmpty() && !additionalFromMDT.isEmpty()) {
+        // there is a chance that when we polled MDT there could have been a new completed commit which was not complete when we polled FS based
+        // listing. let's rule that out.
+        additionalFromMDT.forEach(partitionFromDMT -> {
+          Option<String> partitionCreationTimeOpt = getPartitionCreationInstant(metaClient.getFs(), basePath, partitionFromDMT);
+          // if creation time is greater than last completed instant in active timeline, we can ignore the additional partition from MDT.
+          if (partitionCreationTimeOpt.isPresent() && !completedTimeline.containsInstant(partitionCreationTimeOpt.get())) {
+            Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
+            if (lastInstant.isPresent()
+                && HoodieTimeline.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().getTimestamp())) {
+              LOG.warn("Ignoring additional partition " + partitionFromDMT + ", as it was deduced to be part of a "
+                  + "latest completed commit which was inflight when FS based listing was polled.");
+              actualAdditionalPartitionsInMDT.remove(partitionFromDMT);
+            }
+          }
+        });
+        // if there is no additional partitions from FS listing and only additional partitions from MDT based listing is due to a new commit, we are good
+        if (actualAdditionalPartitionsInMDT.isEmpty()) {
+          misMatch = false;
+        }
+      }
+      if (misMatch) {
+        String message = "Compare Partitions Failed! " + " Additional partitions from FS, but missing from MDT : \"" + additionalFromFS
+            + "\" and additional partitions from MDT, but missing from FS listing : \"" + actualAdditionalPartitionsInMDT
+            + "\".\n All partitions from FS listing " + allPartitionPathsFromFS;
+        LOG.error(message);
+        throw new HoodieValidationException(message);
+      }
+    }
+    return allPartitionPathsMeta;
+  }
+
+  @VisibleForTesting
+  Option<String> getPartitionCreationInstant(FileSystem fs, String basePath, String partition) {
+    HoodiePartitionMetadata hoodiePartitionMetadata =
+        new HoodiePartitionMetadata(fs, FSUtils.getPartitionPath(basePath, partition));
+    return hoodiePartitionMetadata.readPartitionCreatedCommitTime();
+  }
+
+  @VisibleForTesting
+   List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath, boolean assumeDatePartitioning) {
+    return FSUtils.getAllPartitionPaths(engineContext, basePath, true, assumeDatePartitioning);
+  }
+
+  @VisibleForTesting
+  List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, String basePath, boolean assumeDatePartitioning,
+                                           FileSystem fs, HoodieTimeline completedTimeline) {
+    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, assumeDatePartitioning);
 
     // ignore partitions created by uncommitted ingestion.
-    allPartitionPathsFromFS = allPartitionPathsFromFS.stream().parallel().filter(part -> {
+    return allPartitionPathsFromFS.stream().parallel().filter(part -> {
       HoodiePartitionMetadata hoodiePartitionMetadata =
-          new HoodiePartitionMetadata(metaClient.getFs(), FSUtils.getPartitionPath(basePath, part));
-
+          new HoodiePartitionMetadata(fs, FSUtils.getPartitionPath(basePath, part));
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
         String instantTime = instantOption.get();
@@ -622,53 +687,6 @@ public class HoodieMetadataTableValidator implements Serializable {
         return false;
       }
     }).collect(Collectors.toList());
-
-    List<String> allPartitionPathsMeta = FSUtils.getAllPartitionPaths(engineContext, basePath, true, cfg.assumeDatePartitioning);
-
-    Collections.sort(allPartitionPathsFromFS);
-    Collections.sort(allPartitionPathsMeta);
-
-    if (allPartitionPathsFromFS.size() != allPartitionPathsMeta.size()
-        || !allPartitionPathsFromFS.equals(allPartitionPathsMeta)) {
-      List<String> additionalFromFS = new ArrayList<>(allPartitionPathsFromFS);
-      additionalFromFS.remove(allPartitionPathsMeta);
-      List<String> additionalFromMDT = new ArrayList<>(allPartitionPathsMeta);
-      additionalFromMDT.remove(allPartitionPathsFromFS);
-      boolean misMatch = true;
-      List<String> actualAdditionalPartitionsInMDT = new ArrayList<>(additionalFromMDT);
-      if (additionalFromFS.isEmpty() && !additionalFromMDT.isEmpty()) {
-        // there is a chance that when we polled MDT there could have been a new completed commit which was not complete when we polled FS based
-        // listing. let's rule that out.
-        additionalFromMDT.forEach(partitionFromDMT -> {
-
-          HoodiePartitionMetadata hoodiePartitionMetadata =
-              new HoodiePartitionMetadata(metaClient.getFs(), FSUtils.getPartitionPath(basePath, partitionFromDMT));
-          Option<String> partitionCreationTimeOpt = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
-          // if creation time is greater than last completed instant in active timeline, we can ignore the additional partition from MDT.
-          if (partitionCreationTimeOpt.isPresent() && !completedTimeline.containsInstant(partitionCreationTimeOpt.get())) {
-            Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
-            if (lastInstant.isPresent()
-                && HoodieTimeline.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().getTimestamp())) {
-              LOG.warn("Ignoring additional partition " + partitionFromDMT + ", as it was deduced to be part of a "
-                  + "latest completed commit which was inflighht when FS based listing was polled.");
-              actualAdditionalPartitionsInMDT.remove(partitionFromDMT);
-            }
-          }
-        });
-        // if there is no additional partitions from FS listing and only additional partitions from MDT based listing is due to a new commit, we are good
-        if (actualAdditionalPartitionsInMDT.isEmpty()) {
-          misMatch = false;
-        }
-      }
-      if (misMatch) {
-        String message = "Compare Partitions Failed! " + " Additional partitions from FS, but missing from MDT : \"" + additionalFromFS
-            + "\" and additional partitions from MDT, but missing from FS listing : \"" + actualAdditionalPartitionsInMDT
-            + "\".\n All partitions from FS listing " + allPartitionPathsFromFS;
-        LOG.error(message);
-        throw new HoodieValidationException(message);
-      }
-    }
-    return allPartitionPathsMeta;
   }
 
   /**
