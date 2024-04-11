@@ -42,6 +42,7 @@ public class HoodieConfig implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieConfig.class);
 
   protected static final String CONFIG_VALUES_DELIMITER = ",";
+  protected static final String BASE_PATH_KEY = "hoodie.base.path";
 
   protected TypedProperties props;
 

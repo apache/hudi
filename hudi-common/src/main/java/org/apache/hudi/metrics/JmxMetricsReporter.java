@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.MetricRegistry;
@@ -41,7 +41,7 @@ public class JmxMetricsReporter extends MetricsReporter {
   private final MetricRegistry registry;
   private JmxReporterServer jmxReporterServer;
 
-  public JmxMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
+  public JmxMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
     try {
       this.registry = registry;
       // Check the host and port here
