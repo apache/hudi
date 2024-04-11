@@ -132,6 +132,9 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
         return;
       }
       lock = null;
+      if (future != null) {
+        future.cancel(false);
+      }
       hiveClient.unlock(lockResponseLocal.getLockid());
       LOG.info(generateLogStatement(RELEASED, generateLogSuffixString()));
     } catch (TException e) {
@@ -199,7 +202,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       Heartbeat heartbeat = new Heartbeat(hiveClient, lock.getLockid());
       long heartbeatIntervalMs = lockConfiguration.getConfig()
           .getLong(LOCK_HEARTBEAT_INTERVAL_MS_KEY, DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS);
-      future = executor.scheduleAtFixedRate(heartbeat, heartbeatIntervalMs / 2, heartbeatIntervalMs, TimeUnit.MICROSECONDS);
+      future = executor.scheduleAtFixedRate(heartbeat, heartbeatIntervalMs / 2, heartbeatIntervalMs, TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException e) {
       if (this.lock == null || this.lock.getState() != LockState.ACQUIRED) {
         LockResponse lockResponse = this.hiveClient.checkLock(lockRequest.getTxnid());
@@ -214,6 +217,9 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       if (this.lock != null && this.lock.getState() != LockState.ACQUIRED) {
         hiveClient.unlock(this.lock.getLockid());
         lock = null;
+        if (future != null) {
+          future.cancel(false);
+        }
       }
     }
   }
