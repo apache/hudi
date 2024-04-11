@@ -154,6 +154,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
         lock = null;
       }
       Hive.closeCurrent();
+      executor.shutdown();
     } catch (Exception e) {
       LOG.error(generateLogStatement(org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
     }
