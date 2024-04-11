@@ -18,12 +18,10 @@
 
 package org.apache.hudi.util
 
-import org.apache.hadoop.conf.Configuration
+import org.apache.spark.sql.execution.datasources.parquet.TestSparkParquetReaderFormat
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.execution.datasources.parquet.{SparkHoodieParquetReader, TestSparkParquetReaderFormat}
-import org.apache.spark.sql.internal.SQLConf
 
 import java.util.function.Predicate
 
@@ -42,6 +40,13 @@ object JavaConversions extends SparkAdapterSupport {
     }
   }
 
+  /**
+   * Read parquet files using [[TestSparkParquetReaderFormat]]
+   *
+   * @param sparkSession the spark session
+   * @param paths comma seperated list of parquet files or directories containing parquet files
+   * @return dataframe containing the data from the input paths
+   */
   def createTestDataFrame(sparkSession: SparkSession, paths: String): DataFrame = {
     sparkSession.sqlContext.baseRelationToDataFrame(DataSource.apply(
       sparkSession = sparkSession,

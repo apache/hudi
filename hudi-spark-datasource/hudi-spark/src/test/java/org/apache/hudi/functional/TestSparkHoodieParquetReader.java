@@ -24,15 +24,16 @@ import org.apache.hudi.util.JavaConversions;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Tag("functional")
 public class TestSparkHoodieParquetReader extends TestBootstrapReadBase {
 
   @Test
   public void testReader() {
-    sqlContext.setConf("spark.sql.parquet.enableVectorizedReader", "false");
     dataGen = new HoodieTestDataGenerator(dashPartitionPaths);
     int n = 10;
     Dataset<Row> inserts = makeInsertDf("000", n);

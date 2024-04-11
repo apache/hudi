@@ -47,21 +47,29 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
+/**
+ * Class used to test [[SparkHoodieParquetReader]]
+ * This class should have the same functionality as [[ParquetFileFormat]]
+ */
 class TestSparkParquetReaderFormat extends ParquetFileFormat with SparkAdapterSupport {
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
-                                               dataSchema: StructType,
-                                               partitionSchema: StructType,
-                                               requiredSchema: StructType,
-                                               filters: Seq[Filter],
-                                               options: Map[String, String],
-                                               hadoopConf: Configuration): (PartitionedFile) => Iterator[InternalRow] = {
-    val reader = sparkAdapter.createHoodieParquetFileReader(false, sparkSession.sqlContext.conf, options, hadoopConf)
+                                              dataSchema: StructType,
+                                              partitionSchema: StructType,
+                                              requiredSchema: StructType,
+                                              filters: Seq[Filter],
+                                              options: Map[String, String],
+                                              hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+    //reader must be created outsize of the lambda. This happens on the driver
+    val reader = sparkAdapter.createHoodieParquetFileReader(supportBatch(sparkSession,
+      StructType(partitionSchema.fields ++ requiredSchema.fields)),
+      sparkSession.sqlContext.conf, options, hadoopConf)
     val broadcastedHadoopConf =
       sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
+
     (file: PartitionedFile) => {
+      //code inside the lambda will run on the executor
       reader.read(file, requiredSchema, partitionSchema, filters, broadcastedHadoopConf.value.value)
     }
-
   }
 }
