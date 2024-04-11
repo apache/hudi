@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -39,7 +38,6 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
-@Disabled("HUDI-6756")
 public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
 
   private static Stream<Arguments> testArgs() {
