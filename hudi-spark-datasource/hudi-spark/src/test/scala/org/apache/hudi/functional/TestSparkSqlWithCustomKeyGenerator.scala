@@ -56,12 +56,12 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
         Seq("MERGE_ON_READ", "ts:timestamp",
           "(ts=202312)", "202312",
           Seq("202401", "202402"),
-          TS_TO_STRING_FUNC,
+          TS_FORMATTER_FUNC,
           (ts: Integer, _: String) => TS_FORMATTER_FUNC.apply(ts)),
         Seq("MERGE_ON_READ", "ts:timestamp,segment:simple",
           "(ts=202401, segment='cat2')", "202401/cat2",
           Seq("202312/cat2", "202312/cat4", "202401/cat1", "202401/cat3", "202402/cat1", "202402/cat3", "202402/cat5"),
-          TS_TO_STRING_FUNC,
+          TS_FORMATTER_FUNC,
           (ts: Integer, segment: String) => TS_FORMATTER_FUNC.apply(ts) + "/" + segment)
       ).foreach { testParams =>
         withTable(generateTableName) { tableName =>
@@ -263,12 +263,12 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
         CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields2, TS_KEY_GEN_CONFIGS)
 
       // Non-partitioned table does not require additional partition path field write config
-      createTableWithSql(tableNameNonPartitioned, tablePathNonPartitioned, "");
+      createTableWithSql(tableNameNonPartitioned, tablePathNonPartitioned, "")
       // Partitioned table with simple key generator does not require additional partition path field write config
-      createTableWithSql(tableNameSimpleKey, tablePathSimpleKey, "");
+      createTableWithSql(tableNameSimpleKey, tablePathSimpleKey, "")
       // Partitioned table with custom key generator requires additional partition path field write config
       // Without that, right now the SQL DML fails
-      createTableWithSql(tableNameCustom1, tablePathCustom1, "");
+      createTableWithSql(tableNameCustom1, tablePathCustom1, "")
       createTableWithSql(tableNameCustom2, tablePathCustom2,
         s"hoodie.datasource.write.partitionpath.field = '$writePartitionFields2', "
           + TS_KEY_GEN_CONFIGS.map(e => e._1 + " = '" + e._2 + "'").mkString(", "))
@@ -288,7 +288,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
              | SELECT * from $sourceTableName
              | """.stripMargin)
       }
-      testInsertInto1(tableNameCustom2, TS_TO_STRING_FUNC, customPartitionFunc)
+      testInsertInto1(tableNameCustom2, TS_FORMATTER_FUNC, customPartitionFunc)
 
       // Now add the missing partition path field write config for tableNameCustom1
       spark.sql(
@@ -301,7 +301,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
       testInsertInto2(tableNameNonPartitioned, TS_TO_STRING_FUNC, (_, _) => "")
       testInsertInto2(tableNameSimpleKey, TS_TO_STRING_FUNC, segmentPartitionFunc)
       testInsertInto1(tableNameCustom1, TS_TO_STRING_FUNC, segmentPartitionFunc)
-      testInsertInto2(tableNameCustom2, TS_TO_STRING_FUNC, customPartitionFunc)
+      testInsertInto2(tableNameCustom2, TS_FORMATTER_FUNC, customPartitionFunc)
     }
     }
   }
@@ -353,7 +353,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
            | """.stripMargin)
 
       // INSERT INTO should succeed now
-      testInsertInto1(tableName, TS_TO_STRING_FUNC, customPartitionFunc)
+      testInsertInto1(tableName, TS_FORMATTER_FUNC, customPartitionFunc)
     }
     }
   }
@@ -436,6 +436,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
       .option("hoodie.datasource.write.keygenerator.class", keyGenClassName)
       .option("hoodie.datasource.write.partitionpath.field", writePartitionFields)
       .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.precombine.field", "name")
       .option("hoodie.table.name", tableName)
       .option("hoodie.insert.shuffle.parallelism", "1")
       .option("hoodie.upsert.shuffle.parallelism", "1")
