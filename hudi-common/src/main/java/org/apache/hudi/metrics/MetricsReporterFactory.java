@@ -21,10 +21,8 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 import org.apache.hudi.metrics.m3.M3MetricsReporter;
@@ -44,20 +42,20 @@ public class MetricsReporterFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(MetricsReporterFactory.class);
 
-  public static Option<MetricsReporter> createReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    String reporterClassName = config.getMetricReporterClassName();
+  public static Option<MetricsReporter> createReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
+    String reporterClassName = metricsConfig.getMetricReporterClassName();
 
     if (!StringUtils.isNullOrEmpty(reporterClassName)) {
       Object instance = ReflectionUtils.loadClass(
-          reporterClassName, new Class<?>[] {Properties.class, MetricRegistry.class}, config.getProps(), registry);
+          reporterClassName, new Class<?>[] {Properties.class, MetricRegistry.class}, metricsConfig.getProps(), registry);
       if (!(instance instanceof CustomizableMetricsReporter)) {
-        throw new HoodieException(config.getMetricReporterClassName()
+        throw new HoodieException(metricsConfig.getMetricReporterClassName()
             + " is not a subclass of CustomizableMetricsReporter");
       }
       return Option.of((MetricsReporter) instance);
     }
 
-    MetricsReporterType type = config.getMetricsReporterType();
+    MetricsReporterType type = metricsConfig.getMetricsReporterType();
     MetricsReporter reporter = null;
     if (type == null) {
       LOG.warn(String.format("Metric creation failed. %s is not configured",
@@ -67,31 +65,32 @@ public class MetricsReporterFactory {
 
     switch (type) {
       case GRAPHITE:
-        reporter = new MetricsGraphiteReporter(config, registry);
+        reporter = new MetricsGraphiteReporter(metricsConfig, registry);
         break;
       case INMEMORY:
         reporter = new InMemoryMetricsReporter();
         break;
       case JMX:
-        reporter = new JmxMetricsReporter(config, registry);
+        reporter = new JmxMetricsReporter(metricsConfig, registry);
         break;
       case DATADOG:
-        reporter = new DatadogMetricsReporter(config, registry);
+        reporter = new DatadogMetricsReporter(metricsConfig, registry);
         break;
       case PROMETHEUS_PUSHGATEWAY:
-        reporter = new PushGatewayMetricsReporter(config, registry);
+        reporter = new PushGatewayMetricsReporter(metricsConfig, registry);
         break;
       case PROMETHEUS:
-        reporter = new PrometheusReporter(config, registry);
+        reporter = new PrometheusReporter(metricsConfig, registry);
         break;
       case CONSOLE:
         reporter = new ConsoleMetricsReporter(registry);
         break;
       case CLOUDWATCH:
-        reporter = new CloudWatchMetricsReporter(config, registry);
+        reporter = (MetricsReporter) ReflectionUtils.loadClass("org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter",
+            new Class[]{HoodieMetricsConfig.class, MetricRegistry.class}, metricsConfig, registry);
         break;
       case M3:
-        reporter = new M3MetricsReporter(config, registry);
+        reporter = new M3MetricsReporter(metricsConfig, registry);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");

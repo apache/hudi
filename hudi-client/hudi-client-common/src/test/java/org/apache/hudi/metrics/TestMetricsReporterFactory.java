@@ -20,7 +20,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 
@@ -41,27 +41,27 @@ import static org.mockito.Mockito.when;
 public class TestMetricsReporterFactory {
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieMetricsConfig metricsConfig;
 
   @Mock
   MetricRegistry registry;
 
   @Test
   public void metricsReporterFactoryShouldReturnReporter() {
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
-    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry).get();
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(metricsConfig, registry).get();
     assertTrue(reporter instanceof InMemoryMetricsReporter);
   }
 
   @Test
   public void metricsReporterFactoryShouldReturnUserDefinedReporter() {
-    when(config.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
+    when(metricsConfig.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
 
     TypedProperties props = new TypedProperties();
     props.setProperty("testKey", "testValue");
 
-    when(config.getProps()).thenReturn(props);
-    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry).get();
+    when(metricsConfig.getProps()).thenReturn(props);
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(metricsConfig, registry).get();
     assertTrue(reporter instanceof CustomizableMetricsReporter);
     assertEquals(props, ((DummyMetricsReporter) reporter).getProps());
     assertEquals(registry, ((DummyMetricsReporter) reporter).getRegistry());
@@ -69,9 +69,9 @@ public class TestMetricsReporterFactory {
 
   @Test
   public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
-    when(config.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
-    when(config.getProps()).thenReturn(new TypedProperties());
-    assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry));
+    when(metricsConfig.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
+    when(metricsConfig.getProps()).thenReturn(new TypedProperties());
+    assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
   }
 
   public static class DummyMetricsReporter extends CustomizableMetricsReporter {
