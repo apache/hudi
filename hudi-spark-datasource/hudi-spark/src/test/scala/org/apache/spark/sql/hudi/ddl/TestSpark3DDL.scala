@@ -724,7 +724,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
             option("hoodie.schema.on.read.enable","true").
             option(DataSourceWriteOptions.TABLE_NAME.key(), tableName).
-            option("hoodie.table.name", tableName).
             mode("overwrite").
             save(tablePath)
 
@@ -744,7 +743,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             option("hoodie.schema.on.read.enable","true").
             option("hoodie.datasource.write.reconcile.schema","true").
             option(DataSourceWriteOptions.TABLE_NAME.key(), tableName).
-            option("hoodie.table.name", tableName).
             mode("append").
             save(tablePath)
           spark.sql("set hoodie.schema.on.read.enable=true")
@@ -776,7 +774,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             option("hoodie.schema.on.read.enable","true").
             option("hoodie.datasource.write.reconcile.schema","true").
             option(DataSourceWriteOptions.TABLE_NAME.key(), tableName).
-            option("hoodie.table.name", tableName).
             mode("append").
             save(tablePath)
           spark.read.format("hudi").load(tablePath).show(false)
@@ -793,7 +790,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             option("hoodie.schema.on.read.enable","true").
             option("hoodie.datasource.write.reconcile.schema","true").
             option(DataSourceWriteOptions.TABLE_NAME.key(), tableName).
-            option("hoodie.table.name", tableName).
             mode("append").
             save(tablePath)
           spark.read.format("hudi").load(tablePath).createOrReplaceTempView("hudi_trips_snapshot1")
