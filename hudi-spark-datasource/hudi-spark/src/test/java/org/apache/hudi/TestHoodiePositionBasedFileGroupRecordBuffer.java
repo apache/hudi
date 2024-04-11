@@ -102,6 +102,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
 
     HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getHadoopConf());
     HoodieFileGroupReaderState state = ctx.getReaderState();
+    state.useRecordPosition = true;
     state.hasBootstrapBaseFile = false;
     state.hasLogFiles = true;
     state.needsBootstrapMerge = false;
@@ -182,9 +183,8 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
   public void testProcessDeleteBlockWithoutPositions() throws Exception {
     prepareBuffer(false);
     HoodieDeleteBlock deleteBlock = getDeleteBlockWithoutPositions();
-    Exception exception = assertThrows(
-        HoodieValidationException.class, () -> buffer.processDeleteBlock(deleteBlock));
-    assertTrue(exception.getMessage().contains("No record position info is found"));
+    buffer.processDeleteBlock(deleteBlock);
+    assertEquals(50, buffer.getLogRecords().size());
   }
 
   public static class CustomMerger implements HoodieRecordMerger {
