@@ -287,6 +287,7 @@ class HoodieSparkSqlWriterInternal {
           if (StringUtils.nonEmpty(hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)))
             hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
           else KeyGeneratorType.getKeyGeneratorClassName(hoodieConfig)
+        val recordMergerStrategy = hoodieConfig.getStringOrDefault(DataSourceWriteOptions.RECORD_MERGER_STRATEGY)
         HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(tableType)
           .setDatabaseName(databaseName)
@@ -309,6 +310,7 @@ class HoodieSparkSqlWriterInternal {
           .setPartitionMetafileUseBaseFormat(useBaseFormatMetaFile)
           .setShouldDropPartitionColumns(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.DROP_PARTITION_COLUMNS))
           .setCommitTimezone(timelineTimeZone)
+          .setRecordMergerStrategy(recordMergerStrategy)
           .initTable(sparkContext.hadoopConfiguration, path)
       }
 
