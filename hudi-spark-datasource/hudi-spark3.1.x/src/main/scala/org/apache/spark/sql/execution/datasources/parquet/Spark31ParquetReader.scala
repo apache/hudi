@@ -239,5 +239,4 @@ object Spark31ParquetReader extends SparkParquetReaderBuilder {
       enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
       timeZoneId = Some(sqlConf.sessionLocalTimeZone))
   }
-
 }
