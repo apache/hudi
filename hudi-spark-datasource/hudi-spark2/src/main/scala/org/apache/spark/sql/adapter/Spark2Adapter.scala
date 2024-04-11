@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetReader, Spark24LegacyHoodieParquetFileFormat, SparkHoodieParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24LegacyHoodieParquetFileFormat, Spark24ParquetReader, SparkParquetReader}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
@@ -217,10 +217,10 @@ class Spark2Adapter extends SparkAdapter {
    * @param hadoopConf some configs will be set for the hadoopConf
    * @return parquet file reader
    */
-  override def createHoodieParquetFileReader(vectorized: Boolean,
-                                             sqlConf: SQLConf,
-                                             options: Map[String, String],
-                                             hadoopConf: Configuration): SparkHoodieParquetReader = {
-    Spark24HoodieParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  override def createParquetFileReader(vectorized: Boolean,
+                                       sqlConf: SQLConf,
+                                       options: Map[String, String],
+                                       hadoopConf: Configuration): SparkParquetReader = {
+    Spark24ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 }

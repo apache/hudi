@@ -39,20 +39,20 @@ import org.apache.spark.sql.types.StructType
 
 import java.net.URI
 
-class Spark24HoodieParquetReader(enableVectorizedReader: Boolean,
-                                 enableParquetFilterPushDown: Boolean,
-                                 pushDownDate: Boolean,
-                                 pushDownTimestamp: Boolean,
-                                 pushDownDecimal: Boolean,
-                                 pushDownInFilterThreshold: Int,
-                                 pushDownStringStartWith: Boolean,
-                                 isCaseSensitive: Boolean,
-                                 timestampConversion: Boolean,
-                                 enableOffHeapColumnVector: Boolean,
-                                 capacity: Int,
-                                 returningBatch: Boolean,
-                                 enableRecordFilter: Boolean,
-                                 timeZoneId: Option[String]) extends SparkHoodieParquetReaderBase(
+class Spark24ParquetReader(enableVectorizedReader: Boolean,
+                           enableParquetFilterPushDown: Boolean,
+                           pushDownDate: Boolean,
+                           pushDownTimestamp: Boolean,
+                           pushDownDecimal: Boolean,
+                           pushDownInFilterThreshold: Int,
+                           pushDownStringStartWith: Boolean,
+                           isCaseSensitive: Boolean,
+                           timestampConversion: Boolean,
+                           enableOffHeapColumnVector: Boolean,
+                           capacity: Int,
+                           returningBatch: Boolean,
+                           enableRecordFilter: Boolean,
+                           timeZoneId: Option[String]) extends SparkParquetReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
   pushDownDate = pushDownDate,
@@ -185,7 +185,7 @@ class Spark24HoodieParquetReader(enableVectorizedReader: Boolean,
   }
 }
 
-object Spark24HoodieParquetReader extends SparkHoodieParquetReaderBuilder {
+object Spark24ParquetReader extends SparkParquetReaderBuilder {
   /**
    * Get parquet file reader
    *
@@ -198,7 +198,7 @@ object Spark24HoodieParquetReader extends SparkHoodieParquetReaderBuilder {
   def build(vectorized: Boolean,
             sqlConf: SQLConf,
             options: Map[String, String],
-            hadoopConf: Configuration): SparkHoodieParquetReader = {
+            hadoopConf: Configuration): SparkParquetReader = {
     //set hadoopconf
     hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
     hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
@@ -206,7 +206,7 @@ object Spark24HoodieParquetReader extends SparkHoodieParquetReaderBuilder {
     hadoopConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, sqlConf.isParquetBinaryAsString)
     hadoopConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, sqlConf.isParquetINT96AsTimestamp)
 
-    new Spark24HoodieParquetReader(
+    new Spark24ParquetReader(
       enableVectorizedReader = vectorized,
       enableParquetFilterPushDown = sqlConf.parquetFilterPushDown,
       pushDownDate = sqlConf.parquetFilterPushDownDate,
