@@ -977,10 +977,10 @@ object DataSourceOptionsHelper {
 
   def translateConfigurations(optParams: Map[String, String]): Map[String, String] = {
     val translatedOpt = scala.collection.mutable.Map[String, String]() ++= optParams
-    if (!translatedOpt.contains(HoodieTableConfig.HOODIE_TABLE_NAME_KEY) &&
-      translatedOpt.contains(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY)) {
-      translatedOpt.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY,
-        translatedOpt(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY))
+    if (!translatedOpt.contains(HoodieTableConfig.NAME.key()) &&
+      translatedOpt.contains(DataSourceWriteOptions.TABLE_NAME.key())) {
+      translatedOpt.put(HoodieTableConfig.NAME.key(),
+        translatedOpt(DataSourceWriteOptions.TABLE_NAME.key()))
     }
     optParams.keySet.foreach(opt => {
       if (allAlternatives.contains(opt) && !optParams.contains(allAlternatives(opt))) {
