@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
-public class TestSparkHoodieParquetReader extends TestBootstrapReadBase {
+public class TestSparkParquetReader extends TestBootstrapReadBase {
 
   @Test
   public void testReader() {
@@ -38,11 +38,11 @@ public class TestSparkHoodieParquetReader extends TestBootstrapReadBase {
     int n = 10;
     Dataset<Row> inserts = makeInsertDf("000", n);
     inserts.write().format("parquet").save(bootstrapBasePath);
-    Dataset<Row> individualReader = JavaConversions.createTestDataFrame(sparkSession, bootstrapBasePath);
-    Dataset<Row> sparkParquetReader = sparkSession.read().format("parquet").load(bootstrapBasePath);
-    assertEquals(sparkParquetReader.count(), n);
-    assertEquals(individualReader.count(), n);
-    assertEquals(sparkParquetReader.except(individualReader).count(), 0);
-    assertEquals(individualReader.except(sparkParquetReader).count(), 0);
+    Dataset<Row> parquetReadRows = JavaConversions.createTestDataFrame(sparkSession, bootstrapBasePath);
+    Dataset<Row> datasourceReadRows = sparkSession.read().format("parquet").load(bootstrapBasePath);
+    assertEquals(datasourceReadRows.count(), n);
+    assertEquals(parquetReadRows.count(), n);
+    assertEquals(datasourceReadRows.except(parquetReadRows).count(), 0);
+    assertEquals(parquetReadRows.except(datasourceReadRows).count(), 0);
   }
 }

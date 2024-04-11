@@ -26,19 +26,19 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-abstract class SparkHoodieParquetReaderBase(enableVectorizedReader: Boolean,
-                                        enableParquetFilterPushDown: Boolean,
-                                        pushDownDate: Boolean,
-                                        pushDownTimestamp: Boolean,
-                                        pushDownDecimal: Boolean,
-                                        pushDownInFilterThreshold: Int,
-                                        isCaseSensitive: Boolean,
-                                        timestampConversion: Boolean,
-                                        enableOffHeapColumnVector: Boolean,
-                                        capacity: Int,
-                                        returningBatch: Boolean,
-                                        enableRecordFilter: Boolean,
-                                        timeZoneId: Option[String]) extends SparkHoodieParquetReader {
+abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
+                                      enableParquetFilterPushDown: Boolean,
+                                      pushDownDate: Boolean,
+                                      pushDownTimestamp: Boolean,
+                                      pushDownDecimal: Boolean,
+                                      pushDownInFilterThreshold: Int,
+                                      isCaseSensitive: Boolean,
+                                      timestampConversion: Boolean,
+                                      enableOffHeapColumnVector: Boolean,
+                                      capacity: Int,
+                                      returningBatch: Boolean,
+                                      enableRecordFilter: Boolean,
+                                      timeZoneId: Option[String]) extends SparkParquetReader {
 
   /**
    * Read an individual parquet file
@@ -51,10 +51,10 @@ abstract class SparkHoodieParquetReaderBase(enableVectorizedReader: Boolean,
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   final def read(file: PartitionedFile,
-           requiredSchema: StructType,
-           partitionSchema: StructType,
-           filters: Seq[Filter],
-           sharedConf: Configuration): Iterator[InternalRow] = {
+                 requiredSchema: StructType,
+                 partitionSchema: StructType,
+                 filters: Seq[Filter],
+                 sharedConf: Configuration): Iterator[InternalRow] = {
     val conf = new Configuration(sharedConf)
     conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
     conf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
@@ -81,7 +81,7 @@ abstract class SparkHoodieParquetReaderBase(enableVectorizedReader: Boolean,
 
 }
 
-trait SparkHoodieParquetReaderBuilder {
+trait SparkParquetReaderBuilder {
   /**
    * Get parquet file reader
    *
@@ -95,5 +95,5 @@ trait SparkHoodieParquetReaderBuilder {
   def build(vectorized: Boolean,
             sqlConf: SQLConf,
             options: Map[String, String],
-            hadoopConf: Configuration): SparkHoodieParquetReader
+            hadoopConf: Configuration): SparkParquetReader
 }
