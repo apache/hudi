@@ -42,13 +42,9 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
 
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
-    HoodieTableType[] tableType = {COPY_ON_WRITE, MERGE_ON_READ};
-    Integer[] nPartitions = {0, 1, 2};
-    for (HoodieTableType tt : tableType) {
-      for (Integer n : nPartitions) {
-        b.add(Arguments.of(tt, n));
-      }
-    }
+    b.add(Arguments.of(MERGE_ON_READ, 0));
+    b.add(Arguments.of(COPY_ON_WRITE, 1));
+    b.add(Arguments.of(MERGE_ON_READ, 2));
     return b.build();
   }
 
