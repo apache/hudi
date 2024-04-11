@@ -745,7 +745,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public boolean rollback(final String commitInstantTime) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
-    releaseResources(commitInstantTime);
     return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false);
   }
 
@@ -753,7 +752,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public boolean rollback(final String commitInstantTime, String rollbackInstantTimestamp) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
-    releaseResources(commitInstantTime);
     return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTimestamp, false);
   }
 
