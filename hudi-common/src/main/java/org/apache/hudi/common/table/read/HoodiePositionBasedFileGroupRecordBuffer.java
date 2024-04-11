@@ -158,8 +158,9 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   }
 
   private void convertToKeyBasedBuffer() {
-    Set<Serializable> positionBasedKeys = records.keySet();
-    for (Serializable position : positionBasedKeys) {
+    //need to make a copy of the keys to avoid concurrent modification exception
+    ArrayList<Serializable> positions = new ArrayList<>(records.keySet());
+    for (Serializable position : positions) {
       Pair<Option<T>, Map<String, Object>> entry = records.get(position);
       Object recordKey = entry.getRight().get(INTERNAL_META_RECORD_KEY);
       if (entry.getLeft().isPresent() || recordKey != null) {
