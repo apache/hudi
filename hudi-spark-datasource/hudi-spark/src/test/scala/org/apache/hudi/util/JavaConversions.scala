@@ -18,9 +18,16 @@
 
 package org.apache.hudi.util
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.SparkAdapterSupport
+import org.apache.spark.sql.execution.datasources.DataSource
+import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.execution.datasources.parquet.{SparkHoodieParquetReader, TestSparkParquetReaderFormat}
+import org.apache.spark.sql.internal.SQLConf
+
 import java.util.function.Predicate
 
-object JavaConversions {
+object JavaConversions extends SparkAdapterSupport {
   def getPredicate[T](function1: (T) => Boolean): Predicate[T] = {
     new Predicate[T] {
       override def test(t: T): Boolean = function1.apply(t)
@@ -33,5 +40,13 @@ object JavaConversions {
         function.apply(t)
       }
     }
+  }
+
+  def createTestDataFrame(sparkSession: SparkSession, paths: String): DataFrame = {
+    sparkSession.sqlContext.baseRelationToDataFrame(DataSource.apply(
+      sparkSession = sparkSession,
+      className = "org.apache.spark.sql.execution.datasources.parquet.TestSparkParquetReaderFormat",
+      paths =  paths.split(",").toSeq
+    ).resolveRelation())
   }
 }
