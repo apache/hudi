@@ -1411,7 +1411,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val (writeOpts, _) = getWriterReaderOpts()
     val input = recordsToStrings(dataGen.generateInserts("000", 1)).asScala
     val inputDf= spark.read.json(spark.sparkContext.parallelize(input, 1))
-    val mergerStrategyName = "asfdasf"
+    val mergerStrategyName = "example_merger_strategy"
     inputDf.write.format("hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
