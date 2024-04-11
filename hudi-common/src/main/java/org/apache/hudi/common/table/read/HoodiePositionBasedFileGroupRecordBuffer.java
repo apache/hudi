@@ -27,16 +27,22 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.Schema;
+import org.roaringbitmap.longlong.Roaring64NavigableMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -46,6 +52,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -53,10 +60,14 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STR
  * Here the position means that record position in the base file. The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.
  */
-public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
+public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedFileGroupRecordBuffer<T> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodiePositionBasedFileGroupRecordBuffer.class);
+
   public static final String ROW_INDEX_COLUMN_NAME = "row_index";
   public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
   private long nextRecordPosition = 0L;
+  private boolean needToDoHybridStrategy = false;
 
   public HoodiePositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                                   HoodieTableMetaClient hoodieTableMetaClient,
@@ -74,11 +85,25 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
 
   @Override
   public BufferType getBufferType() {
-    return BufferType.POSITION_BASED_MERGE;
+    return readerState.useRecordPosition ? BufferType.POSITION_BASED_MERGE : super.getBufferType();
   }
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
+    if (!readerState.useRecordPosition) {
+      super.processDataBlock(dataBlock, keySpecOpt);
+      return;
+    }
+    // Extract positions from data block.
+    List<Long> recordPositions = extractRecordPositions(dataBlock);
+    if (recordPositions == null) {
+      LOG.warn("Falling back to key based merge for Read");
+      readerState.useRecordPosition = false;
+      convertToKeyBasedBuffer();
+      super.processDataBlock(dataBlock, keySpecOpt);
+      return;
+    }
+
     // Prepare key filters.
     Set<String> keys = new HashSet<>();
     boolean isFullKey = true;
@@ -94,9 +119,6 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
       // partial merging.
       enablePartialMerging = true;
     }
-
-    // Extract positions from data block.
-    List<Long> recordPositions = extractRecordPositions(dataBlock);
 
     Option<Pair<Function<T,T>, Schema>> schemaEvolutionTransformerOpt =
         composeEvolvedSchemaTransformer(dataBlock);
@@ -135,21 +157,39 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
     }
   }
 
-  @Override
-  public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable recordPosition) throws IOException {
-    Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
-    Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
-        doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
-    if (mergedRecordAndMetadata.isPresent()) {
-      records.put(recordPosition, Pair.of(
-          Option.ofNullable(readerContext.seal(mergedRecordAndMetadata.get().getLeft())),
-          mergedRecordAndMetadata.get().getRight()));
+  private void convertToKeyBasedBuffer() {
+    Set<Serializable> positionBasedKeys = records.keySet();
+    for (Serializable position : positionBasedKeys) {
+      Pair<Option<T>, Map<String, Object>> entry = records.get(position);
+      Object recordKey = entry.getRight().get(INTERNAL_META_RECORD_KEY);
+      if (entry.getLeft().isPresent() || recordKey != null) {
+
+        records.put((String) recordKey, entry);
+        records.remove(position);
+      } else {
+        //if it's a delete record and the key is null, then we need to still use
+        //positions
+        needToDoHybridStrategy = true;
+      }
     }
   }
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
+    if (!readerState.useRecordPosition) {
+      super.processDeleteBlock(deleteBlock);
+      return;
+    }
+
     List<Long> recordPositions = extractRecordPositions(deleteBlock);
+    if (recordPositions == null) {
+      LOG.warn("Falling back to key based merge for Read");
+      readerState.useRecordPosition = false;
+      convertToKeyBasedBuffer();
+      super.processDeleteBlock(deleteBlock);
+      return;
+    }
+
     if (recordMerger.getMergingStrategy().equals(DEFAULT_MERGER_STRATEGY_UUID)) {
       for (Long recordPosition : recordPositions) {
         records.put(recordPosition,
@@ -187,23 +227,34 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
 
   @Override
   protected boolean doHasNext() throws IOException {
+    if (!readerState.useRecordPosition && !needToDoHybridStrategy) {
+      return super.doHasNext();
+    }
     ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
+
 
     // Handle merging.
     while (baseFileIterator.hasNext()) {
-      T baseRecord = baseFileIterator.next();
-      nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema, ROW_INDEX_COLUMN_NAME, nextRecordPosition);
-      Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
+      if (needToDoHybridStrategy) {
+        if (handleHybridMergeWithBaseFile()) {
+          return true;
+        }
+      } else {
+        T baseRecord = baseFileIterator.next();
+        nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
+            ROW_INDEX_COLUMN_NAME, nextRecordPosition);
+        Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
 
-      Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-          baseRecord, readerSchema);
+        Map<String, Object> metadata = readerContext.generateMetadataForRecord(
+            baseRecord, readerSchema);
 
-      Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
-        return true;
+        Option<T> resultRecord = logRecordInfo != null
+            ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
+            : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
+        if (resultRecord.isPresent()) {
+          nextRecord = readerContext.seal(resultRecord.get());
+          return true;
+        }
       }
     }
 
@@ -224,5 +275,87 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
     }
 
     return false;
+  }
+
+  private boolean handleHybridMergeWithBaseFile() throws IOException {
+    T baseRecord = baseFileIterator.next();
+    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
+    Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
+    if (logRecordInfo == null) {
+      //see if there is a delete block with record positions
+      nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
+          ROW_INDEX_COLUMN_NAME, nextRecordPosition);
+      logRecordInfo = records.remove(nextRecordPosition);
+    }
+    //always increment record position
+    nextRecordPosition++;
+
+    Map<String, Object> metadata = readerContext.generateMetadataForRecord(
+        baseRecord, readerSchema);
+
+    Option<T> resultRecord = logRecordInfo != null
+        ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
+        : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
+    if (resultRecord.isPresent()) {
+      nextRecord = readerContext.seal(resultRecord.get());
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Filter a record for downstream processing when:
+   *  1. A set of pre-specified keys exists.
+   *  2. The key of the record is not contained in the set.
+   */
+  protected boolean shouldSkip(T record, String keyFieldName, boolean isFullKey, Set<String> keys, Schema dataBlockSchema) {
+    String recordKey = readerContext.getValue(record, dataBlockSchema, keyFieldName).toString();
+    // Can not extract the record key, throw.
+    if (recordKey == null || recordKey.isEmpty()) {
+      throw new HoodieKeyException("Can not extract the key for a record");
+    }
+
+    // No keys are specified. Cannot skip at all.
+    if (keys.isEmpty()) {
+      return false;
+    }
+
+    // When the record key matches with one of the keys or key prefixes, can not skip.
+    if ((isFullKey && keys.contains(recordKey))
+        || (!isFullKey && keys.stream().anyMatch(recordKey::startsWith))) {
+      return false;
+    }
+
+    // Otherwise, this record is not needed.
+    return true;
+  }
+
+  /**
+   * Extract the record positions from a log block header.
+   *
+   * @param logBlock
+   * @return
+   * @throws IOException
+   */
+  protected static List<Long> extractRecordPositions(HoodieLogBlock logBlock) throws IOException {
+    List<Long> blockPositions = new ArrayList<>();
+
+    Roaring64NavigableMap positions = logBlock.getRecordPositions();
+    if (positions == null || positions.isEmpty()) {
+      LOG.warn("No record position info is found when attempt to do position based merge.");
+      return null;
+    }
+
+    Iterator<Long> iterator = positions.iterator();
+    while (iterator.hasNext()) {
+      blockPositions.add(iterator.next());
+    }
+
+    if (blockPositions.isEmpty()) {
+      LOG.warn("No positions are extracted.");
+      return null;
+    }
+
+    return blockPositions;
   }
 }

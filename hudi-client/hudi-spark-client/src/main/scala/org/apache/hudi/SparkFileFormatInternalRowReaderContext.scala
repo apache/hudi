@@ -56,8 +56,7 @@ import scala.collection.mutable
  */
 class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParquetReader,
                                               recordKeyColumn: String,
-                                              filters: Seq[Filter],
-                                              shouldUseRecordPosition: Boolean) extends BaseSparkInternalRowReaderContext {
+                                              filters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
   lazy val sparkFileReaderFactory = new HoodieSparkFileReaderFactory
   val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
@@ -94,12 +93,14 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParq
   }
 
   private def getSchemaAndFiltersForRead(structType: StructType): (StructType, Seq[Filter]) = {
-    (readerState.hasLogFiles.booleanValue(), readerState.needsBootstrapMerge.booleanValue(), shouldUseRecordPosition) match {
+    (readerState.hasLogFiles.booleanValue(),
+      readerState.needsBootstrapMerge.booleanValue(),
+      readerState.useRecordPosition.booleanValue()) match {
       case (false, false, _) =>
         (structType, filters)
-      case (false, true, true) if shouldUseRecordPosition =>
+      case (false, true, true) =>
         (getAppliedRequiredSchema(structType), filters)
-      case (true, _, true) if shouldUseRecordPosition =>
+      case (true, _, true) =>
         (getAppliedRequiredSchema(structType), recordKeyFilters)
       case (_, _, _) =>
         (structType, Seq.empty)
@@ -133,7 +134,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParq
                                  skeletonRequiredSchema: Schema,
                                  dataFileIterator: ClosableIterator[Any],
                                  dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
-    if (shouldUseRecordPosition) {
+    if (readerState.useRecordPosition) {
       assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       val javaSet = new java.util.HashSet[String]()
@@ -235,10 +236,6 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParq
       }.asInstanceOf[ClosableIterator[InternalRow]]
     }
 
-  }
-
-  override def shouldUseRecordPositionMerging(): Boolean = {
-    shouldUseRecordPosition
   }
 
 }

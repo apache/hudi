@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
@@ -25,6 +26,7 @@ import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGrou
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.FileIOUtils
@@ -146,31 +148,9 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
                 baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen))
               } else {
-                val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader.value,
-                  tableState.recordKeyField, filters, shouldUseRecordPosition)
-                val serializedHadoopConf = broadcastedHadoopConf.value.value
-                val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
-                  .builder().setConf(serializedHadoopConf).setBasePath(tableState.tablePath).build
-                val reader = new HoodieFileGroupReader[InternalRow](
-                  readerContext,
-                  serializedHadoopConf,
-                  tableState.tablePath,
-                  tableState.latestCommitTimestamp.get,
-                  fileSlice,
-                  broadcastedDataSchema.value,
-                  broadcastedRequestedSchema.value,
-                  internalSchemaOpt,
-                  metaClient,
-                  metaClient.getTableConfig.getProps,
-                  metaClient.getTableConfig,
-                  file.start,
-                  file.length,
-                  shouldUseRecordPosition,
-                  options.getOrElse(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue() + "").toLong,
-                  options.getOrElse(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath),
-                  DiskMapType.valueOf(options.getOrElse(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT)),
-                  options.getOrElse(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue().toString).toBoolean)
-                reader.initRecordIterators()
+                val reader = buildAndInitReader(parquetFileReader.value, filters, broadcastedHadoopConf.value.value,
+                  fileSlice, broadcastedDataSchema.value, broadcastedRequestedSchema.value, file,
+                  options, shouldUseRecordPosition)
                 // Append partition values to rows and project to output schema
                 appendPartitionAndProject(
                   reader.getClosableIterator,
@@ -221,6 +201,41 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
       cdcSchema,
       requiredSchema,
       props)
+  }
+
+  protected def buildAndInitReader(parquetFileReader: SparkHoodieParquetReader,
+                                   filters: Seq[Filter],
+                                   hadoopConf: Configuration,
+                                   fileSlice: FileSlice,
+                                   dataAvroSchema: Schema,
+                                   requestedAvroSchema: Schema,
+                                   file: PartitionedFile,
+                                   options: Map[String, String],
+                                   useRecordPosition: Boolean): HoodieFileGroupReader[InternalRow] = {
+    val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader, tableState.recordKeyField, filters)
+    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
+      .builder().setConf(hadoopConf).setBasePath(tableState.tablePath).build
+    val reader = new HoodieFileGroupReader[InternalRow](
+      readerContext,
+      hadoopConf,
+      tableState.tablePath,
+      tableState.latestCommitTimestamp.get,
+      fileSlice,
+      dataAvroSchema,
+      requestedAvroSchema,
+      internalSchemaOpt,
+      metaClient,
+      metaClient.getTableConfig.getProps,
+      metaClient.getTableConfig,
+      file.start,
+      file.length,
+      useRecordPosition,
+      options.getOrElse(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue() + "").toLong,
+      options.getOrElse(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath),
+      DiskMapType.valueOf(options.getOrElse(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT)),
+      options.getOrElse(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue().toString).toBoolean)
+    reader.initRecordIterators()
+    reader
   }
 
   private def appendPartitionAndProject(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],

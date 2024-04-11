@@ -103,7 +103,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   }
 
   @Override
-  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
+  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
     Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
     while (it.hasNext()) {
       DeleteRecord record = it.next();

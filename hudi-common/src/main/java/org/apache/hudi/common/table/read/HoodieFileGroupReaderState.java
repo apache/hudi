@@ -33,4 +33,6 @@ public class HoodieFileGroupReaderState<T> {
   public Boolean hasLogFiles = null;
   public Boolean hasBootstrapBaseFile = null;
   public Boolean needsBootstrapMerge = null;
+
+  public Boolean useRecordPosition = null;
 }

@@ -235,13 +235,6 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
-   * returns true if record position should be used for merging
-   */
-  public boolean shouldUseRecordPositionMerging() {
-    return false;
-  }
-
-  /**
    * Constructs engine specific delete record.
    */
   public T constructRawDeleteRecord(Map<String, Object> metadata) {

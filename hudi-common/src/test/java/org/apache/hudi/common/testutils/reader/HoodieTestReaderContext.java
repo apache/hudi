@@ -227,9 +227,4 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
     int pos = field.pos();
     return record.get(pos);
   }
-
-  @Override
-  public boolean shouldUseRecordPositionMerging() {
-    return true;
-  }
 }

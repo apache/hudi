@@ -90,8 +90,9 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
         _spark.sparkContext.hadoopConfiguration, basePath)
       val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
       assertTrue(allBaseFiles.nonEmpty)
-      val readerContext = new SparkFileFormatInternalRowReaderContext(reader, HoodieRecord.RECORD_KEY_METADATA_FIELD, Seq.empty, true)
+      val readerContext = new SparkFileFormatInternalRowReaderContext(reader, HoodieRecord.RECORD_KEY_METADATA_FIELD, Seq.empty)
       val readerState = readerContext.getReaderState
+      readerState.useRecordPosition = true
       readerState.hasLogFiles = true
       readerState.needsBootstrapMerge = false
       readerState.hasBootstrapBaseFile = false
