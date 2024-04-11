@@ -24,6 +24,11 @@ COMPOSE_FILE_NAME="docker-compose_hadoop284_hive233_spark244.yml"
 if [ "$HUDI_DEMO_ENV" = "--mac-aarch64" ]; then
   COMPOSE_FILE_NAME="docker-compose_hadoop284_hive233_spark244_mac_aarch64.yml"
 fi
+
+if [ "$HUDI_DEMO_ENV" = "--hive3" ]; then
+  COMPOSE_FILE_NAME="docker-compose_hadoop310_hive312_spark321_mac_aarch64.yml"
+fi
+
 # shut down cluster
 HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} down
 
