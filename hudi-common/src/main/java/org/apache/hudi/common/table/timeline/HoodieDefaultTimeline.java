@@ -517,10 +517,37 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public Option<HoodieInstant> getFirstPendingClusterInstant() {
+    return getLastOrFirstPendingClusterInstant(false);
+  }
+
+  @Override
   public Option<HoodieInstant> getLastPendingClusterInstant() {
-    return  Option.fromJavaOptional(filterPendingReplaceTimeline()
-        .getReverseOrderedInstants()
+    return getLastOrFirstPendingClusterInstant(true);
+  }
+
+  private Option<HoodieInstant> getLastOrFirstPendingClusterInstant(boolean isLast) {
+    HoodieTimeline replaceTimeline = filterPendingReplaceTimeline();
+    Stream<HoodieInstant> replaceStream;
+    if (isLast) {
+      replaceStream = replaceTimeline.getReverseOrderedInstants();
+    } else {
+      replaceStream = replaceTimeline.getInstantsAsStream();
+    }
+    return  Option.fromJavaOptional(replaceStream
         .filter(i -> ClusteringUtils.isClusteringInstant(this, i)).findFirst());
+  }
+
+  @Override
+  public boolean isPendingClusterInstant(String instantTime) {
+    HoodieTimeline potentialTimeline = getCommitsTimeline().filterPendingReplaceTimeline().filter(i -> i.getTimestamp().equals(instantTime));
+    if (potentialTimeline.countInstants() == 0) {
+      return false;
+    }
+    if (potentialTimeline.countInstants() > 1) {
+      throw new IllegalStateException("Multiple instants with same timestamp: " + potentialTimeline);
+    }
+    return ClusteringUtils.isClusteringInstant(this, potentialTimeline.firstInstant().get());
   }
 
   @Override

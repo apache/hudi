@@ -24,7 +24,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
@@ -91,8 +90,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
       // should support executor metrics
-      Registry registry = Registry.getRegistry("HoodieMetadata");
-      this.metrics = Option.of(new HoodieMetadataMetrics(registry));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig()));
     } else {
       this.metrics = Option.empty();
     }
@@ -164,7 +162,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // reload timeline
     metadataMetaClient.reloadActiveTimeline();
-    metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant().ifPresent(instant -> cleanIfNecessary(writeClient, instant.getTimestamp()));
+    cleanIfNecessary(writeClient);
     writeClient.archive();
 
     // Update total size of the metadata and count of base/log files

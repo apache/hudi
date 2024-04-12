@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
@@ -58,6 +59,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -734,6 +736,55 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     } else {
       assertFalse(bootstrapBaseFile.isPresent());
     }
+  }
+
+  @Test
+  public void testGetLatestFileSlicesIncludingInflight() throws Exception {
+    String partitionPath = "2016/05/01";
+    new File(basePath + "/" + partitionPath).mkdirs();
+    String fileId = UUID.randomUUID().toString();
+
+    String instantTime1 = "1";
+    String deltaInstantTime1 = "2";
+    String deltaInstantTime2 = "3";
+
+    String dataFileName = FSUtils.makeBaseFileName(instantTime1, TEST_WRITE_TOKEN, fileId, BASE_FILE_EXTENSION);
+    new File(basePath + "/" + partitionPath + "/" + dataFileName).createNewFile();
+    String fileName1 =
+        FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, deltaInstantTime1, 0, TEST_WRITE_TOKEN);
+    String fileName2 =
+        FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, deltaInstantTime2, 1, TEST_WRITE_TOKEN);
+    new File(basePath + "/" + partitionPath + "/" + fileName1).createNewFile();
+    new File(basePath + "/" + partitionPath + "/" + fileName2).createNewFile();
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
+    HoodieInstant deltaInstant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
+    HoodieInstant deltaInstant3 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
+
+    // just commit instant1 and deltaInstant2, keep deltaInstant3 inflight
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
+    refreshFsView();
+
+    // getLatestFileSlices should return just 1 log file due to deltaInstant2
+    rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList()).forEach(fs -> {
+      assertEquals(fs.getBaseInstantTime(), instantTime1);
+      assertTrue(fs.getBaseFile().isPresent());
+      assertEquals(fs.getBaseFile().get().getCommitTime(), instantTime1);
+      assertEquals(fs.getBaseFile().get().getFileId(), fileId);
+      assertEquals(fs.getBaseFile().get().getPath(), "file:" + basePath + "/" + partitionPath + "/" + dataFileName);
+      assertEquals(fs.getLogFiles().count(), 1);
+    });
+
+    // getLatestFileSlicesIncludingInflight should return both the log files
+    rtView.getLatestFileSlicesIncludingInflight(partitionPath).collect(Collectors.toList()).forEach(fs -> {
+      assertEquals(fs.getBaseInstantTime(), instantTime1);
+      assertTrue(fs.getBaseFile().isPresent());
+      assertEquals(fs.getBaseFile().get().getCommitTime(), instantTime1);
+      assertEquals(fs.getBaseFile().get().getFileId(), fileId);
+      assertEquals(fs.getBaseFile().get().getPath(), "file:" + basePath + "/" + partitionPath + "/" + dataFileName);
+      assertEquals(fs.getLogFiles().count(), 2);
+    });
   }
 
   /**
@@ -1737,6 +1788,30 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     }
   }
 
+  private void saveAsCompleteCluster(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, inflight.getAction());
+    HoodieInstant clusteringInstant = new HoodieInstant(State.REQUESTED, inflight.getAction(), inflight.getTimestamp());
+    HoodieClusteringPlan plan = new HoodieClusteringPlan();
+    plan.setExtraMetadata(new HashMap<>());
+    plan.setInputGroups(Collections.emptyList());
+    plan.setStrategy(HoodieClusteringStrategy.newBuilder().build());
+    plan.setVersion(1);
+    plan.setPreserveHoodieMetadata(false);
+    try {
+      HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+          .setOperationType(WriteOperationType.CLUSTER.name())
+          .setExtraMetadata(Collections.emptyMap())
+          .setClusteringPlan(plan)
+          .build();
+      timeline.saveToPendingReplaceCommit(clusteringInstant,
+          TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Exception scheduling clustering", ioe);
+    }
+    timeline.transitionRequestedToInflight(clusteringInstant, Option.empty());
+    timeline.saveAsComplete(inflight, data);
+  }
+
   @Test
   public void testReplaceWithTimeTravel() throws IOException {
     String partitionPath1 = "2020/06/27";
@@ -2069,8 +2144,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<HoodieWriteStat> writeStats2 = buildWriteStats(partitionToFile2, commitTime2);
 
     HoodieCommitMetadata commitMetadata2 =
-        CommitUtils.buildMetadata(writeStats2, partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
-    saveAsComplete(
+        CommitUtils.buildMetadata(writeStats2, partitionToReplaceFileIds, Option.empty(), WriteOperationType.CLUSTER, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+    saveAsCompleteCluster(
         commitTimeline,
         instant2,
         serializeCommitMetadata(commitMetadata2));

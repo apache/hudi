@@ -314,4 +314,19 @@ public class ClusteringUtils {
       throw new HoodieException("Resolve replace commit metadata error for instant: " + instant, e);
     }
   }
+
+  /**
+   * Returns whether the given instant {@code instant} is with insert overwrite operation.
+   */
+  public static boolean isInsertOverwriteInstant(HoodieInstant instant, HoodieTimeline timeline) {
+    if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      return false;
+    }
+    try {
+      WriteOperationType opType = TimelineUtils.getCommitMetadata(instant, timeline).getOperationType();
+      return opType.equals(WriteOperationType.INSERT_OVERWRITE) || opType.equals(WriteOperationType.INSERT_OVERWRITE_TABLE);
+    } catch (IOException e) {
+      throw new HoodieException("Resolve replace commit metadata error for instant: " + instant, e);
+    }
+  }
 }

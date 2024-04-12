@@ -29,7 +29,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,18 +40,18 @@ import org.slf4j.LoggerFactory;
 public class M3MetricsReporter extends MetricsReporter {
 
   private static final Logger LOG = LoggerFactory.getLogger(M3MetricsReporter.class);
-  private final HoodieWriteConfig config;
+  private final HoodieMetricsConfig metricsConfig;
   private final MetricRegistry registry;
   private final ImmutableMap<String, String> tags;
 
-  public M3MetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    this.config = config;
+  public M3MetricsReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
+    this.metricsConfig = metricsConfig;
     this.registry = registry;
 
     ImmutableMap.Builder tagBuilder = new ImmutableMap.Builder<>();
-    tagBuilder.putAll(parseOptionalTags(config.getM3Tags()));
-    tagBuilder.put("service", config.getM3Service());
-    tagBuilder.put("env", config.getM3Env());
+    tagBuilder.putAll(parseOptionalTags(metricsConfig.getM3Tags()));
+    tagBuilder.put("service", metricsConfig.getM3Service());
+    tagBuilder.put("env", metricsConfig.getM3Env());
     this.tags = tagBuilder.build();
     LOG.info(String.format("Building M3 Reporter with M3 tags mapping: %s", tags));
   }
@@ -93,7 +93,7 @@ public class M3MetricsReporter extends MetricsReporter {
     synchronized (this) {
       try (Scope scope = new RootScopeBuilder()
           .reporter(new M3Reporter.Builder(
-              new InetSocketAddress(config.getM3ServerHost(), config.getM3ServerPort()))
+              new InetSocketAddress(metricsConfig.getM3ServerHost(), metricsConfig.getM3ServerPort()))
               .includeHost(true).commonTags(tags)
               .build())
           .reportEvery(Duration.ofSeconds(Integer.MAX_VALUE))
