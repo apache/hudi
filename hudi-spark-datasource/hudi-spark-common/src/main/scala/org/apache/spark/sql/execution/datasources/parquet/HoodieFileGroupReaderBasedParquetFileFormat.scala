@@ -128,7 +128,7 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
 
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
-    val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createHoodieParquetFileReader(supportBatchResult, spark.sessionState.conf, options, augmentedHadoopConf))
+    val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(supportBatchResult, spark.sessionState.conf, options, augmentedHadoopConf))
     val broadcastedHadoopConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedHadoopConf))
     val broadcastedDataSchema =  spark.sparkContext.broadcast(dataAvroSchema)
     val broadcastedRequestedSchema =  spark.sparkContext.broadcast(requestedAvroSchema)
