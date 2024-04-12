@@ -60,7 +60,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
   @BeforeEach override def setUp() {
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSqlContext.sparkSession
     initTestDataGenerator()
     initFileSystem()
   }

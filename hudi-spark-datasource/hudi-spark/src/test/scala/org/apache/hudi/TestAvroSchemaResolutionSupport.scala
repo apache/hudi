@@ -57,11 +57,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     setTableName("hoodie_avro_schema_resolution_support")
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
-  }
-
-  @AfterEach override def tearDown(): Unit = {
-    cleanupSparkContexts()
+    spark = getSparkSession
   }
 
   def castColToX(x: Int, colToCast: String, df: DataFrame): DataFrame = x match {

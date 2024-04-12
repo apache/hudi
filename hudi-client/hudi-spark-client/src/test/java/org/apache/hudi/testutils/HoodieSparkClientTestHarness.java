@@ -166,7 +166,6 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    */
   public void cleanupResources() throws IOException {
     cleanupClients();
-    cleanupSparkContexts();
     cleanupTestDataGenerator();
     cleanupFileSystem();
     cleanupExecutorService();
@@ -664,5 +663,25 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata, isEmptyForAll, isEmptyCompleted);
     }
     return new HoodieInstant(inflightOnly, "clean", instantTime);
+  }
+
+  protected SQLContext getSqlContext() {
+    return sqlContext;
+  }
+
+  protected SparkSession getSparkSession() {
+    return sparkSession;
+  }
+
+  protected JavaSparkContext jsc() {
+    return jsc;
+  }
+
+  protected Configuration getHadoopConf() {
+    return hadoopConf;
+  }
+
+  protected HoodieEngineContext getEngineContext() {
+    return context;
   }
 }

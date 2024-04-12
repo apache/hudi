@@ -40,8 +40,8 @@ class TestHoodieParquetBloomFilter extends HoodieSparkClientTestBase with ScalaA
     jsc.hadoopConfiguration.set("parquet.bloom.filter.enabled#bloom_col", "true")
     jsc.hadoopConfiguration.set("parquet.bloom.filter.expected.ndv#bloom_col", "2")
     // ensure nothing but bloom can trigger read skip
-    sparkSession.sql("set parquet.filter.columnindex.enabled=false")
-    sparkSession.sql("set parquet.filter.stats.enabled=false")
+    getSparkSession.sql("set parquet.filter.columnindex.enabled=false")
+    getSparkSession.sql("set parquet.filter.stats.enabled=false")
 
     val basePath = java.nio.file.Files.createTempDirectory("hoodie_bloom_source_path").toAbsolutePath.toString
     val opts = Map(
@@ -51,7 +51,7 @@ class TestHoodieParquetBloomFilter extends HoodieSparkClientTestBase with ScalaA
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition"
     )
-    val inputDF = sparkSession.sql(
+    val inputDF = getSparkSession.sql(
       """select '0' as _row_key, '1' as bloom_col, '2' as partition, '3' as ts
         |union
         |select '1', '2', '3', '4'
@@ -62,19 +62,19 @@ class TestHoodieParquetBloomFilter extends HoodieSparkClientTestBase with ScalaA
       .save(basePath)
 
     val accu = new NumRowGroupsAcc
-    sparkSession.sparkContext.register(accu)
+    getSparkSession.sparkContext.register(accu)
 
     // this one shall skip partition scanning thanks to bloom when spark >=3
-    sparkSession.read.format("hudi").load(basePath).filter("bloom_col = '3'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(0)))
+    getSparkSession.read.format("hudi").load(basePath).filter("bloom_col = '3'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(0)))
     assertEquals(if (currentSparkSupportParquetBloom()) 0 else 1, accu.value)
 
     // this one will trigger one partition scan
-    sparkSession.read.format("hudi").load(basePath).filter("bloom_col = '2'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(0)))
+    getSparkSession.read.format("hudi").load(basePath).filter("bloom_col = '2'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(0)))
     assertEquals(1, accu.value)
   }
 
   def currentSparkSupportParquetBloom(): Boolean = {
-    Integer.valueOf(sparkSession.version.charAt(0)) >= 3
+    Integer.valueOf(getSparkSession.version.charAt(0)) >= 3
   }
 }
 

@@ -65,7 +65,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
 
   @BeforeEach override def setUp() {
     super.setUp()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
     // We set stop to timeout after 30s to avoid blocking things indefinitely
     spark.conf.set("spark.sql.streaming.stopTimeout", 30000)
   }

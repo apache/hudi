@@ -54,13 +54,12 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
     setTableName("hoodie_test")
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
     initTestDataGenerator()
     initFileSystem()
   }
 
   @AfterEach override def tearDown(): Unit = {
-    cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
   }

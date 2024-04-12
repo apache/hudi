@@ -40,13 +40,12 @@ class TestEmptyCommit extends HoodieSparkClientTestBase {
   @BeforeEach override def setUp() {
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
     initTestDataGenerator()
     initFileSystem()
   }
 
   @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
   }

@@ -43,7 +43,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
     setTableName("hoodie_test")
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
   }
 
   override def getSparkSessionExtensionsInjector: org.apache.hudi.common.util.Option[Consumer[SparkSessionExtensions]] =

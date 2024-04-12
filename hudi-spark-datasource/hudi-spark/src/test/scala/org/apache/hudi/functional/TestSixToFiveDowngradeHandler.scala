@@ -60,7 +60,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
       assertTrue(getLogFilesCount(hudiOpts) > 0)
     }
 
-    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
+    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), getEngineContext, SparkUpgradeDowngradeHelper.getInstance)
       .run(HoodieTableVersion.FIVE, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     // Ensure file slices have been compacted and the MDT table has been deleted
@@ -83,7 +83,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(0, getLogFilesCount(hudiOpts))
 
-    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
+    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), getEngineContext, SparkUpgradeDowngradeHelper.getInstance)
       .run(HoodieTableVersion.FIVE, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(0, getLogFilesCount(hudiOpts))
@@ -103,7 +103,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertFalse(metaClient.getTableConfig.isMetadataTableAvailable)
 
-    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
+    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), getEngineContext, SparkUpgradeDowngradeHelper.getInstance)
       .run(HoodieTableVersion.FIVE, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertFalse(metaClient.getTableConfig.isMetadataTableAvailable)

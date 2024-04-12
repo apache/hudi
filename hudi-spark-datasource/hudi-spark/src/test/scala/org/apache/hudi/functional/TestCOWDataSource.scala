@@ -88,7 +88,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @BeforeEach override def setUp() {
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
     initTestDataGenerator()
     initFileSystem()
   }
@@ -1599,7 +1599,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(10))
     val recordsRDD = spark.sparkContext.parallelize(records, 2)
-    val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING))
+    val inputDF = spark.read.json(getSparkSession.createDataset(recordsRDD)(Encoders.STRING))
     inputDF.write.format("hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "uuid")
@@ -1803,7 +1803,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   def assertLastCommitIsUpsert(): Boolean = {
     val metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
-      .setConf(hadoopConf)
+      .setConf(getHadoopConf)
       .build()
     val timeline = metaClient.getActiveTimeline.getAllCommitsTimeline
     val latestCommit = timeline.lastInstant()
@@ -1841,7 +1841,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
-      .setConf(hadoopConf)
+      .setConf(getHadoopConf)
       .build()
 
     assertTrue(metaClient.getActiveTimeline.getLastClusteringInstant.isEmpty)
@@ -1890,12 +1890,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             metaClient.getActiveTimeline.getLastClusteringInstant.get)
         }
         if (firstClusteringState == HoodieInstant.State.REQUESTED) {
-          val table = HoodieSparkTable.create(writeConfig, context)
+          val table = HoodieSparkTable.create(writeConfig, getEngineContext)
           table.rollbackInflightClustering(
             metaClient.getActiveTimeline.getLastClusteringInstant.get,
             new java.util.function.Function[String, Option[HoodiePendingRollbackInfo]] {
               override def apply(commitToRollback: String): Option[HoodiePendingRollbackInfo] = {
-                new SparkRDDWriteClient(context, writeConfig).getTableServiceClient
+                new SparkRDDWriteClient(getEngineContext, writeConfig).getTableServiceClient
                   .getPendingRollbackInfo(table.getMetaClient, commitToRollback, false)
               }
             })
@@ -1906,7 +1906,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             metaClient.getActiveTimeline.getLastClusteringInstant.get)
         }
         // This should not schedule any new clustering
-        new SparkRDDWriteClient(context, writeConfig)
+        new SparkRDDWriteClient(getEngineContext, writeConfig)
           .scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]()))
         assertEquals(lastInstant.getTimestamp,
           metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get.getTimestamp)

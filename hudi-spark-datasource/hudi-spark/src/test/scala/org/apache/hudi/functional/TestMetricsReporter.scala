@@ -54,13 +54,12 @@ class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMix
     setTableName("hoodie_test")
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
     initTestDataGenerator()
     initFileSystem()
   }
 
   @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
   }

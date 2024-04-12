@@ -53,14 +53,13 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     setTableName("hoodie_test")
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
     initTestDataGenerator()
     initFileSystem()
   }
 
   @AfterEach
   override def tearDown() = {
-    cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
   }
@@ -83,7 +82,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
       .map(_.get(0).toString).sorted
     assert(Array("2015/03/16", "2015/03/17", "2016/03/15").sameElements(partitionsForCommit1))
 
-    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build()
+    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(getHadoopConf).build()
     var activeTimeline = metaClient.getActiveTimeline
 
     // check that get the latest parquet file
@@ -153,7 +152,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
       .save(basePath)
     val commit1Time = HoodieDataSourceHelpers.latestCommit(fs, basePath)
 
-    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build()
+    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(getHadoopConf).build()
     var activeTimeline = metaClient.getActiveTimeline
 
     // check that get the latest parquet file

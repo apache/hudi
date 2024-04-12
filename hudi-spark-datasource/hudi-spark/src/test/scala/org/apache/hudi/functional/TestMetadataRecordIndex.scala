@@ -66,13 +66,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
 
     instantTime = new AtomicInteger(1)
 
-    spark = sqlContext.sparkSession
-  }
-
-  @AfterEach
-  override def tearDown() = {
-    cleanupFileSystem()
-    cleanupSparkContexts()
+    spark = getSparkSession
   }
 
   @Test

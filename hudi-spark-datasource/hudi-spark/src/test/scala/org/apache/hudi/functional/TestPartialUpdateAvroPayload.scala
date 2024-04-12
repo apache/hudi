@@ -52,7 +52,7 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
   @BeforeEach override def setUp() {
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
     initTestDataGenerator()
     initFileSystem()
   }
@@ -69,7 +69,7 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(1))
     val recordsRDD = spark.sparkContext.parallelize(records, 2)
-    val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING)).withColumn("ts", lit(1L))
+    val inputDF = spark.read.json(getSparkSession.createDataset(recordsRDD)(Encoders.STRING)).withColumn("ts", lit(1L))
     inputDF.write.format("hudi")
       .options(getQuickstartWriteConfigs)
       .option(DataSourceWriteOptions.TABLE_TYPE.key(), hoodieTableType.name())
@@ -83,19 +83,19 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
       .save(basePath)
 
     val upsert1 = convertToStringList(dataGenerator.generateUniqueUpdates(1))
-    val upsert1DF = spark.read.json(sparkSession.createDataset(upsert1)(Encoders.STRING)).withColumn("ts", lit(4L))
+    val upsert1DF = spark.read.json(getSparkSession.createDataset(upsert1)(Encoders.STRING)).withColumn("ts", lit(4L))
       .withColumn("rider", lit("test_rider"))
       .withColumn("driver", typedLit(null).cast(StringType))
       .withColumn("fare", typedLit(null).cast(DoubleType))
 
     val upsert2 = convertToStringList(dataGenerator.generateUniqueUpdates(1))
-    val upsert2DF = spark.read.json(sparkSession.createDataset(upsert2)(Encoders.STRING)).withColumn("ts", lit(6L))
+    val upsert2DF = spark.read.json(getSparkSession.createDataset(upsert2)(Encoders.STRING)).withColumn("ts", lit(6L))
       .withColumn("rider", typedLit(null).cast(StringType))
       .withColumn("driver", lit("test_driver"))
       .withColumn("fare", typedLit(null).cast(DoubleType))
 
     val upsert3 = convertToStringList(dataGenerator.generateUniqueUpdates(1))
-    val upsert3DF = spark.read.json(sparkSession.createDataset(upsert3)(Encoders.STRING)).withColumn("ts", lit(3L))
+    val upsert3DF = spark.read.json(getSparkSession.createDataset(upsert3)(Encoders.STRING)).withColumn("ts", lit(3L))
       .withColumn("rider", typedLit(null).cast(StringType))
       .withColumn("driver", typedLit(null).cast(StringType))
       .withColumn("fare", lit(123456789d))
