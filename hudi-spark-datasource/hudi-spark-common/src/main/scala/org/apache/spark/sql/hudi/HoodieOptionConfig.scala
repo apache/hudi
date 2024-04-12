@@ -43,6 +43,11 @@ object HoodieOptionConfig {
    */
   val SQL_VALUE_TABLE_TYPE_MOR = "mor"
 
+  /**
+   * The short name for the value of index type.
+   */
+  val SQL_VALUE_INDEX_TYPE = "index.type"
+
 
   val SQL_KEY_TABLE_PRIMARY_KEY: HoodieSQLOption[String] = buildConf()
     .withSqlKey("primaryKey")
@@ -124,14 +129,24 @@ object HoodieOptionConfig {
 
   private lazy val hoodieConfigValueToSqlOptionValue = sqlOptionValueToHoodieConfigValue.map(f => f._2 -> f._1)
 
+  /**
+   * Compatible with configuration information of tables created in other ways that have not yet been converted, such as flink
+   */
+  private val compatibleRemainOptionToWriteConfigValue: Map[String, String] = Map(
+    SQL_VALUE_INDEX_TYPE -> HoodieIndexConfig.INDEX_TYPE.key()
+  )
+
   def withDefaultSqlOptions(options: Map[String, String]): Map[String, String] = defaultSqlOptions ++ options
 
   /**
    * Map SQL options to data source write configs.
    */
   def mapSqlOptionsToDataSourceWriteConfigs(options: Map[String, String]): Map[String, String] = {
-    options.map (kv =>
-      sqlOptionKeyToWriteConfigKey.getOrElse(kv._1, kv._1) -> sqlOptionValueToHoodieConfigValue.getOrElse(kv._2, kv._2))
+    options
+      .map (kv =>
+        sqlOptionKeyToWriteConfigKey.getOrElse(kv._1, kv._1) -> sqlOptionValueToHoodieConfigValue.getOrElse(kv._2, kv._2))
+      .map(kv =>
+        compatibleRemainOptionToWriteConfigValue.getOrElse(kv._1, kv._1) -> compatibleRemainOptionToWriteConfigValue.getOrElse(kv._2, kv._2))
   }
 
   /**
