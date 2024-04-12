@@ -204,6 +204,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<FileSlice> getLatestFileSlicesIncludingInflight(String partitionPath) {
+    return execute(partitionPath, preferredView::getLatestFileSlicesIncludingInflight, secondaryView::getLatestFileSlicesIncludingInflight);
+  }
+
+  @Override
   public Stream<FileSlice> getLatestFileSlicesStateless(String partitionPath) {
     return execute(partitionPath, preferredView::getLatestFileSlicesStateless, secondaryView::getLatestFileSlicesStateless);
   }

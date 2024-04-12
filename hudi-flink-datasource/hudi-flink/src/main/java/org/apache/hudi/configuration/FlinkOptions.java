@@ -329,6 +329,14 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read "
           + "to improve read performance.");
 
+  // this option is experimental
+  public static final ConfigOption<Boolean> READ_STREAMING_SKIP_INSERT_OVERWRITE = ConfigOptions
+      .key("read.streaming.skip_insertoverwrite")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to skip insert overwrite instants to avoid reading base files of insert overwrite operations for streaming read. "
+          + "In streaming scenarios, insert overwrite is usually used to repair data, here you can control the visibility of downstream streaming read.");
+
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
       .key("read.start-commit")

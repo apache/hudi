@@ -207,7 +207,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
         context(), metadataConfig, metaClient.getBasePathV2().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
-    String mdtCommitTime = HoodieTableMetadataUtil.createAsyncIndexerTimestamp(indexUptoInstantTime);
+    String mdtCommitTime = indexingInstant.getTimestamp();
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
 
     // Reverts both instants to inflight state, to simulate inflight indexing instants

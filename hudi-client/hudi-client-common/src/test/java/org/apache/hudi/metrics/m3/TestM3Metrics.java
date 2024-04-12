@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import java.util.UUID;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -38,27 +39,30 @@ import org.mockito.junit.jupiter.MockitoExtension;
 public class TestM3Metrics {
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieWriteConfig writeConfig;
+  @Mock
+  HoodieMetricsConfig metricsConfig;
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
   @BeforeEach
   public void start() {
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.M3);
-    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.M3);
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
   }
 
   @Test
   public void testRegisterGauge() {
-    when(config.getM3ServerHost()).thenReturn("localhost");
-    when(config.getM3ServerPort()).thenReturn(NetworkTestUtils.nextFreePort());
-    when(config.getTableName()).thenReturn("raw_table");
-    when(config.getM3Env()).thenReturn("dev");
-    when(config.getM3Service()).thenReturn("hoodie");
-    when(config.getM3Tags()).thenReturn("tag1=value1,tag2=value2");
-    when(config.getMetricReporterMetricsNamePrefix()).thenReturn("");
-    hoodieMetrics = new HoodieMetrics(config);
+    when(writeConfig.getTableName()).thenReturn("raw_table");
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+    when(metricsConfig.getM3ServerHost()).thenReturn("localhost");
+    when(metricsConfig.getM3ServerPort()).thenReturn(NetworkTestUtils.nextFreePort());
+    when(metricsConfig.getM3Env()).thenReturn("dev");
+    when(metricsConfig.getM3Service()).thenReturn("hoodie");
+    when(metricsConfig.getM3Tags()).thenReturn("tag1=value1,tag2=value2");
+    when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
+    hoodieMetrics = new HoodieMetrics(writeConfig);
     metrics = hoodieMetrics.getMetrics();
     metrics.registerGauge("metric1", 123L);
     assertEquals("123", metrics.getRegistry().getGauges().get("metric1").getValue().toString());
@@ -67,14 +71,16 @@ public class TestM3Metrics {
 
   @Test
   public void testEmptyM3Tags() {
-    when(config.getM3ServerHost()).thenReturn("localhost");
-    when(config.getM3ServerPort()).thenReturn(NetworkTestUtils.nextFreePort());
-    when(config.getTableName()).thenReturn("raw_table");
-    when(config.getM3Env()).thenReturn("dev");
-    when(config.getM3Service()).thenReturn("hoodie");
-    when(config.getM3Tags()).thenReturn("");
-    when(config.getMetricReporterMetricsNamePrefix()).thenReturn("");
-    hoodieMetrics = new HoodieMetrics(config);
+    when(writeConfig.getTableName()).thenReturn("raw_table");
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+    when(metricsConfig.getM3ServerHost()).thenReturn("localhost");
+    when(metricsConfig.getM3ServerPort()).thenReturn(NetworkTestUtils.nextFreePort());
+    when(metricsConfig.getM3Env()).thenReturn("dev");
+    when(metricsConfig.getM3Service()).thenReturn("hoodie");
+    when(metricsConfig.getM3Tags()).thenReturn("");
+    when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
+    hoodieMetrics = new HoodieMetrics(writeConfig);
     metrics = hoodieMetrics.getMetrics();
     metrics.registerGauge("metric1", 123L);
     assertEquals("123", metrics.getRegistry().getGauges().get("metric1").getValue().toString());
@@ -83,10 +89,12 @@ public class TestM3Metrics {
 
   @Test
   public void testInvalidM3Tags() {
-    when(config.getTableName()).thenReturn("raw_table");
-    when(config.getMetricReporterMetricsNamePrefix()).thenReturn("");
+    when(writeConfig.getTableName()).thenReturn("raw_table");
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+    when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
     assertThrows(RuntimeException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(config);
+      hoodieMetrics = new HoodieMetrics(writeConfig);
     });
   }
 }

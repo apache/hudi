@@ -18,25 +18,25 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.hadoop.fs.CachingPath
-
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.fs.Path
+import org.apache.hudi.util.ExceptionWrappingIterator
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils.getTimeZone
 import org.apache.spark.sql.execution.SQLConfInjectingRDD
 import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, HoodieUnsafeUtils}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
@@ -131,6 +131,16 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
   def injectSQLConf[T: ClassTag](rdd: RDD[T], conf: SQLConf): RDD[T] =
     new SQLConfInjectingRDD(rdd, conf)
 
+  def maybeWrapDataFrameWithException(df: DataFrame, exceptionClass: String, msg: String, shouldWrap: Boolean): DataFrame = {
+    if (shouldWrap) {
+      HoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, injectSQLConf(df.queryExecution.toRdd.mapPartitions {
+        rows => new ExceptionWrappingIterator[InternalRow](rows, exceptionClass, msg)
+      }, SQLConf.get), df.schema)
+    } else {
+      df
+    }
+  }
+
   def safeCreateRDD(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
                     latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()):
   Tuple2[RDD[GenericRecord], RDD[String]] = {
@@ -213,7 +223,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         val transform: GenericRecord => Either[GenericRecord, String] = record => try {
           Left(HoodieAvroUtils.rewriteRecordDeep(record, schema, true))
         } catch {
-          case _: Throwable => Right(HoodieAvroUtils.avroToJsonString(record, false))
+          case _: Throwable => Right(HoodieAvroUtils.safeAvroToJsonString(record))
         }
         recs.map(transform)
       }

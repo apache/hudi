@@ -22,7 +22,7 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
-import org.apache.hudi.common.model.{OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
@@ -44,8 +44,8 @@ import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyP
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.PARTITION_OVERWRITE_MODE
 import org.apache.spark.sql.types.StructType
-
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -102,7 +102,7 @@ trait ProvidesHoodieConfig extends Logging {
       // Validate duplicate key for inserts to COW table when using strict insert mode.
       classOf[ValidateDuplicateKeyPayload].getCanonicalName
     } else {
-      classOf[OverwriteWithLatestAvroPayload].getCanonicalName
+      classOf[DefaultHoodieRecordPayload].getCanonicalName
     }
   }
 
@@ -276,7 +276,7 @@ trait ProvidesHoodieConfig extends Logging {
       if (insertDupPolicy == FAIL_INSERT_DUP_POLICY) {
         classOf[ValidateDuplicateKeyPayload].getCanonicalName
       } else {
-        classOf[OverwriteWithLatestAvroPayload].getCanonicalName
+        classOf[DefaultHoodieRecordPayload].getCanonicalName
       }
     }
 
@@ -480,6 +480,8 @@ trait ProvidesHoodieConfig extends Logging {
       hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS, props.getString(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key))
     }
     hiveSyncConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS, classOf[MultiPartKeysValueExtractor].getName)
+    // This is hardcoded to true to ensure consistency as Spark syncs TIMESTAMP types as TIMESTAMP by default
+    // via Spark's externalCatalog API, which is used by AlterHoodieTableCommand.
     hiveSyncConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE, "true")
     if (hiveSyncConfig.useBucketSync())
       hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC,

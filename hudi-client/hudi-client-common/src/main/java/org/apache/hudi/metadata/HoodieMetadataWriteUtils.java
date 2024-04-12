@@ -187,14 +187,14 @@ public class HoodieMetadataWriteUtils {
               .build());
           break;
         case PROMETHEUS_PUSHGATEWAY:
-          HoodieMetricsPrometheusConfig prometheusConfig = HoodieMetricsPrometheusConfig.newBuilder()
+          HoodieMetricsPrometheusConfig pushGatewayConfig = HoodieMetricsPrometheusConfig.newBuilder()
               .withPushgatewayJobname(writeConfig.getPushGatewayJobName())
               .withPushgatewayRandomJobnameSuffix(writeConfig.getPushGatewayRandomJobNameSuffix())
               .withPushgatewayLabels(writeConfig.getPushGatewayLabels())
               .withPushgatewayReportPeriodInSeconds(String.valueOf(writeConfig.getPushGatewayReportPeriodSeconds()))
               .withPushgatewayHostName(writeConfig.getPushGatewayHost())
               .withPushgatewayPortNum(writeConfig.getPushGatewayPort()).build();
-          builder.withProperties(prometheusConfig.getProps());
+          builder.withProperties(pushGatewayConfig.getProps());
           break;
         case M3:
           HoodieMetricsM3Config m3Config = HoodieMetricsM3Config.newBuilder()
@@ -223,6 +223,11 @@ public class HoodieMetadataWriteUtils {
           builder.withProperties(datadogConfig.build().getProps());
           break;
         case PROMETHEUS:
+          HoodieMetricsPrometheusConfig prometheusConfig = HoodieMetricsPrometheusConfig.newBuilder()
+              .withPushgatewayLabels(writeConfig.getPushGatewayLabels())
+              .withPrometheusPortNum(writeConfig.getPrometheusPort()).build();
+          builder.withProperties(prometheusConfig.getProps());
+          break;
         case CONSOLE:
         case INMEMORY:
         case CLOUDWATCH:
