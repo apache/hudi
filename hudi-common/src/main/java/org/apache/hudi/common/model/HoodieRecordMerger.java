@@ -45,6 +45,11 @@ public interface HoodieRecordMerger extends Serializable {
   String DEFAULT_MERGER_STRATEGY_UUID = "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5";
 
   /**
+   * Merger used for testing non-default merger strategies
+   */
+  String PRECOMBINE_BASED_MERGER_STRATEGY_UUID = "2776c979-a2fa-4c3e-bc3d-92590d37700c";
+
+  /**
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.
    * It'd be associative operation: f(a, f(b, c)) = f(f(a, b), c) (which we can translate as having 3 versions A, B, C
    * of the single record, both orders of operations applications have to yield the same result)

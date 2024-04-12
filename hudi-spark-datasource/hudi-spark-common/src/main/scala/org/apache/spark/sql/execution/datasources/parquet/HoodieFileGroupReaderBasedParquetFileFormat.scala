@@ -149,8 +149,7 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
                 baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen))
               } else {
                 val reader = buildAndInitReader(parquetFileReader.value, filters, broadcastedHadoopConf.value.value,
-                  fileSlice, broadcastedDataSchema.value, broadcastedRequestedSchema.value, file,
-                  options, shouldUseRecordPosition)
+                  fileSlice, broadcastedDataSchema.value, broadcastedRequestedSchema.value, file, options)
                 // Append partition values to rows and project to output schema
                 appendPartitionAndProject(
                   reader.getClosableIterator,
@@ -203,15 +202,14 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
       props)
   }
 
-  protected def buildAndInitReader(parquetFileReader: SparkHoodieParquetReader,
+  protected def buildAndInitReader(parquetFileReader: SparkParquetReader,
                                    filters: Seq[Filter],
                                    hadoopConf: Configuration,
                                    fileSlice: FileSlice,
                                    dataAvroSchema: Schema,
                                    requestedAvroSchema: Schema,
                                    file: PartitionedFile,
-                                   options: Map[String, String],
-                                   useRecordPosition: Boolean): HoodieFileGroupReader[InternalRow] = {
+                                   options: Map[String, String]): HoodieFileGroupReader[InternalRow] = {
     val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader, tableState.recordKeyField, filters)
     val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
       .builder().setConf(hadoopConf).setBasePath(tableState.tablePath).build
@@ -229,7 +227,7 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
       metaClient.getTableConfig,
       file.start,
       file.length,
-      useRecordPosition,
+      shouldUseRecordPosition,
       options.getOrElse(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue() + "").toLong,
       options.getOrElse(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath),
       DiskMapType.valueOf(options.getOrElse(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT)),
