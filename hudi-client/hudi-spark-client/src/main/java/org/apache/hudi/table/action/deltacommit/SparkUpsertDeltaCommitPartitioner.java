@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.deltacommit;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -44,8 +45,9 @@ import java.util.stream.Collectors;
  * without the need for an index in the logFile.
  */
 public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
-  private static final Comparator<FileSlice> FILE_SLICE_COMPARATOR = Comparator.<FileSlice, Long>comparing(fileSlice -> fileSlice.getBaseFile().get().getFileSize())
-      .thenComparing(fileSlice -> fileSlice.getBaseFile().get().getFileId());
+  private static final Comparator<FileSlice> FILE_SLICE_COMPARATOR =
+      Comparator.<FileSlice, Long>comparing(fileSlice -> fileSlice.getBaseFile().map(BaseFile::getFileSize).orElse(0L))
+          .thenComparing(FileSlice::getFileId);
 
   public SparkUpsertDeltaCommitPartitioner(WorkloadProfile profile, HoodieSparkEngineContext context, HoodieTable table,
                                            HoodieWriteConfig config) {
