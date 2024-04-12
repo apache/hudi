@@ -19,9 +19,10 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import com.codahale.metrics.MetricRegistry;
@@ -33,9 +34,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * This is the main class of the metrics system.
@@ -44,15 +45,16 @@ public class Metrics {
 
   private static final Logger LOG = LoggerFactory.getLogger(Metrics.class);
 
-  private static final Map<String, Metrics> METRICS_INSTANCE_PER_BASEPATH = new HashMap<>();
+  private static final Map<String, Metrics> METRICS_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
 
   private final MetricRegistry registry;
   private final List<MetricsReporter> reporters;
   private final String commonMetricPrefix;
+  private final String basePath;
   private boolean initialized = false;
   private transient Thread shutdownThread = null;
 
-  public Metrics(HoodieWriteConfig metricConfig) {
+  public Metrics(HoodieMetricsConfig metricConfig) {
     registry = new MetricRegistry();
     commonMetricPrefix = metricConfig.getMetricReporterMetricsNamePrefix();
     reporters = new ArrayList<>();
@@ -65,6 +67,7 @@ public class Metrics {
       throw new RuntimeException("Cannot initialize Reporters.");
     }
     reporters.forEach(MetricsReporter::start);
+    basePath = getBasePath(metricConfig);
 
     shutdownThread = new Thread(() -> shutdown(true));
     Runtime.getRuntime().addShutdownHook(shutdownThread);
@@ -75,8 +78,8 @@ public class Metrics {
     registerGauges(Registry.getAllMetrics(true, true), Option.of(commonMetricPrefix));
   }
 
-  public static synchronized Metrics getInstance(HoodieWriteConfig metricConfig) {
-    String basePath = metricConfig.getBasePath();
+  public static synchronized Metrics getInstance(HoodieMetricsConfig metricConfig) {
+    String basePath = getBasePath(metricConfig);
     if (METRICS_INSTANCE_PER_BASEPATH.containsKey(basePath)) {
       return METRICS_INSTANCE_PER_BASEPATH.get(basePath);
     }
@@ -92,12 +95,12 @@ public class Metrics {
     METRICS_INSTANCE_PER_BASEPATH.clear();
   }
 
-  private List<MetricsReporter> addAdditionalMetricsExporters(HoodieWriteConfig metricConfig) {
+  private List<MetricsReporter> addAdditionalMetricsExporters(HoodieMetricsConfig metricConfig) {
     List<MetricsReporter> reporterList = new ArrayList<>();
     List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
     try (FileSystem fs = HadoopFSUtils.getFs(propPathList.get(0), new Configuration())) {
       for (String propPath : propPathList) {
-        HoodieWriteConfig secondarySourceConfig = HoodieWriteConfig.newBuilder().fromInputStream(
+        HoodieMetricsConfig secondarySourceConfig = HoodieMetricsConfig.newBuilder().fromInputStream(
             fs.open(new Path(propPath))).withPath(metricConfig.getBasePath()).build();
         Option<MetricsReporter> reporter = MetricsReporterFactory.createReporter(secondarySourceConfig, registry);
         if (reporter.isPresent()) {
@@ -155,15 +158,21 @@ public class Metrics {
     metricsMap.forEach((k, v) -> registerGauge(metricPrefix + k, v));
   }
 
-  public void registerGauge(String metricName, final long value) {
+  public Option<HoodieGauge<Long>> registerGauge(String metricName, final long value) {
+    HoodieGauge<Long> gauge = null;
     try {
-      HoodieGauge guage = (HoodieGauge) registry.gauge(metricName, () -> new HoodieGauge<>(value));
-      guage.setValue(value);
+      gauge = (HoodieGauge) registry.gauge(metricName, () -> new HoodieGauge<>(value));
+      gauge.setValue(value);
     } catch (Exception e) {
       // Here we catch all exception, so the major upsert pipeline will not be affected if the
       // metrics system has some issues.
       LOG.error("Failed to send metrics: ", e);
     }
+    return Option.ofNullable(gauge);
+  }
+
+  public Option<HoodieGauge<Long>> registerGauge(String metricName) {
+    return registerGauge(metricName, 0);
   }
 
   public MetricRegistry getRegistry() {
@@ -175,5 +184,17 @@ public class Metrics {
       return METRICS_INSTANCE_PER_BASEPATH.get(basePath).initialized;
     }
     return false;
+  }
+
+  /**
+   * Use the same base path as the hudi table so that Metrics instance is shared.
+   */
+  private static String getBasePath(HoodieMetricsConfig metricsConfig) {
+    String basePath = metricsConfig.getBasePath();
+    if (basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH)) {
+      String toRemoveSuffix = Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
+      basePath = basePath.substring(0, basePath.length() - toRemoveSuffix.length());
+    }
+    return basePath;
   }
 }

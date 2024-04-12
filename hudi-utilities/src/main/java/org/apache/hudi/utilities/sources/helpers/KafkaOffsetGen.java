@@ -331,24 +331,35 @@ public class KafkaOffsetGen {
 
   /**
    * Fetch checkpoint offsets for each partition.
-   * @param consumer instance of {@link KafkaConsumer} to fetch offsets from.
+   *
+   * @param consumer          instance of {@link KafkaConsumer} to fetch offsets from.
    * @param lastCheckpointStr last checkpoint string.
-   * @param topicPartitions set of topic partitions.
+   * @param topicPartitions   set of topic partitions.
    * @return a map of Topic partitions to offsets.
    */
   private Map<TopicPartition, Long> fetchValidOffsets(KafkaConsumer consumer,
-                                                        Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions) {
+                                                      Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions) {
     Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
     Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
-    boolean isCheckpointOutOfBounds = checkpointOffsets.entrySet().stream()
-        .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
+    List<TopicPartition> outOfBoundPartitionList = checkpointOffsets.entrySet().stream()
+        .filter(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()))
+        .map(Map.Entry::getKey)
+        .collect(Collectors.toList());
+    boolean isCheckpointOutOfBounds = !outOfBoundPartitionList.isEmpty();
+
     if (isCheckpointOutOfBounds) {
+      String outOfBoundOffsets = outOfBoundPartitionList.stream()
+          .map(p -> p.toString() + ":{checkpoint=" + checkpointOffsets.get(p)
+              + ",earliestOffset=" + earliestOffsets.get(p) + "}")
+          .collect(Collectors.joining(","));
+      String message = "Some data may have been lost because they are not available in Kafka any more;"
+          + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed. "
+          + "Kafka partitions that have out-of-bound checkpoints: " + outOfBoundOffsets + " .";
+
       if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS)) {
-        throw new HoodieStreamerException("Some data may have been lost because they are not available in Kafka any more;"
-            + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed.");
+        throw new HoodieStreamerException(message);
       } else {
-        LOG.warn("Some data may have been lost because they are not available in Kafka any more;"
-            + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed."
+        LOG.warn(message
             + " If you want Hudi Streamer to fail on such cases, set \"" + KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key() + "\" to \"true\".");
       }
     }
