@@ -80,7 +80,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, hadoopConf: Configuration): HoodieReaderContext[InternalRow] = {
-    val reader = sparkAdapter.createHoodieParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, hadoopConf)
+    val reader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, hadoopConf)
     val metaClient = HoodieTableMetaClient.builder().setConf(getHadoopConf).setBasePath(tablePath).build
     val recordKeyField = if (metaClient.getTableConfig.populateMetaFields()) {
       HoodieRecord.RECORD_KEY_METADATA_FIELD

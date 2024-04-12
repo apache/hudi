@@ -23,7 +23,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{ROW_INDEX_TEMPORARY_COLUMN_NAME, getAppliedRequiredSchema, hasIndexTempColumn}
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{ROW_INDEX_TEMPORARY_COLUMN_NAME, getAppliedRequiredSchema}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
@@ -36,7 +36,7 @@ import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkHoodieParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
@@ -54,7 +54,7 @@ import scala.collection.mutable
  *                        not required for reading a file group with only log files.
  * @param partitionValues The values for a partition in which the file group lives.
  */
-class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkHoodieParquetReader,
+class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
                                               recordKeyColumn: String,
                                               filters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter

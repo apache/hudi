@@ -30,7 +30,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark30HoodieParquetReader, Spark30LegacyHoodieParquetFileFormat, SparkHoodieParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark30LegacyHoodieParquetFileFormat, Spark30ParquetReader, SparkParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark30PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.hudi.SparkAdapter
@@ -130,10 +130,10 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
    * @param hadoopConf some configs will be set for the hadoopConf
    * @return parquet file reader
    */
-  override def createHoodieParquetFileReader(vectorized: Boolean,
+  override def createParquetFileReader(vectorized: Boolean,
                                              sqlConf: SQLConf,
                                              options: Map[String, String],
-                                             hadoopConf: Configuration): SparkHoodieParquetReader = {
-    Spark30HoodieParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+                                             hadoopConf: Configuration): SparkParquetReader = {
+    Spark30ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 }

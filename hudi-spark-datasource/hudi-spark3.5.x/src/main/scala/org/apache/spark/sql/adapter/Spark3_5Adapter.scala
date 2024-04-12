@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark35HoodieParquetReader, Spark35LegacyHoodieParquetFileFormat, SparkHoodieParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark35ParquetReader, Spark35LegacyHoodieParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.SQLConf
@@ -136,10 +136,10 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
    * @param hadoopConf some configs will be set for the hadoopConf
    * @return parquet file reader
    */
-  override def createHoodieParquetFileReader(vectorized: Boolean,
-                                             sqlConf: SQLConf,
-                                             options: Map[String, String],
-                                             hadoopConf: Configuration): SparkHoodieParquetReader = {
-    Spark35HoodieParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  override def createParquetFileReader(vectorized: Boolean,
+                                       sqlConf: SQLConf,
+                                       options: Map[String, String],
+                                       hadoopConf: Configuration): SparkParquetReader = {
+    Spark35ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 }

@@ -34,7 +34,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkHoodieParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -226,8 +226,8 @@ trait SparkAdapter extends Serializable {
    * @param hadoopConf some configs will be set for the hadoopConf
    * @return parquet file reader
    */
-  def createHoodieParquetFileReader(vectorized: Boolean,
-                                    sqlConf: SQLConf,
-                                    options: Map[String, String],
-                                    hadoopConf: Configuration): SparkHoodieParquetReader
+  def createParquetFileReader(vectorized: Boolean,
+                              sqlConf: SQLConf,
+                              options: Map[String, String],
+                              hadoopConf: Configuration): SparkParquetReader
 }
