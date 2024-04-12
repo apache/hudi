@@ -97,13 +97,6 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
     }
   }
 
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupSparkContexts();
-    cleanupTestDataGenerator();
-    metaClient = null;
-  }
-
   /**
    * Create two files, one should be excluded by colstats
    */

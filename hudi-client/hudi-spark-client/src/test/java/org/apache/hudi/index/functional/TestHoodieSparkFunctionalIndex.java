@@ -26,7 +26,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.types.DataTypes;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,11 +44,6 @@ public class TestHoodieSparkFunctionalIndex extends HoodieSparkClientTestHarness
   @BeforeEach
   public void setup() {
     initSparkContexts("TestHoodieSparkFunctionalIndex");
-  }
-
-  @AfterEach
-  public void tearDown() {
-    cleanupSparkContexts();
   }
 
   @Test

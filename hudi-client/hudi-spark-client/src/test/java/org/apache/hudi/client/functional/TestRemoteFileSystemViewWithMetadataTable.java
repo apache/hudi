@@ -91,13 +91,9 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
 
   @AfterEach
   public void tearDown() throws Exception {
+    cleanupResources();
     cleanupTimelineService();
-    cleanupClients();
-    cleanupSparkContexts();
-    cleanupFileSystem();
-    cleanupExecutorService();
     dataGen = null;
-    System.gc();
   }
 
   @Override

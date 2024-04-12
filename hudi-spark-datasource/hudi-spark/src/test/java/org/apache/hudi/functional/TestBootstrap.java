@@ -145,13 +145,6 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     reloadInputFormats();
   }
 
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupSparkContexts();
-    cleanupClients();
-    cleanupTestDataGenerator();
-  }
-
   private void reloadInputFormats() {
     // initialize parquet input format
     roInputFormat = new HoodieParquetInputFormat();

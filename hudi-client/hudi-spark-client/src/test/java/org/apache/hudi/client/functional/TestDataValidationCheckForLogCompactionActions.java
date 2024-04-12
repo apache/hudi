@@ -105,13 +105,8 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
    */
   @AfterEach
   public void cleanupResources() throws IOException {
-    cleanupTimelineService();
-    cleanupClients();
-    cleanupSparkContexts();
-    cleanupTestDataGenerator();
-    cleanupFileSystem();
+    super.cleanupResources();
     cleanupExecutorService();
-    System.gc();
   }
 
   /**

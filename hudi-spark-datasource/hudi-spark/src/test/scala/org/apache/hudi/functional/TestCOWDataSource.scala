@@ -93,14 +93,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     initFileSystem()
   }
 
-  @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
-  }
-
   @Test
   def testShortNameStorage(): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts()

@@ -76,15 +76,6 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
     initFileSystem()
   }
 
-  @AfterEach
-  override def tearDown(): Unit = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
-  }
-
   @ParameterizedTest
   @CsvSource(Array(
     "upsert,org.apache.hudi.client.SparkRDDWriteClient.commit",

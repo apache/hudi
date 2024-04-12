@@ -57,14 +57,6 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
     initFileSystem()
   }
 
-  @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
-  }
-
   @ParameterizedTest
   @CsvSource(Array(
     "COPY_ON_WRITE,false",

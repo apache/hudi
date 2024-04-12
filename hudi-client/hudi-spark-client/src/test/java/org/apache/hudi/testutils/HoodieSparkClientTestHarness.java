@@ -119,13 +119,15 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   @AfterAll
   public static void tearDownAll() throws IOException {
     FileSystem.closeAll();
+    cleanupSparkContexts();
+    cleanupTimelineService();
   }
 
-  protected JavaSparkContext jsc;
-  protected HoodieSparkEngineContext context;
-  protected SparkSession sparkSession;
-  protected Configuration hadoopConf;
-  protected SQLContext sqlContext;
+  protected static JavaSparkContext jsc;
+  protected static HoodieSparkEngineContext context;
+  protected static SparkSession sparkSession;
+  protected static SQLContext sqlContext;
+  protected static Configuration hadoopConf;
   protected FileSystem fs;
   protected ExecutorService executorService;
   protected HoodieTableMetaClient metaClient;
@@ -133,7 +135,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   protected SparkRDDReadClient readClient;
   protected HoodieTableFileSystemView tableView;
 
-  protected TimelineService timelineService;
+  protected static TimelineService timelineService;
   protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
 
   private String testMethodName;
@@ -163,13 +165,11 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    * Cleanups resource group for the subclasses of {@link HoodieClientTestBase}.
    */
   public void cleanupResources() throws IOException {
-    cleanupTimelineService();
     cleanupClients();
     cleanupSparkContexts();
     cleanupTestDataGenerator();
     cleanupFileSystem();
     cleanupExecutorService();
-    System.gc();
   }
 
   protected Option<Consumer<SparkSessionExtensions>> getSparkSessionExtensionsInjector() {
@@ -182,6 +182,9 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    * @param appName The specified application name.
    */
   protected void initSparkContexts(String appName) {
+    if (sparkSession != null) {
+      return;
+    }
     Option<Consumer<SparkSessionExtensions>> sparkSessionExtensionsInjector =
         getSparkSessionExtensionsInjector();
 
@@ -227,7 +230,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   /**
    * Cleanups Spark contexts ({@link JavaSparkContext} and {@link SQLContext}).
    */
-  protected void cleanupSparkContexts() {
+  protected static void cleanupSparkContexts() {
     if (sqlContext != null) {
       LOG.info("Clearing sql context cache of spark-session used in previous test-case");
       sqlContext.clearCache();
@@ -316,12 +319,14 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    * Initializes timeline service based on the write config.
    */
   protected void initTimelineService() {
-    timelineService = HoodieClientTestUtils.initTimelineService(
-        context, basePath, incrementTimelineServicePortToUse());
-    timelineServicePort = timelineService.getServerPort();
+    if (timelineService == null) {
+      timelineService = HoodieClientTestUtils.initTimelineService(
+          context, basePath, incrementTimelineServicePortToUse());
+      timelineServicePort = timelineService.getServerPort();
+    }
   }
 
-  protected void cleanupTimelineService() {
+  protected static void cleanupTimelineService() {
     if (timelineService != null) {
       timelineService.close();
     }
