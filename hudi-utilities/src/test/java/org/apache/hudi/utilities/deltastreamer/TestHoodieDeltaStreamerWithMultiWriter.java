@@ -94,7 +94,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     basePath = Paths.get(URI.create(basePath.replaceAll("/$", ""))).toString();
     propsFilePath = basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER;
     tableBasePath = basePath + "/testUpsertsContinuousModeWithMultipleWritersForConflicts_" + tableType;
-    prepareInitialConfigs(fs, basePath);
+    prepareInitialConfigs(fs, basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs, basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
@@ -161,7 +161,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     basePath = Paths.get(URI.create(basePath.replaceAll("/$", ""))).toString();
     propsFilePath = basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER;
     tableBasePath = basePath + "/testUpsertsContinuousModeWithMultipleWritersWithoutConflicts_" + tableType;
-    prepareInitialConfigs(fs, basePath);
+    prepareInitialConfigs(fs, basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs, basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
@@ -229,7 +229,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     basePath = Paths.get(URI.create(basePath.replaceAll("/$", ""))).toString();
     propsFilePath = basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER;
     tableBasePath = basePath + "/testLatestCheckpointCarryOverWithMultipleWriters_" + tableType;
-    prepareInitialConfigs(fs, basePath);
+    prepareInitialConfigs(fs, basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs, basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
