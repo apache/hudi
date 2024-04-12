@@ -44,6 +44,8 @@ import java.util.stream.Collectors;
  * without the need for an index in the logFile.
  */
 public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
+  private static final Comparator<FileSlice> FILE_SLICE_COMPARATOR = Comparator.<FileSlice, Long>comparing(fileSlice -> fileSlice.getBaseFile().get().getFileSize())
+      .thenComparing(fileSlice -> fileSlice.getBaseFile().get().getFileId());
 
   public SparkUpsertDeltaCommitPartitioner(WorkloadProfile profile, HoodieSparkEngineContext context, HoodieTable table,
                                            HoodieWriteConfig config) {
@@ -93,6 +95,7 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
       return table.getSliceView()
               .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitInstant.getTimestamp(), false)
               .filter(this::isSmallFile)
+              .sorted(FILE_SLICE_COMPARATOR)
               .collect(Collectors.toList());
     }
 
@@ -110,7 +113,7 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
                   //       hence skipping
                   fileSlice.getLogFiles().count() < 1
                   && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit())
-          .sorted(Comparator.comparing(fileSlice -> fileSlice.getBaseFile().get().getFileSize()))
+          .sorted(FILE_SLICE_COMPARATOR)
           .limit(config.getSmallFileGroupCandidatesLimit())
           .collect(Collectors.toList());
   }
