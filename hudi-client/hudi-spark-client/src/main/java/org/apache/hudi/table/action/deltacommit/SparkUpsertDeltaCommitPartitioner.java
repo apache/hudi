@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.deltacommit;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -45,9 +44,6 @@ import java.util.stream.Collectors;
  * without the need for an index in the logFile.
  */
 public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
-  private static final Comparator<FileSlice> FILE_SLICE_COMPARATOR =
-      Comparator.<FileSlice, Long>comparing(fileSlice -> fileSlice.getBaseFile().map(BaseFile::getFileSize).orElse(0L))
-          .thenComparing(FileSlice::getFileId);
 
   public SparkUpsertDeltaCommitPartitioner(WorkloadProfile profile, HoodieSparkEngineContext context, HoodieTable table,
                                            HoodieWriteConfig config) {
@@ -93,11 +89,13 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
   private List<FileSlice> getSmallFileCandidates(String partitionPath, HoodieInstant latestCommitInstant) {
     // If we can index log files, we can add more inserts to log files for fileIds NOT including those under
     // pending compaction
+    Comparator<FileSlice> comparator = Comparator.<FileSlice, Long>comparing(fileSlice -> getTotalFileSize(fileSlice))
+        .thenComparing(FileSlice::getFileId);
     if (table.getIndex().canIndexLogFiles()) {
       return table.getSliceView()
               .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitInstant.getTimestamp(), false)
               .filter(this::isSmallFile)
-              .sorted(FILE_SLICE_COMPARATOR)
+              .sorted(comparator)
               .collect(Collectors.toList());
     }
 
@@ -115,7 +113,7 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
                   //       hence skipping
                   fileSlice.getLogFiles().count() < 1
                   && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit())
-          .sorted(FILE_SLICE_COMPARATOR)
+          .sorted(comparator)
           .limit(config.getSmallFileGroupCandidatesLimit())
           .collect(Collectors.toList());
   }
