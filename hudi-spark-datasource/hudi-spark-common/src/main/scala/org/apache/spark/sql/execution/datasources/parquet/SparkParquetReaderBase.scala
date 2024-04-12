@@ -39,7 +39,6 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
                                       returningBatch: Boolean,
                                       enableRecordFilter: Boolean,
                                       timeZoneId: Option[String]) extends SparkParquetReader {
-
   /**
    * Read an individual parquet file
    *
@@ -61,7 +60,6 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
     ParquetWriteSupport.setSchema(requiredSchema, conf)
     doRead(file, requiredSchema, partitionSchema, filters, conf)
   }
-
 
   /**
    * Implemented for each spark version
@@ -91,7 +89,6 @@ trait SparkParquetReaderBuilder {
    * @param hadoopConf some configs will be set for the hadoopConf
    * @return properties needed for reading a parquet file
    */
-
   def build(vectorized: Boolean,
             sqlConf: SQLConf,
             options: Map[String, String],
