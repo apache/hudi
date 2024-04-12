@@ -48,7 +48,6 @@ import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.slf4j.LoggerFactory
 
 import java.util.Locale
-
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {

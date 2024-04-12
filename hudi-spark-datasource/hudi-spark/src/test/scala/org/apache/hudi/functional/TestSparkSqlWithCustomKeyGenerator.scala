@@ -283,8 +283,8 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
         val segmentPartitionFunc = (_: Integer, segment: String) => segment
         val customPartitionFunc = (ts: Integer, segment: String) => TS_FORMATTER_FUNC.apply(ts) + "/" + segment
 
-        testInsertInto1(tableNameNonPartitioned, TS_TO_STRING_FUNC, (_, _) => "")
-        testInsertInto1(tableNameSimpleKey, TS_TO_STRING_FUNC, segmentPartitionFunc)
+        testFirstRoundInserts(tableNameNonPartitioned, TS_TO_STRING_FUNC, (_, _) => "")
+        testFirstRoundInserts(tableNameSimpleKey, TS_TO_STRING_FUNC, segmentPartitionFunc)
         // INSERT INTO should fail for tableNameCustom1
         val sourceTableName = tableNameCustom1 + "_source"
         prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
@@ -295,7 +295,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                | SELECT * from $sourceTableName
                | """.stripMargin)
         }
-        testInsertInto1(tableNameCustom2, TS_FORMATTER_FUNC, customPartitionFunc)
+        testFirstRoundInserts(tableNameCustom2, TS_FORMATTER_FUNC, customPartitionFunc)
 
         // Now add the missing partition path field write config for tableNameCustom1
         spark.sql(
@@ -305,10 +305,10 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
 
         // All tables should be able to do INSERT INTO without any problem,
         // since the scope of the added write config is at the catalog table level
-        testInsertInto2(tableNameNonPartitioned, TS_TO_STRING_FUNC, (_, _) => "")
-        testInsertInto2(tableNameSimpleKey, TS_TO_STRING_FUNC, segmentPartitionFunc)
-        testInsertInto1(tableNameCustom1, TS_TO_STRING_FUNC, segmentPartitionFunc)
-        testInsertInto2(tableNameCustom2, TS_FORMATTER_FUNC, customPartitionFunc)
+        testSecondRoundInserts(tableNameNonPartitioned, TS_TO_STRING_FUNC, (_, _) => "")
+        testSecondRoundInserts(tableNameSimpleKey, TS_TO_STRING_FUNC, segmentPartitionFunc)
+        testFirstRoundInserts(tableNameCustom1, TS_TO_STRING_FUNC, segmentPartitionFunc)
+        testSecondRoundInserts(tableNameCustom2, TS_FORMATTER_FUNC, customPartitionFunc)
       }
       }
     }
@@ -364,15 +364,15 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
              | """.stripMargin)
 
         // INSERT INTO should succeed now
-        testInsertInto1(tableName, TS_FORMATTER_FUNC, customPartitionFunc)
+        testFirstRoundInserts(tableName, TS_FORMATTER_FUNC, customPartitionFunc)
       }
     }
     }
   }
 
-  private def testInsertInto1(tableName: String,
-                              tsGenFunc: Integer => String,
-                              partitionGenFunc: (Integer, String) => String): Unit = {
+  private def testFirstRoundInserts(tableName: String,
+                                    tsGenFunc: Integer => String,
+                                    partitionGenFunc: (Integer, String) => String): Unit = {
     val sourceTableName = tableName + "_source1"
     prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
     spark.sql(
@@ -396,9 +396,9 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
     )
   }
 
-  private def testInsertInto2(tableName: String,
-                              tsGenFunc: Integer => String,
-                              partitionGenFunc: (Integer, String) => String): Unit = {
+  private def testSecondRoundInserts(tableName: String,
+                                     tsGenFunc: Integer => String,
+                                     partitionGenFunc: (Integer, String) => String): Unit = {
     val sourceTableName = tableName + "_source2"
     prepareParquetSource(sourceTableName, Seq("(8, 'a8', 26.9, 1706800227, 'cat3')"))
     spark.sql(
