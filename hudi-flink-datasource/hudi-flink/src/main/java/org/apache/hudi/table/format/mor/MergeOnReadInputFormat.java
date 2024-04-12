@@ -332,7 +332,7 @@ public class MergeOnReadInputFormat
 
     return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
-        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
+        this.conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE),
         true,
         HadoopConfigurations.getParquetConf(this.conf, hadoopConf),
         fieldNames.toArray(new String[0]),
@@ -735,7 +735,7 @@ public class MergeOnReadInputFormat
       this.emitDelete = emitDelete;
       this.operationPos = operationPos;
       this.avroProjection = avroProjection;
-      this.rowDataToAvroConverter = RowDataToAvroConverters.createConverter(tableRowType);
+      this.rowDataToAvroConverter = RowDataToAvroConverters.createConverter(tableRowType, flinkConf.getBoolean(FlinkOptions.WRITE_UTC_TIMEZONE));
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
       this.projection = projection;
       this.instantRange = split.getInstantRange().orElse(null);

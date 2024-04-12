@@ -66,6 +66,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPU
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
@@ -217,8 +218,19 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public List<Partition> getPartitionsByFilter(String tableName, String filter) {
+  public List<Partition> getPartitionsFromList(String tableName, List<String> partitions) {
+    String filter = null;
     try {
+      List<String> partitionKeys = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).stream()
+          .map(String::toLowerCase)
+          .collect(Collectors.toList());
+
+      List<FieldSchema> partitionFields = this.getMetastoreFieldSchemas(tableName)
+          .stream()
+          .filter(f -> partitionKeys.contains(f.getName()))
+          .collect(Collectors.toList());
+      filter = this.generatePushDownFilter(partitions, partitionFields);
+
       return client.listPartitionsByFilter(databaseName, tableName, filter, (short)-1)
           .stream()
           .map(p -> new Partition(p.getValues(), p.getSd().getLocation()))

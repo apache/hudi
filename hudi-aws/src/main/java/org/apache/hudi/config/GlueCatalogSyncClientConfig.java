@@ -26,6 +26,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import java.util.stream.IntStream;
+
 /**
  * Hoodie Configs for Glue.
  */
@@ -42,6 +44,28 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Glue catalog sync based client will skip archiving the table version if this config is set to true");
+
+  public static final ConfigProperty<Integer> ALL_PARTITIONS_READ_PARALLELISM = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "all_partitions_read_parallelism")
+      .defaultValue(1)
+      .markAdvanced()
+      .withValidValues(IntStream.rangeClosed(1, 10).mapToObj(Integer::toString).toArray(String[]::new))
+      .sinceVersion("1.0.0")
+      .withDocumentation("Parallelism for listing all partitions(first time sync). Should be in interval [1, 10].");
+
+  public static final ConfigProperty<Integer> CHANGED_PARTITIONS_READ_PARALLELISM = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "changed_partitions_read_parallelism")
+      .defaultValue(1)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Parallelism for listing changed partitions(second and subsequent syncs).");
+
+  public static final ConfigProperty<Integer> PARTITION_CHANGE_PARALLELISM = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_change_parallelism")
+      .defaultValue(1)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Parallelism for change operations - such as create/update/delete.");
 
   public static final ConfigProperty<Boolean> GLUE_METADATA_FILE_LISTING = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "metadata_file_listing")

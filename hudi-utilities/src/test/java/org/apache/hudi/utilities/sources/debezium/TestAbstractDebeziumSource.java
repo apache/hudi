@@ -86,12 +86,12 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
 
   private TypedProperties createPropsForJsonSource() {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.kafka.topic", testTopicName);
+    props.setProperty("hoodie.streamer.source.kafka.topic", testTopicName);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.setProperty("auto.offset.reset", "earliest");
     props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-    props.setProperty("hoodie.deltastreamer.schemaprovider.registry.url", "localhost");
-    props.setProperty("hoodie.deltastreamer.source.kafka.value.deserializer.class", StringDeserializer.class.getName());
+    props.setProperty("hoodie.streamer.schemaprovider.registry.url", "localhost");
+    props.setProperty("hoodie.streamer.source.kafka.value.deserializer.class", StringDeserializer.class.getName());
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
 
     return props;

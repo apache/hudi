@@ -801,11 +801,20 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public Void loadAllPartitions() {
+  public void loadAllPartitions() {
     try {
       readLock.lock();
       ensureAllPartitionsLoadedCorrectly();
-      return null;
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
+  public void loadPartitions(List<String> partitionPaths) {
+    try {
+      readLock.lock();
+      ensurePartitionsLoadedCorrectly(partitionPaths);
     } finally {
       readLock.unlock();
     }

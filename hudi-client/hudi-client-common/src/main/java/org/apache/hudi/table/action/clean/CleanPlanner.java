@@ -64,8 +64,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
-
 /**
  * Cleaner is responsible for garbage collecting older files in a given partition path. Such that
  * <p>
@@ -108,14 +106,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         .map(entry -> Pair.of(new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()), entry.getValue()))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    // load all partitions in advance if necessary.
-    if (shouldUseBatchLookup(hoodieTable.getMetaClient().getTableConfig(), config)) {
-      LOG.info("Load all partitions and files into file system view in advance.");
-      fileSystemView.loadAllPartitions();
-    }
-    // collect savepointed timestamps to be assist with incremental cleaning. For non-partitioned and metadata table, we may not need this.
-    this.savepointedTimestamps = hoodieTable.isMetadataTable() ? Collections.EMPTY_LIST : (hoodieTable.isPartitioned() ? hoodieTable.getSavepointTimestamps().stream().collect(Collectors.toList())
-        : Collections.EMPTY_LIST);
+    // collect savepointed timestamps to assist with incremental cleaning. For non-partitioned and metadata table, we may not need this.
+    this.savepointedTimestamps = hoodieTable.isMetadataTable() ? Collections.emptyList() : (hoodieTable.isPartitioned() ? new ArrayList<>(hoodieTable.getSavepointTimestamps())
+        : Collections.emptyList());
   }
 
   /**
@@ -234,8 +227,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   }
 
   private List<String> getPartitionsFromDeletedSavepoint(HoodieCleanMetadata cleanMetadata) {
-    List<String> savepointedTimestampsFromLastClean = Arrays.stream(cleanMetadata.getExtraMetadata()
-            .getOrDefault(SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","))
+    List<String> savepointedTimestampsFromLastClean = cleanMetadata.getExtraMetadata() == null ? Collections.emptyList()
+        : Arrays.stream(cleanMetadata.getExtraMetadata().getOrDefault(SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","))
         .filter(partition -> !StringUtils.isNullOrEmpty(partition)).collect(Collectors.toList());
     if (savepointedTimestampsFromLastClean.isEmpty()) {
       return Collections.emptyList();
@@ -252,6 +245,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       Option<HoodieInstant> instantOption = hoodieTable.getCompletedCommitsTimeline().filter(instant -> instant.getTimestamp().equals(savepointCommit)).firstInstant();
       if (!instantOption.isPresent()) {
         LOG.warn("Skipping to process a commit for which savepoint was removed as the instant moved to archived timeline already");
+        return Stream.empty();
       }
       HoodieInstant instant = instantOption.get();
       return getPartitionsForInstants(instant);

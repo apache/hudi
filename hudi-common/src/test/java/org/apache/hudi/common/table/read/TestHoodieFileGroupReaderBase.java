@@ -150,7 +150,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
     FileSystemViewManager viewManager = FileSystemViewManager.createViewManager(
-        engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder().build(),
+        engineContext, FileSystemViewStorageConfig.newBuilder().build(),
         HoodieCommonConfig.newBuilder().build(),
         mc -> HoodieTableMetadata.create(
             engineContext, metadataConfig, mc.getBasePathV2().toString()));

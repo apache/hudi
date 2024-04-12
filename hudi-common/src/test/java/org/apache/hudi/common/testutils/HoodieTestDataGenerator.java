@@ -91,6 +91,13 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieTestDataGenerator implements AutoCloseable {
 
+  /**
+   * You may get a different result due to the upgrading of Spark 3.0: reading dates before 1582-10-15 or timestamps before 1900-01-01T00:00:00Z from Parquet INT96 files can be ambiguous,
+   * as the files may be written by Spark 2.x or legacy versions of Hive, which uses a legacy hybrid calendar that is different from Spark 3.0+s Proleptic Gregorian calendar.
+   * See more details in SPARK-31404.
+   */
+  private boolean makeDatesAmbiguous = false;
+
   // based on examination of sample file, the schema produces the following per record size
   public static final int BYTES_PER_RECORD = (int) (1.2 * 1024);
   // with default bloom filter with 60,000 entries and 0.000000001 FPRate
@@ -206,6 +213,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   @Deprecated
   public HoodieTestDataGenerator() {
     this(DEFAULT_PARTITION_PATHS);
+  }
+
+  public HoodieTestDataGenerator(boolean makeDatesAmbiguous) {
+    this();
+    this.makeDatesAmbiguous = makeDatesAmbiguous;
   }
 
   @Deprecated
@@ -392,7 +404,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("nation", ByteBuffer.wrap(bytes));
     long randomMillis = genRandomTimeMillis(rand);
     Instant instant = Instant.ofEpochMilli(randomMillis);
-    rec.put("current_date", (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
+    rec.put("current_date", makeDatesAmbiguous ? -1000000 :
+        (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
     rec.put("current_ts", randomMillis);
 
     BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, "%5f", rand.nextFloat()));
@@ -522,6 +535,15 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     Arrays.asList(HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()), HoodieTimeline.makeInflightCommitFileName(instantTime),
             HoodieTimeline.makeRequestedCommitFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
+  }
+
+  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, Configuration configuration) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    createOnlyCompletedCommitFile(basePath, instantTime, configuration, commitMetadata);
+  }
+
+  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    createMetadataFile(HoodieTimeline.makeCommitFileName(instantTime), basePath, configuration, commitMetadata);
   }
 
   public static void createDeltaCommitFile(String basePath, String instantTime, Configuration configuration) {

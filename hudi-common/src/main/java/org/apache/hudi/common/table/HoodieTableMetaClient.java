@@ -636,11 +636,11 @@ public class HoodieTableMetaClient implements Serializable {
       fs.mkdirs(auxiliaryFolder);
     }
 
-    initializeBootstrapDirsIfNotExists(hadoopConf, basePath, fs);
+    initializeBootstrapDirsIfNotExists(basePath, fs);
     HoodieTableConfig.create(fs, metaPathDir, props);
   }
 
-  public static void initializeBootstrapDirsIfNotExists(Configuration hadoopConf, String basePath, FileSystem fs) throws IOException {
+  public static void initializeBootstrapDirsIfNotExists(String basePath, FileSystem fs) throws IOException {
 
     // Create bootstrap index by partition folder if it does not exist
     final Path bootstrap_index_folder_by_partition =
@@ -801,7 +801,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public void initializeBootstrapDirsIfNotExists() throws IOException {
-    initializeBootstrapDirsIfNotExists(getHadoopConf(), basePath.toString(), getFs());
+    initializeBootstrapDirsIfNotExists(basePath.toString(), getFs());
   }
 
   private static HoodieTableMetaClient newMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,

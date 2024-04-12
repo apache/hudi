@@ -62,6 +62,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -119,7 +120,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.util.Time;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.apache.spark.api.java.JavaRDD;
@@ -167,6 +167,7 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_EXTENSION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_EXTENSION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.INFLIGHT_EXTENSION;
@@ -824,6 +825,43 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     });
   }
 
+  /**
+   * Test MDT compaction with delayed pending instants on DT(induced by multi-writer or async table services).
+   *
+   * <p>A demo:
+   * <pre>
+   *   Time t1
+   *
+   *   Main                 Metadata
+   *   c1.commit    ->   c1.deltacommit
+   *   c2.commit.   ->   c2.deltacommit
+   *   c3.inflight  ->
+   *   c4.commit    ->   c4.deltacommit
+   *
+   *   c5.requested ->   c6.compaction
+   *
+   *
+   *   MDT files:
+   *   F1.c1 (base) -> log(c2) -> log(c4)
+   *   F1.c6 (base)
+   *
+   *
+   *   Time t2 (Now c3 is completed)
+   *
+   *   Main                 Metadata
+   *   c1.commit    ->   c1.deltacommit
+   *   c2.commit.   ->   c2.deltacommit
+   *   c3.commit    ->   c3.deltacommit
+   *   c4.commit    ->   c4.deltacommit
+   *
+   *   c5.requested -> c6.compaction
+   *
+   *
+   *   MDT files:
+   *   F1.c1 (base) -> log(c2) -> log(c4)
+   *   F1.c6 (base) -> log(c3)
+   * </pre>
+   */
   @Test
   public void testMetadataTableCompactionWithPendingInstants() throws Exception {
     init(COPY_ON_WRITE, false);
@@ -853,8 +891,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000007", INSERT);
 
     tableMetadata = metadata(writeConfig, context);
-    // verify that compaction of metadata table does not kick in.
-    assertFalse(tableMetadata.getLatestCompactionTime().isPresent());
+    // verify that compaction of metadata table should kick in.
+    assertTrue(tableMetadata.getLatestCompactionTime().isPresent(), "Compaction of metadata table should kick in");
 
     // move inflight to completed
     testTable.moveInflightCommitToComplete("0000003", inflightCommitMeta);
@@ -1098,7 +1136,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Transition the second init commit for record_index partition to inflight in MDT
     deleteMetaFile(metaClient.getFs(), mdtBasePath, mdtInitCommit2, DELTA_COMMIT_EXTENSION);
     metaClient.getTableConfig().setMetadataPartitionState(
-        metaClient, MetadataPartitionType.RECORD_INDEX, false);
+        metaClient, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), false);
     metaClient.getTableConfig().setMetadataPartitionsInflight(
         metaClient, MetadataPartitionType.RECORD_INDEX);
     timeline = metaClient.getActiveTimeline().reload();
@@ -1445,7 +1483,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    */
   @Test
   public void testManualRollbacks() throws Exception {
-    boolean populateMateFields = false;
     init(COPY_ON_WRITE, false);
     // Setting to archive more aggressively on the Metadata Table than the Dataset
     final int maxDeltaCommitsBeforeCompaction = 4;
@@ -1476,23 +1513,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     validateMetadata(testTable);
 
-    // We can only rollback those commits whose deltacommit have not been archived yet.
-    int numRollbacks = 0;
-    boolean exceptionRaised = false;
+    // We can only roll back those commits whose deltacommit have not been archived yet.
     List<HoodieInstant> allInstants = metaClient.reloadActiveTimeline().getCommitsTimeline().getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant instantToRollback : allInstants) {
       try {
-        testTable.doRollback(instantToRollback.getTimestamp(), String.valueOf(Time.now()));
+        testTable.doRollback(instantToRollback.getTimestamp(), metaClient.createNewInstantTime());
         validateMetadata(testTable);
-        ++numRollbacks;
       } catch (HoodieMetadataException e) {
         // This is expected since we are rolling back commits that are older than the latest compaction on the MDT
         break;
       }
     }
-    // Since each rollback also creates a deltacommit, we can only support rolling back of half of the original
-    // instants present before rollback started.
-    // assertTrue(numRollbacks >= minArchiveCommitsDataset / 2, "Rollbacks of non archived instants should work");
   }
 
   /**
@@ -1559,23 +1590,18 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       testTable.setNonPartitioned();
     }
     for (int i = 1; i < 25; i += 7) {
-      long commitTime1 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-      long commitTime2 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-      long commitTime3 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-      long commitTime4 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-      doWriteOperation(testTable, Long.toString(commitTime1), INSERT, nonPartitionedDataset);
-      doWriteOperation(testTable, Long.toString(commitTime2), UPSERT, nonPartitionedDataset);
-      doClean(testTable, Long.toString(commitTime3), Arrays.asList(Long.toString(commitTime1)));
-      doWriteOperation(testTable, Long.toString(commitTime4), UPSERT, nonPartitionedDataset);
+      String commitTime1 = InProcessTimeGenerator.createNewInstantTime();
+      doWriteOperation(testTable, commitTime1, INSERT, nonPartitionedDataset);
+      doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(), UPSERT, nonPartitionedDataset);
+      doClean(testTable, InProcessTimeGenerator.createNewInstantTime(), Collections.singletonList(commitTime1));
+      doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(), UPSERT, nonPartitionedDataset);
       if (tableType == MERGE_ON_READ) {
-        long commitTime5 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-        doCompaction(testTable, Long.toString(commitTime5), nonPartitionedDataset);
+        doCompaction(testTable, InProcessTimeGenerator.createNewInstantTime(), nonPartitionedDataset);
       }
       // added 60s to commitTime6 to make sure it is greater than compaction instant triggered by previous commit
-      long commitTime6 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime()) + 60000L;
-      doWriteOperation(testTable, Long.toString(commitTime6), UPSERT, nonPartitionedDataset);
-      long commitTime7 = Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
-      doRollback(testTable, Long.toString(commitTime6), Long.toString(commitTime7));
+      String commitTime6 = HoodieInstantTimeGenerator.instantTimePlusMillis(InProcessTimeGenerator.createNewInstantTime(), 60000L);
+      doWriteOperation(testTable, commitTime6, UPSERT, nonPartitionedDataset);
+      doRollback(testTable, commitTime6, InProcessTimeGenerator.createNewInstantTime());
     }
     validateMetadata(testTable, emptyList(), nonPartitionedDataset);
   }
@@ -2883,22 +2909,54 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testMetadataTableWithLongLog() throws Exception {
     init(COPY_ON_WRITE, false);
-    final int maxNumDeltacommits = 3;
+    final int maxNumDeltaCommits = 3;
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .enableMetrics(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltacommits + 100)
-            .withMaxNumDeltacommitsWhenPending(maxNumDeltacommits)
+            .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommits + 100)
+            .withMaxNumDeltacommitsWhenPending(maxNumDeltaCommits)
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
     testTable.addRequestedCommit(String.format("%016d", 0));
-    for (int i = 1; i <= maxNumDeltacommits; i++) {
+    for (int i = 1; i <= maxNumDeltaCommits; i++) {
       doWriteOperation(testTable, String.format("%016d", i));
     }
-    int instant = maxNumDeltacommits + 1;
-    Throwable t = assertThrows(HoodieMetadataException.class, () -> doWriteOperation(testTable, String.format("%016d", instant)));
-    assertTrue(t.getMessage().startsWith(String.format("Metadata table's deltacommits exceeded %d: ", maxNumDeltacommits)));
+    int instant = maxNumDeltaCommits + 1;
+    assertDoesNotThrow(() -> doWriteOperation(testTable, String.format("%016d", instant)));
+  }
+
+  @Test
+  public void testMORCheckNumDeltaCommits() throws Exception {
+    init(MERGE_ON_READ, true);
+    final int maxNumDeltaCommits = 3;
+    writeConfig = getWriteConfigBuilder(true, true, false)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                    .enable(true)
+                    .enableMetrics(false)
+                    .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommits - 1)
+                    .withMaxNumDeltacommitsWhenPending(maxNumDeltaCommits)
+                    .build())
+            .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    // write deltacommits to data-table and do compaction in metadata-table (with commit-instant)
+    doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1));
+    doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1));
+    // ensure the compaction is triggered and executed
+    try (HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true)) {
+      HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
+      final HoodieActiveTimeline activeTimeline = metadataMetaClient.reloadActiveTimeline();
+      Option<HoodieInstant> lastCompaction = activeTimeline.filterCompletedInstants()
+              .filter(s -> s.getAction().equals(COMMIT_ACTION)).lastInstant();
+      assertTrue(lastCompaction.isPresent());
+      // create pending instant in data table
+      testTable.addRequestedCommit(InProcessTimeGenerator.createNewInstantTime(1));
+      // continue writing
+      for (int i = 0; i <= maxNumDeltaCommits; i++) {
+        doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1));
+      }
+      assertDoesNotThrow(() -> doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1)));
+    }
   }
 
   @Test

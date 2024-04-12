@@ -101,11 +101,11 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     // Write date files and log file
     String testWriteToken = "2-0-2";
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
-        .makeBaseFileName(commitTime1, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime1, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
-        .makeBaseFileName(commitTime2, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime2, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
@@ -144,11 +144,11 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     // Write date files and log file
     String testWriteToken = "1-0-1";
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
-        .makeBaseFileName(commitTime1, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime1, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
-        .makeBaseFileName(commitTime2, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime2, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
@@ -323,7 +323,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELTA_FILES_UNSCHEDULED);
 
     // Test show with partition path '2016/03/15'
-    new TableCommand().connect(partitionedTablePath, null, false, 0, 0, 0);
+    new TableCommand().connect(partitionedTablePath, null, false, 0, 0, 0,
+        "WAIT_TO_ADJUST_SKEW", 200L, false);
     Object partitionedTable = shell.evaluate(() -> "show fsview latest --partitionPath " + partitionPath);
     assertTrue(ShellEvaluationResultUtil.isSuccess(partitionedTable));
 
@@ -336,7 +337,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     assertEquals(partitionedExpected, partitionedResults);
 
     // Test show for non-partitioned table
-    new TableCommand().connect(nonpartitionedTablePath, null, false, 0, 0, 0);
+    new TableCommand().connect(nonpartitionedTablePath, null, false, 0, 0, 0,
+        "WAIT_TO_ADJUST_SKEW", 200L, false);
     Object nonpartitionedTable = shell.evaluate(() -> "show fsview latest");
     assertTrue(ShellEvaluationResultUtil.isSuccess(nonpartitionedTable));
 

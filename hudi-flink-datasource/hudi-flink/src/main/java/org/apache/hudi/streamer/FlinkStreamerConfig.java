@@ -455,7 +455,7 @@ public class FlinkStreamerConfig extends Configuration {
       conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH, config.sourceAvroSchemaPath);
     }
     conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, config.sourceAvroSchema);
-    conf.setBoolean(FlinkOptions.UTC_TIMEZONE, config.utcTimezone);
+    conf.setBoolean(FlinkOptions.READ_UTC_TIMEZONE, config.utcTimezone);
     conf.setBoolean(FlinkOptions.URL_ENCODE_PARTITIONING, config.writePartitionUrlEncode);
     conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, config.hiveStylePartitioning);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, config.writeTaskMaxSize);

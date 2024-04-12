@@ -37,6 +37,10 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_DRIVER;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_PASS;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_URL;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_USER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
@@ -47,13 +51,13 @@ public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarnes
 
   @BeforeAll
   public static void init() {
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url", "jdbc:h2:mem:test_mem");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.driver.type", "org.h2.Driver");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.username", "sa");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.password", "");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.dbtable", "triprec");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.timeout", "0");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.nullable", "false");
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.connection.url", JDBC_URL);
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.driver.type", JDBC_DRIVER);
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.username", JDBC_USER);
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.password", JDBC_PASS);
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.dbtable", "triprec");
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.timeout", "0");
+    PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.jdbc.nullable", "false");
   }
 
   @Test
@@ -73,7 +77,7 @@ public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarnes
    * @throws SQLException
    */
   private void initH2Database() throws SQLException {
-    try (Connection conn = DriverManager.getConnection("jdbc:h2:mem:test_mem", "sa", "")) {
+    try (Connection conn = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASS)) {
       PreparedStatement ps = conn.prepareStatement(UtilitiesTestBase.Helpers.readFile("streamer-config/triprec.sql"));
       ps.executeUpdate();
     }
