@@ -25,8 +25,7 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-trait SparkHoodieParquetReader extends Serializable {
-
+trait SparkParquetReader extends Serializable {
   /**
    * Read an individual parquet file
    *
@@ -42,5 +41,4 @@ trait SparkHoodieParquetReader extends Serializable {
            partitionSchema: StructType,
            filters: Seq[Filter],
            sharedConf: Configuration): Iterator[InternalRow]
-
 }
