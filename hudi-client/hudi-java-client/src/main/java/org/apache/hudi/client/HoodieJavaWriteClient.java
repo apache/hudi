@@ -209,28 +209,6 @@ public class HoodieJavaWriteClient<T> extends
   }
 
   @Override
-  public List<WriteStatus> postWrite(HoodieWriteMetadata<List<WriteStatus>> result,
-                                     String instantTime,
-                                     HoodieTable hoodieTable) {
-    if (result.getIndexLookupDuration().isPresent()) {
-      metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
-    }
-    if (result.isCommitted()) {
-      // Perform post commit operations.
-      if (result.getFinalizeDuration().isPresent()) {
-        metrics.updateFinalizeWriteMetrics(result.getFinalizeDuration().get().toMillis(),
-            result.getWriteStats().get().size());
-      }
-
-      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
-      mayBeCleanAndArchive(hoodieTable);
-
-      emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
-    }
-    return result.getWriteStatuses();
-  }
-
-  @Override
   protected void initMetadataTable(Option<String> instantTime) {
     // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
     // if it didn't exist before

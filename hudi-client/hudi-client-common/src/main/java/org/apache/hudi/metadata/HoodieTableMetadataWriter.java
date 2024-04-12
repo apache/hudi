@@ -43,8 +43,9 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    *
    * @param engineContext
    * @param indexPartitionInfos - information about partitions to build such as partition type and base instant time
+   * @param instantTime The async index instant time from data table
    */
-  void buildMetadataPartitions(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos) throws IOException;
+  void buildMetadataPartitions(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos, String instantTime) throws IOException;
 
   /**
    * Drop the given metadata partitions.

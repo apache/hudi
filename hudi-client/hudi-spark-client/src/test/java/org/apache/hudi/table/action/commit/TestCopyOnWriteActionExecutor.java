@@ -130,7 +130,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     }).collect().get(0);
 
     assertEquals(newPathWithWriteToken.getKey().toString(), Paths.get(this.basePath, partitionPath,
-        FSUtils.makeBaseFileName(instantTime, newPathWithWriteToken.getRight(), fileName)).toString());
+        FSUtils.makeBaseFileName(instantTime, newPathWithWriteToken.getRight(), fileName, BASE_FILE_EXTENSION)).toString());
   }
 
   private HoodieWriteConfig makeHoodieClientConfig() {

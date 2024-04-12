@@ -348,30 +348,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Write the HoodieCommitMetadata to metadata table if available.
-   *
-   * @param table         {@link HoodieTable} of interest.
-   * @param instantTime   instant time of the commit.
-   * @param metadata      instance of {@link HoodieCommitMetadata}.
-   * @param writeStatuses WriteStatuses for the completed action.
-   */
-  protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
-    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
-    if (metadataWriterOpt.isPresent()) {
-      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-        metadataWriter.updateFromWriteStatuses(metadata, writeStatuses, instantTime);
-      } catch (Exception e) {
-        if (e instanceof HoodieException) {
-          throw (HoodieException) e;
-        } else {
-          throw new HoodieException("Failed to update metadata", e);
-        }
-      }
-    }
-  }
-
-  /**
    * Filter out HoodieRecords that already exists in the output folder. This is useful in deduplication.
    *
    * @param hoodieRecords Input Hoodie records.

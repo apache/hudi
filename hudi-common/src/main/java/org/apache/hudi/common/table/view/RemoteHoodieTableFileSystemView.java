@@ -68,6 +68,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   private static final String BASE_URL = "/v1/hoodie/view";
   public static final String LATEST_PARTITION_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/");
+  public static final String LATEST_PARTITION_SLICES_INFLIGHT_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/inflight/");
   public static final String LATEST_PARTITION_SLICES_STATELESS_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/stateless/");
   public static final String LATEST_PARTITION_SLICE_URL = String.format("%s/%s", BASE_URL, "slices/file/latest/");
   public static final String LATEST_PARTITION_UNCOMPACTED_SLICES_URL =
@@ -331,6 +332,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
     try {
       List<FileSliceDTO> dataFiles = executeRequest(LATEST_PARTITION_SLICES_URL, paramsMap,
+          FILE_SLICE_DTOS_REFERENCE, RequestMethod.GET);
+      return dataFiles.stream().map(FileSliceDTO::toFileSlice);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<FileSlice> getLatestFileSlicesIncludingInflight(String partitionPath) {
+    Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
+    try {
+      List<FileSliceDTO> dataFiles = executeRequest(LATEST_PARTITION_SLICES_INFLIGHT_URL, paramsMap,
           FILE_SLICE_DTOS_REFERENCE, RequestMethod.GET);
       return dataFiles.stream().map(FileSliceDTO::toFileSlice);
     } catch (IOException e) {

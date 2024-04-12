@@ -39,8 +39,7 @@ public class TestAvroDFSSource extends AbstractDFSSourceTestBase {
   }
 
   @Override
-  protected Source prepareDFSSource() {
-    TypedProperties props = new TypedProperties();
+  protected Source prepareDFSSource(TypedProperties props) {
     props.setProperty("hoodie.streamer.source.dfs.root", dfsRoot);
     try {
       return new AvroDFSSource(props, jsc, sparkSession, schemaProvider);
