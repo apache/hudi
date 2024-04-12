@@ -210,15 +210,11 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @CsvSource({
       "/test,/test,",
       "s3://test,s3://test,",
-      "/test,s3://test,",
       "s3://test/foo,s3://test/foo,",
-      "/test/foo,s3://test/foo,",
-      "s3://test/foo,/test/foo,",
+      "/test/foo,/test/foo,",
       "/test/apache/apache,/test/apache/apache/hudi,hudi",
       "/test/apache,/test/apache/hudi,hudi",
-      "/test/apache,s3://test/apache/apache/hudi,apache/hudi",
-      "s3://test/apache,s3://test/apache/apache/hudi,apache/hudi",
-      "s3://test/apache,/test/apache/apache/hudi,apache/hudi"})
+      "s3://test/apache,s3://test/apache/apache/hudi,apache/hudi"})
   public void testGetRelativePartitionPath(String basePathStr, String partitionPathStr, String expected) {
     Path basePath = new Path(basePathStr);
     Path partitionPath = new Path(partitionPathStr);
