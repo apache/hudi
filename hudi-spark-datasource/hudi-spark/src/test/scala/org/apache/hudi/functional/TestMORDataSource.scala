@@ -1405,4 +1405,24 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       basePath
     }
   }
+
+  @Test
+  def testMergerStrategySet(): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts()
+    val input = recordsToStrings(dataGen.generateInserts("000", 1)).asScala
+    val inputDf= spark.read.json(spark.sparkContext.parallelize(input, 1))
+    val mergerStrategyName = "example_merger_strategy"
+    inputDf.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), mergerStrategyName)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+    assertEquals(metaClient.getTableConfig.getRecordMergerStrategy, mergerStrategyName)
+  }
 }
