@@ -210,6 +210,7 @@ public class FSUtils {
           + "\" does not belong to base-path \"" + basePath + "\"");
     }
 
+    // Partition-Path could be empty for non-partitioned tables
     return fullPartitionPathStr.length() == basePathString.length() ? ""
         : fullPartitionPathStr.substring(basePathString.length() + 1);
   }
