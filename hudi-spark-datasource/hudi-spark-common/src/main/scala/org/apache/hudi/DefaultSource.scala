@@ -299,12 +299,20 @@ object DefaultSource {
               new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
             }
 
-          case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, _) =>
+          case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
             if (useNewParquetFileFormat) {
               new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
             } else {
               new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+            }
+
+          case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
+            if (useNewParquetFileFormat) {
+              new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
+                sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+            } else {
+              HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
             }
 
           case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
