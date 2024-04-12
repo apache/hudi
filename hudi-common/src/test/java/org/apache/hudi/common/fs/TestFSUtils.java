@@ -46,6 +46,8 @@ import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -204,25 +206,24 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertThrows(IllegalArgumentException.class, () -> FSUtils.getRelativePartitionPath(basePath, nonPartitionPath));
   }
 
-  @Test
-  public void testGetRelativePartitionPathSameFolder() {
-    Path basePath = new Path("/test");
-    Path partitionPath = new Path("/test");
-    assertEquals("", FSUtils.getRelativePartitionPath(basePath, partitionPath));
-  }
-
-  @Test
-  public void testGetRelativePartitionPathRepeatedFolderNameBasePath() {
-    Path basePath = new Path("/test/apache/apache");
-    Path partitionPath = new Path("/test/apache/apache/hudi");
-    assertEquals("hudi", FSUtils.getRelativePartitionPath(basePath, partitionPath));
-  }
-
-  @Test
-  public void testGetRelativePartitionPathRepeatedFolderNamePartitionPath() {
-    Path basePath = new Path("/test/apache");
-    Path partitionPath = new Path("/test/apache/apache/hudi");
-    assertEquals("apache/hudi", FSUtils.getRelativePartitionPath(basePath, partitionPath));
+  @ParameterizedTest
+  @CsvSource({
+      "/test,/test,",
+      "s3://test,s3://test,",
+      "/test,s3://test,",
+      "s3://test/foo,s3://test/foo,",
+      "/test/foo,s3://test/foo,",
+      "s3://test/foo,/test/foo,",
+      "/test/apache/apache,/test/apache/apache/hudi,hudi",
+      "/test/apache,/test/apache/hudi,hudi",
+      "/test/apache,s3://test/apache/apache/hudi,apache/hudi",
+      "s3://test/apache,s3://test/apache/apache/hudi,apache/hudi",
+      "s3://test/apache,/test/apache/apache/hudi,apache/hudi"})
+  public void testGetRelativePartitionPath(String basePathStr, String partitionPathStr, String expected) {
+    Path basePath = new Path(basePathStr);
+    Path partitionPath = new Path(partitionPathStr);
+    String result = FSUtils.getRelativePartitionPath(basePath, partitionPath);
+    assertEquals(expected == null ? "" : expected, result);
   }
 
   @Test

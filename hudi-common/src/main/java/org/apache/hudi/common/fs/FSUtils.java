@@ -203,17 +203,15 @@ public class FSUtils {
     fullPartitionPath = getPathWithoutSchemeAndAuthority(fullPartitionPath);
 
     String fullPartitionPathStr = fullPartitionPath.toString();
+    String basePathString = basePath.toString();
 
-    if (!fullPartitionPathStr.startsWith(basePath.toString())) {
+    if (!fullPartitionPathStr.startsWith(basePathString)) {
       throw new IllegalArgumentException("Partition path \"" + fullPartitionPathStr
           + "\" does not belong to base-path \"" + basePath + "\"");
     }
 
-    int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
-        basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
-    // Partition-Path could be empty for non-partitioned tables
-    return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
-        : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
+    return fullPartitionPathStr.length() == basePathString.length() ? ""
+        : fullPartitionPathStr.substring(basePathString.length() + 1);
   }
 
   /**
