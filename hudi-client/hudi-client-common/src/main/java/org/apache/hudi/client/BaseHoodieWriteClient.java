@@ -252,12 +252,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       runTableServicesInline(table, metadata, extraMetadata);
     } catch (Exception e) {
       if (config.isFailOnInlineTableServiceExceptionEnabled()) {
+        releaseResources(instantTime);
         throw e;
       }
       LOG.warn("Inline compaction or clustering failed with exception: " + e.getMessage()
           + ". Moving further since \"hoodie.fail.writes.on.inline.table.service.exception\" is set to false.");
     }
-    releaseResources(instantTime);
     emitCommitMetrics(instantTime, metadata, commitActionType);
 
     // callback if needed.
@@ -268,6 +268,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       commitCallback.call(new HoodieWriteCommitCallbackMessage(
           instantTime, config.getTableName(), config.getBasePath(), stats, Option.of(commitActionType), extraMetadata));
     }
+    releaseResources(instantTime);
     return true;
   }
 
