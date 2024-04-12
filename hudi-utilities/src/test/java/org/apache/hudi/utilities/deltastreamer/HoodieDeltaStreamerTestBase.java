@@ -168,11 +168,6 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
-  public void setupTest() {
-    TestDataSource.returnEmptyBatch = false;
-    hudiOpts = new HashMap<>();
-  }
-
   protected static void prepareInitialConfigs(FileSystem dfs, String dfsBasePath) throws IOException {
     // prepare the configs.
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/base.properties", dfs, dfsBasePath + "/base.properties");
