@@ -302,6 +302,7 @@ class HoodieSparkSqlWriterInternal {
           .setPartitionMetafileUseBaseFormat(useBaseFormatMetaFile)
           .setShouldDropPartitionColumns(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.DROP_PARTITION_COLUMNS))
           .setCommitTimezone(timelineTimeZone)
+          .setRecordMergerStrategy(hoodieConfig.getStringOrDefault(DataSourceWriteOptions.RECORD_MERGER_STRATEGY))
           .initTable(sparkContext.hadoopConfiguration, path)
       }
       val instantTime = HoodieActiveTimeline.createNewInstantTime()
