@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
@@ -57,6 +58,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -1442,6 +1444,30 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     }
   }
 
+  private void saveAsCompleteCluster(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, inflight.getAction());
+    HoodieInstant clusteringInstant = new HoodieInstant(State.REQUESTED, inflight.getAction(), inflight.getTimestamp());
+    HoodieClusteringPlan plan = new HoodieClusteringPlan();
+    plan.setExtraMetadata(new HashMap<>());
+    plan.setInputGroups(Collections.emptyList());
+    plan.setStrategy(HoodieClusteringStrategy.newBuilder().build());
+    plan.setVersion(1);
+    plan.setPreserveHoodieMetadata(false);
+    try {
+      HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+          .setOperationType(WriteOperationType.CLUSTER.name())
+          .setExtraMetadata(Collections.emptyMap())
+          .setClusteringPlan(plan)
+          .build();
+      timeline.saveToPendingReplaceCommit(clusteringInstant,
+          TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Exception scheduling clustering", ioe);
+    }
+    timeline.transitionRequestedToInflight(clusteringInstant, Option.empty());
+    timeline.saveAsComplete(inflight, data);
+  }
+
   @Test
   public void testReplaceWithTimeTravel() throws IOException {
     String partitionPath1 = "2020/06/27";
@@ -1765,8 +1791,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<HoodieWriteStat> writeStats2 = buildWriteStats(partitionToFile2, commitTime2);
 
     HoodieCommitMetadata commitMetadata2 =
-        CommitUtils.buildMetadata(writeStats2, partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
-    saveAsComplete(commitTimeline, instant2, Option.of(getUTF8Bytes(commitMetadata2.toJsonString())));
+        CommitUtils.buildMetadata(writeStats2, partitionToReplaceFileIds, Option.empty(), WriteOperationType.CLUSTER, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+    saveAsCompleteCluster(commitTimeline, instant2, Option.of(getUTF8Bytes(commitMetadata2.toJsonString())));
 
     // another insert commit
     String commitTime3 = "3";
