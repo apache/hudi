@@ -21,8 +21,8 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
-import org.apache.hudi.keygen.{AutoRecordKeyGeneratorWrapper, AutoRecordGenWrapperKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, GlobalAvroDeleteKeyGenerator, GlobalDeleteKeyGenerator, KeyGenerator, NonpartitionedAvroKeyGenerator, NonpartitionedKeyGenerator}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.keygen.{AutoRecordKeyGeneratorWrapper, CustomAvroKeyGenerator, CustomKeyGenerator, GlobalAvroDeleteKeyGenerator, GlobalDeleteKeyGenerator, KeyGenerator, NonpartitionedAvroKeyGenerator, NonpartitionedKeyGenerator}
 
 object SparkKeyGenUtils {
 
@@ -32,6 +32,20 @@ object SparkKeyGenUtils {
    */
   def getPartitionColumns(props: TypedProperties): String = {
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
+    getPartitionColumns(keyGenerator, props)
+  }
+
+  /**
+   * @param KeyGenClassNameOption key generator class name if present.
+   * @param props                 config properties.
+   * @return partition column names only, concatenated by ","
+   */
+  def getPartitionColumns(KeyGenClassNameOption: Option[String], props: TypedProperties): String = {
+    val keyGenerator = if (KeyGenClassNameOption.isEmpty) {
+      HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
+    } else {
+      HoodieSparkKeyGeneratorFactory.createKeyGenerator(KeyGenClassNameOption.get, props)
+    }
     getPartitionColumns(keyGenerator, props)
   }
 
