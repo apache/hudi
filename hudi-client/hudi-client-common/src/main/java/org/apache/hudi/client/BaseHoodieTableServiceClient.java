@@ -394,6 +394,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(logCompactionInstant));
+      releaseResources(logCompactionCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
@@ -781,6 +782,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           + " Earliest Retained Instant :" + metadata.getEarliestCommitToRetain()
           + " cleanerElapsedMs" + durationMs);
     }
+    releaseResources(cleanInstantTime);
     return metadata;
   }
 
