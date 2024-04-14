@@ -593,13 +593,13 @@ public class TestCleaner extends HoodieCleanerTestBase {
       timeline = metaClient.reloadActiveTimeline();
 
       assertEquals(0, cleanStats.size(), "Must not clean any files");
-      assertEquals(1, timeline.getTimelineOfActions(
+      assertEquals(0, timeline.getTimelineOfActions(
           CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().countInstants());
       assertEquals(0, timeline.getTimelineOfActions(
           CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflights().countInstants());
-      assertEquals(--cleanCount, timeline.getTimelineOfActions(
+      assertEquals(cleanCount, timeline.getTimelineOfActions(
           CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
-      assertTrue(timeline.getTimelineOfActions(
+      assertFalse(timeline.getTimelineOfActions(
           CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--instantClean, "%09d")));
     }
   }
