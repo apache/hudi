@@ -237,10 +237,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
-      releaseResources(instantTime);
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
       this.txnManager.endTransaction(Option.of(inflightInstant));
+      releaseResources(instantTime);
     }
 
     // trigger clean and archival.
@@ -252,7 +252,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       runTableServicesInline(table, metadata, extraMetadata);
     } catch (Exception e) {
       if (config.isFailOnInlineTableServiceExceptionEnabled()) {
-        releaseResources(instantTime);
         throw e;
       }
       LOG.warn("Inline compaction or clustering failed with exception: " + e.getMessage()
@@ -268,7 +267,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       commitCallback.call(new HoodieWriteCommitCallbackMessage(
           instantTime, config.getTableName(), config.getBasePath(), stats, Option.of(commitActionType), extraMetadata));
     }
-    releaseResources(instantTime);
     return true;
   }
 
@@ -1020,7 +1018,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (shouldDelegateToTableServiceManager(config, ActionType.replacecommit)) {
       throw new UnsupportedOperationException("Clustering should be delegated to table service manager instead of direct run.");
     }
-    return cluster(clusteringInstantTime, true);
+    HoodieWriteMetadata<O> returnVal = cluster(clusteringInstantTime, true);
+    return returnVal;
   }
 
   /**

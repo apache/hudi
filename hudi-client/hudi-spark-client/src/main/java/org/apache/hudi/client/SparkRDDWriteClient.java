@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.utils.SparkReleaseResources;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -328,21 +329,6 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   protected void releaseResources(String instantTime) {
-    // If we do not explicitly release the resource, spark will automatically manage the resource and clean it up automatically
-    // see: https://spark.apache.org/docs/latest/rdd-programming-guide.html#removing-data
-    if (config.areReleaseResourceEnabled()) {
-      HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) context;
-      Map<Integer, JavaRDD<?>> allCachedRdds = sparkEngineContext.getJavaSparkContext().getPersistentRDDs();
-      List<Integer> allDataIds = new ArrayList<>(sparkEngineContext.removeCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime)));
-      if (config.isMetadataTableEnabled()) {
-        String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-        allDataIds.addAll(sparkEngineContext.removeCachedDataIds(HoodieDataCacheKey.of(metadataTableBasePath, instantTime)));
-      }
-      for (int id : allDataIds) {
-        if (allCachedRdds.containsKey(id)) {
-          allCachedRdds.get(id).unpersist();
-        }
-      }
-    }
+    SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
   }
 }
