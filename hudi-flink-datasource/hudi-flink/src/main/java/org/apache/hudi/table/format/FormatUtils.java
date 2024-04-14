@@ -20,7 +20,6 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -161,7 +160,6 @@ public class FormatUtils {
         .withReaderSchema(logSchema)
         .withInternalSchema(internalSchema)
         .withLatestInstantTime(split.getLatestCommit())
-        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
         .withMaxMemorySizeInBytes(split.getMaxCompactionMemoryInBytes())
@@ -203,9 +201,6 @@ public class FormatUtils {
           .withReaderSchema(logSchema)
           .withInternalSchema(internalSchema)
           .withLatestInstantTime(split.getLatestCommit())
-          .withReadBlocksLazily(
-              getBooleanWithAltKeys(flinkConf,
-                  HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
           .withReverseReader(false)
           .withBufferSize(
               flinkConf.getInteger(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(),
@@ -266,7 +261,6 @@ public class FormatUtils {
         .withLogFilePaths(logPaths)
         .withReaderSchema(logSchema)
         .withLatestInstantTime(latestInstantTime)
-        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
         .withMaxMemorySizeInBytes(writeConfig.getMaxMemoryPerPartitionMerge())
