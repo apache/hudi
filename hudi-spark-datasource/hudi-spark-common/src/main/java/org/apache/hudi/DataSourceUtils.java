@@ -95,7 +95,7 @@ public class DataSourceUtils {
    *
    * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
    */
-  private static Option<BulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
+  public static Option<BulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
       throws HoodieException {
     String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
     try {

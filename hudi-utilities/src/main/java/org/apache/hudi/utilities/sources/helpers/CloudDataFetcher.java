@@ -92,7 +92,7 @@ public class CloudDataFetcher implements Serializable {
       long sourceLimit) {
     boolean isSourceProfileAvailable = sourceProfileOption.isPresent() && sourceProfileOption.get() != null;
     if (isSourceProfileAvailable) {
-      LOG.debug("Using source limit from source profile sourceLimitFromConfig {} sourceLimitFromProfile {}", sourceLimit, sourceProfileOption.get().getMaxSourceBytes());
+      LOG.info("Using source limit from source profile sourceLimitFromConfig {} sourceLimitFromProfile {}", sourceLimit, sourceProfileOption.get().getMaxSourceBytes());
       sourceLimit = sourceProfileOption.get().getMaxSourceBytes();
     }
 
@@ -120,7 +120,7 @@ public class CloudDataFetcher implements Serializable {
     if (isSourceProfileAvailable) {
       long bytesPerPartitionFromProfile = sourceProfileOption.get().getSourceSpecificContext();
       if (bytesPerPartitionFromProfile > 0) {
-        LOG.debug("Using bytesPerPartition from source profile bytesPerPartitionFromConfig {} bytesPerPartitionFromProfile {}", bytesPerPartition, bytesPerPartitionFromProfile);
+        LOG.info("Using bytesPerPartition from source profile bytesPerPartitionFromConfig {} bytesPerPartitionFromProfile {}", bytesPerPartition, bytesPerPartitionFromProfile);
         bytesPerPartition = bytesPerPartitionFromProfile;
       }
     }
