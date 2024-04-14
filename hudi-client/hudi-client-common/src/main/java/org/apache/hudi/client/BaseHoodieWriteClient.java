@@ -257,6 +257,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       LOG.warn("Inline compaction or clustering failed with exception: " + e.getMessage()
           + ". Moving further since \"hoodie.fail.writes.on.inline.table.service.exception\" is set to false.");
     }
+
     emitCommitMetrics(instantTime, metadata, commitActionType);
 
     // callback if needed.
@@ -1018,8 +1019,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (shouldDelegateToTableServiceManager(config, ActionType.replacecommit)) {
       throw new UnsupportedOperationException("Clustering should be delegated to table service manager instead of direct run.");
     }
-    HoodieWriteMetadata<O> returnVal = cluster(clusteringInstantTime, true);
-    return returnVal;
+    return cluster(clusteringInstantTime, true);
   }
 
   /**
