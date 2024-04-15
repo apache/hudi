@@ -20,6 +20,7 @@ package org.apache.spark.sql.execution.datasources
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util
@@ -30,6 +31,7 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.parquet.hadoop.metadata.FileMetaData
+import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Cast, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.Spark3ParquetSchemaEvolutionUtils.pruneInternalSchema
@@ -42,13 +44,15 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                                  filePath: Path,
                                                  requiredSchema: StructType,
-                                                 partitionSchema: StructType) {
+                                                 partitionSchema: StructType) extends SparkAdapterSupport{
   // Fetch internal schema
   private lazy val internalSchemaStr: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
 
   private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaStr, requiredSchema)
 
   var shouldUseInternalSchema: Boolean = !isNullOrEmpty(internalSchemaStr) && querySchemaOption.isPresent
+
+  private lazy val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
 
   private lazy val tablePath: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
   private lazy val fileSchema: InternalSchema = if (shouldUseInternalSchema) {
@@ -162,7 +166,7 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
           StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
         } else f
       })
-      val newFullSchema = toAttributes(newSchema) ++ toAttributes(partitionSchema)
+      val newFullSchema = schemaUtils.toAttributes(newSchema) ++ schemaUtils.toAttributes(partitionSchema)
       val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
         if (typeChangeInfos.containsKey(i)) {
           val srcType = typeChangeInfos.get(i).getRight
@@ -174,8 +178,6 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
       GenerateUnsafeProjection.generate(castSchema, newFullSchema)
     }
   }
-
-  protected def toAttributes(schema: StructType): Seq[AttributeReference]
 }
 
 object Spark3ParquetSchemaEvolutionUtils {
