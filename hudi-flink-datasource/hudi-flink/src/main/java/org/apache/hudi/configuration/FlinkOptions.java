@@ -736,6 +736,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("clean.async.enabled")
       .booleanType()
       .defaultValue(true)
+      .withFallbackKeys("hoodie.clean.async.enabled")
       .withDescription("Whether to cleanup the old commits immediately on new commits, enabled by default");
 
   @AdvancedConfig
@@ -743,6 +744,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("clean.policy")
       .stringType()
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+      .withFallbackKeys("hoodie.clean.policy")
       .withDescription("Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
           + "Default is KEEP_LATEST_COMMITS.");
 
@@ -750,6 +752,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("clean.retain_commits")
       .intType()
       .defaultValue(30)// default 30 commits
+      .withFallbackKeys("hoodie.clean.commits.retained")
       .withDescription("Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 30");
 
@@ -758,6 +761,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("clean.retain_hours")
       .intType()
       .defaultValue(24)// default 24 hours
+      .withFallbackKeys("hoodie.clean.hours.retained")
       .withDescription("Number of hours for which commits need to be retained. This config provides a more flexible option as"
           + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
           + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
@@ -767,6 +771,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("clean.retain_file_versions")
       .intType()
       .defaultValue(5)// default 5 version
+      .withFallbackKeys("hoodie.clean.fileversions.retained")
       .withDescription("Number of file versions to retain. default 5");
 
   public static final ConfigOption<Integer> ARCHIVE_MAX_COMMITS = ConfigOptions

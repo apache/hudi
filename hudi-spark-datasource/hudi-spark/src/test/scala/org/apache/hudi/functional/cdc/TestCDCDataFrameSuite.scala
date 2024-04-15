@@ -29,8 +29,8 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.{Row, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
@@ -190,7 +190,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .option("hoodie.clean.automatic", "true")
       .option("hoodie.keep.min.commits", "4")
       .option("hoodie.keep.max.commits", "5")
-      .option("hoodie.cleaner.commits.retained", "3")
+      .option("hoodie.clean.commits.retained", "3")
       .mode(SaveMode.Append)
       .save(basePath)
     val instant7 = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant().get()
@@ -432,7 +432,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .option("hoodie.clean.automatic", "true")
       .option("hoodie.keep.min.commits", "4")
       .option("hoodie.keep.max.commits", "5")
-      .option("hoodie.cleaner.commits.retained", "3")
+      .option("hoodie.clean.commits.retained", "3")
       .mode(SaveMode.Append)
       .save(basePath)
     val instant9 = metaClient.reloadActiveTimeline.lastInstant().get()
@@ -706,7 +706,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       "hoodie.datasource.write.precombine.field" -> "timestamp",
       "hoodie.table.name" -> ("hoodie_test" + loggingMode.name()),
       "hoodie.clean.automatic" -> "true",
-      "hoodie.cleaner.commits.retained" -> "1"
+      "hoodie.clean.commits.retained" -> "1"
     )
 
     // Insert Operation
