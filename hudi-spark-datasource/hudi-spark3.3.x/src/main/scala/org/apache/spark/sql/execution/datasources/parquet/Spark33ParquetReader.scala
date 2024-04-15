@@ -82,16 +82,16 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   protected def doRead(file: PartitionedFile,
-                      requiredSchema: StructType,
-                      partitionSchema: StructType,
-                      filters: Seq[Filter],
-                      sharedConf: Configuration): Iterator[InternalRow] = {
+                       requiredSchema: StructType,
+                       partitionSchema: StructType,
+                       filters: Seq[Filter],
+                       sharedConf: Configuration): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)
 
     val filePath = new Path(new URI(file.filePath))
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new Spark33ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
+    val schemaEvolutionUtils = new Spark32PlusParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
 
     lazy val footerFileMetaData =
       ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
@@ -150,24 +150,14 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
     }
     val taskContext = Option(TaskContext.get())
     if (enableVectorizedReader) {
-      val vectorizedReader = if (schemaEvolutionUtils.shouldUseInternalSchema) {
-        schemaEvolutionUtils.buildVectorizedReader(
-          convertTz,
-          datetimeRebaseSpec,
-          int96RebaseSpec,
-          enableOffHeapColumnVector,
-          taskContext,
-          capacity)
-      } else {
-        new VectorizedParquetRecordReader(
-          convertTz.orNull,
-          datetimeRebaseSpec.mode.toString,
-          datetimeRebaseSpec.timeZone,
-          int96RebaseSpec.mode.toString,
-          int96RebaseSpec.timeZone,
-          enableOffHeapColumnVector && taskContext.isDefined,
-          capacity)
-      }
+      val vectorizedReader = schemaEvolutionUtils.buildVectorizedReader(
+        convertTz.orNull,
+        datetimeRebaseSpec.mode.toString,
+        datetimeRebaseSpec.timeZone,
+        int96RebaseSpec.mode.toString,
+        int96RebaseSpec.timeZone,
+        enableOffHeapColumnVector && taskContext.isDefined,
+        capacity)
       // SPARK-37089: We cannot register a task completion listener to close this iterator here
       // because downstream exec nodes have already registered their listeners. Since listeners
       // are executed in reverse order of registration, a listener registered here would close the

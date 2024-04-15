@@ -27,27 +27,38 @@ import org.apache.spark.sql.types.StructType
 
 import java.time.ZoneId
 
-abstract class Spark32PlusParquetSchemaEvolutionUtils(sharedConf: Configuration,
-                                                      filePath: Path,
-                                                      requiredSchema: StructType,
-                                                      partitionSchema: StructType) extends
+class Spark32PlusParquetSchemaEvolutionUtils(sharedConf: Configuration,
+                                             filePath: Path,
+                                             requiredSchema: StructType,
+                                             partitionSchema: StructType) extends
   Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema) {
 
-  def buildVectorizedReader(convertTz: Option[ZoneId],
-                            datetimeRebaseSpec: RebaseDateTime.RebaseSpec,
-                            int96RebaseSpec: RebaseDateTime.RebaseSpec,
-                            enableOffHeapColumnVector: Boolean,
-                            taskContext: Option[TaskContext],
+  def buildVectorizedReader(convertTz: ZoneId,
+                            datetimeRebaseMode: String,
+                            datetimeRebaseTz: String,
+                            int96RebaseMode: String,
+                            int96RebaseTz: String,
+                            useOffHeap: Boolean,
                             capacity: Int): VectorizedParquetRecordReader = {
-    new Spark32PlusHoodieVectorizedParquetRecordReader(
-      convertTz.orNull,
-      datetimeRebaseSpec.mode.toString,
-      datetimeRebaseSpec.timeZone,
-      int96RebaseSpec.mode.toString,
-      int96RebaseSpec.timeZone,
-      enableOffHeapColumnVector && taskContext.isDefined,
-      capacity,
-      typeChangeInfos
-    )
+    if (shouldUseInternalSchema) {
+      new Spark32PlusHoodieVectorizedParquetRecordReader(
+        convertTz,
+        datetimeRebaseMode,
+        datetimeRebaseTz,
+        int96RebaseMode,
+        int96RebaseTz,
+        useOffHeap,
+        capacity,
+        typeChangeInfos)
+    } else {
+      new VectorizedParquetRecordReader(
+        convertTz,
+        datetimeRebaseMode,
+        datetimeRebaseTz,
+        int96RebaseMode,
+        int96RebaseTz,
+        useOffHeap,
+        capacity)
+    }
   }
 }

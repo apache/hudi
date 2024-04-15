@@ -149,20 +149,11 @@ class Spark30ParquetReader(enableVectorizedReader: Boolean,
     }
     val taskContext = Option(TaskContext.get())
     if (enableVectorizedReader) {
-      val vectorizedReader = if (schemaEvolutionUtils.shouldUseInternalSchema) {
-        schemaEvolutionUtils.buildVectorizedReader(
-          convertTz,
-          datetimeRebaseMode,
-          enableOffHeapColumnVector,
-          taskContext,
-          capacity)
-      } else {
-        new VectorizedParquetRecordReader(
-          convertTz.orNull,
-          datetimeRebaseMode.toString,
-          enableOffHeapColumnVector && taskContext.isDefined,
-          capacity)
-      }
+      val vectorizedReader = schemaEvolutionUtils.buildVectorizedReader(
+        convertTz.orNull,
+        datetimeRebaseMode.toString,
+        enableOffHeapColumnVector && taskContext.isDefined,
+        capacity)
       val iter = new RecordReaderIterator(vectorizedReader)
       // SPARK-23457 Register a task completion listener before `initialization`.
       taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))

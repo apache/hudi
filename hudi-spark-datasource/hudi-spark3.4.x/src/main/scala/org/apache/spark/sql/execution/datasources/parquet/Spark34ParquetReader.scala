@@ -87,7 +87,7 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new Spark34ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
+    val schemaEvolutionUtils = new Spark32PlusParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
 
     lazy val footerFileMetaData =
       ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
@@ -146,24 +146,14 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
     }
     val taskContext = Option(TaskContext.get())
     if (enableVectorizedReader) {
-      val vectorizedReader = if (schemaEvolutionUtils.shouldUseInternalSchema) {
-        schemaEvolutionUtils.buildVectorizedReader(
-          convertTz,
-          datetimeRebaseSpec,
-          int96RebaseSpec,
-          enableOffHeapColumnVector,
-          taskContext,
-          capacity)
-      } else {
-        new VectorizedParquetRecordReader(
-          convertTz.orNull,
-          datetimeRebaseSpec.mode.toString,
-          datetimeRebaseSpec.timeZone,
-          int96RebaseSpec.mode.toString,
-          int96RebaseSpec.timeZone,
-          enableOffHeapColumnVector && taskContext.isDefined,
-          capacity)
-      }
+      val vectorizedReader = schemaEvolutionUtils.buildVectorizedReader(
+        convertTz.orNull,
+        datetimeRebaseSpec.mode.toString,
+        datetimeRebaseSpec.timeZone,
+        int96RebaseSpec.mode.toString,
+        int96RebaseSpec.timeZone,
+        enableOffHeapColumnVector && taskContext.isDefined,
+        capacity)
       // SPARK-37089: We cannot register a task completion listener to close this iterator here
       // because downstream exec nodes have already registered their listeners. Since listeners
       // are executed in reverse order of registration, a listener registered here would close the
