@@ -162,6 +162,7 @@ public class StreamSync implements Serializable, Closeable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(StreamSync.class);
   private static final String NULL_PLACEHOLDER = "[null]";
+  public static final String CHECKPOINT_IGNORE_KEY = "deltastreamer.checkpoint.ignore_key";
 
   /**
    * Delta Sync Config.
@@ -719,7 +720,8 @@ public class StreamSync implements Serializable, Closeable {
    * @return the checkpoint to resume from if applicable.
    * @throws IOException
    */
-  private Option<String> getCheckpointToResume(Option<HoodieTimeline> commitsTimelineOpt) throws IOException {
+  @VisibleForTesting
+  Option<String> getCheckpointToResume(Option<HoodieTimeline> commitsTimelineOpt) throws IOException {
     Option<String> resumeCheckpointStr = Option.empty();
     // try get checkpoint from commits(including commit and deltacommit)
     // in COW migrating to MOR case, the first batch of the deltastreamer will lost the checkpoint from COW table, cause the dataloss
@@ -736,7 +738,11 @@ public class StreamSync implements Serializable, Closeable {
       if (commitMetadataOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
         LOG.debug("Checkpoint reset from metadata: " + commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
-        if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
+        if (cfg.ignoreCheckpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY))
+            || !cfg.ignoreCheckpoint.equals(commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY)))) {
+          // we ignore any existing checkpoint and start ingesting afresh
+          resumeCheckpointStr = Option.empty();
+        } else if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
             || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
           resumeCheckpointStr = Option.of(cfg.checkpoint);
         } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
@@ -837,6 +843,9 @@ public class StreamSync implements Serializable, Closeable {
         }
         if (cfg.checkpoint != null) {
           checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
+        }
+        if (cfg.ignoreCheckpoint != null) {
+          checkpointCommitMetadata.put(CHECKPOINT_IGNORE_KEY, cfg.ignoreCheckpoint);
         }
       }
 

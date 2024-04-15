@@ -116,7 +116,8 @@ public class HoodieStreamer implements Serializable {
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
-  protected final transient Config cfg;
+  @VisibleForTesting
+  final transient Config cfg;
 
   /**
    * NOTE: These properties are already consolidated w/ CLI provided config-overrides.
@@ -128,6 +129,14 @@ public class HoodieStreamer implements Serializable {
   private final Option<BootstrapExecutor> bootstrapExecutor;
 
   public static final String STREAMSYNC_POOL_NAME = "hoodiedeltasync";
+
+  @VisibleForTesting
+  public HoodieStreamer(Config cfg, TypedProperties properties, Configuration conf) throws IOException {
+    this.cfg = cfg;
+    this.properties = properties;
+    this.bootstrapExecutor = Option.empty();
+    initialiseCheckpoint(cfg, conf, properties);
+  }
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, HadoopFSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
@@ -150,19 +159,25 @@ public class HoodieStreamer implements Serializable {
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
-    if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
-      InitialCheckPointProvider checkPointProvider =
-          UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, this.properties);
-      checkPointProvider.init(conf);
-      cfg.checkpoint = checkPointProvider.getCheckpoint();
-    }
-
     this.cfg = cfg;
+    initialiseCheckpoint(cfg, conf, properties);
     this.bootstrapExecutor = Option.ofNullable(
         cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
     HoodieSparkEngineContext sparkEngineContext = new HoodieSparkEngineContext(jssc);
     this.ingestionService = Option.ofNullable(
         cfg.runBootstrap ? null : new StreamSyncService(cfg, sparkEngineContext, fs, conf, Option.ofNullable(this.properties), sourceProfileSupplier));
+  }
+
+  private void initialiseCheckpoint(Config cfg, Configuration conf, TypedProperties properties) throws IOException {
+    boolean ignoreCheckpoint = StringUtils.nonEmpty(cfg.ignoreCheckpoint);
+    if (ignoreCheckpoint) {
+      cfg.checkpoint = null;
+    } else if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
+      InitialCheckPointProvider checkPointProvider =
+          UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, properties);
+      checkPointProvider.init(conf);
+      cfg.checkpoint = checkPointProvider.getCheckpoint();
+    }
   }
 
   private static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
@@ -423,6 +438,12 @@ public class HoodieStreamer implements Serializable {
 
     @Parameter(names = {"--config-hot-update-strategy-class"}, description = "Configuration hot update in continuous mode")
     public String configHotUpdateStrategyClass = "";
+
+    @Parameter(names = {"--ignore-checkpoint"}, description =
+        "Set this config with a unique value, recommend using a timestamp value or UUID. Setting this config indicates that the subsequent sync should ignore the last committed checkpoint "
+            + "for the source. The config value is stored"
+            + " in the commit history, so setting the config with same values would not have any affect.")
+    public String ignoreCheckpoint = null;
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
