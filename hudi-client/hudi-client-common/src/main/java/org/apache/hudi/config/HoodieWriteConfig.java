@@ -159,6 +159,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.datasource.write.payload.type")
       .defaultValue(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())
       .markAdvanced()
+      .sinceVersion("1.0.0")
       .withDocumentation(RecordPayloadType.class);
 
   public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
