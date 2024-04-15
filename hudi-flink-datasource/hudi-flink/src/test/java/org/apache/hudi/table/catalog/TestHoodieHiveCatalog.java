@@ -35,6 +35,8 @@ import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.calcite.shaded.com.fasterxml.jackson.databind.JsonNode;
+import org.apache.flink.calcite.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
@@ -94,6 +96,7 @@ public class TestHoodieHiveCatalog {
           .field("uuid", DataTypes.INT().notNull())
           .field("name", DataTypes.STRING())
           .field("age", DataTypes.INT())
+          .field("infos", DataTypes.ARRAY(DataTypes.STRING()))
           .field("par1", DataTypes.STRING())
           .field("ts_3", DataTypes.TIMESTAMP(3))
           .field("ts_6", DataTypes.TIMESTAMP(6))
@@ -166,6 +169,7 @@ public class TestHoodieHiveCatalog {
         + "uuid:int,"
         + "name:string,"
         + "age:int,"
+        + "infos:array<string>,"
         + "ts_3:timestamp,"
         + "ts_6:timestamp";
     assertEquals(expectedFieldSchema, fieldSchema);
@@ -185,10 +189,17 @@ public class TestHoodieHiveCatalog {
         + "{\"name\":\"uuid\",\"type\":\"integer\",\"nullable\":false,\"metadata\":{}},"
         + "{\"name\":\"name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"age\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"infos\",\"type\":{\"type\":\"array\", \"elementType\":\"string\",\"containsNull\":true},\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"ts_3\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"ts_6\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"par1\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}";
     assertEquals(expectedAvroSchemaStr, avroSchemaStr);
+
+    // validate array field nullable
+    ObjectMapper mapper = new ObjectMapper();
+    JsonNode arrayFieldTypeNode = mapper.readTree(avroSchemaStr).get("fields").get(8).get("type");
+    assertThat(arrayFieldTypeNode.get("type").asText(), is("array"));
+    assertThat(arrayFieldTypeNode.get("containsNull").asBoolean(), is(true));
 
     // validate catalog table
     CatalogBaseTable table1 = hoodieCatalog.getTable(tablePath);
@@ -199,7 +210,7 @@ public class TestHoodieHiveCatalog {
     String tableSchema = table1.getUnresolvedSchema().getColumns().stream()
         .map(Schema.UnresolvedColumn::toString)
         .collect(Collectors.joining(","));
-    String expectedTableSchema = "`uuid` INT NOT NULL,`name` STRING,`age` INT,`par1` STRING,`ts_3` TIMESTAMP(3),`ts_6` TIMESTAMP(6)";
+    String expectedTableSchema = "`uuid` INT NOT NULL,`name` STRING,`age` INT,`infos` ARRAY<STRING>,`par1` STRING,`ts_3` TIMESTAMP(3),`ts_6` TIMESTAMP(6)";
     assertEquals(expectedTableSchema, tableSchema);
     assertEquals(Collections.singletonList("uuid"), table1.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
     assertEquals(Collections.singletonList("par1"), ((CatalogTable) table1).getPartitionKeys());
