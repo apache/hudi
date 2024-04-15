@@ -309,7 +309,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
               .withReaderSchema(readerSchema)
               .withLatestInstantTime(instantTime)
               .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-              .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
               .withReverseReader(config.getCompactionReverseLogReadEnabled())
               .withBufferSize(config.getMaxDFSStreamBufferSize())
               .withSpillableMapBasePath(config.getSpillableMapBasePath())

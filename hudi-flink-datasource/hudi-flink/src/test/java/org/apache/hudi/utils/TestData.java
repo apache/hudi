@@ -949,7 +949,6 @@ public class TestData {
         .withLogFilePaths(logPaths)
         .withReaderSchema(readSchema)
         .withLatestInstantTime(instant)
-        .withReadBlocksLazily(false)
         .withReverseReader(false)
         .withBufferSize(16 * 1024 * 1024)
         .withMaxMemorySizeInBytes(1024 * 1024L)

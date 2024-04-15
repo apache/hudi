@@ -159,7 +159,6 @@ public class FormatUtils {
         .withReaderSchema(logSchema)
         .withInternalSchema(internalSchema)
         .withLatestInstantTime(split.getLatestCommit())
-        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
         .withMaxMemorySizeInBytes(split.getMaxCompactionMemoryInBytes())
@@ -201,10 +200,6 @@ public class FormatUtils {
           .withReaderSchema(logSchema)
           .withInternalSchema(internalSchema)
           .withLatestInstantTime(split.getLatestCommit())
-          .withReadBlocksLazily(
-              string2Boolean(
-                  flinkConf.getString(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
-                      HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
           .withReverseReader(false)
           .withBufferSize(
               flinkConf.getInteger(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
@@ -265,7 +260,6 @@ public class FormatUtils {
         .withLogFilePaths(logPaths)
         .withReaderSchema(logSchema)
         .withLatestInstantTime(latestInstantTime)
-        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
         .withMaxMemorySizeInBytes(writeConfig.getMaxMemoryPerPartitionMerge())
