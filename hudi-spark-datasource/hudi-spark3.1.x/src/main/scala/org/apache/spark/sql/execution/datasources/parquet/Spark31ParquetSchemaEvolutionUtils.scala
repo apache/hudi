@@ -21,10 +21,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.spark.TaskContext
-import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.execution.datasources.Spark3ParquetSchemaEvolutionUtils
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
 import java.time.ZoneId
@@ -35,23 +32,26 @@ class Spark31ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                          partitionSchema: StructType) extends
   Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema) {
 
-
-  override protected def toAttributes(schema: StructType): Seq[AttributeReference] = {
-    schema.toAttributes
-  }
-
-  def buildVectorizedReader(convertTz: Option[ZoneId],
-                            datetimeRebaseMode: SQLConf.LegacyBehaviorPolicy.Value,
-                            int96RebaseMode: SQLConf.LegacyBehaviorPolicy.Value,
-                            enableOffHeapColumnVector: Boolean,
-                            taskContext: Option[TaskContext],
+  def buildVectorizedReader(convertTz: ZoneId,
+                            datetimeRebaseMode: String,
+                            int96RebaseMode: String,
+                            useOffHeap: Boolean,
                             capacity: Int): VectorizedParquetRecordReader = {
-    new Spark31HoodieVectorizedParquetRecordReader(
-      convertTz.orNull,
-      datetimeRebaseMode.toString,
-      int96RebaseMode.toString,
-      enableOffHeapColumnVector && taskContext.isDefined,
-      capacity,
-      typeChangeInfos)
+    if (shouldUseInternalSchema) {
+      new Spark31HoodieVectorizedParquetRecordReader(
+        convertTz,
+        datetimeRebaseMode,
+        int96RebaseMode,
+        useOffHeap,
+        capacity,
+        typeChangeInfos)
+    } else {
+      new VectorizedParquetRecordReader(
+        convertTz,
+        datetimeRebaseMode,
+        int96RebaseMode,
+        useOffHeap,
+        capacity)
+    }
   }
 }
