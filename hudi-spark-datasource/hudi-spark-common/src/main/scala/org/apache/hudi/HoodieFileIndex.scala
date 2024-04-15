@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.HoodieMetadataPayload
@@ -349,10 +350,15 @@ case class HoodieFileIndex(spark: SparkSession,
       Option.empty
     } else if (recordKeys.nonEmpty) {
       Option.apply(recordLevelIndex.getCandidateFiles(getAllFiles(), recordKeys))
-    } else if (functionalIndex.isIndexAvailable && !queryFilters.isEmpty) {
+    } else if (functionalIndex.isIndexAvailable && queryFilters.nonEmpty && functionalIndex.extractSparkFunctionNames(queryFilters).nonEmpty) {
+      val functionToColumnNames = functionalIndex.extractSparkFunctionNames(queryFilters)
+      // Currently, only one functional index in the query is supported. HUDI-7620 for supporting multiple functions.
+      checkState(functionToColumnNames.size == 1, "Currently, only one function with functional index in the query is supported")
+      val (indexFunction, targetColumnName) = functionToColumnNames.head
+      val partitionOption = functionalIndex.getFunctionalIndexPartition(indexFunction, targetColumnName)
       val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
       val shouldReadInMemory = functionalIndex.shouldReadInMemory(this, queryReferencedColumns)
-      val indexDf = functionalIndex.loadFunctionalIndexDataFrame("func_index_idx_datestr", shouldReadInMemory)
+      val indexDf = functionalIndex.loadFunctionalIndexDataFrame(partitionOption.get, shouldReadInMemory)
       Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
     } else if (!columnStatsIndex.isIndexAvailable || queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       validateConfig()
