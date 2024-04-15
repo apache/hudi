@@ -441,7 +441,9 @@ public class HoodieStreamer implements Serializable {
 
     @Parameter(names = {"--ignore-checkpoint"}, description = "Set this config with a unique value, recommend using a timestamp value or UUID."
         + " Setting this config indicates that the subsequent sync should ignore the last committed checkpoint for the source. The config value is stored"
-        + " in the commit history, so setting the config with same values would not have any affect.")
+        + " in the commit history, so setting the config with same values would not have any affect. This config can be used in scenarios like kafka topic change,"
+        + " where we would want to start ingesting from the latest or earliest offset after switching the topic (in this case we would want to ignore the previously"
+        + " committed checkpoint, and rely on other configs to pick the starting offsets ).")
     public String ignoreCheckpoint = null;
 
     public boolean isAsyncCompactionEnabled() {
