@@ -1734,26 +1734,7 @@ public class HoodieTableMetadataUtil {
       final String instantTime = baseFile.getCommitTime();
       HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
           .getFileReader(config, configuration.get(), dataFilePath);
-      ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
-
-      return new ClosableIterator<HoodieRecord>() {
-        @Override
-        public void close() {
-          recordKeyIterator.close();
-        }
-
-        @Override
-        public boolean hasNext() {
-          return recordKeyIterator.hasNext();
-        }
-
-        @Override
-        public HoodieRecord next() {
-          return forDelete
-              ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
-              : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
-        }
-      };
+      return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime);
     });
   }
 
@@ -1801,24 +1782,7 @@ public class HoodieTableMetadataUtil {
             .withTableMetaClient(metaClient)
             .build();
         ClosableIterator<String> recordKeyIterator = ClosableIterator.wrap(mergedLogRecordScanner.getRecords().keySet().iterator());
-        return new ClosableIterator<HoodieRecord>() {
-          @Override
-          public void close() {
-            recordKeyIterator.close();
-          }
-
-          @Override
-          public boolean hasNext() {
-            return recordKeyIterator.hasNext();
-          }
-
-          @Override
-          public HoodieRecord next() {
-            return forDelete
-                ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
-                : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileSlice.getFileId(), fileSlice.getBaseInstantTime(), 0);
-          }
-        };
+        return getHoodieRecordIterator(recordKeyIterator, forDelete, partition, fileSlice.getFileId(), fileSlice.getBaseInstantTime());
       }
       final HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
       final String filename = baseFile.getFileName();
@@ -1829,26 +1793,7 @@ public class HoodieTableMetadataUtil {
       HoodieConfig hoodieConfig = getReaderConfigs(configuration.get());
       HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
           .getFileReader(hoodieConfig, configuration.get(), dataFilePath);
-      ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
-
-      return new ClosableIterator<HoodieRecord>() {
-        @Override
-        public void close() {
-          recordKeyIterator.close();
-        }
-
-        @Override
-        public boolean hasNext() {
-          return recordKeyIterator.hasNext();
-        }
-
-        @Override
-        public HoodieRecord next() {
-          return forDelete
-              ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
-              : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
-        }
-      };
+      return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime);
     });
   }
 
@@ -1864,5 +1809,31 @@ public class HoodieTableMetadataUtil {
     } else {
       return new Path(basePath, partition + StoragePath.SEPARATOR + filename);
     }
+  }
+
+  private static ClosableIterator<HoodieRecord> getHoodieRecordIterator(ClosableIterator<String> recordKeyIterator,
+                                                                        boolean forDelete,
+                                                                        String partition,
+                                                                        String fileId,
+                                                                        String instantTime
+  ) {
+    return new ClosableIterator<HoodieRecord>() {
+      @Override
+      public void close() {
+        recordKeyIterator.close();
+      }
+
+      @Override
+      public boolean hasNext() {
+        return recordKeyIterator.hasNext();
+      }
+
+      @Override
+      public HoodieRecord next() {
+        return forDelete
+                ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
+                : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
+      }
+    };
   }
 }
