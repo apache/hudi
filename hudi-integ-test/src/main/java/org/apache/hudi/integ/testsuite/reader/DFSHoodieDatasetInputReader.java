@@ -287,7 +287,6 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
               .filterCompletedInstants().lastInstant().get().getTimestamp())
           .withMaxMemorySizeInBytes(
               HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
-          .withReadBlocksLazily(true)
           .withReverseReader(false)
           .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue())
           .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())

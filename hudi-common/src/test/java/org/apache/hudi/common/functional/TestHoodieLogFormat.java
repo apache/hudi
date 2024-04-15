@@ -440,8 +440,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
-        true, true);
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), true);
     assertTrue(reader.hasNext(), "We wrote a block, we should be able to read it");
     HoodieLogBlock nextBlock = reader.next();
     assertEquals(DEFAULT_DATA_BLOCK_TYPE, nextBlock.getBlockType(), "The next block should be a data block");
@@ -635,7 +634,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testBasicAppendAndScanMultipleFiles(ExternalSpillableMap.DiskMapType diskMapType,
                                                   boolean isCompressionEnabled,
-                                                  boolean readBlocksLazily,
                                                   boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
 
@@ -657,7 +655,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -763,7 +760,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(true)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -783,7 +779,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testBasicAppendAndPartialScanning(ExternalSpillableMap.DiskMapType diskMapType,
                                                 boolean isCompressionEnabled,
-                                                boolean readBlocksLazily,
                                                 boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     // Generate 3 delta-log files w/ random records
@@ -805,7 +800,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -873,7 +867,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testBasicAppendAndPartialScanningByKeyPrefixes(ExternalSpillableMap.DiskMapType diskMapType,
                                                              boolean isCompressionEnabled,
-                                                             boolean readBlocksLazily,
                                                              boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     // Generate 3 delta-log files w/ random records
@@ -895,7 +888,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -1158,7 +1150,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderBasic(ExternalSpillableMap.DiskMapType diskMapType,
                                            boolean isCompressionEnabled,
-                                           boolean readBlocksLazily,
                                            boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
@@ -1194,7 +1185,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Set<String> originalKeys =
         copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
             .collect(Collectors.toSet());
-    checkLogBlocksAndKeys("100", schema, readBlocksLazily, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
+    checkLogBlocksAndKeys("100", schema, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
         200, 200, Option.of(originalKeys));
   }
 
@@ -1202,7 +1193,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithRollbackTombstone(ExternalSpillableMap.DiskMapType diskMapType,
                                                            boolean isCompressionEnabled,
-                                                           boolean readBlocksLazily,
                                                            boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
@@ -1258,7 +1248,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Set<String> originalKeys =
         copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
             .collect(Collectors.toSet());
-    checkLogBlocksAndKeys("102", schema, readBlocksLazily, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
+    checkLogBlocksAndKeys("102", schema, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
         200, 200, Option.of(originalKeys));
   }
 
@@ -1327,7 +1317,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Set<String> originalKeys =
         copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
             .collect(Collectors.toSet());
-    checkLogBlocksAndKeys("103", schema, true, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
+    checkLogBlocksAndKeys("103", schema, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
         200, 200, Option.of(originalKeys));
   }
 
@@ -1335,7 +1325,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithDeleteAndRollback(ExternalSpillableMap.DiskMapType diskMapType,
                                                            boolean isCompressionEnabled,
-                                                           boolean readBlocksLazily,
                                                            boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
@@ -1393,7 +1382,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime("102")
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -1441,7 +1429,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime("103")
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -1476,7 +1463,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithCommitBeforeAndAfterRollback(ExternalSpillableMap.DiskMapType diskMapType,
                                                                       boolean isCompressionEnabled,
-                                                                      boolean readBlocksLazily,
                                                                       boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
@@ -1549,7 +1535,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime("103")
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -1582,8 +1567,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithDisorderDelete(ExternalSpillableMap.DiskMapType diskMapType,
-                                                        boolean isCompressionEnabled,
-                                                        boolean readBlocksLazily)
+                                                        boolean isCompressionEnabled)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
@@ -1664,7 +1648,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime("104")
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -1703,7 +1686,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithFailedRollbacks(ExternalSpillableMap.DiskMapType diskMapType,
                                                          boolean isCompressionEnabled,
-                                                         boolean readBlocksLazily,
                                                          boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
 
@@ -1760,7 +1742,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(commandBlock);
     writer.close();
 
-    checkLogBlocksAndKeys("100", schema, readBlocksLazily, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
+    checkLogBlocksAndKeys("100", schema, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
         0, 0, Option.empty());
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
   }
@@ -1769,7 +1751,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithInsertDeleteAndRollback(ExternalSpillableMap.DiskMapType diskMapType,
                                                                  boolean isCompressionEnabled,
-                                                                 boolean readBlocksLazily,
                                                                  boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
 
@@ -1810,7 +1791,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(commandBlock);
     writer.close();
 
-    checkLogBlocksAndKeys("100", schema, readBlocksLazily, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
+    checkLogBlocksAndKeys("100", schema, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
         0, 0, Option.empty());
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
   }
@@ -1819,7 +1800,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithInvalidRollback(ExternalSpillableMap.DiskMapType diskMapType,
                                                          boolean isCompressionEnabled,
-                                                         boolean readBlocksLazily,
                                                          boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
@@ -1847,7 +1827,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(commandBlock);
     writer.close();
 
-    checkLogBlocksAndKeys("100", schema, readBlocksLazily, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
+    checkLogBlocksAndKeys("100", schema, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
         100, 100, Option.empty());
   }
 
@@ -1855,7 +1835,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithInsertsDeleteAndRollback(ExternalSpillableMap.DiskMapType diskMapType,
                                                                   boolean isCompressionEnabled,
-                                                                  boolean readBlocksLazily,
                                                                   boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
 
@@ -1900,7 +1879,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(commandBlock);
     writer.close();
 
-    checkLogBlocksAndKeys("101", schema, readBlocksLazily, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
+    checkLogBlocksAndKeys("101", schema, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
         0, 0, Option.empty());
   }
 
@@ -1909,7 +1888,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testLogReaderWithDifferentVersionsOfDeleteBlocks(ExternalSpillableMap.DiskMapType diskMapType,
                                                                boolean isCompressionEnabled,
-                                                               boolean readBlocksLazily,
                                                                boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
@@ -1990,7 +1968,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime("103")
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -2057,7 +2034,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.createDeltaCommit(basePath, "101", fs);
 
     // Should be able to read all 110 records
-    checkLogBlocksAndKeys("101", schema, true, ExternalSpillableMap.DiskMapType.BITCASK, false,
+    checkLogBlocksAndKeys("101", schema, ExternalSpillableMap.DiskMapType.BITCASK, false,
         false, 110, 110, Option.empty());
 
     // Write a rollback for commit 100 which is not the latest commit
@@ -2068,7 +2045,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(commandBlock);
 
     // Should only be able to read 10 records from commit 101
-    checkLogBlocksAndKeys("101", schema, true, ExternalSpillableMap.DiskMapType.BITCASK, false,
+    checkLogBlocksAndKeys("101", schema, ExternalSpillableMap.DiskMapType.BITCASK, false,
         false, 10, 10, Option.empty());
 
     // Write a rollback for commit 101 which is the latest commit
@@ -2080,7 +2057,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     // Should not read any records as both commits are rolled back
-    checkLogBlocksAndKeys("101", schema, true, ExternalSpillableMap.DiskMapType.BITCASK, false,
+    checkLogBlocksAndKeys("101", schema, ExternalSpillableMap.DiskMapType.BITCASK, false,
         false, 0, 0, Option.empty());
   }
 
@@ -2088,7 +2065,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithMixedInsertsCorruptsAndRollback(ExternalSpillableMap.DiskMapType diskMapType,
                                                                          boolean isCompressionEnabled,
-                                                                         boolean readBlocksLazily,
                                                                          boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
 
@@ -2171,7 +2147,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(commandBlock);
     writer.close();
 
-    checkLogBlocksAndKeys("101", schema, true, ExternalSpillableMap.DiskMapType.BITCASK, false,
+    checkLogBlocksAndKeys("101", schema, ExternalSpillableMap.DiskMapType.BITCASK, false,
         false, 0, 0, Option.empty());
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
   }
@@ -2179,8 +2155,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("testArgumentsWithoutOptimizedScanArg")
   public void testAvroLogRecordReaderWithMixedInsertsCorruptsRollbackAndMergedLogBlock(ExternalSpillableMap.DiskMapType diskMapType,
-                                                                                       boolean isCompressionEnabled,
-                                                                                       boolean readBlocksLazily)
+                                                                                       boolean isCompressionEnabled)
       throws IOException, URISyntaxException, InterruptedException {
 
     // Write blocks in this manner.
@@ -2344,7 +2319,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime("108")
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -2384,7 +2358,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   private void testAvroLogRecordReaderMergingMultipleLogFiles(int numRecordsInLog1, int numRecordsInLog2,
                                                               ExternalSpillableMap.DiskMapType diskMapType,
                                                               boolean isCompressionEnabled,
-                                                              boolean readBlocksLazily,
                                                               boolean enableOptimizedLogBlocksScan) {
     try {
       // Write one Data block with same InstantTime (written in same batch)
@@ -2433,7 +2406,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           .withReaderSchema(schema)
           .withLatestInstantTime("100")
           .withMaxMemorySizeInBytes(10240L)
-          .withReadBlocksLazily(readBlocksLazily)
           .withReverseReader(false)
           .withBufferSize(BUFFER_SIZE)
           .withSpillableMapBasePath(spillableBasePath)
@@ -2454,47 +2426,43 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithFailedTaskInFirstStageAttempt(ExternalSpillableMap.DiskMapType diskMapType,
                                                                        boolean isCompressionEnabled,
-                                                                       boolean readBlocksLazily,
                                                                        boolean enableOptimizedLogBlocksScan) {
     /*
      * FIRST_ATTEMPT_FAILED:
      * Original task from the stage attempt failed, but subsequent stage retry succeeded.
      */
     testAvroLogRecordReaderMergingMultipleLogFiles(77, 100,
-        diskMapType, isCompressionEnabled, readBlocksLazily, enableOptimizedLogBlocksScan);
+        diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan);
   }
 
   @ParameterizedTest
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithFailedTaskInSecondStageAttempt(ExternalSpillableMap.DiskMapType diskMapType,
                                                                         boolean isCompressionEnabled,
-                                                                        boolean readBlocksLazily,
                                                                         boolean enableOptimizedLogBlocksScan) {
     /*
      * SECOND_ATTEMPT_FAILED:
      * Original task from stage attempt succeeded, but subsequent retry attempt failed.
      */
     testAvroLogRecordReaderMergingMultipleLogFiles(100, 66,
-        diskMapType, isCompressionEnabled, readBlocksLazily, enableOptimizedLogBlocksScan);
+        diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan);
   }
 
   @ParameterizedTest
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderTasksSucceededInBothStageAttempts(ExternalSpillableMap.DiskMapType diskMapType,
                                                                        boolean isCompressionEnabled,
-                                                                       boolean readBlocksLazily,
                                                                        boolean enableOptimizedLogBlocksScan) {
     /*
      * BOTH_ATTEMPTS_SUCCEEDED:
      * Original task from the stage attempt and duplicate task from the stage retry succeeded.
      */
     testAvroLogRecordReaderMergingMultipleLogFiles(100, 100,
-        diskMapType, isCompressionEnabled, readBlocksLazily, enableOptimizedLogBlocksScan);
+        diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan);
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testBasicAppendAndReadInReverse(boolean readBlocksLazily)
+  @Test
+  public void testBasicAppendAndReadInReverse()
       throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
@@ -2534,7 +2502,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
-    try (HoodieLogFileReader reader = new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, readBlocksLazily, true)) {
+    try (HoodieLogFileReader reader = new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, true)) {
 
       assertTrue(reader.hasPrev(), "Last block should be available");
       HoodieLogBlock prevBlock = reader.prev();
@@ -2568,9 +2536,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testAppendAndReadOnCorruptedLogInReverse(boolean readBlocksLazily)
+  @Test
+  public void testAppendAndReadOnCorruptedLogInReverse()
       throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
@@ -2615,8 +2582,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // First round of reads - we should be able to read the first block and then EOF
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
 
-    try (HoodieLogFileReader reader =
-             new HoodieLogFileReader(fs, logFile, schema, BUFFER_SIZE, readBlocksLazily, true)) {
+    try (HoodieLogFileReader reader = new HoodieLogFileReader(fs, logFile, schema, BUFFER_SIZE, true)) {
 
       assertTrue(reader.hasPrev(), "Last block should be available");
       HoodieLogBlock block = reader.prev();
@@ -2629,9 +2595,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testBasicAppendAndTraverseInReverse(boolean readBlocksLazily)
+  @Test
+  public void testBasicAppendAndTraverseInReverse()
       throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
@@ -2668,7 +2633,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
     try (HoodieLogFileReader reader =
-             new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, readBlocksLazily, true)) {
+             new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, true)) {
 
       assertTrue(reader.hasPrev(), "Third block should be available");
       reader.moveToPrev();
@@ -2758,7 +2723,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     List<GenericRecord> projectedRecords = HoodieAvroUtils.rewriteRecords(records, projectedSchema);
 
-    try (Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), projectedSchema, true, false)) {
+    try (Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), projectedSchema, false)) {
       assertTrue(reader.hasNext(), "First block should be available");
 
       HoodieLogBlock nextBlock = reader.next();
@@ -2826,29 +2791,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   private static Stream<Arguments> testArguments() {
-    // Arg1: ExternalSpillableMap Type, Arg2: isDiskMapCompressionEnabled, Arg3: readBlocksLazily, Arg4: enableOptimizedLogBlocksScan
-    return Stream.of(
-        arguments(ExternalSpillableMap.DiskMapType.BITCASK, false, false, true),
-        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false, false, true),
-        arguments(ExternalSpillableMap.DiskMapType.BITCASK, true, false, true),
-        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true, false, true),
-        arguments(ExternalSpillableMap.DiskMapType.BITCASK, false, true, true),
-        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false, true, true),
-        arguments(ExternalSpillableMap.DiskMapType.BITCASK, true, true, true),
-        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true, true, true),
-        arguments(ExternalSpillableMap.DiskMapType.BITCASK, false, false, false),
-        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false, false, false),
-        arguments(ExternalSpillableMap.DiskMapType.BITCASK, true, false, false),
-        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true, false, false),
-        arguments(ExternalSpillableMap.DiskMapType.BITCASK, false, true, false),
-        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false, true, false),
-        arguments(ExternalSpillableMap.DiskMapType.BITCASK, true, true, false),
-        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true, true, false)
-    );
-  }
-
-  private static Stream<Arguments> testArgumentsWithoutOptimizedScanArg() {
-    // Arg1: ExternalSpillableMap Type, Arg2: isDiskMapCompressionEnabled, Arg3: readBlocksLazily
+    // Arg1: ExternalSpillableMap Type, Arg2: isDiskMapCompressionEnabled, Arg3: enableOptimizedLogBlocksScan
     return Stream.of(
         arguments(ExternalSpillableMap.DiskMapType.BITCASK, false, false),
         arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false, false),
@@ -2858,6 +2801,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false, true),
         arguments(ExternalSpillableMap.DiskMapType.BITCASK, true, true),
         arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true, true)
+    );
+  }
+
+  private static Stream<Arguments> testArgumentsWithoutOptimizedScanArg() {
+    // Arg1: ExternalSpillableMap Type, Arg2: isDiskMapCompressionEnabled
+    return Stream.of(
+        arguments(ExternalSpillableMap.DiskMapType.BITCASK, false),
+        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false),
+        arguments(ExternalSpillableMap.DiskMapType.BITCASK, true),
+        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true)
     );
   }
 
@@ -2970,8 +2923,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     return reader;
   }
 
-  private void checkLogBlocksAndKeys(String latestInstantTime, Schema schema, boolean readBlocksLazily,
-                                     ExternalSpillableMap.DiskMapType diskMapType, boolean isCompressionEnabled, boolean enableOptimizedLogBlocksScan, int expectedTotalRecords,
+  private void checkLogBlocksAndKeys(String latestInstantTime, Schema schema, ExternalSpillableMap.DiskMapType diskMapType,
+                                     boolean isCompressionEnabled, boolean enableOptimizedLogBlocksScan, int expectedTotalRecords,
                                      int expectedTotalKeys, Option<Set<String>> expectedKeys) throws IOException {
     List<String> allLogFiles =
         FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
@@ -2984,7 +2937,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withReaderSchema(schema)
         .withLatestInstantTime(latestInstantTime)
         .withMaxMemorySizeInBytes(10240L)
-        .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
