@@ -1,7 +1,7 @@
 ---
 title: Basic Configurations
 summary: This page covers the basic configurations you may use to write/read Hudi tables. This page only features a subset of the most frequently used configurations. For a full list of all configs, please visit the [All Configurations](/docs/configurations) page.
-last_modified_at: 2024-01-03T18:52:29.439
+last_modified_at: 2024-04-15T09:56:05.413
 ---
 
 
@@ -14,6 +14,7 @@ This page covers the basic configurations you may use to write/read Hudi tables.
 - [**Metrics Configs**](#METRICS): These set of configs are used to enable monitoring and reporting of key Hudi stats and metrics.
 - [**Kafka Connect Configs**](#KAFKA_CONNECT): These set of configs are used for Kafka Connect Sink Connector for writing Hudi Tables
 - [**Hudi Streamer Configs**](#HUDI_STREAMER): These set of configs are used for Hudi Streamer utility which provides the way to ingest from different sources such as DFS or Kafka.
+- [**Indexing Configs**](#INDEXING): Please fill in the description for Config Group Name: Indexing Configs
 
 :::note 
 In the tables below **(N/A)** means there is no default value set
@@ -50,7 +51,7 @@ inputDF.write()
 .format("org.apache.hudi")
 .options(clientOpts) // any of the Hudi client opts can be passed in as well
 .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-.option("hoodie.datasource.write.partitionpath.field", "partition")
+.option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
 .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
 .option(HoodieWriteConfig.TABLE_NAME, tableName)
 .mode(SaveMode.Append)
@@ -101,6 +102,7 @@ Flink jobs using the SQL can be configured through the options in WITH clause. T
 | [hoodie.database.name](#hoodiedatabasename)                                                      | (N/A)                         | Database name to register to Hive metastore<br /> `Config Param: DATABASE_NAME`                                                                                                                                                                                                                                                                                                                           |
 | [hoodie.table.name](#hoodietablename)                                                            | (N/A)                         | Table name to register to Hive metastore<br /> `Config Param: TABLE_NAME`                                                                                                                                                                                                                                                                                                                                 |
 | [path](#path)                                                                                    | (N/A)                         | Base path for the target hoodie table. The path would be created if it does not exist, otherwise a Hoodie table expects to be initialized successfully<br /> `Config Param: PATH`                                                                                                                                                                                                                         |
+| [read.commits.limit](#readcommitslimit)                                                          | (N/A)                         | The maximum number of commits allowed to read in each instant check, if it is streaming read, the avg read instants number per-second would be 'read.commits.limit'/'read.streaming.check-interval', by default no limit<br /> `Config Param: READ_COMMITS_LIMIT`                                                                                                                                         |
 | [read.end-commit](#readend-commit)                                                               | (N/A)                         | End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'<br /> `Config Param: READ_END_COMMIT`                                                                                                                                                                                                                                                                                   |
 | [read.start-commit](#readstart-commit)                                                           | (N/A)                         | Start commit instant for reading, the commit time format should be 'yyyyMMddHHmmss', by default reading from the latest instant for streaming read<br /> `Config Param: READ_START_COMMIT`                                                                                                                                                                                                                |
 | [archive.max_commits](#archivemax_commits)                                                       | 50                            | Max number of commits to keep before archiving older commits into a sequential log, default 50<br /> `Config Param: ARCHIVE_MAX_COMMITS`                                                                                                                                                                                                                                                                  |
@@ -128,6 +130,7 @@ Flink jobs using the SQL can be configured through the options in WITH clause. T
 | [metadata.enabled](#metadataenabled)                                                             | false                         | Enable the internal metadata table which serves table metadata like level file listings, default disabled<br /> `Config Param: METADATA_ENABLED`                                                                                                                                                                                                                                                          |
 | [precombine.field](#precombinefield)                                                             | ts                            | Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br /> `Config Param: PRECOMBINE_FIELD`                                                                                                                                                                 |
 | [read.streaming.enabled](#readstreamingenabled)                                                  | false                         | Whether to read as streaming source, default false<br /> `Config Param: READ_AS_STREAMING`                                                                                                                                                                                                                                                                                                                |
+| [read.streaming.skip_insertoverwrite](#readstreamingskip_insertoverwrite)                        | false                         | Whether to skip insert overwrite instants to avoid reading base files of insert overwrite operations for streaming read. In streaming scenarios, insert overwrite is usually used to repair data, here you can control the visibility of downstream streaming read.<br /> `Config Param: READ_STREAMING_SKIP_INSERT_OVERWRITE`                                                                            |
 | [table.type](#tabletype)                                                                         | COPY_ON_WRITE                 | Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ<br /> `Config Param: TABLE_TYPE`                                                                                                                                                                                                                                                                                                                 |
 | [write.operation](#writeoperation)                                                               | upsert                        | The write operation, that this write should do<br /> `Config Param: OPERATION`                                                                                                                                                                                                                                                                                                                            |
 | [write.parquet.max.file.size](#writeparquetmaxfilesize)                                          | 120                           | Target size for parquet files produced by Hudi write phases. For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.<br /> `Config Param: WRITE_PARQUET_MAX_FILE_SIZE`                                                                                                                                                                                       |
@@ -135,6 +138,21 @@ Flink jobs using the SQL can be configured through the options in WITH clause. T
 
 ## Write Client Configs {#WRITE_CLIENT}
 Internally, the Hudi datasource uses a RDD based HoodieWriteClient API to actually perform writes to storage. These configs provide deep control over lower level aspects like file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.
+
+
+### Common Configurations {#Common-Configurations}
+The following set of configurations are common across Hudi.
+
+
+
+
+[**Basic Configs**](#Common-Configurations-basic-configs)
+
+
+| Config Name                         | Default | Description                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [hoodie.base.path](#hoodiebasepath) | (N/A)   | Base path on lake storage, under which all the table data is stored. Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs etc in .hoodie directory under this base path directory.<br />`Config Param: BASE_PATH` |
+---
 
 
 ### Metadata Configs {#Metadata-Configs}
@@ -146,13 +164,11 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 [**Basic Configs**](#Metadata-Configs-basic-configs)
 
 
-| Config Name                                                                        | Default     | Description                                                                                                                                                                                                                                                                                                        |
-| ---------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [hoodie.metadata.enable](#hoodiemetadataenable)                                    | true        | Enable the internal metadata table which serves table metadata like level file listings<br />`Config Param: ENABLE`<br />`Since Version: 0.7.0`                                                                                                                                                                    |
-| [hoodie.metadata.index.bloom.filter.enable](#hoodiemetadataindexbloomfilterenable) | false       | Enable indexing bloom filters of user data files under metadata table. When enabled, metadata table will have a partition to store the bloom filter index and will be used during the index lookups.<br />`Config Param: ENABLE_METADATA_INDEX_BLOOM_FILTER`<br />`Since Version: 0.11.0`                          |
-| [hoodie.metadata.index.column.stats.enable](#hoodiemetadataindexcolumnstatsenable) | false       | Enable indexing column ranges of user data files under metadata table key lookups. When enabled, metadata table will have a partition to store the column ranges and will be used for pruning files during the index lookups.<br />`Config Param: ENABLE_METADATA_INDEX_COLUMN_STATS`<br />`Since Version: 0.11.0` |
-| [hoodie.metadata.max.init.parallelism](#hoodiemetadatamaxinitparallelism)          | 100000      | Maximum parallelism to use when initializing Record Index.<br />`Config Param: RECORD_INDEX_MAX_PARALLELISM`<br />`Since Version: 0.14.0`                                                                                                                                                                          |
-| [hoodie.metadata.max.logfile.size](#hoodiemetadatamaxlogfilesize)                  | 2147483648  | Maximum size in bytes of a single log file. Larger log files can contain larger log blocks thereby reducing the number of blocks to search for keys<br />`Config Param: MAX_LOG_FILE_SIZE_BYTES_PROP`<br />`Since Version: 0.14.0`                                                                                 |
+| Config Name                                                                        | Default | Description                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [hoodie.metadata.enable](#hoodiemetadataenable)                                    | true    | Enable the internal metadata table which serves table metadata like level file listings<br />`Config Param: ENABLE`<br />`Since Version: 0.7.0`                                                                                                                                                                    |
+| [hoodie.metadata.index.bloom.filter.enable](#hoodiemetadataindexbloomfilterenable) | false   | Enable indexing bloom filters of user data files under metadata table. When enabled, metadata table will have a partition to store the bloom filter index and will be used during the index lookups.<br />`Config Param: ENABLE_METADATA_INDEX_BLOOM_FILTER`<br />`Since Version: 0.11.0`                          |
+| [hoodie.metadata.index.column.stats.enable](#hoodiemetadataindexcolumnstatsenable) | false   | Enable indexing column ranges of user data files under metadata table key lookups. When enabled, metadata table will have a partition to store the column ranges and will be used for pruning files during the index lookups.<br />`Config Param: ENABLE_METADATA_INDEX_COLUMN_STATS`<br />`Since Version: 0.11.0` |
 ---
 
 
@@ -165,10 +181,11 @@ Configurations that control aspects around writing, sizing, reading base and log
 [**Basic Configs**](#Storage-Configs-basic-configs)
 
 
-| Config Name                                                        | Default    | Description                                                                                                                                                                                                           |
-| ------------------------------------------------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [hoodie.parquet.compression.codec](#hoodieparquetcompressioncodec) | gzip       | Compression Codec for parquet files<br />`Config Param: PARQUET_COMPRESSION_CODEC_NAME`                                                                                                                               |
-| [hoodie.parquet.max.file.size](#hoodieparquetmaxfilesize)          | 125829120  | Target size in bytes for parquet files produced by Hudi write phases. For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.<br />`Config Param: PARQUET_MAX_FILE_SIZE` |
+| Config Name                                                             | Default    | Description                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [hoodie.parquet.bloom.filter.enabled](#hoodieparquetbloomfilterenabled) | true       | Control whether to write bloom filter or not. Default true. We can set to false in non bloom index cases for CPU resource saving.<br />`Config Param: PARQUET_WITH_BLOOM_FILTER_ENABLED`                              |
+| [hoodie.parquet.compression.codec](#hoodieparquetcompressioncodec)      | gzip       | Compression Codec for parquet files<br />`Config Param: PARQUET_COMPRESSION_CODEC_NAME`                                                                                                                               |
+| [hoodie.parquet.max.file.size](#hoodieparquetmaxfilesize)               | 125829120  | Target size in bytes for parquet files produced by Hudi write phases. For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.<br />`Config Param: PARQUET_MAX_FILE_SIZE` |
 ---
 
 
@@ -212,10 +229,10 @@ Cleaning (reclamation of older/unused file groups/slices).
 [**Basic Configs**](#Clean-Configs-basic-configs)
 
 
-| Config Name                                                      | Default | Description                                                                                                                                                                                                                                                                      |
-| ---------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [hoodie.clean.async](#hoodiecleanasync)                          | false   | Only applies when hoodie.clean.automatic is turned on. When turned on runs cleaner async with writing, which can speed up overall write performance.<br />`Config Param: ASYNC_CLEAN`                                                                                            |
-| [hoodie.cleaner.commits.retained](#hoodiecleanercommitsretained) | 10      | Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries.<br />`Config Param: CLEANER_COMMITS_RETAINED` |
+| Config Name                                                  | Default | Description                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [hoodie.clean.async.enabled](#hoodiecleanasyncenabled)       | false   | Only applies when hoodie.clean.automatic is turned on. When turned on runs cleaner async with writing, which can speed up overall write performance.<br />`Config Param: ASYNC_CLEAN`                                                                                                                                                  |
+| [hoodie.clean.commits.retained](#hoodiecleancommitsretained) | 10      | When KEEP_LATEST_COMMITS cleaning policy is used, the number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries.<br />`Config Param: CLEANER_COMMITS_RETAINED` |
 ---
 
 
@@ -262,13 +279,33 @@ Configurations that control write behavior on Hudi tables. These can be directly
 [**Basic Configs**](#Write-Configurations-basic-configs)
 
 
-| Config Name                                                                               | Default        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ----------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [hoodie.base.path](#hoodiebasepath)                                                       | (N/A)          | Base path on lake storage, under which all the table data is stored. Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs etc in .hoodie directory under this base path directory.<br />`Config Param: BASE_PATH`                                                                                                                      |
-| [hoodie.table.name](#hoodietablename)                                                     | (N/A)          | Table name that will be used for registering with metastores like HMS. Needs to be same across runs.<br />`Config Param: TBL_NAME`                                                                                                                                                                                                                                                                                                                |
-| [hoodie.datasource.write.precombine.field](#hoodiedatasourcewriteprecombinefield)         | ts             | Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br />`Config Param: PRECOMBINE_FIELD_NAME`                                                                                                                                                                                                     |
-| [hoodie.write.concurrency.mode](#hoodiewriteconcurrencymode)                              | SINGLE_WRITER  | org.apache.hudi.common.model.WriteConcurrencyMode: Concurrency modes for write operations.     SINGLE_WRITER(default): Only one active writer to the table. Maximizes throughput.     OPTIMISTIC_CONCURRENCY_CONTROL: Multiple writers can operate on the table with lazy conflict resolution using locks. This means that only one writer succeeds if multiple writers write to the same file group.<br />`Config Param: WRITE_CONCURRENCY_MODE` |
-| [hoodie.write.num.retries.on.conflict.failures](#hoodiewritenumretriesonconflictfailures) | 0              | Maximum number of times to retry a batch on conflict failure.<br />`Config Param: NUM_RETRIES_ON_CONFLICT_FAILURES`<br />`Since Version: 0.13.0`                                                                                                                                                                                                                                                                                                  |
+| Config Name                                                                                                                                    | Default        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [hoodie.base.path](#hoodiebasepath)                                                                                                            | (N/A)          | Base path on lake storage, under which all the table data is stored. Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs etc in .hoodie directory under this base path directory.<br />`Config Param: BASE_PATH`                                                                                                                                                                                                                                                                                                                                                                             |
+| [hoodie.table.name](#hoodietablename)                                                                                                          | (N/A)          | Table name that will be used for registering with metastores like HMS. Needs to be same across runs.<br />`Config Param: TBL_NAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| [hoodie.datasource.write.precombine.field](#hoodiedatasourcewriteprecombinefield)                                                              | ts             | Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br />`Config Param: PRECOMBINE_FIELD_NAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| [hoodie.instant_state.timeline_server_based.enabled](#hoodieinstant_statetimeline_server_basedenabled)                                         | false          | If enabled, writers get instant state from timeline server rather than requesting DFS directly<br />`Config Param: INSTANT_STATE_TIMELINE_SERVER_BASED`<br />`Since Version: 1.0.0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| [hoodie.instant_state.timeline_server_based.force_refresh.request.number](#hoodieinstant_statetimeline_server_basedforce_refreshrequestnumber) | 100            | Number of requests to trigger instant state cache refreshing<br />`Config Param: INSTANT_STATE_TIMELINE_SERVER_BASED_FORCE_REFRESH_REQUEST_NUMBER`<br />`Since Version: 1.0.0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| [hoodie.write.concurrency.mode](#hoodiewriteconcurrencymode)                                                                                   | SINGLE_WRITER  | org.apache.hudi.common.model.WriteConcurrencyMode: Concurrency modes for write operations.     SINGLE_WRITER(default): Only one active writer to the table. Maximizes throughput.     OPTIMISTIC_CONCURRENCY_CONTROL: Multiple writers can operate on the table with lazy conflict resolution using locks. This means that only one writer succeeds if multiple writers write to the same file group.     NON_BLOCKING_CONCURRENCY_CONTROL: Multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the same file group with the conflicts resolved automatically by the query reader and the compactor.<br />`Config Param: WRITE_CONCURRENCY_MODE` |
+---
+
+
+### Lock Configs {#LOCK}
+Configurations that control locking mechanisms required for concurrency control  between writers to a Hudi table. Concurrency between Hudi's own table services  are auto managed internally.
+
+
+#### Common Lock Configurations {#Common-Lock-Configurations}
+
+
+
+
+
+[**Basic Configs**](#Common-Lock-Configurations-basic-configs)
+
+
+| Config Name                                                                      | Default | Description                                                                                                                                                           |
+| -------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [hoodie.write.lock.heartbeat_interval_ms](#hoodiewritelockheartbeat_interval_ms) | 60000   | Heartbeat interval in ms, to send a heartbeat to indicate that hive client holding locks.<br />`Config Param: LOCK_HEARTBEAT_INTERVAL_MS`<br />`Since Version: 1.0.0` |
 ---
 
 
@@ -327,6 +364,22 @@ Configurations used by the Hudi to sync metadata to external metastores and cata
 | Config Name                                                           | Default | Description                                                                                                       |
 | --------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
 | [hoodie.datasource.meta.sync.enable](#hoodiedatasourcemetasyncenable) | false   | Enable Syncing the Hudi Table with an external meta store or data catalog.<br />`Config Param: META_SYNC_ENABLED` |
+---
+
+
+### Glue catalog sync based client Configurations {#Glue-catalog-sync-based-client-Configurations}
+Configs that control Glue catalog sync based client.
+
+
+
+
+[**Basic Configs**](#Glue-catalog-sync-based-client-Configurations-basic-configs)
+
+
+| Config Name                                                                                                                 | Default | Description                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [hoodie.datasource.meta.sync.glue.partition_index_fields](#hoodiedatasourcemetasyncgluepartition_index_fields)              |         | Specify the partitions fields to index on aws glue. Separate the fields by semicolon. By default, when the feature is enabled, all the partition will be indexed. You can create up to three indexes, separate them by comma. Eg: col1;col2;col3,col2,col3<br />`Config Param: META_SYNC_PARTITION_INDEX_FIELDS`<br />`Since Version: 1.0.0` |
+| [hoodie.datasource.meta.sync.glue.partition_index_fields.enable](#hoodiedatasourcemetasyncgluepartition_index_fieldsenable) | false   | Enable aws glue partition index feature, to speedup partition based query pattern<br />`Config Param: META_SYNC_PARTITION_INDEX_FIELDS_ENABLE`<br />`Since Version: 1.0.0`                                                                                                                                                                   |
 ---
 
 
@@ -415,6 +468,25 @@ Enables reporting on Hudi metrics. Hudi publishes metrics on every commit, clean
 | [hoodie.metrics.on](#hoodiemetricson)                                         | false     | Turn on/off metrics reporting. off by default.<br />`Config Param: TURN_METRICS_ON`<br />`Since Version: 0.5.0`                                                              |
 | [hoodie.metrics.reporter.type](#hoodiemetricsreportertype)                    | GRAPHITE  | Type of metrics reporter.<br />`Config Param: METRICS_REPORTER_TYPE_VALUE`<br />`Since Version: 0.5.0`                                                                       |
 | [hoodie.metricscompaction.log.blocks.on](#hoodiemetricscompactionlogblockson) | false     | Turn on/off metrics reporting for log blocks with compaction commit. off by default.<br />`Config Param: TURN_METRICS_COMPACTION_LOG_BLOCKS_ON`<br />`Since Version: 0.14.0` |
+---
+
+
+### Metrics Configurations for M3 {#Metrics-Configurations-for-M3}
+Enables reporting on Hudi metrics using M3.  Hudi publishes metrics on every commit, clean, rollback etc.
+
+
+
+
+[**Basic Configs**](#Metrics-Configurations-for-M3-basic-configs)
+
+
+| Config Name                                          | Default     | Description                                                                                                      |
+| ---------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
+| [hoodie.metrics.m3.env](#hoodiemetricsm3env)         | production  | M3 tag to label the environment (defaults to 'production'), applied to all metrics.<br />`Config Param: M3_ENV`  |
+| [hoodie.metrics.m3.host](#hoodiemetricsm3host)       | localhost   | M3 host to connect to.<br />`Config Param: M3_SERVER_HOST_NAME`                                                  |
+| [hoodie.metrics.m3.port](#hoodiemetricsm3port)       | 9052        | M3 port to connect to.<br />`Config Param: M3_SERVER_PORT_NUM`                                                   |
+| [hoodie.metrics.m3.service](#hoodiemetricsm3service) | hoodie      | M3 tag to label the service name (defaults to 'hoodie'), applied to all metrics.<br />`Config Param: M3_SERVICE` |
+| [hoodie.metrics.m3.tags](#hoodiemetricsm3tags)       |             | Optional M3 tags applied to all metrics.<br />`Config Param: M3_TAGS`                                            |
 ---
 
 ## Kafka Connect Configs {#KAFKA_CONNECT}
@@ -599,5 +671,30 @@ Configurations for file-based schema provider.
 | -------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------- |
 | [hoodie.streamer.schemaprovider.source.schema.file](#hoodiestreamerschemaprovidersourceschemafile) | (N/A)   | The schema of the source you are reading from<br />`Config Param: SOURCE_SCHEMA_FILE` |
 | [hoodie.streamer.schemaprovider.target.schema.file](#hoodiestreamerschemaprovidertargetschemafile) | (N/A)   | The schema of the target you are writing to<br />`Config Param: TARGET_SCHEMA_FILE`   |
+---
+
+## Indexing Configs {#INDEXING}
+Please fill in the description for Config Group Name: Indexing Configs
+
+
+### Functional Index Configs {#FUNCTIONAL_INDEX}
+Configurations controlling the behavior of functional index.
+
+
+#### Common Index Configs {#Common-Index-Configs}
+
+
+
+
+
+[**Basic Configs**](#Common-Index-Configs-basic-configs)
+
+
+| Config Name                                                        | Default       | Description                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [hoodie.functional.index.function](#hoodiefunctionalindexfunction) | (N/A)         | Function to be used for building the functional index.<br />`Config Param: INDEX_FUNCTION`<br />`Since Version: 1.0.0`                                                                                                                                                                                                                                                                   |
+| [hoodie.functional.index.name](#hoodiefunctionalindexname)         | (N/A)         | Name of the functional index. This is also used for the partition name in the metadata table.<br />`Config Param: INDEX_NAME`<br />`Since Version: 1.0.0`                                                                                                                                                                                                                                |
+| [hoodie.table.checksum](#hoodietablechecksum)                      | (N/A)         | Index definition checksum is used to guard against partial writes in HDFS. It is added as the last entry in index.properties and then used to validate while reading table config.<br />`Config Param: INDEX_DEFINITION_CHECKSUM`<br />`Since Version: 1.0.0`                                                                                                                            |
+| [hoodie.functional.index.type](#hoodiefunctionalindextype)         | COLUMN_STATS  | Type of the functional index. Default is `column_stats` if there are no functions and expressions in the command. Valid options could be BITMAP, COLUMN_STATS, LUCENE, etc. If index_type is not provided, and there are functions or expressions in the command then a functional index using column stats will be created.<br />`Config Param: INDEX_TYPE`<br />`Since Version: 1.0.0` |
 ---
 
