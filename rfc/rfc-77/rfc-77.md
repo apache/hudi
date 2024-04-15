@@ -168,7 +168,7 @@ chosen will depend on the cardinality of the `record-key` and `secondary-key` co
 | city        | string      |
 
 `uuid` is the `record-key` column and a SI is built on the `city` column. Few details to be noted:
-1. Base files in the MDT are sorted (HFile) by the 'record-key' for the records stored in the MDT. For the MDT 
+1. Base files in the MDT are sorted (HFile) by the 'key' for the records stored in that MDT partition. For the MDT 
 partition hosting SI, records are sorted by `secondary-key`.
 2. Base file will never contain a tombstone record (record mergers never write tombstone or deleted records 
 into base file)
@@ -199,7 +199,7 @@ los-angeles -> 9909a8b1-2d15-4d3d-8ec9-efc48c536a01
 sfo -> 334e26e9-8355-45cc-97c6-c31daf0df330
 ```
 
-An important detail to be noted here is that similarity depends on the `secondary-key, record-key` tuple (`city, uuid` 
+An important detail to be noted here is that grouping for merging depends on the `secondary-key, record-key` tuple (`city, uuid` 
 in this example). This is radically different from any other existing partitions in Hudi (MDT or base tables). Hence, 
 support needs to be added to merge records from MDT partition hosting SI (with generalized approach that can be used for
 any future non-unique record key based dataset).
@@ -215,15 +215,91 @@ on `secondary-key` and second search will be based on `record-key`. Hence, a sin
 uses a flat array will not be efficient. 
 4. Should allow for efficient insertion of records (for inserting merged record and for buffering fresh records). 
 
-The initial POC makes use of an in-memory nested maps - with the first level keyed by `secondary-key`  
-and the second level keyed by`record-key`. The final design should allow spilling to disk. Here are some options:
-1. Extend Hudi's `ExternalSpillableMap` to support multi-map.
-2. Write spillable version of [Guava's multi-map](https://github.com/google/guava/wiki/NewCollectionTypesExplained#multimap).
-3. Use [Chronicle map](https://github.com/OpenHFT/Chronicle-Map).
-4. Use two different spillable data structures - one is a set of `secondary-key` and the other is  map of 
-`record-key -> (secondary-key, HoodieRecord)`.
+The [initial POC](https://github.com/apache/hudi/pull/10625) makes use of an in-memory nested maps - with the first level keyed by `secondary-key`  
+and the second level keyed by`record-key`. However, the final design should allow spilling to disk.
 
-## Comparing alternate design proposals
+Considering the above requirements, the proposal is to extend `HoodieKey` to support secondary keys. We will make `HoodieKey` generic and create a subclass `HoodieSecondaryKey` where the key can be a generic type.
+```java
+public class HoodieKey<T extends Serializable> implements Serializable {
+
+  private T recordKey;
+  private String partitionPath;
+
+  // Required for serializer
+  public HoodieKey() {}
+
+  public HoodieKey(T recordKey, String partitionPath) {
+    this.recordKey = recordKey;
+    this.partitionPath = partitionPath;
+  }
+
+  // Getters and setters
+  public T getRecordKey() {
+    return recordKey;
+  }
+
+  public void setRecordKey(T recordKey) {
+    this.recordKey = recordKey;
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
+  public void setPartitionPath(String partitionPath) {
+    this.partitionPath = partitionPath;
+  }
+}
+```
+
+Since `HoodieKey` is now generic, `HoodieSecondaryKey` can specify any type for its key by setting the type parameter
+when it extends `HoodieKey`.
+
+```java
+public class HoodieSecondaryKey<K extends Serializable> extends HoodieKey<K> {
+
+  // Additional properties and methods specific to HoodieSecondaryKey can be added here
+
+  public HoodieSecondaryKey(K recordKey, String partitionPath) {
+    super(recordKey, partitionPath);
+  }
+
+  // Example method that might use the generic type K
+  public void someMethod() {
+    K key = getRecordKey();
+    // Process key which is of type K
+  }
+}
+```
+
+The primary advantage of this approach is that the merge algorithm does not change. We interpret the key in the scanner
+without leaking any details to the merge handle. To interpret the key in the scanner, we will introduce a boolean flag
+that indicates whether the key is a secondary key or not ( for instance, merging secondary index MDT partition records
+or something else). This flag will be false by default, and set to true when the key is a secondary key.
+
+**Key Considerations**
+
+1. Type Safety: This refactoring ensures that we can use `HoodieSecondaryKey` with any type of key that
+   implements `Serializable`, making the code more flexible and robust.
+2. Usage Flexibility: We can now create instances of `HoodieSecondaryKey` with different types for the key. For example,
+   you might have `HoodieSecondaryKey<SomeOtherCustomType>` in the future.
+3. Backward Compatibility: Current codebase heavily relies on `HoodieKey` being a String. We need to consider the impact
+   of this change and maintain an overloaded constructor for backward compatibility.
+
+### Comparing alternate design proposals
+
+Here are some alternate options that we considered:
+
+1. Extend Hudi's `ExternalSpillableMap` to support multi-map. More signicant refactoring is required and it would have
+   leaked implementation details to the write handle layer, as the records held by `ExternalSpillableMap` is exposed to
+   write handle via `HoodieMeredLogRecordScanner::getRecords`.
+2. Write spillable version
+   of [Guava's multi-map](https://github.com/google/guava/wiki/NewCollectionTypesExplained#multimap). Apart from reason
+   mentioned above, we did not want to add a third-party dependency on Guava.
+3. Use [Chronicle map](https://github.com/OpenHFT/Chronicle-Map). Same reasons as above.
+4. Use two different spillable data structures - one is a set of `secondary-key` and the other is map of
+   `record-key -> (secondary-key, HoodieRecord)`. This would have been harder to maintain and the log scanner should
+   know when to use which data structure.
 
 ## Test Plan
 
