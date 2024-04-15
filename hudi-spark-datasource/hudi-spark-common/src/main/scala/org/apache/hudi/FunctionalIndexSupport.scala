@@ -45,7 +45,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
-import scala.collection.convert.ImplicitConversions.`map AsScala`
 import scala.collection.{JavaConverters, mutable}
 
 class FunctionalIndexSupport(spark: SparkSession,
@@ -139,7 +138,7 @@ class FunctionalIndexSupport(spark: SparkSession,
         val targetColumnName = expr.references.head.name
         // Check if the expression string contains any of the function names
         val exprString = expr.toString
-        SPARK_FUNCTION_MAP.keys
+        SPARK_FUNCTION_MAP.asScala.keys
           .find(exprString.contains)
           .map(functionName => functionName -> targetColumnName)
       } else {
