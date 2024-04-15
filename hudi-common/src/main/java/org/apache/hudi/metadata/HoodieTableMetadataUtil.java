@@ -1786,7 +1786,6 @@ public class HoodieTableMetadataUtil {
             .withLogFilePaths(logFilePaths)
             .withReaderSchema(HoodieAvroUtils.getRecordKeySchema())
             .withLatestInstantTime(metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp).orElse(""))
-            .withReadBlocksLazily(configuration.get().getBoolean("", true))
             .withReverseReader(false)
             .withMaxMemorySizeInBytes(configuration.get().getLongBytes(MAX_MEMORY_FOR_COMPACTION.key(), DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES))
             .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())

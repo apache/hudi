@@ -71,7 +71,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   @SuppressWarnings("unchecked")
   private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext,
                                       FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-                                      String latestInstantTime, boolean readBlocksLazily,
+                                      String latestInstantTime,
                                       boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan,
                                       Option<String> partitionName,
@@ -80,7 +80,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
                                       boolean enableOptimizedLogBlocksScan,
                                       HoodieRecordMerger recordMerger,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
-    super(readerContext, fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
+    super(readerContext, fs, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan,
         recordMerger, recordBuffer);
     this.scannedPrefixes = new HashSet<>();
@@ -175,8 +175,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = recordBuffer.size();
 
-    LOG.info("Number of log files scanned => " + logFilePaths.size());
-    LOG.info("Number of entries in Map => " + recordBuffer.size());
+    LOG.info("Number of log files scanned => {}", logFilePaths.size());
+    LOG.info("Number of entries in Map => {}", recordBuffer.size());
   }
 
   @Override
@@ -223,7 +223,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     private Schema readerSchema;
     private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
     private String latestInstantTime;
-    private boolean readBlocksLazily;
     private boolean reverseReader;
     private int bufferSize;
     // specific configurations
@@ -277,12 +276,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     @Override
     public Builder<T> withLatestInstantTime(String latestInstantTime) {
       this.latestInstantTime = latestInstantTime;
-      return this;
-    }
-
-    @Override
-    public Builder<T> withReadBlocksLazily(boolean readBlocksLazily) {
-      this.readBlocksLazily = readBlocksLazily;
       return this;
     }
 
@@ -358,7 +351,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
 
       return new HoodieMergedLogRecordReader<>(
           readerContext, fs, basePath, logFilePaths, readerSchema,
-          latestInstantTime, readBlocksLazily, reverseReader,
+          latestInstantTime, reverseReader,
           bufferSize, instantRange,
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName), internalSchema,

@@ -19,9 +19,7 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
@@ -83,9 +81,6 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
             .withLogFilePaths(split.getDeltaLogPaths())
             .withReaderSchema(getReaderSchema())
             .withLatestInstantTime(split.getMaxCommitTime())
-            .withReadBlocksLazily(
-                ConfigUtils.getBooleanWithAltKeys(jobConf,
-                    HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
             .withReverseReader(false)
             .withBufferSize(this.jobConf.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(),
                 HoodieMemoryConfig.DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE));

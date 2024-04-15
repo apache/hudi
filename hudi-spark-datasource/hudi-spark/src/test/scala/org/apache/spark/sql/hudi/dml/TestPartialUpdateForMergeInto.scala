@@ -410,7 +410,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     for (i <- 0 until expectedNumLogFile) {
       val logReader = new HoodieLogFileReader(
         metaClient.getFs, new HoodieLogFile(logFilePathList.get(i)),
-        avroSchema, 1024 * 1024, true, false, false,
+        avroSchema, 1024 * 1024, false, false,
         "id", null)
       assertTrue(logReader.hasNext)
       val logBlockHeader = logReader.next().getLogBlockHeader
