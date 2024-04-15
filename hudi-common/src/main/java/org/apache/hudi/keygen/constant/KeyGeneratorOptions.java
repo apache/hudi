@@ -63,6 +63,7 @@ public class KeyGeneratorOptions extends HoodieConfig {
   public static final ConfigProperty<String> KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled")
       .defaultValue("false")
+      .sinceVersion("0.10.1")
       .markAdvanced()
       .withDocumentation("When set to true, consistent value will be generated for a logical timestamp type column, "
           + "like timestamp-millis and timestamp-micros, irrespective of whether row-writer is enabled. Disabled by default so "

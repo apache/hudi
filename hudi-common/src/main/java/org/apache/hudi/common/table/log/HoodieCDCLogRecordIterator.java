@@ -82,8 +82,7 @@ public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecor
     try {
       closeReader();
       if (cdcLogFileIter.hasNext()) {
-        reader = new HoodieLogFileReader(fs, cdcLogFileIter.next(), cdcSchema,
-            HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
+        reader = new HoodieLogFileReader(fs, cdcLogFileIter.next(), cdcSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE);
         return reader.hasNext();
       }
       return false;

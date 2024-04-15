@@ -69,7 +69,6 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         .withLogFilePaths(logFilePaths.asJava)
         .withReaderSchema(schema)
         .withLatestInstantTime(client.getActiveTimeline.getCommitTimeline.lastInstant.get.getTimestamp)
-        .withReadBlocksLazily(java.lang.Boolean.parseBoolean(HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue))
         .withReverseReader(java.lang.Boolean.parseBoolean(HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue))
         .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue)
         .withMaxMemorySizeInBytes(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)

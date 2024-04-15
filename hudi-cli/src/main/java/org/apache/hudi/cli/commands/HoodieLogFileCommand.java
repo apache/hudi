@@ -238,9 +238,6 @@ public class HoodieLogFileCommand {
               .withLatestInstantTime(
                   client.getActiveTimeline()
                       .getCommitTimeline().lastInstant().get().getTimestamp())
-              .withReadBlocksLazily(
-                  Boolean.parseBoolean(
-                      HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue()))
               .withReverseReader(
                   Boolean.parseBoolean(
                       HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue()))

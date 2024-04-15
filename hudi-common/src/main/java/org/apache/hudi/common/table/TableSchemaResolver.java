@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -74,7 +75,6 @@ import java.util.function.Supplier;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
@@ -288,13 +288,12 @@ public class TableSchemaResolver {
             Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePathV2()).values().iterator();
             return Option.of(fetchSchemaFromFiles(filePaths));
           } else {
-            LOG.warn("Could not find any data file written for commit, "
-                + "so could not get schema for table " + metaClient.getBasePath());
+            LOG.warn("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePathV2());
             return Option.empty();
           }
         default:
-          LOG.error("Unknown table type " + metaClient.getTableType());
-          throw new InvalidTableException(metaClient.getBasePath());
+          LOG.error("Unknown table type {}", metaClient.getTableType());
+          throw new InvalidTableException(metaClient.getBasePathV2().toString());
       }
     } catch (IOException e) {
       throw new HoodieException("Failed to read data schema", e);
@@ -332,7 +331,7 @@ public class TableSchemaResolver {
   }
 
   private MessageType readSchemaFromParquetBaseFile(Path parquetFilePath) throws IOException {
-    LOG.info("Reading schema from " + parquetFilePath);
+    LOG.info("Reading schema from {}", parquetFilePath);
 
     FileSystem fs = metaClient.getRawFs();
     ParquetMetadata fileFooter =
@@ -341,18 +340,18 @@ public class TableSchemaResolver {
   }
 
   private MessageType readSchemaFromHFileBaseFile(Path hFilePath) throws IOException {
-    LOG.info("Reading schema from " + hFilePath);
+    LOG.info("Reading schema from {}", hFilePath);
 
     FileSystem fs = metaClient.getRawFs();
     try (HoodieFileReader fileReader =
              HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-                 .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, fs.getConf(), hFilePath)) {
+                 .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, fs.getConf(), hFilePath)) {
       return convertAvroSchemaToParquet(fileReader.getSchema());
     }
   }
 
   private MessageType readSchemaFromORCBaseFile(Path orcFilePath) throws IOException {
-    LOG.info("Reading schema from " + orcFilePath);
+    LOG.info("Reading schema from {}", orcFilePath);
 
     FileSystem fs = metaClient.getRawFs();
     HoodieAvroOrcReader orcReader = new HoodieAvroOrcReader(fs.getConf(), orcFilePath);
@@ -392,7 +391,7 @@ public class TableSchemaResolver {
     // We only need to read the schema from the log block header,
     // so we read the block lazily to avoid reading block content
     // containing the records
-    try (Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null, true, false)) {
+    try (Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null, false)) {
       HoodieDataBlock lastBlock = null;
       while (reader.hasNext()) {
         HoodieLogBlock block = reader.next();
@@ -477,7 +476,7 @@ public class TableSchemaResolver {
       Schema tableAvroSchema = getTableAvroSchemaFromDataFile();
       return tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
     } catch (Exception e) {
-      LOG.info(String.format("Failed to read operation field from avro schema (%s)", e.getMessage()));
+      LOG.info("Failed to read operation field from avro schema ({})", e.getMessage());
       return false;
     }
   }
