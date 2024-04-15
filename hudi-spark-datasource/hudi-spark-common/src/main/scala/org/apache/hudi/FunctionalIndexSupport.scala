@@ -27,7 +27,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieFunctionalIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.ColumnIndexID
@@ -111,6 +111,19 @@ class FunctionalIndexSupport(spark: SparkSession,
 
     colStatsDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
       .select(requiredIndexColumns: _*)
+  }
+
+  def searchFunctionalIndex(indexFunction: String, sourceFields: List[String]): Option[Tuple2[String, HoodieFunctionalIndexDefinition]] = {
+    var result: Option[Tuple2[String, HoodieFunctionalIndexDefinition]] = Option.empty
+
+    val indexDefinitions = metaClient.getFunctionalIndexMetadata.get().getIndexDefinitions
+    indexDefinitions.forEach((indexPartition, indexDefinition) => {
+      if (indexDefinition.getIndexFunction.equals(indexFunction) && indexDefinition.getSourceFields.equals(sourceFields)) {
+        result = Option.apply(Tuple2(indexPartition, indexDefinition))
+      }
+    })
+
+    result
   }
 
   def loadFunctionalIndexDataFrame(indexPartition: String,

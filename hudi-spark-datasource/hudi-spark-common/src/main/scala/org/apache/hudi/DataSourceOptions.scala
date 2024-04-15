@@ -156,7 +156,7 @@ object DataSourceReadOptions {
 
   val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.enable.data.skipping")
-    .defaultValue(false)
+    .defaultValue(true)
     .markAdvanced()
     .sinceVersion("0.10.0")
     .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +

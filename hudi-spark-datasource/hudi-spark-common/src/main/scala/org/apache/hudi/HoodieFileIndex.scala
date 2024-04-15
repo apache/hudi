@@ -352,7 +352,7 @@ case class HoodieFileIndex(spark: SparkSession,
     } else if (functionalIndex.isIndexAvailable && !queryFilters.isEmpty) {
       val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
       val shouldReadInMemory = functionalIndex.shouldReadInMemory(this, queryReferencedColumns)
-      val indexDf = functionalIndex.loadFunctionalIndexDataFrame("", shouldReadInMemory)
+      val indexDf = functionalIndex.loadFunctionalIndexDataFrame("func_index_idx_datestr", shouldReadInMemory)
       Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
     } else if (!columnStatsIndex.isIndexAvailable || queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       validateConfig()
