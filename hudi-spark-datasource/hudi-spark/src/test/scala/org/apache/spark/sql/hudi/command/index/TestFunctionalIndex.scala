@@ -321,6 +321,49 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Create Functional Index Validate Column Stats MDT") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql("set hoodie.metadata.enable=true")
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  ts long,
+               |  price int
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts',
+               |  hoodie.metadata.record.index.enable = 'true',
+               |  hoodie.datasource.write.recordkey.field = 'id'
+               | )
+               | partitioned by(price)
+               | location '$basePath'
+       """.stripMargin)
+
+          // Insert three rows, each going into a different partition. Hence this creates three files for the table
+          spark.sql(s"insert into $tableName (id, name, ts, price) values(1, 'a1', 1000, 10)")
+          spark.sql(s"insert into $tableName (id, name, ts, price) values(2, 'a2', 200000, 100)")
+          spark.sql(s"insert into $tableName (id, name, ts, price) values(3, 'a3', 2000000000, 1000)")
+
+          val createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
+          spark.sql(createIndexSql)
+
+          // This should return three rows (representing col-stats aggregated for three files of the table)
+          val colStatsDF = spark.sql(s"select key, type, ColumnStatsMetadata from hudi_metadata('$tableName') where type = 3")
+          colStatsDF.show(false)
+          assertEquals(3, colStatsDF.count())
+        }
+      }
+    }
+  }
+
   private def assertTableIdentifier(catalogTable: CatalogTable,
                                     expectedDatabaseName: String,
                                     expectedTableName: String): Unit = {
