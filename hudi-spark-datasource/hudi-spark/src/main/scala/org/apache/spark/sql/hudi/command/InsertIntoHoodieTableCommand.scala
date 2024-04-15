@@ -22,7 +22,7 @@ import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{Alias, Cast, Literal, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Cast, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -142,12 +142,26 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     //       positionally for example
     val expectedQueryColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
     val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), cleanedQuery, catalogTable, conf)
+    val coercedQueryOutputWithoutMetaFields = removeMetaFields(coercedQueryOutput.output)
+    val dataProjectsWithoutMetaFields = getTableFieldsAlias(coercedQueryOutputWithoutMetaFields, StructType(expectedQueryColumns).fields)
     // After potential reshaping validate that the output of the query conforms to the table's schema
     validate(removeMetaFields(coercedQueryOutput.schema), partitionsSpec, catalogTable)
+    val staticPartitionValuesExprs = createStaticPartitionValuesExpressions(staticPartitionValues, targetPartitionSchema)
+    Project(dataProjectsWithoutMetaFields ++ staticPartitionValuesExprs, coercedQueryOutput)
+  }
 
-    val staticPartitionValuesExprs = createStaticPartitionValuesExpressions(staticPartitionValues, targetPartitionSchema, conf)
-
-    Project(coercedQueryOutput.output ++ staticPartitionValuesExprs, coercedQueryOutput)
+  private def getTableFieldsAlias(queryOutputWithoutMetaFields: Seq[Attribute],
+                                  schemaWithoutMetaFields: Seq[StructField]): Seq[Alias] = {
+    queryOutputWithoutMetaFields.zip(schemaWithoutMetaFields).map { case (dataAttr, dataField) =>
+      val targetAttrOption = if (dataAttr.name.startsWith("col")) {
+        None
+      } else {
+        queryOutputWithoutMetaFields.find(_.name.equals(dataField.name))
+      }
+      val targetAttr = targetAttrOption.getOrElse(dataAttr)
+      val castAttr = castIfNeeded(targetAttr.withNullability(dataField.nullable), dataField.dataType)
+      Alias(castAttr, dataField.name)()
+    }
   }
 
   private def coerceQueryOutputColumns(expectedSchema: StructType,
@@ -187,8 +201,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
   }
 
   private def createStaticPartitionValuesExpressions(staticPartitionValues: Map[String, String],
-                                                     partitionSchema: StructType,
-                                                     conf: SQLConf): Seq[NamedExpression] = {
+                                                     partitionSchema: StructType): Seq[NamedExpression] = {
     partitionSchema.fields
       .filter(pf => staticPartitionValues.contains(pf.name))
       .map(pf => {
