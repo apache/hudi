@@ -31,13 +31,12 @@ import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, Hood
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
+import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.SerDeHelper
-import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
@@ -186,13 +185,13 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
 
   protected def getConfigValue(config: ConfigProperty[String],
-                               defaultValueOption: Option[String] = Option.empty): String = {
+                             defaultValueOption: Option[String] = Option.empty): String = {
     optParams.getOrElse(config.key(),
       sqlContext.getConf(config.key(), defaultValueOption.getOrElse(config.defaultValue())))
   }
 
   protected def checkIfAConfigurationEnabled(config: ConfigProperty[java.lang.Boolean],
-                                             defaultValueOption: Option[String] = Option.empty): Boolean = {
+                                           defaultValueOption: Option[String] = Option.empty): Boolean = {
     optParams.getOrElse(config.key(),
       sqlContext.getConf(config.key(), defaultValueOption.getOrElse(String.valueOf(config.defaultValue())))).toBoolean
   }
@@ -295,10 +294,10 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
 }
 
 class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: SQLContext,
-                                                       override val metaClient: HoodieTableMetaClient,
-                                                       override val options: Map[String, String],
-                                                       override val schemaSpec: Option[StructType],
-                                                       isBootstrap: Boolean)
+                                                        override val metaClient: HoodieTableMetaClient,
+                                                        override val options: Map[String, String],
+                                                        override val schemaSpec: Option[StructType],
+                                                        isBootstrap: Boolean)
   extends HoodieMergeOnReadSnapshotHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   override val mandatoryFields: Seq[String] = Seq.empty
@@ -354,10 +353,10 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
 }
 
 class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
-                                                  override val metaClient: HoodieTableMetaClient,
-                                                  override val options: Map[String, String],
-                                                  override val schemaSpec: Option[StructType],
-                                                  isBootstrap: Boolean)
+                                                   override val metaClient: HoodieTableMetaClient,
+                                                   override val options: Map[String, String],
+                                                   override val schemaSpec: Option[StructType],
+                                                   isBootstrap: Boolean)
   extends HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
   override val fileIndex = new HoodieCDCFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), true, true)
@@ -380,4 +379,5 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
 
   override def buildPartitionSchema(): StructType = StructType(Nil)
 }
+
 

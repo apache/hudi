@@ -89,7 +89,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       checkState(keyFields.length == 1)
       keyFields.head
     }
-    new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty, false)
+    new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty)
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {

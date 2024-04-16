@@ -326,20 +326,20 @@ public class AvroInternalSchemaConverter {
       String name = logical.getName();
       if (logical instanceof LogicalTypes.Decimal) {
         return Types.DecimalType.get(
-            ((LogicalTypes.Decimal) logical).getPrecision(),
-            ((LogicalTypes.Decimal) logical).getScale());
+                ((LogicalTypes.Decimal) logical).getPrecision(),
+                ((LogicalTypes.Decimal) logical).getScale());
 
       } else if (logical instanceof LogicalTypes.Date) {
         return Types.DateType.get();
 
       } else if (
-          logical instanceof LogicalTypes.TimeMillis
-              || logical instanceof LogicalTypes.TimeMicros) {
+              logical instanceof LogicalTypes.TimeMillis
+                      || logical instanceof LogicalTypes.TimeMicros) {
         return Types.TimeType.get();
 
       } else if (
-          logical instanceof LogicalTypes.TimestampMillis
-              || logical instanceof LogicalTypes.TimestampMicros) {
+              logical instanceof LogicalTypes.TimestampMillis
+                      || logical instanceof LogicalTypes.TimestampMicros) {
         return Types.TimestampType.get();
       } else if (LogicalTypes.uuid().getName().equals(name)) {
         return Types.UUIDType.get();
@@ -567,7 +567,7 @@ public class AvroInternalSchemaConverter {
 
       default:
         throw new UnsupportedOperationException(
-            "Unsupported type ID: " + primitive.typeId());
+                "Unsupported type ID: " + primitive.typeId());
     }
   }
 

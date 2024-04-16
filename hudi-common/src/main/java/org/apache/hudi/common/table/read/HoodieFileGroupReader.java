@@ -111,17 +111,17 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readerState.recordMerger = this.recordMerger;
     this.readerState.tablePath = tablePath;
     this.readerState.latestCommitTime = latestCommitTime;
-    boolean shouldMergeWithPosition = shouldUseRecordPosition && readerContext.shouldUseRecordPositionMerging();
+    readerState.useRecordPosition = shouldUseRecordPosition;
     readerState.hasLogFiles = !this.logFiles.isEmpty();
     readerState.hasBootstrapBaseFile = hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent();
-    readerState.schemaHandler = shouldMergeWithPosition
+    readerState.schemaHandler = shouldUseRecordPosition
         ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
         : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig);
     this.schemaHandler = readerState.schemaHandler;
     this.outputConverter = schemaHandler.getOutputConverter();
     this.recordBuffer = this.logFiles.isEmpty()
         ? null
-        : shouldMergeWithPosition
+        : shouldUseRecordPosition
         ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(),
         Option.empty(), recordMerger, props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled)
         : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(),

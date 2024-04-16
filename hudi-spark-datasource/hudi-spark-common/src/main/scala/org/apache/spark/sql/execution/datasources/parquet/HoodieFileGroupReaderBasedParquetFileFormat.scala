@@ -146,8 +146,7 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
                 baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen))
               } else {
-                val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader.value,
-                  tableState.recordKeyField, filters, shouldUseRecordPosition)
+                val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader.value, tableState.recordKeyField, filters)
                 val serializedHadoopConf = broadcastedHadoopConf.value.value
                 val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                   .builder().setConf(serializedHadoopConf).setBasePath(tableState.tablePath).build
