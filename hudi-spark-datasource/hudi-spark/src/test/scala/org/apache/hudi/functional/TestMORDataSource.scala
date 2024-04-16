@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
-import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -1425,4 +1425,131 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .build()
     assertEquals(metaClient.getTableConfig.getRecordMergerStrategy, mergerStrategyName)
   }
+
+  @Test
+  def showDeleteIsInconsistent(): Unit = {
+    val merger = classOf[HoodieSparkRecordMerger].getName
+    //val merger = classOf[HoodieAvroRecordMerger].getName
+    val useFGReader = "true"
+    //val useFGReader = "false"
+    //val tableType = "COPY_ON_WRITE"
+    val tableType = "MERGE_ON_READ"
+
+
+    val columns = Seq("ts", "key", "number", "_hoodie_is_deleted")
+    val data = Seq((10, "A", 1, false), (10, "B", 1, false))
+
+    val inserts = spark.createDataFrame(data).toDF(columns: _*)
+    inserts.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "key").
+      option(PRECOMBINE_FIELD.key(), "ts").
+      option(TABLE_TYPE.key(), tableType).
+      option("hoodie.table.name", "test_table").
+      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
+      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
+      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFGReader).
+      mode(SaveMode.Overwrite).
+      save(basePath)
+
+    val updateData = Seq((9, "A", 2, false), (11, "B", 2, true))
+
+    val updates = spark.createDataFrame(updateData).toDF(columns: _*)
+
+    updates.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "key").
+      option(PRECOMBINE_FIELD.key(), "ts").
+      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(TABLE_TYPE.key(), tableType).
+      option(OPERATION.key(), "upsert").
+      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
+      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
+      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFGReader).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    val updateData2 = Seq((11, "A", 3, false), (9, "B", 3, false))
+    val updates2 = spark.createDataFrame(updateData2).toDF(columns: _*)
+    updates2.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "key").
+      option(PRECOMBINE_FIELD.key(), "ts").
+      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(TABLE_TYPE.key(), tableType).
+      option(OPERATION.key(), "upsert").
+      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
+      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
+      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFGReader).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    val df = spark.read.format("hudi").
+      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFGReader).
+      option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), "false").load(basePath)
+    val finalDf = df.select("ts", "key", "number", "_hoodie_is_deleted")
+    finalDf.show(100, false)
+    finalDf.show(100, false)
+  }
+
+  @Test
+  def showDeleteIsInconsistent2(): Unit = {
+    val merger = classOf[HoodieSparkRecordMerger].getName
+    //val merger = classOf[HoodieAvroRecordMerger].getName
+    val useFGReader = "true"
+    //val useFGReader = "false"
+    //val tableType = "COPY_ON_WRITE"
+    val tableType = "MERGE_ON_READ"
+
+
+    val columns = Seq("ts", "key", "number", "_hoodie_is_deleted")
+    val data = Seq((10, "A", 1, false), (10, "B", 1, false))
+
+    val inserts = spark.createDataFrame(data).toDF(columns: _*)
+    inserts.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "key").
+      option(PRECOMBINE_FIELD.key(), "ts").
+      option(TABLE_TYPE.key(), tableType).
+      option("hoodie.table.name", "test_table").
+      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
+      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
+      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFGReader).
+      mode(SaveMode.Overwrite).
+      save(basePath)
+
+    val updateData = Seq((12, "A", 2, false), (9, "B", 2, true))
+
+    val updates = spark.createDataFrame(updateData).toDF(columns: _*)
+
+    updates.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "key").
+      option(PRECOMBINE_FIELD.key(), "ts").
+      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(TABLE_TYPE.key(), tableType).
+      option(OPERATION.key(), "upsert").
+      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
+      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
+      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFGReader).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    val updateData2 = Seq((11, "A", 3, false), (8, "B", 3, false))
+    val updates2 = spark.createDataFrame(updateData2).toDF(columns: _*)
+    updates2.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "key").
+      option(PRECOMBINE_FIELD.key(), "ts").
+      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(TABLE_TYPE.key(), tableType).
+      option(OPERATION.key(), "upsert").
+      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
+      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
+      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFGReader).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    val df = spark.read.format("hudi").
+      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFGReader).
+      option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), "false").load(basePath)
+    val finalDf = df.select("ts", "key", "number", "_hoodie_is_deleted")
+    finalDf.show(100, false)
+    finalDf.show(100, false)
+  }
+
 }

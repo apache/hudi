@@ -20,6 +20,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -44,36 +45,26 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
-
-    if (newer instanceof HoodieSparkRecord) {
-      HoodieSparkRecord newSparkRecord = (HoodieSparkRecord) newer;
-      if (newSparkRecord.isDeleted()) {
-        // Delete record
-        return Option.empty();
-      }
-    } else {
-      if (newer.getData() == null) {
-        // Delete record
-        return Option.empty();
-      }
-    }
-
-    if (older instanceof HoodieSparkRecord) {
-      HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
-      if (oldSparkRecord.isDeleted()) {
-        // use natural order for delete record
+    try {
+      Comparable olderOrderingValue = older.getOrderingValue(oldSchema, props);
+      Comparable newerOrderingValue = newer.getOrderingValue(newSchema, props);
+      if (olderOrderingValue.compareTo(newerOrderingValue) > 0) {
+        if (older instanceof HoodieEmptyRecord) {
+          newer.setOrderingValue(olderOrderingValue);
+          return Option.of(Pair.of(newer, newSchema));
+        }
+        HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
+        if (oldSparkRecord.isDelete(oldSchema, props)) {
+          newer.setOrderingValue(olderOrderingValue);
+          return Option.of(Pair.of(newer, newSchema));
+        }
+        return Option.of(Pair.of(older, oldSchema));
+      } else {
         return Option.of(Pair.of(newer, newSchema));
       }
-    } else {
-      if (older.getData() == null) {
-        // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
-      }
-    }
-    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
-      return Option.of(Pair.of(older, oldSchema));
-    } else {
-      return Option.of(Pair.of(newer, newSchema));
+    } catch (Exception e) {
+      System.out.println(e.getMessage());
+      throw e;
     }
   }
 

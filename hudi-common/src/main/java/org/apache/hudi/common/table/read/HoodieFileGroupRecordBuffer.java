@@ -78,7 +78,7 @@ public interface HoodieFileGroupRecordBuffer<T> {
    *
    * @param deleteRecord
    */
-  void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index);
+  void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) throws IOException;
 
   /**
    * Check if a record exists in the buffered records.

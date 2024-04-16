@@ -207,7 +207,20 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return operation;
   }
 
-  public abstract Comparable<?> getOrderingValue(Schema recordSchema, Properties props);
+  private Comparable orderingValue = null;
+
+  public final void setOrderingValue(Comparable value) {
+    this.orderingValue = value;
+  }
+
+  public final Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+    if (orderingValue != null) {
+      return orderingValue;
+    }
+    return doGetOrderingValue(recordSchema, props);
+  }
+
+  protected abstract Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props);
 
   public T getData() {
     if (data == null) {
