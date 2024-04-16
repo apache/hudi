@@ -61,6 +61,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -215,7 +218,7 @@ public abstract class AbstractHoodieLogRecordReader {
   protected final void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
     synchronized (this) {
       if (enableOptimizedLogBlocksScan) {
-        scanInternalV2(keySpecOpt, skipProcessingBlocks);
+        scanInternalV3(keySpecOpt, skipProcessingBlocks);
       } else {
         scanInternalV1(keySpecOpt);
       }
@@ -524,6 +527,121 @@ public abstract class AbstractHoodieLogRecordReader {
       curCommitBlockMap.get(0L).add(Pair.of(blockSeqNumber, logBlock));
       // update the latest to block sequence tracker
       blockSequenceMapPerCommit.put(instantTime, curCommitBlockMap);
+    }
+  }
+
+  private void scanInternalV3(Option<KeySpec> keySpecOption, boolean skipProcessingBlocks) {
+    totalLogFiles = new AtomicLong(0);
+    totalRollbacks = new AtomicLong(0);
+    totalCorruptBlocks = new AtomicLong(0);
+    totalLogBlocks = new AtomicLong(0);
+    totalLogRecords = new AtomicLong(0);
+    ConcurrentMap<String, List<HoodieLogBlock>> instantToBlocksMap = new ConcurrentHashMap<>();
+    ConcurrentMap<String, String> blockTimeToCompactionBlockTimeMap = new ConcurrentHashMap<>();
+    currentInstantLogBlocks = new ConcurrentLinkedDeque<>();
+    Set<String> targetRollbackInstants = ConcurrentHashMap.newKeySet();
+    Set<HoodieLogFile> scannedLogFiles = ConcurrentHashMap.newKeySet();
+
+    try (HoodieLogFormatReader logFormatReaderWrapper = new HoodieLogFormatReader(fs,
+        logFilePaths.stream().map(logFile -> new HoodieLogFile(new CachingPath(logFile))).collect(Collectors.toList()),
+        readerSchema, true, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema)) {
+      while (logFormatReaderWrapper.hasNext()) {
+        HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
+        LOG.info("Scanning log file " + logFile);
+        scannedLogFiles.add(logFile);
+        totalLogFiles.set(scannedLogFiles.size());
+        HoodieLogBlock logBlock = logFormatReaderWrapper.next();
+
+        if (shouldSkipBlock(logBlock)) {
+          continue;
+        }
+
+        switch (logBlock.getBlockType()) {
+          case HFILE_DATA_BLOCK:
+          case AVRO_DATA_BLOCK:
+          case PARQUET_DATA_BLOCK:
+          case DELETE_BLOCK:
+            processRegularDataBlock(logBlock, instantToBlocksMap, blockTimeToCompactionBlockTimeMap, currentInstantLogBlocks);
+            break;
+          case COMMAND_BLOCK:
+            processCommandBlock(logBlock, instantToBlocksMap, targetRollbackInstants);
+            break;
+          default:
+            throw new UnsupportedOperationException("Block type not yet supported.");
+        }
+      }
+      // merge the last read block when all the blocks are done reading
+      if (!currentInstantLogBlocks.isEmpty() && !skipProcessingBlocks) {
+        LOG.info("Merging the final data blocks");
+        processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOption);
+      }
+    } catch (IOException e) {
+      LOG.error("Got IOException when reading log file", e);
+      throw new HoodieIOException("IOException when reading log file ", e);
+    } catch (Exception e) {
+      LOG.error("Got exception when reading log file", e);
+      throw new HoodieException("Exception when reading log file ", e);
+    }
+  }
+
+  private boolean shouldSkipBlock(HoodieLogBlock logBlock) {
+    if (logBlock.getBlockType().equals(CORRUPT_BLOCK)) {
+      totalCorruptBlocks.incrementAndGet();
+      return true;
+    }
+    HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
+    HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
+    HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
+    String instantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
+    if (logBlock.getBlockType() != COMMAND_BLOCK) {
+      if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
+          || inflightInstantsTimeline.containsInstant(instantTime)) {
+        // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
+        return true;
+      }
+      if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
+        // filter the log block by instant range
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private void processRegularDataBlock(HoodieLogBlock logBlock, ConcurrentMap<String, List<HoodieLogBlock>> instantToBlocksMap, ConcurrentMap<String, String> blockTimeToCompactionBlockTimeMap,
+                                       Deque<HoodieLogBlock> processingDeque) {
+    String instantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
+    instantToBlocksMap.compute(instantTime, (key, val) -> {
+      if (val == null) {
+        val = new ArrayList<>();
+      }
+      val.add(logBlock);
+      return val;
+    });
+
+    // For compacted blocks
+    if (logBlock.getLogBlockHeader().containsKey(COMPACTED_BLOCK_TIMES)) {
+      Arrays.stream(logBlock.getLogBlockHeader().get(COMPACTED_BLOCK_TIMES).split(","))
+          .forEach(originalInstant -> {
+            String finalInstant = blockTimeToCompactionBlockTimeMap.getOrDefault(instantTime, instantTime);
+            blockTimeToCompactionBlockTimeMap.put(originalInstant, finalInstant);
+            if (!processingDeque.contains(logBlock)) {
+              processingDeque.addLast(logBlock);
+            }
+          });
+    } else {
+      String compactedFinalInstantTime = blockTimeToCompactionBlockTimeMap.get(instantTime);
+      if (compactedFinalInstantTime == null) {
+        processingDeque.addLast(logBlock);
+      }
+    }
+  }
+
+  private void processCommandBlock(HoodieLogBlock logBlock, ConcurrentMap<String, List<HoodieLogBlock>> instantToBlocksMap, Set<String> targetRollbackInstants) {
+    if (((HoodieCommandBlock) logBlock).getType().equals(ROLLBACK_BLOCK)) {
+      totalRollbacks.incrementAndGet();
+      String targetInstantForCommandBlock = logBlock.getLogBlockHeader().get(TARGET_INSTANT_TIME);
+      targetRollbackInstants.add(targetInstantForCommandBlock);
+      instantToBlocksMap.remove(targetInstantForCommandBlock);
     }
   }
 
