@@ -329,6 +329,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
           spark.sql("set hoodie.metadata.enable=true")
+          spark.sql("set hoodie.enable.data.skipping=true")
           spark.sql(
             s"""
                |create table $tableName (

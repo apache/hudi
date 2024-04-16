@@ -345,20 +345,16 @@ case class HoodieFileIndex(spark: SparkSession,
 
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
     lazy val (_, recordKeys) = recordLevelIndex.filterQueriesWithRecordKey(queryFilters)
+    lazy val functionalIndexPartitionOpt = functionalIndex.getFunctionalIndexPartition(queryFilters)
     if (!isMetadataTableEnabled || !isDataSkippingEnabled) {
       validateConfig()
       Option.empty
     } else if (recordKeys.nonEmpty) {
       Option.apply(recordLevelIndex.getCandidateFiles(getAllFiles(), recordKeys))
-    } else if (functionalIndex.isIndexAvailable && queryFilters.nonEmpty && functionalIndex.extractSparkFunctionNames(queryFilters).nonEmpty) {
-      val functionToColumnNames = functionalIndex.extractSparkFunctionNames(queryFilters)
-      // Currently, only one functional index in the query is supported. HUDI-7620 for supporting multiple functions.
-      checkState(functionToColumnNames.size == 1, "Currently, only one function with functional index in the query is supported")
-      val (indexFunction, targetColumnName) = functionToColumnNames.head
-      val partitionOption = functionalIndex.getFunctionalIndexPartition(indexFunction, targetColumnName)
-      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
+    } else if (functionalIndex.isIndexAvailable && queryFilters.nonEmpty && functionalIndexPartitionOpt.nonEmpty) {
       val shouldReadInMemory = functionalIndex.shouldReadInMemory(this, queryReferencedColumns)
-      val indexDf = functionalIndex.loadFunctionalIndexDataFrame(partitionOption.get, shouldReadInMemory)
+      val indexDf = functionalIndex.loadFunctionalIndexDataFrame(functionalIndexPartitionOpt.get, shouldReadInMemory)
+      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
       Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
     } else if (!columnStatsIndex.isIndexAvailable || queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       validateConfig()

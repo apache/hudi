@@ -115,6 +115,38 @@ class FunctionalIndexSupport(spark: SparkSession,
   }
 
   /**
+   * Searches for an index partition based on the specified index function and target column name.
+   *
+   * This method looks up the index definitions available in the metadata of a `metaClient` instance
+   * and attempts to find an index partition where the index function and the source fields match
+   * the provided arguments. If a matching index definition is found, the partition identifier for
+   * that index is returned.
+   *
+   * @param queryFilters A sequence of `Expression` objects to analyze. Each expression should involve a single column
+   *                     for the method to consider it (expressions involving multiple columns are skipped).
+   * @return An `Option` containing the index partition identifier if a matching index definition is found.
+   *         Returns `None` if no matching index definition is found.
+   */
+  def getFunctionalIndexPartition(queryFilters: Seq[Expression]): Option[String] = {
+    val functionToColumnNames = extractSparkFunctionNames(queryFilters)
+    if (functionToColumnNames.nonEmpty) {
+      // Currently, only one functional index in the query is supported. HUDI-7620 for supporting multiple functions.
+      checkState(functionToColumnNames.size == 1, "Currently, only one function with functional index in the query is supported")
+      val (indexFunction, targetColumnName) = functionToColumnNames.head
+      val indexDefinitions = metaClient.getFunctionalIndexMetadata.get().getIndexDefinitions
+      indexDefinitions.asScala.foreach {
+        case (indexPartition, indexDefinition) =>
+          if (indexDefinition.getIndexFunction.equals(indexFunction) && indexDefinition.getSourceFields.contains(targetColumnName)) {
+            Option.apply(indexPartition)
+          }
+      }
+      Option.empty
+    } else {
+      Option.empty
+    }
+  }
+
+  /**
    * Extracts mappings from function names to column names from a sequence of expressions.
    *
    * This method iterates over a given sequence of Spark SQL expressions and identifies expressions
@@ -122,16 +154,8 @@ class FunctionalIndexSupport(spark: SparkSession,
    * expressions that are simple binary expressions involving a single column. If an expression contains
    * one of the functions and operates on a single column, this method maps the function name to the
    * column name.
-   *
-   * @param queryFilters A sequence of `Expression` objects to analyze. Each expression should involve a
-   *                     single column for the method to consider it (expressions involving multiple columns
-   *                     are skipped).
-   * @return A `Map` where each key is a function name from `SPARK_FUNCTION_MAP` found in the expressions,
-   *         and the corresponding value is the name of the column on which that function is called.
-   *         If no matching functions are found, or if the conditions are not met (e.g., multiple columns
-   *         in an expression), the map will be empty.
    */
-  def extractSparkFunctionNames(queryFilters: Seq[Expression]): Map[String, String] = {
+  private def extractSparkFunctionNames(queryFilters: Seq[Expression]): Map[String, String] = {
     queryFilters.flatMap { expr =>
       // Support only simple binary expression on single column
       if (expr.references.size == 1) {
@@ -145,31 +169,6 @@ class FunctionalIndexSupport(spark: SparkSession,
         None // Skip expressions that do not match the criteria
       }
     }.toMap
-  }
-
-  /**
-   * Searches for an index partition based on the specified index function and target column name.
-   *
-   * This method looks up the index definitions available in the metadata of a `metaClient` instance
-   * and attempts to find an index partition where the index function and the source fields match
-   * the provided arguments. If a matching index definition is found, the partition identifier for
-   * that index is returned.
-   *
-   * @param indexFunction    The name of the index function to match in the index definitions.
-   * @param targetColumnName The name of the column to match in the index definitions' source fields.
-   * @return An `Option` containing the index partition identifier if a matching index definition is found.
-   *         Returns `None` if no matching index definition is found.
-   */
-  def getFunctionalIndexPartition(indexFunction: String, targetColumnName: String): Option[String] = {
-    var result: Option[String] = Option.empty
-    val indexDefinitions = metaClient.getFunctionalIndexMetadata.get().getIndexDefinitions
-    indexDefinitions.forEach((indexPartition, indexDefinition) => {
-      if (indexDefinition.getIndexFunction.equals(indexFunction) && indexDefinition.getSourceFields.contains(targetColumnName)) {
-        result = Option.apply(indexPartition)
-      }
-    })
-
-    result
   }
 
   def loadFunctionalIndexDataFrame(indexPartition: String,
