@@ -79,7 +79,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
     inserts.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option("hoodie.table.name", "test_table").
       option(TABLE_TYPE.key(), "MERGE_ON_READ").
       option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
       option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID).
@@ -96,7 +96,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
     updates.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option("hoodie.table.name", "test_table").
       option(TABLE_TYPE.key(), "MERGE_ON_READ").
       option(OPERATION.key(), "upsert").
       option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
@@ -113,7 +113,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
     deletes.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option("hoodie.table.name", "test_table").
       option(TABLE_TYPE.key(), "MERGE_ON_READ").
       option(OPERATION.key(), "upsert").
       option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
@@ -130,7 +130,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
     secondUpdates.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option("hoodie.table.name", "test_table").
       option(TABLE_TYPE.key(), "MERGE_ON_READ").
       option(OPERATION.key(), "upsert").
       option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").

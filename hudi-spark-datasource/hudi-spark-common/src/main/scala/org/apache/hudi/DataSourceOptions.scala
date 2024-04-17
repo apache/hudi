@@ -964,11 +964,6 @@ object DataSourceOptionsHelper {
 
   def translateConfigurations(optParams: Map[String, String]): Map[String, String] = {
     val translatedOpt = scala.collection.mutable.Map[String, String]() ++= optParams
-    if (!translatedOpt.contains(HoodieTableConfig.HOODIE_TABLE_NAME_KEY) &&
-      translatedOpt.contains(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY)) {
-      translatedOpt.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY,
-        translatedOpt(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY))
-    }
     optParams.keySet.foreach(opt => {
       if (allAlternatives.contains(opt) && !optParams.contains(allAlternatives(opt))) {
         log.warn(opt + " is deprecated and will be removed in a later release; Please use " + allAlternatives(opt))
