@@ -122,3 +122,11 @@ f5916bb302e [ENG-8344][INTERNAL] Fix typo in workflow (#640)
 b3286a546dc [ENG-8344][INTERNAL] fix name of ref in workflow (#639)
 af2a99fe2bb [ENG-8344][INTERNAL] Update CI to run spark tests on merge to master (#638)
 d506f4b9608 [AUDIT-726] Upgrade to version release-v1.8.1 (#636)
+
+---[2024-04-17 16:24:37] [release-v1.10.0] ---
+493ab4d29 [ENG-8210][HUDI-7606] Unpersist RDDs after table services, mainly compaction and clustering (#650)
+d74f32b21 [ENG-8577][HUDI-7617] Fix issues for bulk insert user defined partitioner in StreamSync (#645)
+7f7f52e97 [ENG-8657][HUDI-7616] Avoid multiple cleaner plans and deprecate hoodie.clean.allow.multiple (#649)
+7d65c9134 [ENG-6353][HUDI-7378] Fix Spark SQL DML with custom key generator (#535)
+60023c101 [ENG-6324][HUDI-7391] HoodieMetadataMetrics should use Metrics instance for metrics registry (#536)
+8689cc42e [AUDIT-737] Upgrade to version release-v1.9.0 (#647)
