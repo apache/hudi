@@ -185,7 +185,7 @@ public class IncrSourceHelper {
     if (sourceData.isEmpty()) {
       // There is no file matching the prefix.
       CloudObjectIncrCheckpoint updatedCheckpoint =
-              queryInfo.getEndInstant() == cloudObjectIncrCheckpoint.getCommit()
+              queryInfo.getEndInstant().equals(cloudObjectIncrCheckpoint.getCommit())
                       ? cloudObjectIncrCheckpoint
                       : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
       return Pair.of(updatedCheckpoint, Option.empty());
@@ -212,7 +212,7 @@ public class IncrSourceHelper {
         // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c1, return c1#abc.
         // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c2, return c2.
         CloudObjectIncrCheckpoint updatedCheckpoint =
-            queryInfo.getEndInstant() == cloudObjectIncrCheckpoint.getCommit()
+            queryInfo.getEndInstant().equals(cloudObjectIncrCheckpoint.getCommit())
                 ? cloudObjectIncrCheckpoint
                 : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
         return Pair.of(updatedCheckpoint, Option.empty());
