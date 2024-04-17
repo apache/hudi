@@ -50,7 +50,6 @@ import scala.Function1;
 
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
-import static org.apache.hudi.common.model.HoodieRecordMerger.PRECOMBINE_BASED_MERGER_STRATEGY_UUID;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 /**
@@ -68,8 +67,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     switch (mergerStrategy) {
       case DEFAULT_MERGER_STRATEGY_UUID:
         return new HoodieSparkRecordMerger();
-      case PRECOMBINE_BASED_MERGER_STRATEGY_UUID:
-        return new PrecombineBasedSparkRecordMerger();
       default:
         throw new HoodieException("The merger strategy UUID is not supported: " + mergerStrategy);
     }
