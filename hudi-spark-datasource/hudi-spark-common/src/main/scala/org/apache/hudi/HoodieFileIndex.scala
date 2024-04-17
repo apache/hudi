@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.HoodieMetadataPayload
@@ -344,15 +345,16 @@ case class HoodieFileIndex(spark: SparkSession,
 
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
     lazy val (_, recordKeys) = recordLevelIndex.filterQueriesWithRecordKey(queryFilters)
+    lazy val functionalIndexPartitionOpt = functionalIndex.getFunctionalIndexPartition(queryFilters)
     if (!isMetadataTableEnabled || !isDataSkippingEnabled) {
       validateConfig()
       Option.empty
     } else if (recordKeys.nonEmpty) {
       Option.apply(recordLevelIndex.getCandidateFiles(getAllFiles(), recordKeys))
-    } else if (functionalIndex.isIndexAvailable && !queryFilters.isEmpty) {
-      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
+    } else if (functionalIndex.isIndexAvailable && queryFilters.nonEmpty && functionalIndexPartitionOpt.nonEmpty) {
       val shouldReadInMemory = functionalIndex.shouldReadInMemory(this, queryReferencedColumns)
-      val indexDf = functionalIndex.loadFunctionalIndexDataFrame("", shouldReadInMemory)
+      val indexDf = functionalIndex.loadFunctionalIndexDataFrame(functionalIndexPartitionOpt.get, shouldReadInMemory)
+      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
       Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
     } else if (!columnStatsIndex.isIndexAvailable || queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       validateConfig()

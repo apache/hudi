@@ -241,9 +241,6 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         .withLatestInstantTime(INSTANT_TIME)
         .withMaxMemorySizeInBytes(
             HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
-        .withReadBlocksLazily(
-            Boolean.parseBoolean(
-                HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue()))
         .withReverseReader(
             Boolean.parseBoolean(
                 HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue()))

@@ -246,7 +246,7 @@ public interface HoodieLogFormat {
       }
 
       if (logVersion == null) {
-        LOG.info("Computing the next log version for " + logFileId + " in " + parentPath);
+        LOG.info("Computing the next log version for {} in {}", logFileId, parentPath);
         if (logWriteToken == null) {
           // if the log write toke is null, scans the fs to fetch the latest write token.
           Option<Pair<Integer, String>> versionAndWriteToken =
@@ -264,8 +264,7 @@ public interface HoodieLogFormat {
           // the log format writer handles the existence check.
           logVersion = HoodieLogFile.LOGFILE_BASE_VERSION;
         }
-        LOG.info("Computed the next log version for " + logFileId + " in " + parentPath + " as " + logVersion
-            + " with write-token " + logWriteToken);
+        LOG.info("Computed the next log version for {} in {} as {} with write-token {}", logFileId, parentPath, logVersion, logWriteToken);
       }
 
       if (logWriteToken == null) {
@@ -283,7 +282,7 @@ public interface HoodieLogFormat {
 
       Path logPath = new Path(parentPath,
           FSUtils.makeLogFileName(logFileId, fileExtension, instantTime, logVersion, logWriteToken));
-      LOG.info("HoodieLogFile on path " + logPath);
+      LOG.info("HoodieLogFile on path {}", logPath);
       HoodieLogFile logFile = new HoodieLogFile(logPath, fileLen);
 
       if (bufferSize == null) {
@@ -305,13 +304,11 @@ public interface HoodieLogFormat {
 
   static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema)
       throws IOException {
-    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
+    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE);
   }
 
-  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
-      boolean readBlockLazily, boolean reverseReader) throws IOException {
-    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, readBlockLazily,
-        reverseReader);
+  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean reverseReader) throws IOException {
+    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, reverseReader);
   }
 
   /**

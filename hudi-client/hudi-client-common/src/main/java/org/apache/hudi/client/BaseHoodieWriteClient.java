@@ -236,11 +236,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       commit(table, commitActionType, instantTime, metadata, stats, writeStatuses);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
-      releaseResources(instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
       this.txnManager.endTransaction(Option.of(inflightInstant));
+      releaseResources(instantTime);
     }
 
     // trigger clean and archival.

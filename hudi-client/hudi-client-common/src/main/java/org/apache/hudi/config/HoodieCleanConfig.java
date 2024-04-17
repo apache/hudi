@@ -48,9 +48,9 @@ import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_FILE
     description = "Cleaning (reclamation of older/unused file groups/slices).")
 public class HoodieCleanConfig extends HoodieConfig {
 
-  private static final String CLEANER_COMMITS_RETAINED_KEY = "hoodie.cleaner.commits.retained";
-  private static final String CLEANER_HOURS_RETAINED_KEY = "hoodie.cleaner.hours.retained";
-  private static final String CLEANER_FILE_VERSIONS_RETAINED_KEY = "hoodie.cleaner.fileversions.retained";
+  private static final String CLEANER_COMMITS_RETAINED_KEY = "hoodie.clean.commits.retained";
+  private static final String CLEANER_HOURS_RETAINED_KEY = "hoodie.clean.hours.retained";
+  private static final String CLEANER_FILE_VERSIONS_RETAINED_KEY = "hoodie.clean.fileversions.retained";
 
   public static final ConfigProperty<String> AUTO_CLEAN = ConfigProperty
       .key("hoodie.clean.automatic")
@@ -61,8 +61,9 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "growth is bounded.");
 
   public static final ConfigProperty<String> ASYNC_CLEAN = ConfigProperty
-      .key("hoodie.clean.async")
+      .key("hoodie.clean.async.enabled")
       .defaultValue("false")
+      .withAlternatives("hoodie.clean.async")
       .withDocumentation("Only applies when " + AUTO_CLEAN.key() + " is turned on. "
           + "When turned on runs cleaner async with writing, which can speed up overall write performance.");
 
@@ -70,8 +71,9 @@ public class HoodieCleanConfig extends HoodieConfig {
   // CLEANER_COMMITS_RETAINED, CLEANER_HOURS_RETAINED, CLEANER_FILE_VERSIONS_RETAINED
   @Deprecated
   public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
-      .key("hoodie.cleaner.policy")
+      .key("hoodie.clean.policy")
       .defaultValue(KEEP_LATEST_COMMITS.name())
+      .withAlternatives("hoodie.cleaner.policy")
       .withDocumentation(HoodieCleaningPolicy.class)
       .markAdvanced()
       .withInferFunction(cfg -> {
@@ -81,9 +83,9 @@ public class HoodieCleanConfig extends HoodieConfig {
 
         // If the cleaner policy is not configured, the cleaner policy is inferred only when one
         // of the following configs are explicitly configured by the user:
-        // "hoodie.cleaner.commits.retained" (inferred as KEEP_LATEST_COMMITS)
-        // "hoodie.cleaner.hours.retained" (inferred as KEEP_LATEST_BY_HOURS)
-        // "hoodie.cleaner.fileversions.retained" (inferred as KEEP_LATEST_FILE_VERSIONS)
+        // "hoodie.clean.commits.retained" (inferred as KEEP_LATEST_COMMITS)
+        // "hoodie.clean.hours.retained" (inferred as KEEP_LATEST_BY_HOURS)
+        // "hoodie.clean.fileversions.retained" (inferred as KEEP_LATEST_FILE_VERSIONS)
         if (isCommitsRetainedConfigured && !isHoursRetainedConfigured && !isFileVersionsRetainedConfigured) {
           return Option.of(KEEP_LATEST_COMMITS.name());
         }
@@ -124,22 +126,25 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation(CleaningTriggerStrategy.class);
 
   public static final ConfigProperty<String> CLEAN_MAX_COMMITS = ConfigProperty
-      .key("hoodie.clean.max.commits")
+      .key("hoodie.clean.trigger.max.commits")
       .defaultValue("1")
+      .withAlternatives("hoodie.clean.max.commits")
       .markAdvanced()
       .withDocumentation("Number of commits after the last clean operation, before scheduling of a new clean is attempted.");
 
   public static final ConfigProperty<String> CLEANER_INCREMENTAL_MODE_ENABLE = ConfigProperty
-      .key("hoodie.cleaner.incremental.mode")
+      .key("hoodie.clean.incremental.enabled")
       .defaultValue("true")
+      .withAlternatives("hoodie.cleaner.incremental.mode")
       .markAdvanced()
       .withDocumentation("When enabled, the plans for each cleaner service run is computed incrementally off the events "
           + "in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full "
           + "table for each planning (even with a metadata table).");
 
   public static final ConfigProperty<String> FAILED_WRITES_CLEANER_POLICY = ConfigProperty
-      .key("hoodie.cleaner.policy.failed.writes")
+      .key("hoodie.clean.failed.writes.policy")
       .defaultValue(HoodieFailedWritesCleaningPolicy.EAGER.name())
+      .withAlternatives("hoodie.cleaner.policy.failed.writes")
       .withInferFunction(cfg -> {
         Option<String> writeConcurrencyModeOpt = Option.ofNullable(cfg.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE));
         if (!writeConcurrencyModeOpt.isPresent()
@@ -152,8 +157,9 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation(HoodieFailedWritesCleaningPolicy.class);
 
   public static final ConfigProperty<String> CLEANER_PARALLELISM_VALUE = ConfigProperty
-      .key("hoodie.cleaner.parallelism")
+      .key("hoodie.clean.parallelism")
       .defaultValue("200")
+      .withAlternatives("hoodie.cleaner.parallelism")
       .markAdvanced()
       .withDocumentation("This config controls the behavior of both the cleaning plan and "
           + "cleaning execution. Deriving the cleaning plan is parallelized at the table "
@@ -167,17 +173,21 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "execution is slow due to limited parallelism, you can increase this to tune the "
           + "performance..");
 
+  @Deprecated
   public static final ConfigProperty<Boolean> ALLOW_MULTIPLE_CLEANS = ConfigProperty
-      .key("hoodie.clean.allow.multiple")
-      .defaultValue(true)
+      .key("hoodie.clean.multiple.enabled")
+      .defaultValue(false)
+      .withAlternatives("hoodie.clean.allow.multiple")
       .markAdvanced()
       .sinceVersion("0.11.0")
+      .deprecatedAfter("1.0.0")
       .withDocumentation("Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, "
           + ".i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.");
 
   public static final ConfigProperty<String> CLEANER_BOOTSTRAP_BASE_FILE_ENABLE = ConfigProperty
-      .key("hoodie.cleaner.delete.bootstrap.base.file")
+      .key("hoodie.clean.delete.bootstrap.base.file")
       .defaultValue("false")
+      .withAlternatives("hoodie.cleaner.delete.bootstrap.base.file")
       .markAdvanced()
       .withDocumentation("When set to true, cleaner also deletes the bootstrap base file when it's skeleton base file is "
           + "cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the "
