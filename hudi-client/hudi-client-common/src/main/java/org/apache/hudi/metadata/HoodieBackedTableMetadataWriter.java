@@ -781,7 +781,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
         final HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), false, blockHeader);
 
-        HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
+        try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
             .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), partitionName))
             .withFileId(fileGroupFileId)
             .withDeltaCommit(instantTime)
@@ -791,9 +791,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             .withFs(dataMetaClient.getFs())
             .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
-        writer.appendBlock(block);
-        writer.close();
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build()) {
+          writer.appendBlock(block);
+        }
       } catch (InterruptedException e) {
         throw new HoodieException(String.format("Failed to created fileGroup %s for partition %s", fileGroupFileId, partitionName), e);
       }

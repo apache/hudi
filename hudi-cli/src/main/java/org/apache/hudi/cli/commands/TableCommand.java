@@ -403,12 +403,8 @@ public class TableCommand {
     if (outFile.exists()) {
       outFile.delete();
     }
-    OutputStream os = null;
-    try {
-      os = new FileOutputStream(outFile);
+    try (OutputStream os = new FileOutputStream(outFile)) {
       os.write(getUTF8Bytes(data), 0, data.length());
-    } finally {
-      os.close();
     }
   }
 }
