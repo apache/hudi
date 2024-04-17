@@ -24,9 +24,13 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.BufferedFSInputStream;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -153,5 +157,91 @@ public class HadoopFSUtils {
         pathInfo.getBlockSize(),
         pathInfo.getModificationTime(),
         convertToHadoopPath(pathInfo.getPath()));
+  }
+
+  /**
+   * Fetch the right {@link FSDataInputStream} to be used by wrapping with required input streams.
+   *
+   * @param fs         instance of {@link FileSystem} in use.
+   * @param filePath   path of the file.
+   * @param bufferSize buffer size to be used.
+   * @return the right {@link FSDataInputStream} as required.
+   */
+  public static FSDataInputStream getFSDataInputStream(FileSystem fs,
+                                                       StoragePath filePath,
+                                                       int bufferSize) {
+    FSDataInputStream fsDataInputStream = null;
+    try {
+      fsDataInputStream = fs.open(new Path(filePath.toUri()), bufferSize);
+    } catch (IOException e) {
+      throw new HoodieIOException("Exception creating input stream from file: " + filePath, e);
+    }
+
+    if (isGCSFileSystem(fs)) {
+      // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception
+      return new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCS(fsDataInputStream, filePath, bufferSize), true);
+    }
+
+    if (isCHDFileSystem(fs)) {
+      return new BoundedFsDataInputStream(fs, new Path(filePath.toUri()), fsDataInputStream);
+    }
+
+    if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
+      return new TimedFSDataInputStream(new Path(filePath.toUri()), new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
+    }
+
+    // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
+    // need to wrap in another BufferedFSInputStream the make bufferSize work?
+    return fsDataInputStream;
+  }
+
+  /**
+   * GCS FileSystem needs some special handling for seek and hence this method assists to fetch the right {@link FSDataInputStream} to be
+   * used by wrapping with required input streams.
+   *
+   * @param fsDataInputStream original instance of {@link FSDataInputStream}.
+   * @param filePath          path of the file.
+   * @param bufferSize        buffer size to be used.
+   * @return the right {@link FSDataInputStream} as required.
+   */
+  private static FSDataInputStream getFSDataInputStreamForGCS(FSDataInputStream fsDataInputStream,
+                                                              StoragePath filePath,
+                                                              int bufferSize) {
+    // in case of GCS FS, there are two flows.
+    // a. fsDataInputStream.getWrappedStream() instanceof FSInputStream
+    // b. fsDataInputStream.getWrappedStream() not an instanceof FSInputStream, but an instance of FSDataInputStream.
+    // (a) is handled in the first if block and (b) is handled in the second if block. If not, we fallback to original fsDataInputStream
+    if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
+      return new TimedFSDataInputStream(new Path(filePath.toUri()), new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
+    }
+
+    if (fsDataInputStream.getWrappedStream() instanceof FSDataInputStream
+        && ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream() instanceof FSInputStream) {
+      FSInputStream inputStream = (FSInputStream) ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream();
+      return new TimedFSDataInputStream(new Path(filePath.toUri()),
+          new FSDataInputStream(new BufferedFSInputStream(inputStream, bufferSize)));
+    }
+
+    return fsDataInputStream;
+  }
+
+  /**
+   * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
+   *
+   * @param fs fileSystem instance.
+   * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
+   */
+  public static boolean isGCSFileSystem(FileSystem fs) {
+    return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
+  }
+
+  /**
+   * Chdfs will throw {@code IOException} instead of {@code EOFException}. It will cause error in isBlockCorrupted().
+   * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
+   */
+  public static boolean isCHDFileSystem(FileSystem fs) {
+    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
   }
 }

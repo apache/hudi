@@ -24,6 +24,7 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.SeekableDataInputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +52,12 @@ public abstract class HoodieStorage implements Closeable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract String getScheme();
+
+  /**
+   * @return the default block size.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract int getDefaultBlockSize(StoragePath path);
 
   /**
    * Returns a URI which identifies this HoodieStorage.
@@ -81,6 +88,17 @@ public abstract class HoodieStorage implements Closeable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract InputStream open(StoragePath path) throws IOException;
+
+  /**
+   * Opens an SeekableDataInputStream at the indicated path with seeks supported.
+   *
+   * @param path       the file to open.
+   * @param bufferSize buffer size to use.
+   * @return the InputStream to read from.
+   * @throws IOException IO error.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract SeekableDataInputStream openSeekable(StoragePath path, int bufferSize) throws IOException;
 
   /**
    * Appends to an existing file (optional operation).
@@ -330,6 +348,18 @@ public abstract class HoodieStorage implements Closeable {
       create(path, false).close();
       return true;
     }
+  }
+
+  /**
+   * Opens an SeekableDataInputStream at the indicated path with seeks supported.
+   *
+   * @param path the file to open.
+   * @return the InputStream to read from.
+   * @throws IOException IO error.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public SeekableDataInputStream openSeekable(StoragePath path) throws IOException {
+    return openSeekable(path, getDefaultBlockSize(path));
   }
 
   /**
