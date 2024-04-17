@@ -285,7 +285,7 @@ public class CompactionUtils {
    */
   public static Option<Pair<HoodieTimeline, HoodieInstant>> getDeltaCommitsSinceLatestCompaction(
       HoodieActiveTimeline activeTimeline) {
-    Option<HoodieInstant> lastCompaction = activeTimeline.filterCompletedCommitInstants().lastInstant();
+    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitTimeline().filterCompletedInstants().lastInstant();
     HoodieTimeline deltaCommits = activeTimeline.getDeltaCommitTimeline();
 
     final HoodieInstant latestInstant;
@@ -307,7 +307,7 @@ public class CompactionUtils {
 
   public static Option<Pair<HoodieTimeline, HoodieInstant>> getDeltaCommitsSinceLatestCompactionRequest(
         HoodieActiveTimeline activeTimeline) {
-    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitTimeline()
+    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitAndReplaceTimeline()
           .filterCompletedInstants().lastInstant();
     Option<HoodieInstant> lastRequestCompaction = activeTimeline.getAllCommitsTimeline()
           .filterPendingCompactionTimeline().lastInstant();

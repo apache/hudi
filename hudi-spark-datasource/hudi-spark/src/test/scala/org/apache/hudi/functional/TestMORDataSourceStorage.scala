@@ -181,6 +181,6 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     }
     // compaction should have been completed
     val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(fs.getConf), basePath)
-    assertEquals(1, metaClient.getActiveTimeline.getCommitTimeline.countInstants())
+    assertEquals(1, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.countInstants())
   }
 }

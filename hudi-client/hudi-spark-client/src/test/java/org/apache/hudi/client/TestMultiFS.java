@@ -135,7 +135,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       // Read from hdfs
       FileSystem fs = HadoopFSUtils.getFs(dfsBasePath, HoodieTestUtils.getDefaultStorageConf());
       HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HadoopFSUtils.getStorageConf(fs.getConf()), dfsBasePath);
-      HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+      HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       Dataset<Row> readRecords = HoodieClientTestUtils.readCommit(dfsBasePath, sqlContext, timeline, readCommitTime);
       assertEquals(readRecords.count(), records.size());
 
@@ -156,7 +156,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       LOG.info("Reading from path: " + tablePath);
       fs = HadoopFSUtils.getFs(tablePath, HoodieTestUtils.getDefaultStorageConf());
       metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(fs.getConf()), tablePath);
-      timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+      timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       Dataset<Row> localReadRecords =
           HoodieClientTestUtils.readCommit(tablePath, sqlContext, timeline, writeCommitTime);
       assertEquals(localReadRecords.count(), localRecords.size());

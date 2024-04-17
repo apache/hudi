@@ -113,6 +113,24 @@ public class HoodieCDCExtractor {
     ValidationUtils.checkState(commits != null, "Empty commits");
 
     Map<HoodieFileGroupId, List<HoodieCDCFileSplit>> fgToCommitChanges = new HashMap<>();
+
+    // iterate over all replace commits and track all replaced FileIds.
+    Map<String, List<String>> replacedFileIdsPerPartition = new HashMap<>();
+    for (HoodieInstant instant : commits.keySet()) {
+      HoodieCommitMetadata commitMetadata = commits.get(instant);
+      if (commitMetadata instanceof HoodieReplaceCommitMetadata) {
+        HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
+        Map<String, List<String>> ptToReplacedFileId = replaceCommitMetadata.getPartitionToReplaceFileIds();
+        for (String partition : ptToReplacedFileId.keySet()) {
+          List<String> fileIds = ptToReplacedFileId.get(partition);
+          if (!replacedFileIdsPerPartition.containsKey(partition)) {
+            replacedFileIdsPerPartition.put(partition, new ArrayList<>());
+          }
+          replacedFileIdsPerPartition.get(partition).addAll(fileIds);
+        }
+      }
+    }
+
     for (HoodieInstant instant : commits.keySet()) {
       HoodieCommitMetadata commitMetadata = commits.get(instant);
 
@@ -121,13 +139,16 @@ public class HoodieCDCExtractor {
       for (String partition : ptToWriteStats.keySet()) {
         List<HoodieWriteStat> hoodieWriteStats = ptToWriteStats.get(partition);
         hoodieWriteStats.forEach(writeStat -> {
-          HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partition, writeStat.getFileId());
-          // Identify the CDC source involved in this commit and
-          // determine its type for subsequent loading using different methods.
-          HoodieCDCFileSplit changeFile =
-              parseWriteStat(fileGroupId, instant, writeStat, commitMetadata.getOperationType());
-          fgToCommitChanges.computeIfAbsent(fileGroupId, k -> new ArrayList<>());
-          fgToCommitChanges.get(fileGroupId).add(changeFile);
+          if (!replacedFileIdsPerPartition.containsKey(partition) || !replacedFileIdsPerPartition.get(partition).contains(writeStat.getFileId())) {
+            // ignore any replaced files
+            HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partition, writeStat.getFileId());
+            // Identify the CDC source involved in this commit and
+            // determine its type for subsequent loading using different methods.
+            HoodieCDCFileSplit changeFile =
+                parseWriteStat(fileGroupId, instant, writeStat, commitMetadata.getOperationType());
+            fgToCommitChanges.computeIfAbsent(fileGroupId, k -> new ArrayList<>());
+            fgToCommitChanges.get(fileGroupId).add(changeFile);
+          }
         });
       }
 
@@ -137,15 +158,17 @@ public class HoodieCDCExtractor {
         for (String partition : ptToReplacedFileId.keySet()) {
           List<String> fileIds = ptToReplacedFileId.get(partition);
           fileIds.forEach(fileId -> {
-            Option<FileSlice> latestFileSliceOpt = getOrCreateFsView().fetchLatestFileSlice(partition, fileId);
-            if (latestFileSliceOpt.isPresent()) {
-              HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partition, fileId);
-              HoodieCDCFileSplit changeFile = new HoodieCDCFileSplit(instant.getTimestamp(),
-                  REPLACE_COMMIT, new ArrayList<>(), latestFileSliceOpt, Option.empty());
-              if (!fgToCommitChanges.containsKey(fileGroupId)) {
-                fgToCommitChanges.put(fileGroupId, new ArrayList<>());
+            if (!replacedFileIdsPerPartition.get(partition).contains(fileId)) {
+              Option<FileSlice> latestFileSliceOpt = getOrCreateFsView().fetchLatestFileSlice(partition, fileId);
+              if (latestFileSliceOpt.isPresent()) {
+                HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partition, fileId);
+                HoodieCDCFileSplit changeFile = new HoodieCDCFileSplit(instant.getTimestamp(),
+                    REPLACE_COMMIT, new ArrayList<>(), latestFileSliceOpt, Option.empty());
+                if (!fgToCommitChanges.containsKey(fileGroupId)) {
+                  fgToCommitChanges.put(fileGroupId, new ArrayList<>());
+                }
+                fgToCommitChanges.get(fileGroupId).add(changeFile);
               }
-              fgToCommitChanges.get(fileGroupId).add(changeFile);
             }
           });
         }

@@ -190,7 +190,7 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
   @throws[IOException]
   def countNewRecords(target: HoodieTableMetaClient, commitsToCatchup: List[String]): Long = {
     var totalNew: Long = 0
-    val timeline: HoodieTimeline = target.reloadActiveTimeline.getCommitTimeline.filterCompletedInstants
+    val timeline: HoodieTimeline = target.reloadActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants
     for (commit <- commitsToCatchup) {
       val c: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commit)).get, classOf[HoodieCommitMetadata])
       totalNew += c.fetchTotalRecordsWritten - c.fetchTotalUpdateRecordsWritten

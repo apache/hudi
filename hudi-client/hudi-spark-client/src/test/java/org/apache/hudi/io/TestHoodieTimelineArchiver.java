@@ -612,7 +612,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline();
     // load instant details
     archivedTimeLine.loadCompactionDetailsInMemory("00000001", "00000011");
-    List<HoodieInstant> compactionInstants = archivedTimeLine.getCommitTimeline().getInstants();
+    List<HoodieInstant> compactionInstants = archivedTimeLine.getCommitAndReplaceTimeline().getInstants();
     assertEquals(2, compactionInstants.size(), "Two compactions instants should be archived.");
     List<Option<byte[]>> planDetailsList = compactionInstants.stream().map(archivedTimeLine::getInstantDetails).collect(Collectors.toList());
     assertTrue(planDetailsList.stream().allMatch(Option::isPresent), "All the compaction instants should have plan details.");
@@ -1563,7 +1563,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         // delta commits 11 till 12 are added later on without archival or compaction
         // mdt timeline [7, 8, 9, 10, a completed compaction commit] for i = 10
         assertEquals(i - 5, metadataTableInstants.size());
-        assertEquals(1, metadataTableMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants());
+        assertEquals(1, metadataTableMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants());
         IntStream.range(7, i).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instants.get(j - 1)))));
@@ -1573,7 +1573,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         // till 17 are added later on without archival or compaction
         // mdt timeline: [10, a completed compaction commit, 11, ... 14, 15, ... 17]
         assertEquals(i - 8, metadataTableInstants.size());
-        assertEquals(1, metadataTableMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants());
+        assertEquals(1, metadataTableMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants());
         IntStream.range(10, i).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instants.get(j - 1)))));
@@ -1582,7 +1582,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         // commits in MDT [10, a completed compaction commit, 11, ... 17, 18, a completed compaction commit]
         // another compaction is triggered by this commit so everything upto 18 is compacted.
         assertEquals(11, metadataTableInstants.size());
-        assertEquals(2, metadataTableMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants());
+        assertEquals(2, metadataTableMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants());
         IntStream.range(10, i).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instants.get(j - 1)))));

@@ -291,7 +291,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       assertTrue(deltaCommit.isPresent());
       assertEquals("001", deltaCommit.get().getTimestamp(), "Delta commit should be 001");
 
-      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
@@ -334,7 +334,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       assertTrue(deltaCommit.isPresent());
       assertEquals("004", deltaCommit.get().getTimestamp(), "Latest Delta commit should be 004");
 
-      commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+      commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
       allFiles = listAllBaseFilesInPath(hoodieTable);

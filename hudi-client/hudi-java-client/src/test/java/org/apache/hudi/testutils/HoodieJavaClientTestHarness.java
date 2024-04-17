@@ -867,7 +867,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = createMetaClient();
-    HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+    HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
 
     if (assertForCommit) {
       assertEquals(3, timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants(),
