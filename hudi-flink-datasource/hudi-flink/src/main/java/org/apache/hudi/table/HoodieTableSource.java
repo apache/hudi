@@ -556,6 +556,7 @@ public class HoodieTableSource implements
         this.requiredPos,
         this.conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
         this.conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
+        this.conf.getBoolean(FlinkOptions.CLIP_CASE_SENSITIVE_CONTROL),
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
         this.predicates,
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value

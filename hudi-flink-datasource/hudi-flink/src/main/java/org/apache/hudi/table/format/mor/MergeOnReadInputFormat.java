@@ -333,7 +333,7 @@ public class MergeOnReadInputFormat
     return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
         this.conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE),
-        true,
+        this.conf.getBoolean(FlinkOptions.CLIP_CASE_SENSITIVE_CONTROL),
         HadoopConfigurations.getParquetConf(this.conf, hadoopConf),
         fieldNames.toArray(new String[0]),
         fieldTypes.toArray(new DataType[0]),

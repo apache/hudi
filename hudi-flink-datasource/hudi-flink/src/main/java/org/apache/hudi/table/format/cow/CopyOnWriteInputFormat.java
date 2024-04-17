@@ -78,6 +78,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final SerializableConfiguration conf;
   private final List<Predicate> predicates;
   private final long limit;
+  private boolean caseSensetive;
 
   private transient ClosableIterator<RowData> itr;
   private transient long currentReadCount;
@@ -96,6 +97,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       int[] selectedFields,
       String partDefaultName,
       String partPathField,
+      boolean caseSensetive,
       boolean hiveStylePartitioning,
       List<Predicate> predicates,
       long limit,
@@ -107,6 +109,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.limit = limit;
     this.partDefaultName = partDefaultName;
     this.partPathField = partPathField;
+    this.caseSensetive = caseSensetive;
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.fullFieldNames = fullFieldNames;
     this.fullFieldTypes = fullFieldTypes;
@@ -130,7 +133,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.itr = RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
         utcTimestamp,
-        true,
+        caseSensetive,
         conf.conf(),
         fullFieldNames,
         fullFieldTypes,

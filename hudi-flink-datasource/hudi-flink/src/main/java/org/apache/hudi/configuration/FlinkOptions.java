@@ -478,6 +478,12 @@ public class FlinkOptions extends HoodieConfig {
           + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
           + "By default false (the names of partition folders are only partition values)");
 
+  public static final ConfigOption<Boolean> CLIP_CASE_SENSITIVE_CONTROL = ConfigOptions
+          .key("clip.parquetSchema.casesensitive")
+          .booleanType()
+          .defaultValue(true)
+          .withDescription("Columns case-sensitive control of clipping parquetSchema according to fieldNames.");
+
   @AdvancedConfig
   public static final ConfigOption<String> KEYGEN_CLASS_NAME = ConfigOptions
       .key(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key())
