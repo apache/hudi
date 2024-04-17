@@ -131,11 +131,11 @@ public class HoodieStreamer implements Serializable {
   public static final String STREAMSYNC_POOL_NAME = "hoodiedeltasync";
 
   @VisibleForTesting
-  public HoodieStreamer(Config cfg, TypedProperties properties, Configuration conf) throws IOException {
+  HoodieStreamer(Config cfg, TypedProperties properties, Configuration conf) throws IOException {
     this.cfg = cfg;
     this.properties = properties;
     this.bootstrapExecutor = Option.empty();
-    initialiseCheckpoint(cfg, conf, properties);
+    initializeCheckpoint(cfg, conf, properties);
   }
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
@@ -160,7 +160,7 @@ public class HoodieStreamer implements Serializable {
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
     this.cfg = cfg;
-    initialiseCheckpoint(cfg, conf, properties);
+    initializeCheckpoint(cfg, conf, properties);
     this.bootstrapExecutor = Option.ofNullable(
         cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
     HoodieSparkEngineContext sparkEngineContext = new HoodieSparkEngineContext(jssc);
@@ -168,7 +168,7 @@ public class HoodieStreamer implements Serializable {
         cfg.runBootstrap ? null : new StreamSyncService(cfg, sparkEngineContext, fs, conf, Option.ofNullable(this.properties), sourceProfileSupplier));
   }
 
-  private void initialiseCheckpoint(Config cfg, Configuration conf, TypedProperties properties) throws IOException {
+  private void initializeCheckpoint(Config cfg, Configuration conf, TypedProperties properties) throws IOException {
     boolean ignoreCheckpoint = StringUtils.nonEmpty(cfg.ignoreCheckpoint);
     if (ignoreCheckpoint) {
       cfg.checkpoint = null;
