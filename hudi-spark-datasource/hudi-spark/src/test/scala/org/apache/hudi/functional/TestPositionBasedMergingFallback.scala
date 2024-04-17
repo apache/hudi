@@ -66,14 +66,15 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testDefaultMergerArgs"))
-  def testDefaultMergerArgs(updateWithRecordPositions: String, deleteWithRecordPositions: String, secondUpdateWithPositions: String): Unit = {
-    val columns = Seq("ts", "key", "rider", "driver", "fare", "number")
-    val data = Seq((10, "1", "rider-A", "driver-A", 19.10, 7),
-      (10, "2", "rider-B", "driver-B", 27.70, 1),
-      (10, "3", "rider-C", "driver-C", 33.90, 10),
-      (10, "4", "rider-D", "driver-D", 34.15, 6),
-      (10, "5", "rider-E", "driver-E", 17.85, 10))
+  @MethodSource(Array("testArgs"))
+  def testPositionFallback(updateWithRecordPositions: String, deleteWithRecordPositions: String, secondUpdateWithPositions: String): Unit = {
+    val columns = Seq("ts", "key", "name", "_hoodie_is_deleted")
+    val data = Seq(
+      (10, "1", "A", false),
+      (10, "2", "B", false),
+      (10, "3", "C", false),
+      (10, "4", "D", false),
+      (10, "5", "E", false))
 
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     inserts.write.format("hudi").
@@ -89,8 +90,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
       mode(Overwrite).
       save(basePath)
 
-    val updateData = Seq((11, "1", "rider-X", "driver-X", 19.10, 9),
-      (9, "2", "rider-Y", "driver-Y", 27.70, 7))
+    val updateData = Seq((11, "1", "A_1", false), (9, "2", "B_1", false))
 
     val updates = spark.createDataFrame(updateData).toDF(columns: _*)
 
@@ -108,7 +108,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
       mode(Append).
       save(basePath)
 
-    val deletesData = Seq((10, "4", "rider-D", "driver-D", 34.15, 6))
+    val deletesData = Seq((10, "4", "D",  true), (10, "3", "C", true))
 
     val deletes = spark.createDataFrame(deletesData).toDF(columns: _*)
     deletes.write.format("hudi").
@@ -116,7 +116,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
       option(PRECOMBINE_FIELD.key(), "ts").
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(TABLE_TYPE.key(), "MERGE_ON_READ").
-      option(OPERATION.key(), "delete").
+      option(OPERATION.key(), "upsert").
       option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
       option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID).
       option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), "org.apache.hudi.HoodieSparkRecordMerger").
@@ -126,7 +126,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
       save(basePath)
 
 
-    val secondUpdateData = Seq((14, "5", "rider-Z", "driver-Z", 17.85, 3))
+    val secondUpdateData = Seq((14, "5", "E_3", false), (3, "3", "C_3", false))
     val secondUpdates = spark.createDataFrame(secondUpdateData).toDF(columns: _*)
     secondUpdates.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
@@ -147,15 +147,15 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
       option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), "org.apache.hudi.HoodieSparkRecordMerger").
       option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
       option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), "true").load(basePath)
-    val finalDf = df.select("ts", "key", "rider", "driver", "fare", "number")
+    val finalDf = df.select("ts", "key", "name")
+    val finalColumns = Seq("ts", "key", "name")
 
+    val finalExpectedData = Seq(
+      (11, "1", "A_1"),
+      (10, "2", "B"),
+      (14, "5", "E_3"))
 
-    val finalExpectedData = Seq((11, "1", "rider-X", "driver-X", 19.10, 9),
-      (10, "2", "rider-B", "driver-B", 27.70, 1),
-      (10, "3", "rider-C", "driver-C", 33.90, 10),
-      (14, "5", "rider-Z", "driver-Z", 17.85, 3))
-
-    val expectedDf = spark.createDataFrame(finalExpectedData).toDF(columns: _*)
+    val expectedDf = spark.createDataFrame(finalExpectedData).toDF(finalColumns: _*)
 
     assertEquals(0, finalDf.except(expectedDf).count())
     assertEquals(0, expectedDf.except(finalDf).count())
@@ -166,129 +166,19 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
     //that record is the "winner" of merging, and therefore the record should not be
     //in the output
     sqlContext.clearCache()
-    val finalFilterDf = finalDf.filter("rider != 'rider-B'")
-    val finalExpectedFilterData = Seq((11, "1", "rider-X", "driver-X", 19.10, 9),
-      (10, "3", "rider-C", "driver-C", 33.90, 10),
-      (14, "5", "rider-Z", "driver-Z", 17.85, 3))
+    val finalFilterDf = finalDf.filter("name != 'B'")
+    val finalExpectedFilterData = Seq(
+      (11, "1", "A_1"),
+      (14, "5", "E_3"))
 
-    val expectedFilterDf = spark.createDataFrame(finalExpectedFilterData).toDF(columns: _*)
+    val expectedFilterDf = spark.createDataFrame(finalExpectedFilterData).toDF(finalColumns: _*)
     assertEquals(0, finalFilterDf.except(expectedFilterDf).count())
     assertEquals(0, expectedFilterDf.except(finalFilterDf).count())
-  }
-
-
-  @ParameterizedTest
-  @MethodSource(Array("testOtherMergerArgs"))
-  def testWithOtherMerger(updateWithRecordPositions: String, deleteWithRecordPositions: String,
-                          secondUpdateWithPositions: String, deletePrecombineLess: String): Unit = {
-    val columns = Seq("ts", "key", "rider", "driver", "fare", "number")
-    val data = Seq((10, "1", "rider-A", "driver-A", 19.10, 7),
-      (10, "2", "rider-B", "driver-B", 27.70, 1),
-      (10, "3", "rider-C", "driver-C", 33.90, 10),
-      (10, "4", "rider-D", "driver-D", 34.15, 6),
-      (10, "5", "rider-E", "driver-E", 17.85, 10))
-
-    val inserts = spark.createDataFrame(data).toDF(columns: _*)
-    inserts.write.format("hudi").
-      option(RECORDKEY_FIELD.key(), "key").
-      option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
-      option(TABLE_TYPE.key(), "MERGE_ON_READ").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.PRECOMBINE_BASED_MERGER_STRATEGY_UUID).
-      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), classOf[PrecombineBasedSparkRecordMerger].getName).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
-      option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), "true").
-      mode(Overwrite).
-      save(basePath)
-
-    val updateData = Seq((11, "1", "rider-X", "driver-X", 19.10, 9),
-      (9, "2", "rider-Y", "driver-Y", 27.70, 7))
-
-    val updates = spark.createDataFrame(updateData).toDF(columns: _*)
-
-    updates.write.format("hudi").
-      option(RECORDKEY_FIELD.key(), "key").
-      option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
-      option(TABLE_TYPE.key(), "MERGE_ON_READ").
-      option(OPERATION.key(), "upsert").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.PRECOMBINE_BASED_MERGER_STRATEGY_UUID).
-      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), classOf[PrecombineBasedSparkRecordMerger].getName).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
-      option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), updateWithRecordPositions).
-      mode(Append).
-      save(basePath)
-
-    val deletesData = if (deletePrecombineLess.toBoolean) {
-      Seq((9, "4", "rider-D", "driver-D", 34.15, 6))
-    } else {
-      Seq((11, "4", "rider-D", "driver-D", 34.15, 6))
-    }
-
-    val deletes = spark.createDataFrame(deletesData).toDF(columns: _*)
-    deletes.write.format("hudi").
-      option(RECORDKEY_FIELD.key(), "key").
-      option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
-      option(TABLE_TYPE.key(), "MERGE_ON_READ").
-      option(OPERATION.key(), "delete").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.PRECOMBINE_BASED_MERGER_STRATEGY_UUID).
-      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), classOf[PrecombineBasedSparkRecordMerger].getName).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
-      option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), deleteWithRecordPositions).
-      mode(Append).
-      save(basePath)
-
-
-    val secondUpdateData = Seq((14, "5", "rider-Z", "driver-Z", 17.85, 3),(10, "4", "rider-DD", "driver-DD", 34.15, 5))
-    val secondUpdates = spark.createDataFrame(secondUpdateData).toDF(columns: _*)
-    secondUpdates.write.format("hudi").
-      option(RECORDKEY_FIELD.key(), "key").
-      option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
-      option(TABLE_TYPE.key(), "MERGE_ON_READ").
-      option(OPERATION.key(), "upsert").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.PRECOMBINE_BASED_MERGER_STRATEGY_UUID).
-      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), classOf[PrecombineBasedSparkRecordMerger].getName).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
-      option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), secondUpdateWithPositions).
-      mode(Append).
-      save(basePath)
-
-    val df = spark.read.format("hudi").
-      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.PRECOMBINE_BASED_MERGER_STRATEGY_UUID).
-      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), classOf[PrecombineBasedSparkRecordMerger].getName).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
-      option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), "false").load(basePath)
-    val finalDf = df.select("ts", "key", "rider", "driver", "fare", "number")
-
-
-    val finalExpectedData = if (deletePrecombineLess.toBoolean) {
-      Seq((11, "1", "rider-X", "driver-X", 19.10, 9),
-        (10, "2", "rider-B", "driver-B", 27.70, 1),
-        (10, "3", "rider-C", "driver-C", 33.90, 10),
-        (10, "4", "rider-D", "driver-D", 34.15, 6),
-        (14, "5", "rider-Z", "driver-Z", 17.85, 3))
-    } else {
-      Seq((11, "1", "rider-X", "driver-X", 19.10, 9),
-        (10, "2", "rider-B", "driver-B", 27.70, 1),
-        (10, "3", "rider-C", "driver-C", 33.90, 10),
-        (14, "5", "rider-Z", "driver-Z", 17.85, 3))
-    }
-
-    val expectedDf = spark.createDataFrame(finalExpectedData).toDF(columns: _*)
-
-    assertEquals(0, finalDf.except(expectedDf).count())
-    assertEquals(0, expectedDf.except(finalDf).count())
   }
 }
 
 object TestPositionBasedMergingFallback {
-  def testDefaultMergerArgs: java.util.stream.Stream[Arguments] = {
+  def testArgs: java.util.stream.Stream[Arguments] = {
     val scenarios = Array(
       Seq("true","true","true"),
       Seq("false","true","true"),
@@ -300,27 +190,5 @@ object TestPositionBasedMergingFallback {
       Seq("false","false","false")
     )
     java.util.Arrays.stream(scenarios.map(as => Arguments.arguments(as.map(_.asInstanceOf[AnyRef]):_*)))
-  }
-
-  def testOtherMergerArgs: java.util.stream.Stream[Arguments] = {
-    val scenarios = Array(
-//      Seq("true", "true", "true", "true"),
-//      Seq("false", "true", "true", "true"),
-//      Seq("true", "false", "true", "true"),
-//      Seq("false", "false", "true", "true"),
-//      Seq("true", "true", "false", "true"),
-//      Seq("false", "true", "false", "true"),
-//      Seq("true", "false", "false", "true"),
-//      Seq("false", "false", "false", "true"),
-//      Seq("true", "true", "true", "false"),
-//      Seq("false", "true", "true", "false"),
-//      Seq("true", "false", "true", "false"),
-//      Seq("false", "false", "true", "false"),
-//      Seq("true", "true", "false", "false"),
-//      Seq("false", "true", "false", "false"),
-//      Seq("true", "false", "false", "false"),
-      Seq("false", "false", "false", "true")
-    )
-    java.util.Arrays.stream(scenarios.map(as => Arguments.arguments(as.map(_.asInstanceOf[AnyRef]): _*)))
   }
 }

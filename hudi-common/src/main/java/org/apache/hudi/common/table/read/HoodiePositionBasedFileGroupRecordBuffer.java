@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -29,7 +28,6 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
@@ -43,7 +41,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -53,7 +50,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
-import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
  * by calling the {@link #processDataBlock} and {@link #processDeleteBlock} methods into record position based map.
@@ -98,8 +95,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     List<Long> recordPositions = extractRecordPositions(dataBlock);
     if (recordPositions == null) {
       LOG.warn("Falling back to key based merge for Read");
-      readerState.useRecordPosition = false;
-      convertToKeyBasedBuffer();
+      fallbackToKeyBasedBuffer();
       super.processDataBlock(dataBlock, keySpecOpt);
       return;
     }
@@ -157,7 +153,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     }
   }
 
-  private void convertToKeyBasedBuffer() {
+  private void fallbackToKeyBasedBuffer() {
+    readerState.useRecordPosition = false;
     //need to make a copy of the keys to avoid concurrent modification exception
     ArrayList<Serializable> positions = new ArrayList<>(records.keySet());
     for (Serializable position : positions) {
@@ -185,37 +182,14 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     List<Long> recordPositions = extractRecordPositions(deleteBlock);
     if (recordPositions == null) {
       LOG.warn("Falling back to key based merge for Read");
-      readerState.useRecordPosition = false;
-      convertToKeyBasedBuffer();
+      fallbackToKeyBasedBuffer();
       super.processDeleteBlock(deleteBlock);
       return;
     }
 
-    if (recordMerger.getMergingStrategy().equals(DEFAULT_MERGER_STRATEGY_UUID)) {
-      for (Long recordPosition : recordPositions) {
-        records.put(recordPosition,
-            Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", 0)));
-      }
-      return;
-    }
-
-    int recordIndex = 0;
-    Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
-    while (it.hasNext()) {
-      DeleteRecord record = it.next();
-      long recordPosition = recordPositions.get(recordIndex++);
-      processNextDeletedRecord(record, recordPosition);
-    }
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
-    Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
-    if (recordOpt.isPresent()) {
-      String recordKey = recordOpt.get().getRecordKey();
-      records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue())));
+    for (Long recordPosition : recordPositions) {
+      records.put(recordPosition,
+          Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", 0)));
     }
   }
 
@@ -227,69 +201,14 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   }
 
   @Override
-  protected boolean doHasNext() throws IOException {
-    if (!readerState.useRecordPosition && !needToDoHybridStrategy) {
-      return super.doHasNext();
-    }
-    ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
-
-
-    // Handle merging.
-    while (baseFileIterator.hasNext()) {
-      if (needToDoHybridStrategy) {
-        if (handleHybridMergeWithBaseFile()) {
-          return true;
-        }
-      } else {
-        T baseRecord = baseFileIterator.next();
-        nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
-            ROW_INDEX_COLUMN_NAME, nextRecordPosition);
-        Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
-
-        Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-            baseRecord, readerSchema);
-
-        Option<T> resultRecord = logRecordInfo != null
-            ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
-            : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
-        if (resultRecord.isPresent()) {
-          nextRecord = readerContext.seal(resultRecord.get());
-          return true;
-        }
-      }
+  protected boolean doHasNextMerge(T baseRecord) throws IOException {
+    if (!readerState.useRecordPosition) {
+      return doHasNextFallbackMerge(baseRecord);
     }
 
-    // Handle records solely from log files.
-    if (logRecordIterator == null) {
-      logRecordIterator = records.values().iterator();
-    }
-
-    while (logRecordIterator.hasNext()) {
-      Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
-      Option<T> resultRecord;
-      resultRecord = merge(Option.empty(), Collections.emptyMap(),
-          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  private boolean handleHybridMergeWithBaseFile() throws IOException {
-    T baseRecord = baseFileIterator.next();
-    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
-    Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
-    if (logRecordInfo == null) {
-      //see if there is a delete block with record positions
-      nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
-          ROW_INDEX_COLUMN_NAME, nextRecordPosition);
-      logRecordInfo = records.remove(nextRecordPosition);
-    }
-    //always increment record position
-    nextRecordPosition++;
+    nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
+        ROW_INDEX_COLUMN_NAME, nextRecordPosition);
+    Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
 
     Map<String, Object> metadata = readerContext.generateMetadataForRecord(
         baseRecord, readerSchema);
@@ -302,6 +221,22 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       return true;
     }
     return false;
+  }
+
+  private boolean doHasNextFallbackMerge(T baseRecord) throws IOException {
+    if (needToDoHybridStrategy) {
+      //see if there is a delete block with record positions
+      nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
+          ROW_INDEX_COLUMN_NAME, nextRecordPosition);
+      Pair<Option<T>, Map<String, Object>> logRecordInfo  = records.remove(nextRecordPosition++);
+      if (logRecordInfo != null) {
+        //we have a delete that was not able to be converted. Since it is the newest version, the record is deleted
+        //remove a key based record if it exists
+        records.remove(readerContext.getRecordKey(baseRecord, readerSchema));
+        return false;
+      }
+    }
+    return super.doHasNextMerge(baseRecord);
   }
 
   /**

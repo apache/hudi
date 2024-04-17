@@ -114,12 +114,8 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
-    Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
-    if (recordOpt.isPresent()) {
-      records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          (String) recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue())));
-    }
+    records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
+        (String) recordKey, deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue())));
   }
 
   @Override
@@ -134,17 +130,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     // Handle merging.
     while (baseFileIterator.hasNext()) {
       T baseRecord = baseFileIterator.next();
-
-      String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
-      Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
-      Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-          baseRecord, readerSchema);
-
-      Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
+      if (doHasNextMerge(baseRecord)) {
         return true;
       }
     }
@@ -163,6 +149,22 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
         nextRecord = readerContext.seal(resultRecord.get());
         return true;
       }
+    }
+    return false;
+  }
+
+  protected boolean doHasNextMerge(T baseRecord) throws IOException {
+    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
+    Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
+    Map<String, Object> metadata = readerContext.generateMetadataForRecord(
+        baseRecord, readerSchema);
+
+    Option<T> resultRecord = logRecordInfo != null
+        ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
+        : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
+    if (resultRecord.isPresent()) {
+      nextRecord = readerContext.seal(resultRecord.get());
+      return true;
     }
     return false;
   }
