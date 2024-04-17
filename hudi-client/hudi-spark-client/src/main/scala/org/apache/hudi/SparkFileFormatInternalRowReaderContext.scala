@@ -49,10 +49,11 @@ import scala.collection.mutable
  *
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
- * @param baseFileReader  A reader that transforms a {@link PartitionedFile} to an iterator of
+ * @param parquetFileReader A reader that transforms a {@link PartitionedFile} to an iterator of
  *                        {@link InternalRow}. This is required for reading the base file and
  *                        not required for reading a file group with only log files.
- * @param partitionValues The values for a partition in which the file group lives.
+ * @param recordKeyColumn column name for the recordkey
+ * @param filters spark filters that might be pushed down into the reader
  */
 class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
                                               recordKeyColumn: String,
@@ -142,7 +143,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       val skeletonProjection = projectRecord(skeletonRequiredSchema,
         AvroSchemaUtils.removeFieldsFromSchema(skeletonRequiredSchema, javaSet))
       //If we have log files, we will want to do position based merging with those as well,
-      //so leave a temporary column at the end
+      //so leave the row index column at the end
       val dataProjection = if (readerState.hasLogFiles) {
         getIdentityProjection
       } else {
@@ -150,9 +151,12 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
           AvroSchemaUtils.removeFieldsFromSchema(dataRequiredSchema, javaSet))
       }
 
+      //Always use internal row for positional merge because
+      //we need to iterate row by row when merging
       new CachingIterator[InternalRow] {
         val combinedRow = new JoinedRow()
 
+        //position column will always be at the end of the row
         private def getPos(row: InternalRow): Long = {
           row.getLong(row.numFields-1)
         }
@@ -235,9 +239,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         }
       }.asInstanceOf[ClosableIterator[InternalRow]]
     }
-
   }
-
 }
 
 object SparkFileFormatInternalRowReaderContext {
@@ -252,10 +254,6 @@ object SparkFileFormatInternalRowReaderContext {
 
   def getRecordKeyRelatedFilters(filters: Seq[Filter], recordKeyColumn: String): Seq[Filter] = {
     filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
-  }
-
-  def hasIndexTempColumn(structType: StructType): Boolean = {
-    structType.fields.exists(isIndexTempColumn)
   }
 
   def isIndexTempColumn(field: StructField): Boolean = {

@@ -384,9 +384,6 @@ object LogFileIterator extends SparkAdapterSupport {
         // NOTE: This part shall only be reached when at least one log is present in the file-group
         //       entailing that table has to have at least one commit
         .withLatestInstantTime(tableState.latestCommitTimestamp.get)
-        .withReadBlocksLazily(
-          ConfigUtils.getBooleanWithAltKeys(hadoopConf,
-            HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
         .withReverseReader(false)
         .withInternalSchema(internalSchema)
         .withBufferSize(

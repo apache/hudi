@@ -69,17 +69,16 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
 
   @SuppressWarnings("unchecked")
   private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext,
-                                      FileSystem fs, List<String> logFilePaths, boolean readBlocksLazily,
-                                      boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
+                                      FileSystem fs, List<String> logFilePaths, boolean reverseReader,
+                                      int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan,
                                       Option<String> partitionName,
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
                                       HoodieRecordMerger recordMerger,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
-    super(readerContext, fs, logFilePaths, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan,
-        recordMerger, recordBuffer);
+    super(readerContext, fs, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
+        forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger, recordBuffer);
     this.scannedPrefixes = new HashSet<>();
 
     if (forceFullScan) {
@@ -172,8 +171,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = recordBuffer.size();
 
-    LOG.info("Number of log files scanned => " + logFilePaths.size());
-    LOG.info("Number of entries in Map => " + recordBuffer.size());
+    LOG.info("Number of log files scanned => {}", logFilePaths.size());
+    LOG.info("Number of entries in Map => {}", recordBuffer.size());
   }
 
   @Override
@@ -217,7 +216,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     private HoodieFileGroupReaderState readerState;
     private FileSystem fs;
     private List<String> logFilePaths;
-    private boolean readBlocksLazily;
+    private String latestInstantTime;
     private boolean reverseReader;
     private int bufferSize;
     // specific configurations
@@ -253,12 +252,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
           .filter(l -> !l.isCDC())
           .map(l -> l.getPath().toString())
           .collect(Collectors.toList());
-      return this;
-    }
-
-    @Override
-    public Builder<T> withReadBlocksLazily(boolean readBlocksLazily) {
-      this.readBlocksLazily = readBlocksLazily;
       return this;
     }
 
@@ -323,14 +316,14 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       ValidationUtils.checkArgument(recordMerger != null);
       ValidationUtils.checkArgument(recordBuffer != null);
       ValidationUtils.checkArgument(readerContext != null);
+      this.readerState = readerContext.getReaderState();
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(new Path(readerState.tablePath), new Path(this.logFilePaths.get(0)).getParent());
       }
 
       return new HoodieMergedLogRecordReader<>(
           readerContext, fs, logFilePaths,
-          readBlocksLazily, reverseReader,
-          bufferSize, instantRange,
+          reverseReader, bufferSize, instantRange,
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName),
           Option.ofNullable(keyFieldOverride),

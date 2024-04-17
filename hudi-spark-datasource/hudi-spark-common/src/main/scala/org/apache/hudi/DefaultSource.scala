@@ -47,9 +47,9 @@ import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
 /**
- * Hoodie Spark Datasource, for reading and writing hoodie tables
- *
- */
+  * Hoodie Spark Datasource, for reading and writing hoodie tables
+  *
+  */
 class DefaultSource extends RelationProvider
   with SchemaRelationProvider
   with CreatableRelationProvider
