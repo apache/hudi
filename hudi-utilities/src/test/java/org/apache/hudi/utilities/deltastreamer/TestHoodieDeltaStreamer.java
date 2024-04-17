@@ -2486,6 +2486,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add("hoodie.keep.min.commits=4");
     cfg.configs.add("hoodie.keep.max.commits=5");
     cfg.configs.add("hoodie.test.source.generate.inserts=true");
+    cfg.configs.add("hoodie.parquet.small.file.limit=0");
 
     for (int i = 0; i < count; i++) {
       new HoodieDeltaStreamer(cfg, jsc).sync();
