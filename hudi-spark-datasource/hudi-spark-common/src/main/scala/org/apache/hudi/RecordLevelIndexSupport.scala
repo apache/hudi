@@ -104,7 +104,7 @@ class RecordLevelIndexSupport (spark: SparkSession,
    * @param queryFilters The queries that need to be filtered.
    * @return Tuple of List of filtered queries and list of record key literals that need to be matched
    */
-  private def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
+  def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
     if (!isIndexAvailable) {
       (List.empty, List.empty)
     } else {

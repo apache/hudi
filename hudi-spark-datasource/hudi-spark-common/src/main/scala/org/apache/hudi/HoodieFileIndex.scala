@@ -105,6 +105,7 @@ case class HoodieFileIndex(spark: SparkSession,
     new BucketIndexSupport(spark, metadataConfig, metaClient),
     new PartitionStatsIndexSupport(spark, schema, metadataConfig, metaClient),
     new FunctionalIndexSupport(spark, metadataConfig, metaClient),
+    new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
     new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
   )
 
@@ -331,9 +332,9 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of pruned (data-skipped) candidate base-files and log files' names
    */
   // scalastyle:off return
-  private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression],
-                                                  prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
-                                                  shouldPushDownFilesFilter: Boolean): Try[Option[Set[String]]] = Try {
+  def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression],
+                                          prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                          shouldPushDownFilesFilter: Boolean): Try[Option[Set[String]]] = Try {
     // NOTE: For column stats, Data Skipping is only effective when it references columns that are indexed w/in
     //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
     //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
@@ -407,6 +408,9 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isPartitionStatsIndexEnabled: Boolean = indicesSupport.exists(idx =>
     idx.getIndexName == PartitionStatsIndexSupport.INDEX_NAME && idx.isIndexAvailable)
 
+  private def isBloomFiltersIndexEnabled: Boolean = indicesSupport.exists(idx =>
+    idx.getIndexName == BloomFiltersIndexSupport.INDEX_NAME && idx.isIndexAvailable)
+
   private def isIndexEnabled: Boolean = indicesSupport.exists(idx => idx.isIndexAvailable)
 
   private def validateConfig(): Unit = {
@@ -414,7 +418,8 @@ case class HoodieFileIndex(spark: SparkSession,
       logWarning("Data skipping requires both Metadata Table and at least one of Column Stats Index, Record Level Index, or Functional Index" +
         " to be enabled as well! " + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
         + s", isRecordIndexApplicable = $isRecordIndexEnabled, isFunctionalIndexEnabled = $isFunctionalIndexEnabled, " +
-        s"isBucketIndexEnable = $isBucketIndexEnabled, isPartitionStatsIndexEnabled = $isPartitionStatsIndexEnabled)")
+        s"isBucketIndexEnable = $isBucketIndexEnabled, isPartitionStatsIndexEnabled = $isPartitionStatsIndexEnabled)"
+        + s", isBloomFiltersIndexEnabled = $isBloomFiltersIndexEnabled)")
     }
   }
 
