@@ -52,6 +52,7 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.fs.Trash;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -538,7 +539,7 @@ public class FSUtils {
       if (recovered) {
         break;
       }
-      // Sleep for 1 second before trying again. Typically it takes about 2-3 seconds to recover
+      // Sleep for 1 second before trying again. Typically, it takes about 2-3 seconds to recover
       // under default settings
       Thread.sleep(1000);
     }
@@ -643,7 +644,7 @@ public class FSUtils {
    * @param fs file system
    * @param dirPath directory path
    * @param parallelism parallelism to use for sub-paths
-   * @return {@code true} if the directory is delete; {@code false} otherwise.
+   * @return {@code true} if the directory is deleted; {@code false} otherwise.
    */
   public static boolean deleteDir(
       HoodieEngineContext hoodieEngineContext, FileSystem fs, Path dirPath, int parallelism) {
@@ -653,7 +654,7 @@ public class FSUtils {
             pairOfSubPathAndConf -> deleteSubPath(
                 pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), true)
         );
-        boolean result = fs.delete(dirPath, true);
+        boolean result = handleFileSystemDeletion(fs, dirPath, true);
         LOG.info("Removed directory at " + dirPath);
         return result;
       }
@@ -725,7 +726,7 @@ public class FSUtils {
     try {
       Path subPath = new Path(subPathStr);
       FileSystem fileSystem = subPath.getFileSystem(conf.get());
-      return fileSystem.delete(subPath, recursive);
+      return handleFileSystemDeletion(fileSystem, subPath, recursive);
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
     }
@@ -806,7 +807,7 @@ public class FSUtils {
           try {
             FileSystem fs = metaClient.getFs();
             if (fs.exists(file)) {
-              return fs.delete(file, false);
+              return handleFileSystemDeletion(fs, file, false);
             }
             return true;
           } catch (IOException e) {
@@ -833,4 +834,28 @@ public class FSUtils {
   private static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
   }
+
+  /**
+   * Delete a file or move the file and path to the trash when on the distributed file system.
+   *
+   * @param fs                  {@link FileSystem} instance.
+   * @param relativeFilePath    Path to delete.
+   * @param recursive           If path is a directory and set to true, the directory is deleted else throws an exception. In case of a file the recursive can be set to either true or false.
+   * @return true if delete is successful else false.
+   */
+  public static boolean handleFileSystemDeletion(FileSystem fs, Path relativeFilePath, Boolean recursive) throws IOException {
+    boolean success;
+    try {
+      if (fs instanceof DistributedFileSystem) {
+        success = Trash.moveToAppropriateTrash(fs, relativeFilePath, fs.getConf());
+      } else {
+        success = fs.delete(relativeFilePath, recursive);
+      }
+    } catch (IOException e) {
+      LOG.error("An error occurred while handling the file system deletion", e);
+      throw new IOException("Failed to handle the file system deletion", e);
+    }
+    return success;
+  }
+
 }
