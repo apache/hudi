@@ -158,44 +158,38 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
    * Validate commit sequence for rollback commits.
    */
   private void validateRollbackCommitSequence() {
-    // Continue to provide the same behavior if policy is EAGER (similar to pendingRollback logic). This is required
-    // since with LAZY rollback we support parallel writing which can allow a new inflight while rollback is ongoing
-    // Remove this once we support LAZY rollback of failed writes by default as parallel writing becomes the default
-    // writer mode.
-    if (config.getFailedWritesCleanPolicy().isEager()  && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
-      final String instantTimeToRollback = instantToRollback.getTimestamp();
-      HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
-      HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
-      // Check validity of completed commit timeline.
-      // Make sure only the last n commits are being rolled back
-      // If there is a commit in-between or after that is not rolled back, then abort
-      // this condition may not hold good for metadata table. since the order of commits applied to MDT in data table commits and the ordering could be different.
-      if ((instantTimeToRollback != null) && !commitTimeline.empty()
-          && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
-        // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
-        try {
-          if (!HoodieHeartbeatClient.heartbeatExists(table.getMetaClient().getFs(),
-              config.getBasePath(), instantTimeToRollback)) {
-            throw new HoodieRollbackException(
-                "Found commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
-          }
-        } catch (IOException io) {
-          throw new HoodieRollbackException("Unable to rollback commits ", io);
+    final String instantTimeToRollback = instantToRollback.getTimestamp();
+    HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
+    HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
+    // Check validity of completed commit timeline.
+    // Make sure only the last n commits are being rolled back
+    // If there is a commit in-between or after that is not rolled back, then abort
+    // this condition may not hold good for metadata table. since the order of commits applied to MDT in data table commits and the ordering could be different.
+    if ((instantTimeToRollback != null) && !commitTimeline.empty()
+        && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
+      // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
+      try {
+        if (!HoodieHeartbeatClient.heartbeatExists(table.getMetaClient().getFs(),
+            config.getBasePath(), instantTimeToRollback)) {
+          throw new HoodieRollbackException(
+              "Found commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
         }
+      } catch (IOException io) {
+        throw new HoodieRollbackException("Unable to rollback commits ", io);
       }
+    }
 
-      List<String> inflights = inflightAndRequestedCommitTimeline.getInstantsAsStream().filter(instant -> {
-        if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-          return true;
-        }
-        return !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant);
-      }).map(HoodieInstant::getTimestamp)
-          .collect(Collectors.toList());
-      if ((instantTimeToRollback != null) && !inflights.isEmpty()
-          && (inflights.indexOf(instantTimeToRollback) != inflights.size() - 1)) {
-        throw new HoodieRollbackException(
-            "Found in-flight commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
+    List<String> inflights = inflightAndRequestedCommitTimeline.getInstantsAsStream().filter(instant -> {
+      if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+        return true;
       }
+      return !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant);
+    }).map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toList());
+    if ((instantTimeToRollback != null) && !inflights.isEmpty()
+        && (inflights.indexOf(instantTimeToRollback) != inflights.size() - 1)) {
+      throw new HoodieRollbackException(
+          "Found in-flight commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
     }
   }
 
@@ -211,11 +205,17 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     final boolean isPendingCompaction = Objects.equals(HoodieTimeline.COMPACTION_ACTION, instantToRollback.getAction())
         && !instantToRollback.isCompleted();
 
-    final boolean isPendingClustering = Objects.equals(HoodieTimeline.REPLACE_COMMIT_ACTION, instantToRollback.getAction())
-        && !instantToRollback.isCompleted() && ClusteringUtils.getClusteringPlan(table.getMetaClient(), instantToRollback).isPresent();
-    validateSavepointRollbacks();
-    if (!isPendingCompaction && !isPendingClustering) {
-      validateRollbackCommitSequence();
+    if (config.getFailedWritesCleanPolicy().isEager()  && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
+      // Continue to provide the same behavior if policy is EAGER (similar to pendingRollback logic). This is required
+      // since with LAZY rollback we support parallel writing which can allow a new inflight while rollback is ongoing
+      // Remove this once we support LAZY rollback of failed writes by default as parallel writing becomes the default
+      // writer mode.
+      final boolean isPendingClustering = Objects.equals(HoodieTimeline.REPLACE_COMMIT_ACTION, instantToRollback.getAction())
+          && !instantToRollback.isCompleted() && ClusteringUtils.getClusteringPlan(table.getMetaClient(), instantToRollback).isPresent();
+      validateSavepointRollbacks();
+      if (!isPendingCompaction && !isPendingClustering) {
+        validateRollbackCommitSequence();
+      }
     }
 
     backupRollbackInstantsIfNeeded();

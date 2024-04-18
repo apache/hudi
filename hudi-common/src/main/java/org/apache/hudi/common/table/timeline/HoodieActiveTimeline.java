@@ -744,7 +744,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  private Path getInstantFileNamePath(String fileName) {
+  public Path getInstantFileNamePath(String fileName) {
     return new Path(fileName.contains(SCHEMA_COMMIT_ACTION) ? metaClient.getSchemaFolderName() : metaClient.getMetaPath(), fileName);
   }
 
