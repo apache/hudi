@@ -86,6 +86,7 @@ public abstract class WriteMarkers implements Serializable {
       HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
       // TODO If current is compact or clustering then create marker directly without early conflict detection.
       // Need to support early conflict detection between table service and common writers.
+      // ok to use filterPendingReplaceTimeline().containsInstant because early conflict detection is not relevant for insert overwrite as well
       if (pendingCompactionTimeline.containsInstant(instantTime) || pendingReplaceTimeline.containsInstant(instantTime)) {
         return create(partitionPath, fileName, type, false);
       }
@@ -126,6 +127,7 @@ public abstract class WriteMarkers implements Serializable {
       HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
       // TODO If current is compact or clustering then create marker directly without early conflict detection.
       // Need to support early conflict detection between table service and common writers.
+      // ok to use filterPendingReplaceTimeline().containsInstant because early conflict detection is not relevant for insert overwrite as well
       if (pendingCompactionTimeline.containsInstant(instantTime) || pendingReplaceTimeline.containsInstant(instantTime)) {
         return create(partitionPath, fileName, type, true);
       }

@@ -53,6 +53,7 @@ import static org.apache.hudi.utilities.config.KafkaSourceConfig.ENABLE_KAFKA_CO
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -169,7 +170,7 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, Long.MAX_VALUE, "earliest");
     SourceFormatAdapter kafkaSource = createSource(props);
-    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", "500");
+    props.setProperty("hoodie.streamer.kafka.source.maxEvents", "500");
 
     /*
      1. maxEventsFromKafkaSourceProp set to more than generated insert records
@@ -254,7 +255,7 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
     final String topic = TEST_TOPIC_PREFIX + "testFailOnDataLoss";
     Properties topicConfig = new Properties();
     topicConfig.setProperty("retention.ms", "8000");
-    testUtils.createTopic(topic, 1, topicConfig);
+    testUtils.createTopic(topic, 2, topicConfig);
 
     TypedProperties failOnDataLossProps = createPropsForKafkaSource(topic, null, "earliest");
     failOnDataLossProps.setProperty(KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key(), Boolean.toString(true));
@@ -269,17 +270,14 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
     Throwable t = assertThrows(HoodieStreamerException.class, () -> {
       kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     });
-    assertEquals(
-        "Some data may have been lost because they are not available in Kafka any more;"
-            + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed.",
-        t.getMessage());
+    String errorMessagePrefix = "Some data may have been lost because they are not available in Kafka any more;"
+        + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed. "
+        + "Kafka partitions that have out-of-bound checkpoints:";
+    assertTrue(t.getMessage().startsWith(errorMessagePrefix));
     t = assertThrows(HoodieStreamerException.class, () -> {
       kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     });
-    assertEquals(
-        "Some data may have been lost because they are not available in Kafka any more;"
-            + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed.",
-        t.getMessage());
+    assertTrue(t.getMessage().startsWith(errorMessagePrefix));
   }
 
   @Test

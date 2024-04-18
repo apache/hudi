@@ -44,7 +44,6 @@ import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -125,14 +124,14 @@ public class FSUtils {
   }
 
   /**
-   * Makes location qualified with {@link HoodieStorage}'s URI.
+   * Makes path qualified with {@link HoodieStorage}'s URI.
    *
-   * @param storage  instance of {@link HoodieStorage}.
-   * @param location to be qualified.
-   * @return qualified location, prefixed with the URI of the target HoodieStorage object provided.
+   * @param storage instance of {@link HoodieStorage}.
+   * @param path    to be qualified.
+   * @return qualified path, prefixed with the URI of the target HoodieStorage object provided.
    */
-  public static StoragePath makeQualified(HoodieStorage storage, StoragePath location) {
-    return location.makeQualified(storage.getUri());
+  public static StoragePath makeQualified(HoodieStorage storage, StoragePath path) {
+    return path.makeQualified(storage.getUri());
   }
 
   /**
@@ -140,12 +139,6 @@ public class FSUtils {
    */
   public static String makeWriteToken(int taskPartitionId, int stageId, long taskAttemptId) {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
-  }
-
-  // TODO: this should be removed
-  public static String makeBaseFileName(String instantTime, String writeToken, String fileId) {
-    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime,
-        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
   }
 
   public static String makeBaseFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
@@ -603,24 +596,6 @@ public class FSUtils {
    */
   public static String getDFSFullPartitionPath(FileSystem fs, Path fullPartitionPath) {
     return fs.getUri() + fullPartitionPath.toUri().getRawPath();
-  }
-
-  /**
-   * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
-   *
-   * @param fs fileSystem instance.
-   * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
-   */
-  public static boolean isGCSFileSystem(FileSystem fs) {
-    return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
-  }
-
-  /**
-   * Chdfs will throw {@code IOException} instead of {@code EOFException}. It will cause error in isBlockCorrupted().
-   * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
-   */
-  public static boolean isCHDFileSystem(FileSystem fs) {
-    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
   }
 
   public static Configuration registerFileSystem(Path file, Configuration conf) {

@@ -24,12 +24,12 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -167,14 +167,14 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .defaultValue(DefaultHoodieRecordPayload.class.getName())
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
   public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
       .key("hoodie.compaction.payload.type")
-      .defaultValue(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())
+      .defaultValue(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())
       .sinceVersion("1.0.0")
       .withDocumentation(RecordPayloadType.class);
 
@@ -737,11 +737,13 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Checks if metadata table is enabled and the specified partition has been initialized.
    *
-   * @param partition The partition to check
+   * @param metadataPartitionType The metadata table partition type to check
    * @returns true if the specific partition has been initialized, else returns false.
    */
-  public boolean isMetadataPartitionAvailable(MetadataPartitionType partition) {
-    return getMetadataPartitions().contains(partition.getPartitionPath());
+  public boolean isMetadataPartitionAvailable(MetadataPartitionType metadataPartitionType) {
+    /*return getMetadataPartitions().stream().anyMatch(metadataPartition ->
+        metadataPartition.equals(metadataPartitionType.getPartitionPath()) || (FUNCTIONAL_INDEX.equals(metadataPartitionType) && metadataPartition.startsWith(FUNCTIONAL_INDEX.getPartitionPath())));*/
+    return getMetadataPartitions().contains(metadataPartitionType.getPartitionPath());
   }
 
   /**

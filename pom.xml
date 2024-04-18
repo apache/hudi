@@ -113,7 +113,7 @@
     <junit.jupiter.version>5.7.2</junit.jupiter.version>
     <junit.vintage.version>5.7.2</junit.vintage.version>
     <junit.platform.version>1.7.2</junit.platform.version>
-    <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
+    <mockito.jupiter.version>3.12.4</mockito.jupiter.version>
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
@@ -482,6 +482,7 @@
               <include>org.apache.htrace:htrace-core4</include>
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>
+              <include>com.fasterxml.jackson.module:jackson-module-scala_${scala.binary.version}</include>
               <!-- native HFile reader uses protobuf -->
               <include>com.google.protobuf:protobuf-java</include>
             </includes>

@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
 import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
@@ -44,6 +45,7 @@ import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.hudi.timeline.service.handlers.TimelineHandler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import io.javalin.Javalin;
@@ -52,11 +54,13 @@ import io.javalin.http.Context;
 import io.javalin.http.Handler;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +76,7 @@ public class RequestHandler {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
   private static final Logger LOG = LoggerFactory.getLogger(RequestHandler.class);
+  private static final TypeReference<List<String>> LIST_TYPE_REFERENCE = new TypeReference<List<String>>() {};
 
   private final TimelineService.Config timelineServiceConfig;
   private final FileSystemViewManager viewManager;
@@ -337,6 +342,14 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICES_INFLIGHT_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("LATEST_PARTITION_SLICES_INFLIGHT", 1);
+      List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlicesIncludingInflight(
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICES_STATELESS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_PARTITION_SLICES_STATELESS", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlicesStateless(
@@ -442,6 +455,19 @@ public class RequestHandler {
       boolean success = sliceHandler
           .refreshTable(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")));
       writeValueAsString(ctx, success);
+    }, false));
+
+    app.post(RemoteHoodieTableFileSystemView.LOAD_PARTITIONS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("LOAD_PARTITIONS", 1);
+      String basePath = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid"));
+      try {
+        List<String> partitionPaths = OBJECT_MAPPER.readValue(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITIONS_PARAM, String.class)
+            .getOrThrow(e -> new HoodieException("Partitions param is invalid")), LIST_TYPE_REFERENCE);
+        boolean success = sliceHandler.loadPartitions(basePath, partitionPaths);
+        writeValueAsString(ctx, success);
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse request parameter", e);
+      }
     }, false));
 
     app.post(RemoteHoodieTableFileSystemView.LOAD_ALL_PARTITIONS_URL, new ViewHandler(ctx -> {
@@ -569,76 +595,86 @@ public class RequestHandler {
 
     private final Handler handler;
     private final boolean performRefreshCheck;
+    private final UserGroupInformation ugi;
 
     ViewHandler(Handler handler, boolean performRefreshCheck) {
       this.handler = handler;
       this.performRefreshCheck = performRefreshCheck;
+      try {
+        ugi = UserGroupInformation.getCurrentUser();
+      } catch (Exception e) {
+        LOG.warn("Fail to get ugi", e);
+        throw new HoodieException(e);
+      }
     }
 
     @Override
     public void handle(@NotNull Context context) throws Exception {
-      boolean success = true;
-      long beginTs = System.currentTimeMillis();
-      boolean synced = false;
-      boolean refreshCheck = performRefreshCheck && !isRefreshCheckDisabledInQuery(context);
-      long refreshCheckTimeTaken = 0;
-      long handleTimeTaken = 0;
-      long finalCheckTimeTaken = 0;
-      try {
-        if (refreshCheck) {
-          long beginRefreshCheck = System.currentTimeMillis();
-          synced = syncIfLocalViewBehind(context);
-          long endRefreshCheck = System.currentTimeMillis();
-          refreshCheckTimeTaken = endRefreshCheck - beginRefreshCheck;
-        }
-
-        long handleBeginMs = System.currentTimeMillis();
-        handler.handle(context);
-        long handleEndMs = System.currentTimeMillis();
-        handleTimeTaken = handleEndMs - handleBeginMs;
-
-        if (refreshCheck) {
-          long beginFinalCheck = System.currentTimeMillis();
-          if (isLocalViewBehind(context)) {
-            String lastKnownInstantFromClient = context.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
-            String timelineHashFromClient = context.queryParamAsClass(RemoteHoodieTableFileSystemView.TIMELINE_HASH, String.class).getOrDefault("");
-            HoodieTimeline localTimeline =
-                viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM)).getTimeline();
-            if (shouldThrowExceptionIfLocalViewBehind(localTimeline, timelineHashFromClient)) {
-              String errMsg =
-                  "Last known instant from client was "
-                      + lastKnownInstantFromClient
-                      + " but server has the following timeline "
-                      + localTimeline.getInstants();
-              throw new BadRequestResponse(errMsg);
-            }
+      ugi.doAs((PrivilegedExceptionAction<Void>) () -> {
+        boolean success = true;
+        long beginTs = System.currentTimeMillis();
+        boolean synced = false;
+        boolean refreshCheck = performRefreshCheck && !isRefreshCheckDisabledInQuery(context);
+        long refreshCheckTimeTaken = 0;
+        long handleTimeTaken = 0;
+        long finalCheckTimeTaken = 0;
+        try {
+          if (refreshCheck) {
+            long beginRefreshCheck = System.currentTimeMillis();
+            synced = syncIfLocalViewBehind(context);
+            long endRefreshCheck = System.currentTimeMillis();
+            refreshCheckTimeTaken = endRefreshCheck - beginRefreshCheck;
           }
-          long endFinalCheck = System.currentTimeMillis();
-          finalCheckTimeTaken = endFinalCheck - beginFinalCheck;
-        }
-      } catch (RuntimeException re) {
-        success = false;
-        if (re instanceof BadRequestResponse) {
-          LOG.warn("Bad request response due to client view behind server view. " + re.getMessage());
-        } else {
-          LOG.error("Got runtime exception servicing request " + context.queryString(), re);
-        }
-        throw re;
-      } finally {
-        long endTs = System.currentTimeMillis();
-        long timeTakenMillis = endTs - beginTs;
-        metricsRegistry.add("TOTAL_API_TIME", timeTakenMillis);
-        metricsRegistry.add("TOTAL_REFRESH_TIME", refreshCheckTimeTaken);
-        metricsRegistry.add("TOTAL_HANDLE_TIME", handleTimeTaken);
-        metricsRegistry.add("TOTAL_CHECK_TIME", finalCheckTimeTaken);
-        metricsRegistry.add("TOTAL_API_CALLS", 1);
 
-        LOG.debug(String.format(
-            "TimeTakenMillis[Total=%d, Refresh=%d, handle=%d, Check=%d], "
-                + "Success=%s, Query=%s, Host=%s, synced=%s",
-            timeTakenMillis, refreshCheckTimeTaken, handleTimeTaken, finalCheckTimeTaken, success,
-            context.queryString(), context.host(), synced));
-      }
+          long handleBeginMs = System.currentTimeMillis();
+          handler.handle(context);
+          long handleEndMs = System.currentTimeMillis();
+          handleTimeTaken = handleEndMs - handleBeginMs;
+
+          if (refreshCheck) {
+            long beginFinalCheck = System.currentTimeMillis();
+            if (isLocalViewBehind(context)) {
+              String lastKnownInstantFromClient = context.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
+              String timelineHashFromClient = context.queryParamAsClass(RemoteHoodieTableFileSystemView.TIMELINE_HASH, String.class).getOrDefault("");
+              HoodieTimeline localTimeline =
+                  viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM)).getTimeline();
+              if (shouldThrowExceptionIfLocalViewBehind(localTimeline, timelineHashFromClient)) {
+                String errMsg =
+                    "Last known instant from client was "
+                        + lastKnownInstantFromClient
+                        + " but server has the following timeline "
+                        + localTimeline.getInstants();
+                throw new BadRequestResponse(errMsg);
+              }
+            }
+            long endFinalCheck = System.currentTimeMillis();
+            finalCheckTimeTaken = endFinalCheck - beginFinalCheck;
+          }
+        } catch (RuntimeException re) {
+          success = false;
+          if (re instanceof BadRequestResponse) {
+            LOG.warn("Bad request response due to client view behind server view. " + re.getMessage());
+          } else {
+            LOG.error("Got runtime exception servicing request " + context.queryString(), re);
+          }
+          throw re;
+        } finally {
+          long endTs = System.currentTimeMillis();
+          long timeTakenMillis = endTs - beginTs;
+          metricsRegistry.add("TOTAL_API_TIME", timeTakenMillis);
+          metricsRegistry.add("TOTAL_REFRESH_TIME", refreshCheckTimeTaken);
+          metricsRegistry.add("TOTAL_HANDLE_TIME", handleTimeTaken);
+          metricsRegistry.add("TOTAL_CHECK_TIME", finalCheckTimeTaken);
+          metricsRegistry.add("TOTAL_API_CALLS", 1);
+
+          LOG.debug(String.format(
+              "TimeTakenMillis[Total=%d, Refresh=%d, handle=%d, Check=%d], "
+                  + "Success=%s, Query=%s, Host=%s, synced=%s",
+              timeTakenMillis, refreshCheckTimeTaken, handleTimeTaken, finalCheckTimeTaken, success,
+              context.queryString(), context.host(), synced));
+        }
+        return null;
+      });
     }
   }
 }

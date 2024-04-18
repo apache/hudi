@@ -201,8 +201,26 @@ object HoodieWriterUtils {
           diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
         }
 
+        // Please note that the validation of partition path fields needs the key generator class
+        // for the table, since the custom key generator expects a different format of
+        // the value of the write config "hoodie.datasource.write.partitionpath.field"
+        // e.g., "col:simple,ts:timestamp", whereas the table config "hoodie.table.partition.fields"
+        // in hoodie.properties stores "col,ts".
+        // The "params" here may only contain the write config of partition path field,
+        // so we need to pass in the validated key generator class name.
+        val validatedKeyGenClassName = if (tableConfigKeyGen != null) {
+          Option(tableConfigKeyGen)
+        } else if (datasourceKeyGen != null) {
+          Option(datasourceKeyGen)
+        } else {
+          None
+        }
         val datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
-        val currentPartitionFields = if (datasourcePartitionFields == null) null else SparkKeyGenUtils.getPartitionColumns(TypedProperties.fromMap(params))
+        val currentPartitionFields = if (datasourcePartitionFields == null) {
+          null
+        } else {
+          SparkKeyGenUtils.getPartitionColumns(validatedKeyGenClassName, TypedProperties.fromMap(params))
+        }
         val tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
         if (null != datasourcePartitionFields && null != tableConfigPartitionFields
           && currentPartitionFields != tableConfigPartitionFields) {

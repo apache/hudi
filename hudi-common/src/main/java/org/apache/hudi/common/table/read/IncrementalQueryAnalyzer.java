@@ -111,6 +111,7 @@ public class IncrementalQueryAnalyzer {
   private final InstantRange.RangeType rangeType;
   private final boolean skipCompaction;
   private final boolean skipClustering;
+  private final boolean skipInsertOverwrite;
   private final int limit;
 
   private IncrementalQueryAnalyzer(
@@ -120,6 +121,7 @@ public class IncrementalQueryAnalyzer {
       InstantRange.RangeType rangeType,
       boolean skipCompaction,
       boolean skipClustering,
+      boolean skipInsertOverwrite,
       int limit) {
     this.metaClient = metaClient;
     this.startTime = Option.ofNullable(startTime);
@@ -127,6 +129,7 @@ public class IncrementalQueryAnalyzer {
     this.rangeType = rangeType;
     this.skipCompaction = skipCompaction;
     this.skipClustering = skipClustering;
+    this.skipInsertOverwrite = skipInsertOverwrite;
     this.limit = limit;
   }
 
@@ -206,13 +209,13 @@ public class IncrementalQueryAnalyzer {
 
   private HoodieTimeline getFilteredTimeline(HoodieTableMetaClient metaClient) {
     HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
-    return filterInstantsAsPerUserConfigs(metaClient, timeline, this.skipCompaction, this.skipClustering);
+    return filterInstantsAsPerUserConfigs(metaClient, timeline, this.skipCompaction, this.skipClustering, this.skipInsertOverwrite);
   }
 
   private HoodieTimeline getArchivedReadTimeline(HoodieTableMetaClient metaClient, String startInstant) {
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(startInstant, false);
     HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
-    return filterInstantsAsPerUserConfigs(metaClient, archivedCompleteTimeline, this.skipCompaction, this.skipClustering);
+    return filterInstantsAsPerUserConfigs(metaClient, archivedCompleteTimeline, this.skipCompaction, this.skipClustering, this.skipInsertOverwrite);
   }
 
   /**
@@ -223,14 +226,17 @@ public class IncrementalQueryAnalyzer {
    * @return the filtered timeline
    */
   @VisibleForTesting
-  public static HoodieTimeline filterInstantsAsPerUserConfigs(HoodieTableMetaClient metaClient, HoodieTimeline timeline, boolean skipCompaction, boolean skipClustering) {
+  public static HoodieTimeline filterInstantsAsPerUserConfigs(HoodieTableMetaClient metaClient, HoodieTimeline timeline, boolean skipCompaction, boolean skipClustering, boolean skipInsertOverwrite) {
     final HoodieTimeline oriTimeline = timeline;
     if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ & skipCompaction) {
       // the compaction commit uses 'commit' as action which is tricky
       timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
     }
     if (skipClustering) {
-      timeline = timeline.filter(instant -> !ClusteringUtils.isClusteringInstant(instant, oriTimeline));
+      timeline = timeline.filter(instant -> !ClusteringUtils.isCompletedClusteringInstant(instant, oriTimeline));
+    }
+    if (skipInsertOverwrite) {
+      timeline = timeline.filter(instant -> !ClusteringUtils.isInsertOverwriteInstant(instant, oriTimeline));
     }
     return timeline;
   }
@@ -254,6 +260,7 @@ public class IncrementalQueryAnalyzer {
     private HoodieTableMetaClient metaClient;
     private boolean skipCompaction = false;
     private boolean skipClustering = false;
+    private boolean skipInsertOverwrite = false;
     /**
      * Maximum number of instants to read per run.
      */
@@ -292,6 +299,11 @@ public class IncrementalQueryAnalyzer {
       return this;
     }
 
+    public Builder skipInsertOverwrite(boolean skipInsertOverwrite) {
+      this.skipInsertOverwrite = skipInsertOverwrite;
+      return this;
+    }
+
     public Builder limit(int limit) {
       this.limit = limit;
       return this;
@@ -299,7 +311,7 @@ public class IncrementalQueryAnalyzer {
 
     public IncrementalQueryAnalyzer build() {
       return new IncrementalQueryAnalyzer(Objects.requireNonNull(this.metaClient), this.startTime, this.endTime,
-          Objects.requireNonNull(this.rangeType), this.skipCompaction, this.skipClustering, this.limit);
+          Objects.requireNonNull(this.rangeType), this.skipCompaction, this.skipClustering, this.skipInsertOverwrite, this.limit);
     }
   }
 

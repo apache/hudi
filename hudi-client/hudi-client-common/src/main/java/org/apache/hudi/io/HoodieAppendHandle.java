@@ -89,7 +89,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private static final AtomicLong RECORD_COUNTER = new AtomicLong(1);
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE = 100;
 
-  protected final String fileId;
   private final boolean shouldWriteRecordPositions;
   // Buffer for holding records in memory before they are flushed to disk
   private final List<HoodieRecord> recordList = new ArrayList<>();
@@ -158,7 +157,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
             : Option.empty(),
         taskContextSupplier);
-    this.fileId = fileId;
     this.recordItr = recordItr;
     this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
@@ -564,7 +562,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     return IOType.APPEND;
   }
 
-  public List<WriteStatus> writeStatuses() {
+  public List<WriteStatus> getWriteStatuses() {
     return statuses;
   }
 

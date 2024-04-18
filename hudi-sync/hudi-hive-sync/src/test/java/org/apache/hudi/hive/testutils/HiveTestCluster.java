@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -203,7 +204,7 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, Bef
       // Create 5 files
       String fileId = UUID.randomUUID().toString();
       Path filePath = new Path(partPath.toString() + "/" + FSUtils
-          .makeBaseFileName(commitTime, "1-0-1", fileId));
+          .makeBaseFileName(commitTime, "1-0-1", fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
       generateParquetData(filePath, isParquetSchemaSimple);
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setFileId(fileId);

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -31,7 +29,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -512,25 +509,45 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public Option<HoodieInstant> getLastClusterCommit() {
-    return  Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
+  public Option<HoodieInstant> getLastClusteringInstant() {
+    return Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
         .getReverseOrderedInstants()
-        .filter(i -> {
-          try {
-            HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
-            return metadata.getOperationType().equals(WriteOperationType.CLUSTER);
-          } catch (IOException e) {
-            LOG.warn("Unable to read commit metadata for " + i + " due to " + e.getMessage());
-            return false;
-          }
-        }).findFirst());
+        .filter(i -> ClusteringUtils.isClusteringInstant(this, i))
+        .findFirst());
+  }
+
+  @Override
+  public Option<HoodieInstant> getFirstPendingClusterInstant() {
+    return getLastOrFirstPendingClusterInstant(false);
   }
 
   @Override
   public Option<HoodieInstant> getLastPendingClusterInstant() {
-    return  Option.fromJavaOptional(filterPendingReplaceTimeline()
-        .getReverseOrderedInstants()
-        .filter(i -> ClusteringUtils.isPendingClusteringInstant(this, i)).findFirst());
+    return getLastOrFirstPendingClusterInstant(true);
+  }
+
+  private Option<HoodieInstant> getLastOrFirstPendingClusterInstant(boolean isLast) {
+    HoodieTimeline replaceTimeline = filterPendingReplaceTimeline();
+    Stream<HoodieInstant> replaceStream;
+    if (isLast) {
+      replaceStream = replaceTimeline.getReverseOrderedInstants();
+    } else {
+      replaceStream = replaceTimeline.getInstantsAsStream();
+    }
+    return  Option.fromJavaOptional(replaceStream
+        .filter(i -> ClusteringUtils.isClusteringInstant(this, i)).findFirst());
+  }
+
+  @Override
+  public boolean isPendingClusterInstant(String instantTime) {
+    HoodieTimeline potentialTimeline = getCommitsTimeline().filterPendingReplaceTimeline().filter(i -> i.getTimestamp().equals(instantTime));
+    if (potentialTimeline.countInstants() == 0) {
+      return false;
+    }
+    if (potentialTimeline.countInstants() > 1) {
+      throw new IllegalStateException("Multiple instants with same timestamp: " + potentialTimeline);
+    }
+    return ClusteringUtils.isClusteringInstant(this, potentialTimeline.firstInstant().get());
   }
 
   @Override

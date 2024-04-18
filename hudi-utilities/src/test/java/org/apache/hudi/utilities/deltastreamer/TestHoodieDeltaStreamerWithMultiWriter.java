@@ -320,12 +320,12 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     props.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
-    props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/source.avsc");
-    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", basePath + "/target.avsc");
+    props.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/source.avsc");
+    props.setProperty("hoodie.streamer.schemaprovider.target.schema.file", basePath + "/target.avsc");
 
     props.setProperty("include", "base.properties");
     props.setProperty("hoodie.write.concurrency.mode", "optimistic_concurrency_control");
-    props.setProperty("hoodie.cleaner.policy.failed.writes", "LAZY");
+    props.setProperty("hoodie.clean.failed.writes.policy", "LAZY");
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider");
     props.setProperty("hoodie.write.lock.hivemetastore.database", "testdb1");
     props.setProperty("hoodie.write.lock.hivemetastore.table", "table1");

@@ -22,6 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimeGeneratorType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -85,12 +87,24 @@ public class TableCommand {
       @ShellOption(value = {"--maxWaitIntervalMs"}, defaultValue = "300000",
           help = "Max wait time for eventual consistency") final Integer maxConsistencyIntervalMs,
       @ShellOption(value = {"--maxCheckIntervalMs"}, defaultValue = "7",
-          help = "Max checks for eventual consistency") final Integer maxConsistencyChecks)
+          help = "Max checks for eventual consistency") final Integer maxConsistencyChecks,
+      @ShellOption(value = {"--timeGeneratorType"}, defaultValue = "WAIT_TO_ADJUST_SKEW",
+          help = "Time generator type, which is used to generate globally monotonically increasing timestamp") final String timeGeneratorType,
+      @ShellOption(value = {"--maxExpectedClockSkewMs"}, defaultValue = "200",
+          help = "The max expected clock skew time for WaitBasedTimeGenerator in ms") final Long maxExpectedClockSkewMs,
+      @ShellOption(value = {"--useDefaultLockProvider"}, defaultValue = "false",
+          help = "Use org.apache.hudi.client.transaction.lock.InProcessLockProvider") final boolean useDefaultLockProvider)
       throws IOException {
     HoodieCLI
         .setConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(eventuallyConsistent)
             .withInitialConsistencyCheckIntervalMs(initialConsistencyIntervalMs)
             .withMaxConsistencyCheckIntervalMs(maxConsistencyIntervalMs).withMaxConsistencyChecks(maxConsistencyChecks)
+            .build());
+    HoodieCLI
+        .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().withPath(path)
+            .withTimeGeneratorType(TimeGeneratorType.valueOf(timeGeneratorType))
+            .withMaxExpectedClockSkewMs(maxExpectedClockSkewMs)
+            .withDefaultLockProvider(useDefaultLockProvider)
             .build());
     HoodieCLI.initConf();
     HoodieCLI.connectTo(path, layoutVersion);
@@ -144,7 +158,8 @@ public class TableCommand {
         .setTimelineLayoutVersion(layoutVersion)
         .initTable(HoodieCLI.conf, path);
     // Now connect to ensure loading works
-    return connect(path, layoutVersion, false, 0, 0, 0);
+    return connect(path, layoutVersion, false, 0, 0, 0,
+        "WAIT_TO_ADJUST_SKEW", 200L, true);
   }
 
   /**
@@ -388,12 +403,8 @@ public class TableCommand {
     if (outFile.exists()) {
       outFile.delete();
     }
-    OutputStream os = null;
-    try {
-      os = new FileOutputStream(outFile);
+    try (OutputStream os = new FileOutputStream(outFile)) {
       os.write(getUTF8Bytes(data), 0, data.length());
-    } finally {
-      os.close();
     }
   }
 }

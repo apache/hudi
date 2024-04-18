@@ -168,8 +168,29 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
-  public Void loadAllPartitions() {
-    return execute(preferredView::loadAllPartitions, secondaryView::loadAllPartitions);
+  public void loadAllPartitions() {
+    execute(
+        () -> {
+          preferredView.loadAllPartitions();
+          return null;
+        },
+        () -> {
+          secondaryView.loadAllPartitions();
+          return null;
+        });
+  }
+
+  @Override
+  public void loadPartitions(List<String> partitionPaths) {
+    execute(
+        () -> {
+          preferredView.loadPartitions(partitionPaths);
+          return null;
+        },
+        () -> {
+          secondaryView.loadPartitions(partitionPaths);
+          return null;
+        });
   }
 
   @Override
@@ -180,6 +201,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Stream<FileSlice> getLatestFileSlices(String partitionPath) {
     return execute(partitionPath, preferredView::getLatestFileSlices, secondaryView::getLatestFileSlices);
+  }
+
+  @Override
+  public Stream<FileSlice> getLatestFileSlicesIncludingInflight(String partitionPath) {
+    return execute(partitionPath, preferredView::getLatestFileSlicesIncludingInflight, secondaryView::getLatestFileSlicesIncludingInflight);
   }
 
   @Override

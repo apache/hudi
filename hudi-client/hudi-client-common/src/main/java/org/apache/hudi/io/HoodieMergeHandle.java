@@ -104,7 +104,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
-  private boolean preserveMetadata = false;
+  protected boolean preserveMetadata = false;
 
   protected Path newFilePath;
   protected Path oldFilePath;
@@ -112,7 +112,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected long recordsDeleted = 0;
   protected long updatedRecordsWritten = 0;
   protected long insertRecordsWritten = 0;
-  protected boolean useWriterSchemaForCompaction;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
   private HoodieBaseFile baseFileToMerge;
 
@@ -143,7 +142,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
-    this.useWriterSchemaForCompaction = true;
     this.preserveMetadata = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -280,7 +278,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
-    Schema schema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
+    Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     // just skip the ignored record
     if (newRecord.shouldIgnore(schema, config.getProps())) {
       return;
@@ -313,7 +311,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         boolean decision = recordMerger.shouldFlush(combineRecord.get(), schema, config.getProps());
 
         if (decision) { // CASE (1): Flush the merged record.
-          writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata && useWriterSchemaForCompaction);
+          writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata);
           recordsWritten++;
         } else {  // CASE (2): A delete operation.
           recordsDeleted++;
@@ -342,8 +340,12 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
    * Go through an old record. Here if we detect a newer version shows up, we write the new one to the file.
    */
   public void write(HoodieRecord<T> oldRecord) {
-    Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
-    Schema newSchema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
+    // Use schema with metadata files no matter whether 'hoodie.populate.meta.fields' is enabled
+    // to avoid unnecessary rewrite. Even with metadata table(whereas the option 'hoodie.populate.meta.fields' is configured as false),
+    // the record is deserialized with schema including metadata fields,
+    // see HoodieMergeHelper#runMerge for more details.
+    Schema oldSchema = writeSchemaWithMetaFields;
+    Schema newSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     boolean copyOldRecord = true;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
@@ -392,8 +394,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
     //       file holding this record even in cases when overall metadata is preserved
     MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
-    HoodieRecord populatedRecord =
-        record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
+    HoodieRecord populatedRecord = record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
 
     if (shouldPreserveRecordMetadata) {
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
@@ -480,6 +481,15 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
               instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
               baseFileToMerge.getCommitTime(), oldNumWrites));
     }
+  }
+
+  public Iterator<List<WriteStatus>> getWriteStatusesAsIterator() {
+    List<WriteStatus> statuses = getWriteStatuses();
+    // TODO(vc): This needs to be revisited
+    if (getPartitionPath() == null) {
+      LOG.info("Upsert Handle has partition path as null {}, {}", getOldFilePath(), statuses);
+    }
+    return Collections.singletonList(statuses).iterator();
   }
 
   public Path getOldFilePath() {

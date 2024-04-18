@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 
 import com.codahale.metrics.Timer;
 import org.junit.jupiter.api.AfterEach;
@@ -44,17 +45,19 @@ import static org.mockito.Mockito.when;
 public class TestHoodieMetrics {
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieWriteConfig writeConfig;
+  @Mock
+  HoodieMetricsConfig metricsConfig;
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
   @BeforeEach
   void setUp() {
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getTableName()).thenReturn("raw_table");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
-    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(config);
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    hoodieMetrics = new HoodieMetrics(writeConfig);
     metrics = hoodieMetrics.getMetrics();
   }
 
@@ -143,7 +146,7 @@ public class TestHoodieMetrics {
       when(metadata.getTotalCorruptLogBlocks()).thenReturn(randomValue + 15);
       when(metadata.getTotalRollbackLogBlocks()).thenReturn(randomValue + 16);
       when(metadata.getMinAndMaxEventTime()).thenReturn(Pair.of(Option.empty(), Option.empty()));
-      when(config.isCompactionLogBlockMetricsOn()).thenReturn(true);
+      when(writeConfig.isCompactionLogBlockMetricsOn()).thenReturn(true);
 
       hoodieMetrics.updateCommitMetrics(randomValue + 17, commitTimer.stop(), metadata, action);
 

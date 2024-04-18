@@ -75,15 +75,22 @@ public class ClusteringUtils {
   }
 
   /**
-   * Checks if the replacecommit is clustering commit.
+   * Checks if the requested, inflight, or completed instant of replacecommit action
+   * is a clustering operation, by checking whether the requested instant contains
+   * a clustering plan.
+   *
+   * @param timeline       Hudi timeline.
+   * @param replaceInstant the instant of replacecommit action to check.
+   * @return whether the instant is a clustering operation.
    */
-  public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
-    return getClusteringPlan(metaClient, pendingReplaceInstant).isPresent();
+  public static boolean isClusteringInstant(HoodieTimeline timeline, HoodieInstant replaceInstant) {
+    return getClusteringPlan(timeline, replaceInstant).isPresent();
   }
 
   /**
    * Get requested replace metadata from timeline.
-   * @param timeline used to get the bytes stored in the requested replace instant in the timeline
+   *
+   * @param timeline              used to get the bytes stored in the requested replace instant in the timeline
    * @param pendingReplaceInstant can be in any state, because it will always be converted to requested state
    * @return option of the replace metadata if present, else empty
    * @throws IOException
@@ -238,16 +245,8 @@ public class ClusteringUtils {
 
   public static List<HoodieInstant> getPendingClusteringInstantTimes(HoodieTableMetaClient metaClient) {
     return metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstantsAsStream()
-            .filter(instant -> isPendingClusteringInstant(metaClient, instant))
-            .collect(Collectors.toList());
-  }
-
-  public static boolean isPendingClusteringInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
-    return getClusteringPlan(metaClient, instant).isPresent();
-  }
-
-  public static boolean isPendingClusteringInstant(HoodieTimeline timeline, HoodieInstant instant) {
-    return getClusteringPlan(timeline, instant).isPresent();
+        .filter(instant -> isClusteringInstant(metaClient.getActiveTimeline(), instant))
+        .collect(Collectors.toList());
   }
 
   /**
@@ -301,14 +300,31 @@ public class ClusteringUtils {
   }
 
   /**
-   * Returns whether the given instant {@code instant} is with clustering operation.
+   * @param instant  Hudi instant to check.
+   * @param timeline Hudi timeline.
+   * @return whether the given {@code instant} is a completed clustering operation.
    */
-  public static boolean isClusteringInstant(HoodieInstant instant, HoodieTimeline timeline) {
+  public static boolean isCompletedClusteringInstant(HoodieInstant instant, HoodieTimeline timeline) {
     if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
       return false;
     }
     try {
       return TimelineUtils.getCommitMetadata(instant, timeline).getOperationType().equals(WriteOperationType.CLUSTER);
+    } catch (IOException e) {
+      throw new HoodieException("Resolve replace commit metadata error for instant: " + instant, e);
+    }
+  }
+
+  /**
+   * Returns whether the given instant {@code instant} is with insert overwrite operation.
+   */
+  public static boolean isInsertOverwriteInstant(HoodieInstant instant, HoodieTimeline timeline) {
+    if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      return false;
+    }
+    try {
+      WriteOperationType opType = TimelineUtils.getCommitMetadata(instant, timeline).getOperationType();
+      return opType.equals(WriteOperationType.INSERT_OVERWRITE) || opType.equals(WriteOperationType.INSERT_OVERWRITE_TABLE);
     } catch (IOException e) {
       throw new HoodieException("Resolve replace commit metadata error for instant: " + instant, e);
     }
