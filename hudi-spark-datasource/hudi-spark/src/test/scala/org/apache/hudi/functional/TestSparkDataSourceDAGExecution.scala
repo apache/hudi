@@ -71,18 +71,9 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
   override def setUp(): Unit = {
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
     initTestDataGenerator()
     initFileSystem()
-  }
-
-  @AfterEach
-  override def tearDown(): Unit = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
   }
 
   @ParameterizedTest

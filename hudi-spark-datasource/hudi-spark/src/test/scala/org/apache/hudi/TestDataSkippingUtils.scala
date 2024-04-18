@@ -69,7 +69,7 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
   @BeforeEach
   override def setUp(): Unit = {
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
   }
 
   val indexedCols: Seq[String] = Seq("A", "B", "C")

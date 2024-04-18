@@ -64,13 +64,12 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     setTableName("hoodie_test")
     initMetaClient()
 
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
   }
 
   @AfterEach
   override def tearDown() = {
     cleanupFileSystem()
-    cleanupSparkContexts()
   }
 
   protected def doWriteAndValidateColumnStats(testCase: ColumnStatsTestCase,

@@ -71,13 +71,12 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
 
     instantTime = new AtomicInteger(1)
 
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
   }
 
   @AfterEach
   override def tearDown() = {
     cleanupFileSystem()
-    cleanupSparkContexts()
   }
 
   protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
@@ -194,7 +193,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     val prevDfOpt = mergedDfList.lastOption
     if (prevDfOpt.isEmpty) {
       mergedDfList = mergedDfList :+ latestBatchDf
-      sparkSession.emptyDataFrame
+      getSparkSession.emptyDataFrame
     } else {
       if (operation == INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL) {
         mergedDfList = mergedDfList :+ latestBatchDf
@@ -217,7 +216,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
           && prevDf("partition") === latestBatchDf("partition"), "leftanti")
         val latestSnapshot = prevDfOld.union(latestBatchDf)
         mergedDfList = mergedDfList :+ latestSnapshot
-        sparkSession.emptyDataFrame
+        getSparkSession.emptyDataFrame
       }
     }
   }
@@ -240,7 +239,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def validateDataAndRecordIndices(hudiOpts: Map[String, String],
-                                           deletedDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
+                                           deletedDf: DataFrame = getSparkSession.emptyDataFrame): Unit = {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val writeConfig = getWriteConfig(hudiOpts)
     val metadata = metadataWriter(writeConfig).getTableMetadata

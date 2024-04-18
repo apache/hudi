@@ -69,17 +69,9 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
   @BeforeEach override def setUp(): Unit = {
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSqlContext.sparkSession
     initTestDataGenerator()
     initFileSystem()
-  }
-
-  @AfterEach override def tearDown(): Unit = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
   }
 
   // TODO add test-case for upcasting

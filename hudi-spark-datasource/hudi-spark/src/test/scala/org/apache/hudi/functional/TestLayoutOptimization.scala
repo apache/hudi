@@ -70,14 +70,13 @@ class TestLayoutOptimization extends HoodieSparkClientTestBase {
   override def setUp() {
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
     initTestDataGenerator()
     initFileSystem()
   }
 
   @AfterEach
   override def tearDown() = {
-    cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
   }
@@ -120,7 +119,7 @@ class TestLayoutOptimization extends HoodieSparkClientTestBase {
       .save(basePath)
 
     val hudiMetaClient = HoodieTableMetaClient.builder
-      .setConf(hadoopConf)
+      .setConf(getHadoopConf)
       .setBasePath(basePath)
       .setLoadActiveTimelineOnLoad(true)
       .build

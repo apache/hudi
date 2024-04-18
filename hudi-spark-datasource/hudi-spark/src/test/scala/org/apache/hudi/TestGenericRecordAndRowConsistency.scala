@@ -47,11 +47,7 @@ class TestGenericRecordAndRowConsistency extends HoodieSparkClientTestBase {
     setTableName("hoodie_type_consistency_tbl")
     initPath()
     initSparkContexts()
-    spark = sqlContext.sparkSession
-  }
-
-  @AfterEach override def tearDown(): Unit = {
-    cleanupSparkContexts()
+    spark = getSparkSession
   }
 
   @Test

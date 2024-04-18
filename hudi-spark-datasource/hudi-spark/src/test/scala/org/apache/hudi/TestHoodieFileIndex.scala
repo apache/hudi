@@ -91,7 +91,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     setTableName("hoodie_test")
     super.setUp()
     initPath()
-    spark = sqlContext.sparkSession
+    spark = getSparkSession
     queryOpts = queryOpts ++ Map("path" -> basePath)
   }
 
@@ -161,7 +161,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   @Test
   def testPartitionSchemaWithoutKeyGenerator(): Unit = {
     val metaClient = HoodieTestUtils.init(
-      hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableMetaClient.withPropertyBuilder()
+      getHadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableMetaClient.withPropertyBuilder()
         .fromMetaClient(this.metaClient)
         .setRecordKeyFields("_row_key")
         .setPartitionFields("partition_path")
@@ -604,7 +604,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
     // Test getting partition paths in a subset of directories
-    val metadata = HoodieTableMetadata.create(context,
+    val metadata = HoodieTableMetadata.create(getEngineContext(),
       HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build(),
       metaClient.getBasePathV2.toString)
     assertEquals(
