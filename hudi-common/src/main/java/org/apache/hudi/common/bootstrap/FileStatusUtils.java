@@ -22,6 +22,8 @@ import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -71,16 +73,16 @@ public class FileStatusUtils {
     return HoodieFSPermission.newBuilder().setUserAction(userAction).setGroupAction(grpAction)
         .setOtherAction(otherAction).setStickyBit(fsPermission.getStickyBit()).build();
   }
-  
-  public static FileStatus toFileStatus(HoodieFileStatus fileStatus) {
+
+  public static StoragePathInfo toStoragePathInfo(HoodieFileStatus fileStatus) {
     if (null == fileStatus) {
       return null;
     }
 
-    return new FileStatus(fileStatus.getLength(), fileStatus.getIsDir() == null ? false : fileStatus.getIsDir(),
-        fileStatus.getBlockReplication(), fileStatus.getBlockSize(), fileStatus.getModificationTime(),
-        fileStatus.getAccessTime(), toFSPermission(fileStatus.getPermission()), fileStatus.getOwner(),
-        fileStatus.getGroup(), toPath(fileStatus.getSymlink()), toPath(fileStatus.getPath()));
+    return new StoragePathInfo(
+        new StoragePath(fileStatus.getPath().getUri()), fileStatus.getLength(),
+        fileStatus.getIsDir() == null ? false : fileStatus.getIsDir(),
+        fileStatus.getBlockReplication().shortValue(), fileStatus.getBlockSize(), fileStatus.getModificationTime());
   }
 
   public static HoodieFileStatus fromFileStatus(FileStatus fileStatus) {

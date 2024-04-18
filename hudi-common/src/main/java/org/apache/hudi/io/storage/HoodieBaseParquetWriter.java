@@ -21,9 +21,9 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -50,9 +50,10 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
   public static final String BLOOM_FILTER_EXPECTED_NDV = "parquet.bloom.filter.expected.ndv";
   public static final String BLOOM_FILTER_ENABLED = "parquet.bloom.filter.enabled";
 
-  public HoodieBaseParquetWriter(Path file,
+  public HoodieBaseParquetWriter(StoragePath file,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
-    ParquetWriter.Builder parquetWriterbuilder = new ParquetWriter.Builder(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf())) {
+    ParquetWriter.Builder parquetWriterbuilder = new ParquetWriter.Builder(
+        HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf())) {
       @Override
       protected ParquetWriter.Builder self() {
         return this;

@@ -39,11 +39,12 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -110,7 +111,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // Read the operation metadata field from the avro record
   private final boolean withOperationField;
   // FileSystem
-  private final FileSystem fs;
+  private final HoodieStorage storage;
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
   // Internal schema, used to support full schema evolution.
@@ -140,7 +141,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected HoodieFileGroupRecordBuffer<T> recordBuffer;
 
   protected BaseHoodieLogRecordReader(HoodieReaderContext readerContext,
-                                      FileSystem fs, String basePath, List<String> logFilePaths,
+                                      HoodieStorage storage, String basePath, List<String> logFilePaths,
                                       Schema readerSchema, String latestInstantTime,
                                       boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan,
@@ -153,7 +154,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.readerContext = readerContext;
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
-    this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
+    this.hoodieTableMetaClient = HoodieTableMetaClient.builder()
+        .setConf((Configuration) storage.getConf()).setBasePath(basePath).build();
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
@@ -168,7 +170,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
-    this.fs = fs;
+    this.storage = storage;
     this.bufferSize = bufferSize;
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
@@ -233,8 +235,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReverseReader(fs,
-          logFilePaths.stream().map(logFile -> new HoodieLogFile(new CachingPath(logFile))).collect(Collectors.toList()),
+      logFormatReaderWrapper = new HoodieLogFormatReverseReader(storage,
+          logFilePaths.stream().map(logFile -> new HoodieLogFile(new StoragePath(logFile))).collect(Collectors.toList()),
           readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
@@ -281,14 +283,16 @@ public abstract class BaseHoodieLogRecordReader<T> {
             // store the current block
             currentInstantLogBlocks.push(logBlock);
             validLogBlockInstants.add(logBlock);
-            updateBlockSequenceTracker(logBlock, instantTime, blockSeqNo, attemptNo, blockSequenceMapPerCommit);
+            updateBlockSequenceTracker(logBlock, instantTime, blockSeqNo, attemptNo,
+                blockSequenceMapPerCommit);
             break;
           case DELETE_BLOCK:
             LOG.info("Reading a delete block from file {}", logFile.getPath());
             // store deletes so can be rolled back
             currentInstantLogBlocks.push(logBlock);
             validLogBlockInstants.add(logBlock);
-            updateBlockSequenceTracker(logBlock, instantTime, blockSeqNo, attemptNo, blockSequenceMapPerCommit);
+            updateBlockSequenceTracker(logBlock, instantTime, blockSeqNo, attemptNo,
+                blockSequenceMapPerCommit);
             break;
           case COMMAND_BLOCK:
             // Consider the following scenario
@@ -345,7 +349,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
                   }
                   if (targetInstantForCommandBlock.contentEquals(block.getLogBlockHeader().get(INSTANT_TIME))) {
                     // rollback older data block or delete block
-                    LOG.info(String.format("Rolling back an older log block read from %s with instantTime %s",
+                    LOG.info(String.format(
+                        "Rolling back an older log block read from %s with instantTime %s",
                         logFile.getPath(), targetInstantForCommandBlock));
                     return false;
                   }
@@ -523,8 +528,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReader(fs,
-          logFilePaths.stream().map(logFile -> new HoodieLogFile(new CachingPath(logFile))).collect(Collectors.toList()),
+      logFormatReaderWrapper = new HoodieLogFormatReader(storage,
+          logFilePaths.stream().map(logFile -> new HoodieLogFile(new StoragePath(logFile))).collect(Collectors.toList()),
           readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       /**
@@ -838,7 +843,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   public abstract static class Builder<T> {
     public abstract Builder withHoodieReaderContext(HoodieReaderContext<T> readerContext);
 
-    public abstract Builder withFileSystem(FileSystem fs);
+    public abstract Builder withStorage(HoodieStorage storage);
 
     public abstract Builder withBasePath(String basePath);
 

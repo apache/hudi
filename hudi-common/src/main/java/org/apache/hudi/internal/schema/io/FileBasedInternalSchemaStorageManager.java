@@ -26,20 +26,19 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -57,19 +56,19 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   private static final Logger LOG = LoggerFactory.getLogger(FileBasedInternalSchemaStorageManager.class);
 
   public static final String SCHEMA_NAME = ".schema";
-  private final Path baseSchemaPath;
+  private final StoragePath baseSchemaPath;
   private final Configuration conf;
   private HoodieTableMetaClient metaClient;
 
-  public FileBasedInternalSchemaStorageManager(Configuration conf, Path baseTablePath) {
-    Path metaPath = new Path(baseTablePath, ".hoodie");
-    this.baseSchemaPath = new Path(metaPath, SCHEMA_NAME);
+  public FileBasedInternalSchemaStorageManager(Configuration conf, StoragePath baseTablePath) {
+    StoragePath metaPath = new StoragePath(baseTablePath, ".hoodie");
+    this.baseSchemaPath = new StoragePath(metaPath, SCHEMA_NAME);
     this.conf = conf;
   }
 
   public FileBasedInternalSchemaStorageManager(HoodieTableMetaClient metaClient) {
-    Path metaPath = new Path(metaClient.getBasePath(), ".hoodie");
-    this.baseSchemaPath = new Path(metaPath, SCHEMA_NAME);
+    StoragePath metaPath = new StoragePath(metaClient.getBasePath(), ".hoodie");
+    this.baseSchemaPath = new StoragePath(metaPath, SCHEMA_NAME);
     this.conf = metaClient.getHadoopConf();
     this.metaClient = metaClient;
   }
@@ -80,7 +79,8 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
       metaClient = HoodieTableMetaClient.builder()
           .setBasePath(baseSchemaPath.getParent().getParent().toString())
           .setConf(conf)
-          .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.defaultConfig(baseSchemaPath.getParent().getParent().toString()))
+          .setTimeGeneratorConfig(
+              HoodieTimeGeneratorConfig.defaultConfig(baseSchemaPath.getParent().getParent().toString()))
           .build();
     }
     return metaClient;
@@ -101,15 +101,18 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   private void cleanResidualFiles() {
     List<String> validateCommits = getValidInstants();
     try {
-      FileSystem fs = baseSchemaPath.getFileSystem(conf);
-      if (fs.exists(baseSchemaPath)) {
-        List<String> candidateSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath)).filter(f -> f.isFile())
+      HoodieStorage storage = HoodieStorageUtils.getStorage(baseSchemaPath, conf);
+      if (storage.exists(baseSchemaPath)) {
+        List<String> candidateSchemaFiles = storage.listDirectEntries(baseSchemaPath).stream()
+            .filter(f -> f.isFile())
             .map(file -> file.getPath().getName()).collect(Collectors.toList());
-        List<String> residualSchemaFiles = candidateSchemaFiles.stream().filter(f -> !validateCommits.contains(f.split("\\.")[0])).collect(Collectors.toList());
+        List<String> residualSchemaFiles =
+            candidateSchemaFiles.stream().filter(f -> !validateCommits.contains(f.split("\\.")[0]))
+                .collect(Collectors.toList());
         // clean residual files
         residualSchemaFiles.forEach(f -> {
           try {
-            fs.delete(new Path(getMetaClient().getSchemaFolderName(), f));
+            storage.deleteFile(new StoragePath(getMetaClient().getSchemaFolderName(), f));
           } catch (IOException o) {
             throw new HoodieException(o);
           }
@@ -122,13 +125,16 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   public void cleanOldFiles(List<String> validateCommits) {
     try {
-      FileSystem fs = baseSchemaPath.getFileSystem(conf);
-      if (fs.exists(baseSchemaPath)) {
-        List<String> candidateSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath)).filter(f -> f.isFile())
+      HoodieStorage storage = HoodieStorageUtils.getStorage(baseSchemaPath, conf);
+      if (storage.exists(baseSchemaPath)) {
+        List<String> candidateSchemaFiles = storage.listDirectEntries(baseSchemaPath).stream()
+            .filter(f -> f.isFile())
             .map(file -> file.getPath().getName()).collect(Collectors.toList());
-        List<String> validateSchemaFiles = candidateSchemaFiles.stream().filter(f -> validateCommits.contains(f.split("\\.")[0])).collect(Collectors.toList());
+        List<String> validateSchemaFiles =
+            candidateSchemaFiles.stream().filter(f -> validateCommits.contains(f.split("\\.")[0]))
+                .collect(Collectors.toList());
         for (int i = 0; i < validateSchemaFiles.size(); i++) {
-          fs.delete(new Path(validateSchemaFiles.get(i)));
+          storage.deleteFile(new StoragePath(validateSchemaFiles.get(i)));
         }
       }
     } catch (IOException e) {
@@ -150,17 +156,18 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public String getHistorySchemaStrByGivenValidCommits(List<String> validCommits) {
     List<String> commitList = validCommits == null || validCommits.isEmpty() ? getValidInstants() : validCommits;
     try {
-      FileSystem fs = HadoopFSUtils.getFs(baseSchemaPath.toString(), conf);
-      if (fs.exists(baseSchemaPath)) {
-        List<String> validaSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath))
+      HoodieStorage storage = HoodieStorageUtils.getStorage(baseSchemaPath, conf);
+      if (storage.exists(baseSchemaPath)) {
+        List<String> validaSchemaFiles = storage.listDirectEntries(baseSchemaPath).stream()
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
             .map(file -> file.getPath().getName())
             .filter(Objects::nonNull)
             .filter(f -> commitList.contains(HoodieInstant.extractTimestamp(f))).sorted().collect(Collectors.toList());
         if (!validaSchemaFiles.isEmpty()) {
-          Path latestFilePath = new Path(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));
+          StoragePath latestFilePath =
+              new StoragePath(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));
           byte[] content;
-          try (InputStream is = fs.open(latestFilePath)) {
+          try (InputStream is = storage.open(latestFilePath)) {
             content = FileIOUtils.readAsByteArray(is);
             LOG.info(String.format("read history schema success from file : %s", latestFilePath));
             return fromUTF8Bytes(content);

@@ -52,6 +52,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -659,11 +660,14 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       List<HoodieRollbackMetadata> rollbackM = new ArrayList<>();
       rollbackM.add(rollbackMetadata);
       HoodieRestoreMetadata metadata = TimelineMetadataUtils.convertRestoreMetadata(rollbackInstant,
-          100, Collections.singletonList(instant), Collections.singletonMap(rollbackInstant, rollbackM));
+          100, Collections.singletonList(instant),
+          Collections.singletonMap(rollbackInstant, rollbackM));
 
-      HoodieInstant restoreInstant = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, rollbackInstant);
+      HoodieInstant restoreInstant =
+          new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, rollbackInstant);
       metaClient.getActiveTimeline().createNewInstant(restoreInstant);
-      metaClient.getActiveTimeline().saveAsComplete(restoreInstant, TimelineMetadataUtils.serializeRestoreMetadata(metadata));
+      metaClient.getActiveTimeline()
+          .saveAsComplete(restoreInstant, TimelineMetadataUtils.serializeRestoreMetadata(metadata));
     } else {
       metaClient.getActiveTimeline().createNewInstant(
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant));
@@ -671,9 +675,11 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant),
           TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
     }
-    Path instantPath = HoodieTestUtils
-        .getCompleteInstantPath(metaClient.getFs(), new Path(metaClient.getMetaPath()), instant.getTimestamp(), instant.getAction());
-    boolean deleted = metaClient.getFs().delete(instantPath, false);
+    StoragePath instantPath = HoodieTestUtils
+        .getCompleteInstantPath(metaClient.getStorage(),
+            new StoragePath(metaClient.getMetaPath()),
+            instant.getTimestamp(), instant.getAction());
+    boolean deleted = metaClient.getStorage().deleteFile(instantPath);
     assertTrue(deleted);
   }
 
@@ -770,13 +776,17 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    */
   private void unscheduleCompaction(SyncableFileSystemView view, String compactionInstantTime, String newLastInstant,
       String newBaseInstant) throws IOException {
-    HoodieInstant instant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstantTime);
-    boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
+    HoodieInstant instant =
+        new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstantTime);
+    boolean deleted =
+        metaClient.getStorage().deleteFile(
+            new StoragePath(metaClient.getMetaPath(), instant.getFileName()));
     ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
 
     view.sync();
     assertEquals(newLastInstant, view.getLastInstant().get().getTimestamp());
-    PARTITIONS.forEach(p -> view.getLatestFileSlices(p).forEach(fs -> assertEquals(newBaseInstant, fs.getBaseInstantTime())));
+    PARTITIONS.forEach(p -> view.getLatestFileSlices(p)
+        .forEach(fs -> assertEquals(newBaseInstant, fs.getBaseInstantTime())));
   }
 
   /**
@@ -789,13 +799,17 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    */
   private void unscheduleLogCompaction(SyncableFileSystemView view, String logCompactionInstantTime, String newLastInstant,
                                     String newBaseInstant) throws IOException {
-    HoodieInstant instant = new HoodieInstant(State.REQUESTED, LOG_COMPACTION_ACTION, logCompactionInstantTime);
-    boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
+    HoodieInstant instant =
+        new HoodieInstant(State.REQUESTED, LOG_COMPACTION_ACTION, logCompactionInstantTime);
+    boolean deleted =
+        metaClient.getStorage().deleteFile(
+            new StoragePath(metaClient.getMetaPath(), instant.getFileName()));
     ValidationUtils.checkArgument(deleted, "Unable to delete log compaction instant.");
 
     view.sync();
     assertEquals(newLastInstant, view.getLastInstant().get().getTimestamp());
-    PARTITIONS.forEach(p -> view.getLatestFileSlices(p).forEach(fs -> assertEquals(newBaseInstant, fs.getBaseInstantTime())));
+    PARTITIONS.forEach(p -> view.getLatestFileSlices(p)
+        .forEach(fs -> assertEquals(newBaseInstant, fs.getBaseInstantTime())));
   }
 
   /**
@@ -938,9 +952,11 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
                       Path.getPathWithoutSchemeAndAuthority(new Path(df2.getPath())));
                 }
                 List<Path> logPaths1 = slice1.getLogFiles()
-                    .map(lf -> Path.getPathWithoutSchemeAndAuthority(lf.getPath())).collect(Collectors.toList());
+                    .map(lf -> Path.getPathWithoutSchemeAndAuthority(
+                        new Path(lf.getPath().toUri()))).collect(Collectors.toList());
                 List<Path> logPaths2 = slice2.getLogFiles()
-                    .map(lf -> Path.getPathWithoutSchemeAndAuthority(lf.getPath())).collect(Collectors.toList());
+                    .map(lf -> Path.getPathWithoutSchemeAndAuthority(
+                        new Path(lf.getPath().toUri()))).collect(Collectors.toList());
                 assertEquals(logPaths1, logPaths2);
               });
           return slices1.size();

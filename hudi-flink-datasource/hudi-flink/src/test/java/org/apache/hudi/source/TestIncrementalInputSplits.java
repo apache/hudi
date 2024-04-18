@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -45,7 +46,6 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
-import org.apache.hadoop.fs.FileStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -400,16 +400,19 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    HoodieTimeline commitsTimeline = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitsTimeline =
+        metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> instants = commitsTimeline.getInstants();
-    String lastInstant  = commitsTimeline.lastInstant().map(HoodieInstant::getTimestamp).get();
+    String lastInstant = commitsTimeline.lastInstant().map(HoodieInstant::getTimestamp).get();
     List<HoodieCommitMetadata> metadataList = instants.stream()
-            .map(instant -> WriteProfiles.getCommitMetadata(tableName, new Path(basePath), instant, commitsTimeline)).collect(Collectors.toList());
-    FileStatus[] fileStatuses = WriteProfiles.getFilesFromMetadata(new Path(basePath), metaClient.getHadoopConf(), metadataList, metaClient.getTableType());
+        .map(instant -> WriteProfiles.getCommitMetadata(tableName, new Path(basePath), instant,
+            commitsTimeline)).collect(Collectors.toList());
+    List<StoragePathInfo> pathInfoList = WriteProfiles.getFilesFromMetadata(
+        new Path(basePath), metaClient.getHadoopConf(), metadataList, metaClient.getTableType());
     HoodieTableFileSystemView fileSystemView =
-            new HoodieTableFileSystemView(metaClient, commitsTimeline, fileStatuses);
+        new HoodieTableFileSystemView(metaClient, commitsTimeline, pathInfoList);
     Map<String, String> fileIdToBaseInstant = fileSystemView.getAllFileSlices("par1")
-            .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
+        .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
 
     IncrementalInputSplits iis = IncrementalInputSplits.builder()
             .conf(conf)

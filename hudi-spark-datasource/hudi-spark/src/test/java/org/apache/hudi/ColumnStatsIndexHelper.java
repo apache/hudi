@@ -17,13 +17,14 @@
 
 package org.apache.hudi;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StoragePath;
+
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -48,10 +49,9 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters$;
 
 import javax.annotation.Nonnull;
+
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -60,6 +60,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+
+import scala.collection.JavaConversions;
+import scala.collection.JavaConverters$;
 
 // TODO merge w/ ColumnStatsIndexSupport
 public class ColumnStatsIndexHelper {
@@ -178,7 +181,7 @@ public class ColumnStatsIndexHelper {
                     .flatMap(path ->
                         utils.readRangeFromParquetMetadata(
                                 serializableConfiguration.value(),
-                                new Path(path),
+                                new StoragePath(path),
                                 columnNames
                             )
                             .stream()

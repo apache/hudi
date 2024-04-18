@@ -21,24 +21,26 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieKey, HoodieLogFile, HoodieRecord}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, OP_KEY_ONLY}
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, OP_KEY_ONLY}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
 
 import java.util.function.Predicate
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -65,7 +67,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown(): Unit = {
@@ -118,14 +120,14 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
 
   protected def isFilesExistInFileSystem(files: List[String]): Boolean = {
     files.stream().allMatch(new Predicate[String] {
-      override def test(file: String): Boolean = fs.exists(new Path(basePath + "/" + file))
+      override def test(file: String): Boolean = storage.exists(new StoragePath(basePath + "/" + file))
     })
   }
 
   protected def getCDCBlocks(relativeLogFile: String, cdcSchema: Schema): List[HoodieDataBlock] = {
     val logFile = new HoodieLogFile(
-      metaClient.getFs.getFileStatus(new Path(metaClient.getBasePathV2, relativeLogFile)))
-    val reader = HoodieLogFormat.newReader(fs, logFile, cdcSchema)
+      metaClient.getStorage.getPathInfo(new StoragePath(metaClient.getBasePathV2, relativeLogFile)))
+    val reader = HoodieLogFormat.newReader(storage, logFile, cdcSchema)
     val blocks = scala.collection.mutable.ListBuffer.empty[HoodieDataBlock]
     while(reader.hasNext) {
       blocks.add(reader.next().asInstanceOf[HoodieDataBlock])

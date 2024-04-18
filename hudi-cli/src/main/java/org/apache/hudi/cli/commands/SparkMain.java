@@ -43,6 +43,8 @@ import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -381,8 +383,10 @@ public class SparkMain {
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
                                               String repairedOutputPath, String basePath, boolean dryRun, String dedupeType) {
-    DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc),
-        HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration()), DeDupeType.withName(dedupeType));
+    DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath,
+        new SQLContext(jsc),
+        HoodieStorageUtils.getStorage(basePath, jsc.hadoopConfiguration()),
+        DeDupeType.withName(dedupeType));
     job.fixDuplicates(dryRun);
     return 0;
   }
@@ -475,7 +479,7 @@ public class SparkMain {
                                  String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? buildProperties(configs)
-        : readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
+        : readConfig(jsc.hadoopConfiguration(), new StoragePath(propsFilePath), configs).getProps(true);
 
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key(), sourcePath);
 

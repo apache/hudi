@@ -37,13 +37,13 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.slf4j.Logger;
@@ -106,16 +106,18 @@ public class ArchivedCommitsCommand {
       throws IOException {
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     String basePath = HoodieCLI.getTableMetaClient().getBasePath();
-    Path archivePath = new Path(HoodieCLI.getTableMetaClient().getArchivePath() + "/.commits_.archive*");
+    StoragePath archivePath = new StoragePath(
+        HoodieCLI.getTableMetaClient().getArchivePath() + "/.commits_.archive*");
     if (folder != null && !folder.isEmpty()) {
-      archivePath = new Path(basePath + "/.hoodie/" + folder);
+      archivePath = new StoragePath(basePath + "/.hoodie/" + folder);
     }
-    FileStatus[] fsStatuses = HadoopFSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
+    List<StoragePathInfo> pathInfoList =
+        HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
     List<Comparable[]> allStats = new ArrayList<>();
-    for (FileStatus fs : fsStatuses) {
+    for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file
-      try (Reader reader = HoodieLogFormat.newReader(HadoopFSUtils.getFs(basePath, HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
+      try (Reader reader = HoodieLogFormat.newReader(HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf),
+          new HoodieLogFile(pathInfo.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
         List<IndexedRecord> readRecords = new ArrayList<>();
         // read the avro blocks
         while (reader.hasNext()) {
@@ -181,14 +183,15 @@ public class ArchivedCommitsCommand {
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     String basePath = metaClient.getBasePath();
-    Path archivePath = new Path(metaClient.getArchivePath() + "/.commits_.archive*");
-    FileStatus[] fsStatuses =
-        HadoopFSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
+    StoragePath archivePath =
+        new StoragePath(metaClient.getArchivePath() + "/.commits_.archive*");
+    List<StoragePathInfo> pathInfoList =
+        HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
     List<Comparable[]> allCommits = new ArrayList<>();
-    for (FileStatus fs : fsStatuses) {
+    for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file
-      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(HadoopFSUtils.getFs(basePath, HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
+      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf),
+          new HoodieLogFile(pathInfo.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
         List<IndexedRecord> readRecords = new ArrayList<>();
         // read the avro blocks
         while (reader.hasNext()) {

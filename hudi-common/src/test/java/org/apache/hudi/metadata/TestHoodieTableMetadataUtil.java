@@ -32,8 +32,8 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,7 +65,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
   @AfterEach
   public void tearDown() throws IOException {
-    metaClient.getFs().delete(metaClient.getBasePathV2(), true);
+    metaClient.getStorage().deleteDirectory(metaClient.getBasePathV2());
     cleanupTestDataGenerator();
     cleanMetaClient();
   }
@@ -99,7 +99,12 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         List<HoodieRecord> hoodieRecords = dataGen.generateInsertsForPartition(instant, 10, p);
         String fileId = UUID.randomUUID().toString();
         FileSlice fileSlice = new FileSlice(p, instant, fileId);
-        writeParquetFile(instant, hoodieTestTable.getBaseFilePath(p, fileId), hoodieRecords, metaClient, engineContext);
+        writeParquetFile(
+            instant,
+            new StoragePath(hoodieTestTable.getBaseFilePath(p, fileId).toUri()),
+            hoodieRecords,
+            metaClient,
+            engineContext);
         HoodieBaseFile baseFile = new HoodieBaseFile(hoodieTestTable.getBaseFilePath(p, fileId).toString(), fileId, instant, null);
         fileSlice.setBaseFile(baseFile);
         partitionFileSlicePairs.add(Pair.of(p, fileSlice));
@@ -129,7 +134,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
   }
 
   private static void writeParquetFile(String instant,
-                                       Path path,
+                                       StoragePath path,
                                        List<HoodieRecord> records,
                                        HoodieTableMetaClient metaClient,
                                        HoodieLocalEngineContext engineContext) throws IOException {
