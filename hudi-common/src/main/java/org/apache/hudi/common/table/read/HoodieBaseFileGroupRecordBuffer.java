@@ -289,7 +289,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         true, false, false).mergeSchemaGetRenamed();
     Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName());
     assert mergedAvroSchema.equals(readerSchema);
-    return Option.of(Pair.of(readerContext.projectRecordUnsafe(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
+    return Option.of(Pair.of(readerContext.projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
   }
 
   /**

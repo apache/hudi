@@ -79,7 +79,7 @@ public class ValidationUtils {
 
   public static void checkNotNull(Object o) {
     if (o == null) {
-      throw new IllegalStateException();
+      throw new IllegalStateException("Value is null when it should be initialized");
     }
   }
 }

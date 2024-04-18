@@ -709,8 +709,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   test("Test schema auto evolution") {
-    //This test will be flakey for mor until [HUDI-6798] is landed and we can set the merge mode
-    spark.sql("set hoodie.file.group.reader.enabled=false")
     withTempDir { tmp =>
       Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
         // for complex schema.
@@ -809,7 +807,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         }
       }
     }
-    spark.sqlContext.conf.unsetConf("hoodie.file.group.reader.enabled");
   }
 
   test("Test DATE to STRING conversions when vectorized reading is not enabled") {

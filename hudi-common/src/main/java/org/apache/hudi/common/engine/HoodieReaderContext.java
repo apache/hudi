@@ -33,6 +33,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -217,12 +218,14 @@ public abstract class HoodieReaderContext<T> {
    *
    * @param from the schema of records to be passed into UnaryOperator
    * @param to the schema of records produced by UnaryOperator
+   * @param renamedColumns map of renamed columns where the key is the new name from the query and
+   *                       the value is the old name that exists in the file
    * @return a function that takes in a record and returns the record with reordered columns
    */
-  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
+  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns);
 
-  public UnaryOperator<T> projectRecordUnsafe(Schema from, Schema to, Map<String, String> renamedColumns) {
-    throw new UnsupportedOperationException("Schema on read is not supported for this reader.");
+  public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
+    return projectRecord(from, to, Collections.emptyMap());
   }
 
   /**

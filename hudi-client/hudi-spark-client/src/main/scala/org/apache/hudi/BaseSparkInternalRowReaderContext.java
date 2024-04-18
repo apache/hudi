@@ -142,18 +142,15 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to) {
-    UnsafeProjection projection = HoodieInternalRowUtils.generateUnsafeProjectionAlias(getCachedSchema(from), getCachedSchema(to));
-    return projection::apply;
-  }
-
-  @Override
-  public UnaryOperator<InternalRow> projectRecordUnsafe(Schema from, Schema to, Map<String, String> renamedColumns) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(from);
-    StructType newStructType = HoodieInternalRowUtils.getCachedSchema(to);
-    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renamedColumns);
-    return row -> (InternalRow) unsafeRowWriter.apply(row);
+  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+    if (renamedColumns.isEmpty()) {
+      UnsafeProjection projection = HoodieInternalRowUtils.generateUnsafeProjectionAlias(getCachedSchema(from), getCachedSchema(to));
+      return projection::apply;
+    } else {
+      Function1<InternalRow, UnsafeRow> unsafeRowWriter =
+          HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns);
+      return row -> (InternalRow) unsafeRowWriter.apply(row);
+    }
   }
 
   protected UnaryOperator<InternalRow> getIdentityProjection() {
