@@ -29,11 +29,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 
@@ -94,8 +94,9 @@ public class TestAsyncCompaction extends CompactionTestBase {
       hoodieTable.rollbackInflightCompaction(
           new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime));
       metaClient.reloadActiveTimeline();
-      pendingCompactionInstant = metaClient.getCommitsAndCompactionTimeline().filterPendingCompactionTimeline()
-          .getInstantsAsStream().findFirst().get();
+      pendingCompactionInstant =
+          metaClient.getCommitsAndCompactionTimeline().filterPendingCompactionTimeline()
+              .getInstantsAsStream().findFirst().get();
       assertEquals("compaction", pendingCompactionInstant.getAction());
       assertEquals(State.REQUESTED, pendingCompactionInstant.getState());
       assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp());
@@ -104,9 +105,10 @@ public class TestAsyncCompaction extends CompactionTestBase {
       // time this happens, the pending compaction instant file in Hoodie Meta path becomes an empty file (Note: Hoodie
       // reads compaction plan from aux path which is untouched). TO test for regression, we simply get file status
       // and look at the file size
-      FileStatus fstatus =
-          metaClient.getFs().getFileStatus(new Path(metaClient.getMetaPath(), pendingCompactionInstant.getFileName()));
-      assertTrue(fstatus.getLen() > 0);
+      StoragePathInfo pathInfo = metaClient.getStorage()
+          .getPathInfo(new StoragePath(metaClient.getMetaPath(),
+              pendingCompactionInstant.getFileName()));
+      assertTrue(pathInfo.getLength() > 0);
     }
   }
 

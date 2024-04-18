@@ -20,6 +20,8 @@
 package org.apache.hudi.storage.hadoop;
 
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
+import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
@@ -64,6 +66,11 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
+  public int getDefaultBlockSize(StoragePath path) {
+    return (int) fs.getDefaultBlockSize(convertToHadoopPath(path));
+  }
+
+  @Override
   public OutputStream create(StoragePath path, boolean overwrite) throws IOException {
     return fs.create(convertToHadoopPath(path), overwrite);
   }
@@ -71,6 +78,12 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public InputStream open(StoragePath path) throws IOException {
     return fs.open(convertToHadoopPath(path));
+  }
+
+  @Override
+  public SeekableDataInputStream openSeekable(StoragePath path, int bufferSize) throws IOException {
+    return new HadoopSeekableDataInputStream(
+        HadoopFSUtils.getFSDataInputStream(fs, path, bufferSize));
   }
 
   @Override

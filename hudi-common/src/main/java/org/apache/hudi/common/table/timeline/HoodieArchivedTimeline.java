@@ -27,11 +27,11 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroParquetReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -267,7 +267,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
           .parallel().forEach(fileName -> {
             // Read the archived file
             try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-                .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, metaClient.getHadoopConf(), new Path(metaClient.getArchivePath(), fileName))) {
+                .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, metaClient.getHadoopConf(), new StoragePath(metaClient.getArchivePath(), fileName))) {
               try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
                 while (iterator.hasNext()) {
                   GenericRecord record = (GenericRecord) iterator.next();
@@ -279,7 +279,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
                 }
               }
             } catch (IOException ioException) {
-              throw new HoodieIOException("Error open file reader for path: " + new Path(metaClient.getArchivePath(), fileName));
+              throw new HoodieIOException("Error open file reader for path: "
+                  + new StoragePath(metaClient.getArchivePath(), fileName));
             }
           });
     } catch (IOException e) {

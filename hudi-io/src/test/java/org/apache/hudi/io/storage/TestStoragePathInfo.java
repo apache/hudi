@@ -72,6 +72,19 @@ public class TestStoragePathInfo {
   }
 
   @Test
+  public void testCompareTo() {
+    StoragePathInfo pathInfo1 = new StoragePathInfo(
+        new StoragePath(PATH1), LENGTH, false, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME);
+    StoragePathInfo pathInfo2 = new StoragePathInfo(
+        new StoragePath(PATH1), LENGTH + 2, false, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME + 2L);
+    StoragePathInfo pathInfo3 = new StoragePathInfo(
+        new StoragePath(PATH2), LENGTH, false, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME);
+
+    assertEquals(0, pathInfo1.compareTo(pathInfo2));
+    assertEquals(-1, pathInfo1.compareTo(pathInfo3));
+  }
+
+  @Test
   public void testEquals() {
     StoragePathInfo pathInfo1 = new StoragePathInfo(
         new StoragePath(PATH1), LENGTH, false, BLOCK_REPLICATION, BLOCK_SIZE, MODIFICATION_TIME);

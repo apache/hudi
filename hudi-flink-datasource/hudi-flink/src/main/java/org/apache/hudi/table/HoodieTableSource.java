@@ -53,6 +53,7 @@ import org.apache.hudi.source.filedistribution.selector.StreamReadBucketIndexKey
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
@@ -92,7 +93,6 @@ import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -351,14 +351,15 @@ public class HoodieTableSource implements
     if (relPartitionPaths.size() == 0) {
       return Collections.emptyList();
     }
-    FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
-    if (fileStatuses.length == 0) {
+    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+    if (pathInfoList.size() == 0) {
       throw new HoodieException("No files found for reading in user provided path.");
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         // file-slice after pending compaction-requested instant-time is also considered valid
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), fileStatuses);
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(),
+        pathInfoList);
     if (!fsView.getLastInstant().isPresent()) {
       return Collections.emptyList();
     }
@@ -534,16 +535,16 @@ public class HoodieTableSource implements
   }
 
   private InputFormat<RowData, ?> baseFileOnlyInputFormat() {
-    final FileStatus[] fileStatuses = getReadFiles();
-    if (fileStatuses.length == 0) {
+    final List<StoragePathInfo> pathInfoList = getReadFiles();
+    if (pathInfoList.size() == 0) {
       return InputFormats.EMPTY_INPUT_FORMAT;
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), fileStatuses);
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), pathInfoList);
     Path[] paths = fsView.getLatestBaseFiles()
-        .map(HoodieBaseFile::getFileStatus)
-        .map(FileStatus::getPath).toArray(Path[]::new);
+        .map(HoodieBaseFile::getPathInfo)
+        .map(e -> new Path(e.getPath().toUri())).toArray(Path[]::new);
 
     if (paths.length == 0) {
       return InputFormats.EMPTY_INPUT_FORMAT;
@@ -619,11 +620,11 @@ public class HoodieTableSource implements
    * Get the reader paths with partition path expanded.
    */
   @VisibleForTesting
-  public FileStatus[] getReadFiles() {
+  public List<StoragePathInfo> getReadFiles() {
     FileIndex fileIndex = getOrBuildFileIndex();
     List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
     if (relPartitionPaths.size() == 0) {
-      return new FileStatus[0];
+      return Collections.emptyList();
     }
     return fileIndex.getFilesInPartitions();
   }

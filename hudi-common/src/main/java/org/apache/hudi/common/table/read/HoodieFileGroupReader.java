@@ -38,11 +38,11 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -147,7 +147,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return makeBootstrapBaseFileIterator(baseFile);
     }
 
-    return readerContext.getFileRecordIterator(baseFile.getHadoopPath(), start, length,
+    return readerContext.getFileRecordIterator(
+        baseFile.getStoragePath(), start, length,
         readerContext.getSchemaHandler().getDataSchema(),
         readerContext.getSchemaHandler().getRequiredSchema(), hadoopConf);
   }
@@ -165,7 +166,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     } else if (!dataFileIterator.isPresent()) {
       return skeletonFileIterator.get().getLeft();
     } else if (!skeletonFileIterator.isPresent()) {
-      return  dataFileIterator.get().getLeft();
+      return dataFileIterator.get().getLeft();
     } else {
       return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
           dataFileIterator.get().getLeft(), dataFileIterator.get().getRight());
@@ -179,7 +180,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return Option.empty();
     }
     Schema requiredSchema = readerContext.getSchemaHandler().createSchemaFromFields(requiredFields);
-    return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getHadoopPath(), 0, file.getFileLen(),
+    return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, file.getFileLen(),
         readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, hadoopConf), requiredSchema));
   }
 
@@ -208,16 +209,16 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private void scanLogFiles() {
     String path = readerContext.getTablePath();
-    FileSystem fs = readerContext.getFs(path, hadoopConf);
+    HoodieStorage storage = readerContext.getStorage(path, hadoopConf);
 
     HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
         .withHoodieReaderContext(readerContext)
-        .withFileSystem(fs)
+        .withStorage(storage)
         .withLogFiles(logFiles)
         .withReverseReader(false)
         .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
         .withPartition(getRelativePartitionPath(
-            new Path(path), logFiles.get(0).getPath().getParent()))
+            new StoragePath(path), logFiles.get(0).getPath().getParent()))
         .withRecordMerger(recordMerger)
         .withRecordBuffer(recordBuffer)
         .build();

@@ -31,9 +31,9 @@ import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -51,8 +51,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -187,7 +187,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     }
 
     @Override
-    List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, String basePath, FileSystem fs, HoodieTimeline completedTimeline) {
+    List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, String basePath, HoodieStorage storage, HoodieTimeline completedTimeline) {
       return fsPartitionsToReturn;
     }
 
@@ -197,7 +197,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     }
 
     @Override
-    Option<String> getPartitionCreationInstant(FileSystem fs, String basePath, String partition) {
+    Option<String> getPartitionCreationInstant(HoodieStorage storage, String basePath, String partition) {
       return this.partitionCreationTime;
     }
   }

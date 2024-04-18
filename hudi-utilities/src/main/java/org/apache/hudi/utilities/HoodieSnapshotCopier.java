@@ -33,6 +33,9 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -112,15 +115,15 @@ public class HoodieSnapshotCopier implements Serializable {
 
       List<Tuple2<String, String>> filesToCopy = context.flatMap(partitions, partition -> {
         // Only take latest version files <= latestCommit.
-        FileSystem fs1 = HadoopFSUtils.getFs(baseDir, serConf.newCopy());
+        HoodieStorage storage1 = HoodieStorageUtils.getStorage(baseDir, serConf.newCopy());
         List<Tuple2<String, String>> filePaths = new ArrayList<>();
         Stream<HoodieBaseFile> dataFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
         dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
 
         // also need to copy over partition metadata
-        Path partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(fs1,
+        StoragePath partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(storage1,
             FSUtils.getPartitionPath(baseDir, partition)).get();
-        if (fs1.exists(partitionMetaFile)) {
+        if (storage1.exists(partitionMetaFile)) {
           filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
         }
 
@@ -130,7 +133,7 @@ public class HoodieSnapshotCopier implements Serializable {
       context.foreach(filesToCopy, tuple -> {
         String partition = tuple._1();
         Path sourceFilePath = new Path(tuple._2());
-        Path toPartitionPath = FSUtils.getPartitionPath(outputDir, partition);
+        Path toPartitionPath = FSUtils.getPartitionPathInHadoopPath(outputDir, partition);
         FileSystem ifs = HadoopFSUtils.getFs(baseDir, serConf.newCopy());
 
         if (!ifs.exists(toPartitionPath)) {

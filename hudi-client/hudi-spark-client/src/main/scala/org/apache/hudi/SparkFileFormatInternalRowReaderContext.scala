@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.CloseableInternalRowIterator
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
@@ -63,7 +64,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
   lazy val recordKeyFilters: Seq[Filter] = filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
 
-  override def getFileRecordIterator(filePath: Path,
+  override def getFileRecordIterator(filePath: StoragePath,
                                      start: Long,
                                      length: Long,
                                      dataSchema: Schema,

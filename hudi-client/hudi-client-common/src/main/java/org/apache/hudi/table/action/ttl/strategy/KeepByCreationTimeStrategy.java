@@ -41,7 +41,7 @@ public class KeepByCreationTimeStrategy extends KeepByTimeStrategy {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     return partitionPathsForTTL.stream().parallel().filter(part -> {
       HoodiePartitionMetadata hoodiePartitionMetadata =
-          new HoodiePartitionMetadata(metaClient.getFs(), FSUtils.getPartitionPath(metaClient.getBasePath(), part));
+          new HoodiePartitionMetadata(metaClient.getStorage(), FSUtils.getPartitionPath(metaClient.getBasePath(), part));
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
         String instantTime = instantOption.get();

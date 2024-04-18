@@ -143,8 +143,12 @@ public class TestCompletionTimeQueryView {
     writer.write(activeActions.subList(2, 4), Option.empty(), Option.empty());
     writer.write(activeActions.subList(4, 6), Option.empty(), Option.empty());
     // reconcile the active timeline
-    instants.subList(0, 3 * 6).forEach(instant -> HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), instant));
-    ValidationUtils.checkState(metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4, "should archive 6 instants with 4 as active");
+    instants.subList(0, 3 * 6).forEach(
+        instant -> HoodieActiveTimeline.deleteInstantFile(metaClient.getStorage(),
+            metaClient.getMetaPath(), instant));
+    ValidationUtils.checkState(
+        metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4,
+        "should archive 6 instants with 4 as active");
   }
 
   @SuppressWarnings("rawtypes")

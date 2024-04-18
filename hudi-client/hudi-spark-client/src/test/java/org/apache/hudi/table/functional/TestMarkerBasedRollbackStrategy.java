@@ -76,7 +76,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
   public void setUp() throws Exception {
     initPath();
     initSparkContexts();
-    initFileSystem();
+    initHoodieStorage();
     initMetaClient(tableType);
     initTestDataGenerator();
   }

@@ -19,10 +19,10 @@
 package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.hadoop.fs.FileStatus;
 
 /**
  * The data transfer object of log file.
@@ -38,8 +38,8 @@ public class LogFileDTO {
   private long fileLen;
 
   public static HoodieLogFile toHoodieLogFile(LogFileDTO dto) {
-    FileStatus status = FileStatusDTO.toFileStatus(dto.fileStatus);
-    HoodieLogFile logFile = (status == null) ? new HoodieLogFile(dto.pathStr) : new HoodieLogFile(status);
+    StoragePathInfo pathInfo = FileStatusDTO.toStoragePathInfo(dto.fileStatus);
+    HoodieLogFile logFile = (pathInfo == null) ? new HoodieLogFile(dto.pathStr) : new HoodieLogFile(pathInfo);
     logFile.setFileLen(dto.fileLen);
     return logFile;
   }
@@ -48,7 +48,7 @@ public class LogFileDTO {
     LogFileDTO logFile = new LogFileDTO();
     logFile.fileLen = dataFile.getFileSize();
     logFile.pathStr = dataFile.getPath().toString();
-    logFile.fileStatus = FileStatusDTO.fromFileStatus(dataFile.getFileStatus());
+    logFile.fileStatus = FileStatusDTO.fromStoragePathInfo(dataFile.getPathInfo());
     return logFile;
   }
 }

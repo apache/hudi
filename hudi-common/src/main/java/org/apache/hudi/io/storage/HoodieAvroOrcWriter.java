@@ -26,6 +26,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -66,7 +67,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private String minRecordKey;
   private String maxRecordKey;
 
-  public HoodieAvroOrcWriter(String instantTime, Path file, HoodieOrcConfig config, Schema schema,
+  public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, Schema schema,
                              TaskContextSupplier taskContextSupplier) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, config.getHadoopConf());

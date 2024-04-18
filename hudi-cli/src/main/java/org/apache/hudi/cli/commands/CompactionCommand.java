@@ -42,11 +42,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.compact.OperationResult;
 import org.apache.hudi.utilities.UtilHelpers;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.slf4j.Logger;
@@ -432,9 +432,9 @@ public class CompactionCommand {
     return TMP_DIR + UUID.randomUUID().toString() + ".ser";
   }
 
-  private <T> T deSerializeOperationResult(String inputP, FileSystem fs) throws Exception {
-    Path inputPath = new Path(inputP);
-    InputStream inputStream = fs.open(inputPath);
+  private <T> T deSerializeOperationResult(StoragePath inputPath,
+                                           HoodieStorage storage) throws Exception {
+    InputStream inputStream = storage.open(inputPath);
     ObjectInputStream in = new ObjectInputStream(inputStream);
     try {
       T result = (T) in.readObject();
@@ -463,7 +463,7 @@ public class CompactionCommand {
     HoodieCLI.initFS(initialized);
 
     String outputPathStr = getTmpSerializerFile();
-    Path outputPath = new Path(outputPathStr);
+    StoragePath outputPath = new StoragePath(outputPathStr);
     String output;
     try {
       String sparkPropertiesPath = Utils
@@ -477,7 +477,7 @@ public class CompactionCommand {
       if (exitCode != 0) {
         return "Failed to validate compaction for " + compactionInstant;
       }
-      List<ValidationOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<ValidationOpResult> res = deSerializeOperationResult(outputPath, HoodieCLI.storage);
       boolean valid = res.stream().map(OperationResult::isSuccess).reduce(Boolean::logicalAnd).orElse(true);
       String message = "\n\n\t COMPACTION PLAN " + (valid ? "VALID" : "INVALID") + "\n\n";
       List<Comparable[]> rows = new ArrayList<>();
@@ -502,8 +502,8 @@ public class CompactionCommand {
           headerOnly, rows);
     } finally {
       // Delete tmp file used to serialize result
-      if (HoodieCLI.fs.exists(outputPath)) {
-        HoodieCLI.fs.delete(outputPath, false);
+      if (HoodieCLI.storage.exists(outputPath)) {
+        HoodieCLI.storage.deleteFile(outputPath);
       }
     }
     return output;
@@ -528,7 +528,7 @@ public class CompactionCommand {
     HoodieCLI.initFS(initialized);
 
     String outputPathStr = getTmpSerializerFile();
-    Path outputPath = new Path(outputPathStr);
+    StoragePath outputPath = new StoragePath(outputPathStr);
     String output;
     try {
       String sparkPropertiesPath = Utils
@@ -543,13 +543,13 @@ public class CompactionCommand {
       if (exitCode != 0) {
         return "Failed to unschedule compaction for " + compactionInstant;
       }
-      List<RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<RenameOpResult> res = deSerializeOperationResult(outputPath, HoodieCLI.storage);
       output =
           getRenamesToBePrinted(res, limit, sortByField, descending, headerOnly, "unschedule pending compaction");
     } finally {
       // Delete tmp file used to serialize result
-      if (HoodieCLI.fs.exists(outputPath)) {
-        HoodieCLI.fs.delete(outputPath, false);
+      if (HoodieCLI.storage.exists(outputPath)) {
+        HoodieCLI.storage.deleteFile(outputPath);
       }
     }
     return output;
@@ -573,7 +573,7 @@ public class CompactionCommand {
     HoodieCLI.initFS(initialized);
 
     String outputPathStr = getTmpSerializerFile();
-    Path outputPath = new Path(outputPathStr);
+    StoragePath outputPath = new StoragePath(outputPathStr);
     String output;
     try {
       String sparkPropertiesPath = Utils
@@ -588,13 +588,13 @@ public class CompactionCommand {
       if (exitCode != 0) {
         return "Failed to unschedule compaction for file " + fileId;
       }
-      List<RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<RenameOpResult> res = deSerializeOperationResult(outputPath, HoodieCLI.storage);
       output = getRenamesToBePrinted(res, limit, sortByField, descending, headerOnly,
           "unschedule file from pending compaction");
     } finally {
       // Delete tmp file used to serialize result
-      if (HoodieCLI.fs.exists(outputPath)) {
-        HoodieCLI.fs.delete(outputPath, false);
+      if (HoodieCLI.storage.exists(outputPath)) {
+        HoodieCLI.storage.deleteFile(outputPath);
       }
     }
     return output;
@@ -619,7 +619,7 @@ public class CompactionCommand {
     HoodieCLI.initFS(initialized);
 
     String outputPathStr = getTmpSerializerFile();
-    Path outputPath = new Path(outputPathStr);
+    StoragePath outputPath = new StoragePath(outputPathStr);
     String output;
     try {
       String sparkPropertiesPath = Utils
@@ -633,12 +633,12 @@ public class CompactionCommand {
       if (exitCode != 0) {
         return "Failed to unschedule compaction for " + compactionInstant;
       }
-      List<RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<RenameOpResult> res = deSerializeOperationResult(outputPath, HoodieCLI.storage);
       output = getRenamesToBePrinted(res, limit, sortByField, descending, headerOnly, "repair compaction");
     } finally {
       // Delete tmp file used to serialize result
-      if (HoodieCLI.fs.exists(outputPath)) {
-        HoodieCLI.fs.delete(outputPath, false);
+      if (HoodieCLI.storage.exists(outputPath)) {
+        HoodieCLI.storage.deleteFile(outputPath);
       }
     }
     return output;

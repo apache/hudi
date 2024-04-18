@@ -29,8 +29,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 
 import java.io.IOException;
@@ -55,19 +55,19 @@ public final class RepairUtils {
   /**
    * Tags the instant time of each base or log file from the input file paths.
    *
-   * @param basePath          Base path of the table.
-   * @param allPaths          A {@link List} of file paths to tag.
+   * @param basePath Base path of the table.
+   * @param allPaths A {@link List} of file paths to tag.
    * @return A {@link Map} of instant time in {@link String} to a {@link List} of relative file paths.
    */
   public static Map<String, List<String>> tagInstantsOfBaseAndLogFiles(
-      String basePath, List<Path> allPaths) {
+      String basePath, List<StoragePath> allPaths) {
     // Instant time -> Set of base and log file paths
     Map<String, List<String>> instantToFilesMap = new HashMap<>();
     allPaths.forEach(path -> {
       String instantTime = FSUtils.getCommitTime(path.getName());
       instantToFilesMap.computeIfAbsent(instantTime, k -> new ArrayList<>());
       instantToFilesMap.get(instantTime).add(
-          FSUtils.getRelativePartitionPath(new Path(basePath), path));
+          FSUtils.getRelativePartitionPath(new StoragePath(basePath), path));
     });
     return instantToFilesMap;
   }

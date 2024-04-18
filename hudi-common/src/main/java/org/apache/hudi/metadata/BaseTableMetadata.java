@@ -41,11 +41,12 @@ import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -134,24 +135,27 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param partitionPath The absolute path of the partition to list
    */
   @Override
-  public FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException {
+  public List<StoragePathInfo> getAllFilesInPartition(StoragePath partitionPath) throws IOException {
     ValidationUtils.checkArgument(isMetadataTableInitialized);
     try {
       return fetchAllFilesInPartition(partitionPath);
     } catch (Exception e) {
-      throw new HoodieMetadataException("Failed to retrieve files in partition " + partitionPath + " from metadata", e);
+      throw new HoodieMetadataException(
+          "Failed to retrieve files in partition " + partitionPath + " from metadata", e);
     }
   }
 
   @Override
-  public Map<String, FileStatus[]> getAllFilesInPartitions(Collection<String> partitions) throws IOException {
+  public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitions)
+      throws IOException {
     ValidationUtils.checkArgument(isMetadataTableInitialized);
     if (partitions.isEmpty()) {
       return Collections.emptyMap();
     }
 
     try {
-      List<Path> partitionPaths = partitions.stream().map(Path::new).collect(Collectors.toList());
+      List<StoragePath> partitionPaths =
+          partitions.stream().map(StoragePath::new).collect(Collectors.toList());
       return fetchAllFilesInPartitionPaths(partitionPaths);
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to retrieve files in partition from metadata", e);
@@ -337,8 +341,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    *
    * @param partitionPath The absolute path of the partition
    */
-  FileStatus[] fetchAllFilesInPartition(Path partitionPath) {
-    String relativePartitionPath = FSUtils.getRelativePartitionPath(dataBasePath.get(), partitionPath);
+  List<StoragePathInfo> fetchAllFilesInPartition(StoragePath partitionPath) {
+    String relativePartitionPath = FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
     String recordKey = relativePartitionPath.isEmpty() ? NON_PARTITIONED_NAME : relativePartitionPath;
 
     HoodieTimer timer = HoodieTimer.start();
@@ -346,49 +350,56 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
-    FileStatus[] statuses = recordOpt.map(record -> {
-      HoodieMetadataPayload metadataPayload = record.getData();
-      checkForSpuriousDeletes(metadataPayload, recordKey);
-      try {
-        return metadataPayload.getFileStatuses(getHadoopConf(), partitionPath);
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
-      }
-    })
-        .orElseGet(() -> new FileStatus[0]);
+    List<StoragePathInfo> pathInfoList = recordOpt
+        .map(record -> {
+          HoodieMetadataPayload metadataPayload = record.getData();
+          checkForSpuriousDeletes(metadataPayload, recordKey);
+          try {
+            return metadataPayload.getFileList(getHadoopConf(), partitionPath);
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to extract file-pathInfoList from the payload", e);
+          }
+        })
+        .orElseGet(Collections::emptyList);
 
-    LOG.info("Listed file in partition from metadata: partition=" + relativePartitionPath + ", #files=" + statuses.length);
-    return statuses;
+    LOG.info("Listed file in partition from metadata: partition=" + relativePartitionPath + ", #files=" + pathInfoList.size());
+    return pathInfoList;
   }
 
-  Map<String, FileStatus[]> fetchAllFilesInPartitionPaths(List<Path> partitionPaths) throws IOException {
-    Map<String, Path> partitionIdToPathMap =
+  Map<String, List<StoragePathInfo>> fetchAllFilesInPartitionPaths(List<StoragePath> partitionPaths)
+      throws IOException {
+    Map<String, StoragePath> partitionIdToPathMap =
         partitionPaths.parallelStream()
             .collect(
                 Collectors.toMap(partitionPath -> {
-                  String partitionId = FSUtils.getRelativePartitionPath(dataBasePath.get(), partitionPath);
+                  String partitionId =
+                      FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
                   return partitionId.isEmpty() ? NON_PARTITIONED_NAME : partitionId;
                 }, Function.identity())
             );
 
     HoodieTimer timer = HoodieTimer.start();
     Map<String, HoodieRecord<HoodieMetadataPayload>> partitionIdRecordPairs =
-        getRecordsByKeys(new ArrayList<>(partitionIdToPathMap.keySet()), MetadataPartitionType.FILES.getPartitionPath());
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
+        getRecordsByKeys(new ArrayList<>(partitionIdToPathMap.keySet()),
+            MetadataPartitionType.FILES.getPartitionPath());
+    metrics.ifPresent(
+        m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
-    FileSystem fs = partitionPaths.get(0).getFileSystem(getHadoopConf());
+    HoodieStorage storage =
+        HoodieStorageUtils.getStorage(partitionPaths.get(0), getHadoopConf());
 
-    Map<String, FileStatus[]> partitionPathToFilesMap = partitionIdRecordPairs.entrySet().stream()
-        .map(e -> {
-          final String partitionId = e.getKey();
-          Path partitionPath = partitionIdToPathMap.get(partitionId);
+    Map<String, List<StoragePathInfo>> partitionPathToFilesMap =
+        partitionIdRecordPairs.entrySet().stream()
+            .map(e -> {
+              final String partitionId = e.getKey();
+              StoragePath partitionPath = partitionIdToPathMap.get(partitionId);
 
-          HoodieMetadataPayload metadataPayload = e.getValue().getData();
-          checkForSpuriousDeletes(metadataPayload, partitionId);
+              HoodieMetadataPayload metadataPayload = e.getValue().getData();
+              checkForSpuriousDeletes(metadataPayload, partitionId);
 
-          FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
-          return Pair.of(partitionPath.toString(), files);
-        })
+              List<StoragePathInfo> files = metadataPayload.getFileList(storage, partitionPath);
+              return Pair.of(partitionPath.toString(), files);
+            })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     LOG.info("Listed files in " + partitionPaths.size() + " partitions from metadata");

@@ -35,8 +35,8 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.AppendResult;
-import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -52,6 +52,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -63,7 +64,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -138,8 +138,9 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
       hoodieTable.getHoodieView().sync();
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      HoodieTableFileSystemView tableView =
+          getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent());
 
@@ -292,8 +293,10 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      HoodieTableFileSystemView tableView =
+          getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(),
+              allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertFalse(dataFilesToRead.findAny().isPresent());
 
@@ -365,11 +368,13 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
       JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
-      long expectedLogFileNum = statuses.map(writeStatus -> (HoodieDeltaWriteStat) writeStatus.getStat())
-          .flatMap(deltaWriteStat -> deltaWriteStat.getLogFiles().iterator())
-          .count();
+      long expectedLogFileNum =
+          statuses.map(writeStatus -> (HoodieDeltaWriteStat) writeStatus.getStat())
+              .flatMap(deltaWriteStat -> deltaWriteStat.getLogFiles().iterator())
+              .count();
       // inject a fake log file to test marker file for log file
-      HoodieDeltaWriteStat correctWriteStat = (HoodieDeltaWriteStat) statuses.map(WriteStatus::getStat).take(1).get(0);
+      HoodieDeltaWriteStat correctWriteStat =
+          (HoodieDeltaWriteStat) statuses.map(WriteStatus::getStat).take(1).get(0);
       assertTrue(FSUtils.isLogFile(new Path(correctWriteStat.getPath())));
       HoodieLogFile correctLogFile = new HoodieLogFile(correctWriteStat.getPath());
       String correctWriteToken = FSUtils.getWriteTokenFromLogPath(correctLogFile.getPath());
@@ -379,12 +384,14 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       final WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(),
           HoodieSparkTable.create(config, context()), newCommitTime);
       HoodieLogFormat.Writer fakeLogWriter = HoodieLogFormat.newWriterBuilder()
-          .onParentPath(FSUtils.getPartitionPath(config.getBasePath(), correctWriteStat.getPartitionPath()))
+          .onParentPath(
+              FSUtils.getPartitionPath(config.getBasePath(),
+                  correctWriteStat.getPartitionPath()))
           .withFileId(correctWriteStat.getFileId())
           .withDeltaCommit(newCommitTime)
           .withLogVersion(correctLogFile.getLogVersion())
           .withFileSize(0L)
-          .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs())
+          .withSizeThreshold(config.getLogFileMaxSize()).withStorage(hoodieStorage())
           .withRolloverLogWriteToken(fakeToken)
           .withLogWriteToken(fakeToken)
           .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
@@ -401,7 +408,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       // check fake log generated
       assertTrue(unCommittedFsView.getAllFileSlices(correctWriteStat.getPartitionPath())
           .flatMap(FileSlice::getLogFiles).map(HoodieLogFile::getPath)
-          .anyMatch(path -> path.getName().equals(fakeAppendResult.logFile().getPath().getName())));
+          .anyMatch(
+              path -> path.getName().equals(fakeAppendResult.logFile().getPath().getName())));
       writeClient.commit(newCommitTime, statuses);
 
       HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
