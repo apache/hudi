@@ -715,7 +715,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         // So that we need to delete the whole MDT here.
         if (!deleteMDT) {
           HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
-          if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
+          if (mdtMetaClient.getCommitsTimeline().isArchived(syncedInstant.getTimestamp())) {
             LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than the MDT timeline %s",
                 savepointTime, mdtMetaClient.getCommitsTimeline().firstInstant().get().getTimestamp()));
             deleteMDT = true;

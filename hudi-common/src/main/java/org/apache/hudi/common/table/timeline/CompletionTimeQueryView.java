@@ -95,7 +95,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
     this.beginToCompletionInstantTimeMap = new ConcurrentHashMap<>();
     this.cursorInstant = HoodieTimeline.minInstant(eagerLoadInstant, metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse(""));
     // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
-    this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::getTimestamp).orElse("");
+    this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointActiveCommit().map(HoodieInstant::getTimestamp).orElse("");
     load();
   }
 

@@ -358,7 +358,7 @@ public interface HoodieTimeline extends Serializable {
    * @return true if the passed instant is present as a completed instant on the timeline or if the instant is before
    *         the first completed instant in the timeline
    */
-  boolean containsOrBeforeTimelineStarts(String ts);
+  boolean isValidInstant(String ts);
 
   /**
    * @return Get the stream of completed instants
@@ -384,7 +384,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * @return true if the passed in instant is before the first completed instant in the timeline
    */
-  boolean isBeforeTimelineStarts(String ts);
+  boolean isArchived(String ts);
 
   /**
    * First non-savepoint commit in the active data timeline. Examples:
@@ -393,7 +393,7 @@ public interface HoodieTimeline extends Serializable {
    * while C3, C5 have been savepointed, then for the data timeline
    * C3, C3_Savepoint, C5, C5_Savepoint, C6, C7 returns C6.
    */
-  Option<HoodieInstant> getFirstNonSavepointCommit();
+  Option<HoodieInstant> getFirstNonSavepointActiveCommit();
 
   /**
    * get the most recent cluster commit if present

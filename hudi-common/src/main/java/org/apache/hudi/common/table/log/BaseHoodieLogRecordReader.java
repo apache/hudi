@@ -262,7 +262,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
           continue;
         }
         if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
-          if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
+          if (!completedInstantsTimeline.isValidInstant(instantTime)
               || inflightInstantsTimeline.containsInstant(instantTime)) {
             // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
             continue;
@@ -591,7 +591,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
           break;
         }
         if (logBlock.getBlockType() != COMMAND_BLOCK) {
-          if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
+          if (!completedInstantsTimeline.isValidInstant(instantTime)
               || inflightInstantsTimeline.containsInstant(instantTime)) {
             // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
             continue;

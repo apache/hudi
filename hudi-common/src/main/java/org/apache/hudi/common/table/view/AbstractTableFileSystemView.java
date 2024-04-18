@@ -825,7 +825,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchAllBaseFiles(partitionPath)
           .filter(df -> !isFileGroupReplaced(partitionPath, df.getFileId()))
-          .filter(df -> visibleCommitsAndCompactionTimeline.containsOrBeforeTimelineStarts(df.getCommitTime()))
+          .filter(df -> visibleCommitsAndCompactionTimeline.isValidInstant(df.getCommitTime()))
           .filter(df -> !isBaseFileDueToPendingCompaction(df) && !isBaseFileDueToPendingClustering(df))
           .map(df -> addBootstrapBaseFileIfPresent(new HoodieFileGroupId(partitionPath, df.getFileId()), df));
     } finally {

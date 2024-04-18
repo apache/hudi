@@ -219,9 +219,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
 
       val startInstantTime = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
-      val startInstantArchived = commitTimeline.isBeforeTimelineStarts(startInstantTime)
+      val startInstantArchived = commitTimeline.isArchived(startInstantTime)
       val endInstantTime = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp)
-      val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
+      val endInstantArchived = commitTimeline.isArchived(endInstantTime)
 
       val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
         if (hollowCommitHandling == USE_TRANSITION_TIME) {

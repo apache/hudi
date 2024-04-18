@@ -691,7 +691,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         // during writing data files.  Next time, C2 adds new data to the same partition after C1
         // is rolled back. In this case, the partition metadata still has C1 as the created commit
         // time, since Hudi does not rewrite the partition metadata in C2.
-        if (!completedTimeline.containsOrBeforeTimelineStarts(instantTime)) {
+        if (!completedTimeline.isValidInstant(instantTime)) {
           Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
           return lastInstant.isPresent()
               && HoodieTimeline.compareTimestamps(
@@ -1215,7 +1215,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             } else {
               LOG.warn("Log file is uncommitted in a completed instant, likely due to retry: instantTime={} {}", instantTime, logFilePathStr);
             }
-          } else if (completedInstantsTimeline.isBeforeTimelineStarts(instantTime)) {
+          } else if (completedInstantsTimeline.isArchived(instantTime)) {
             // The instant is in archived timeline
             LOG.warn("Log file is committed in an instant in archived timeline: instantTime={} {}", instantTime, logFilePathStr);
             return true;

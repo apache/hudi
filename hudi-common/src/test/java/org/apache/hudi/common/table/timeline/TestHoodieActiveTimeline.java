@@ -204,8 +204,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertEquals("19", activeCommitTimeline.lastInstant().get().getTimestamp());
     assertEquals("09", activeCommitTimeline.nthFromLastInstant(5).get().getTimestamp());
     assertTrue(activeCommitTimeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "09")));
-    assertFalse(activeCommitTimeline.isBeforeTimelineStarts("02"));
-    assertTrue(activeCommitTimeline.isBeforeTimelineStarts("00"));
+    assertFalse(activeCommitTimeline.isArchived("02"));
+    assertTrue(activeCommitTimeline.isArchived("00"));
   }
 
   @Test
@@ -276,13 +276,13 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
     ).collect(Collectors.toList()));
-    assertTrue(timeline.isBeforeTimelineStarts("00"));
-    assertTrue(timeline.isBeforeTimelineStarts("01"));
-    assertTrue(timeline.isBeforeTimelineStarts("02"));
-    assertTrue(timeline.isBeforeTimelineStarts("03"));
-    assertTrue(timeline.isBeforeTimelineStarts("04"));
-    assertFalse(timeline.isBeforeTimelineStarts("05"));
-    assertFalse(timeline.isBeforeTimelineStarts("06"));
+    assertTrue(timeline.isArchived("00"));
+    assertTrue(timeline.isArchived("01"));
+    assertTrue(timeline.isArchived("02"));
+    assertTrue(timeline.isArchived("03"));
+    assertTrue(timeline.isArchived("04"));
+    assertFalse(timeline.isArchived("05"));
+    assertFalse(timeline.isArchived("06"));
 
     // with an inflight savepoint in between
     timeline = new MockHoodieTimeline(Stream.of(
@@ -292,13 +292,13 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05")
     ).collect(Collectors.toList()));
-    assertTrue(timeline.isBeforeTimelineStarts("00"));
-    assertTrue(timeline.isBeforeTimelineStarts("01"));
-    assertTrue(timeline.isBeforeTimelineStarts("02"));
-    assertTrue(timeline.isBeforeTimelineStarts("03"));
-    assertTrue(timeline.isBeforeTimelineStarts("04"));
-    assertFalse(timeline.isBeforeTimelineStarts("05"));
-    assertFalse(timeline.isBeforeTimelineStarts("06"));
+    assertTrue(timeline.isArchived("00"));
+    assertTrue(timeline.isArchived("01"));
+    assertTrue(timeline.isArchived("02"));
+    assertTrue(timeline.isArchived("03"));
+    assertTrue(timeline.isArchived("04"));
+    assertFalse(timeline.isArchived("05"));
+    assertFalse(timeline.isArchived("06"));
 
     // with a pending replacecommit after savepoints
     timeline = new MockHoodieTimeline(Stream.of(
@@ -309,13 +309,13 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05"),
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "06")
     ).collect(Collectors.toList()));
-    assertTrue(timeline.isBeforeTimelineStarts("00"));
-    assertTrue(timeline.isBeforeTimelineStarts("01"));
-    assertTrue(timeline.isBeforeTimelineStarts("02"));
-    assertTrue(timeline.isBeforeTimelineStarts("03"));
-    assertTrue(timeline.isBeforeTimelineStarts("04"));
-    assertFalse(timeline.isBeforeTimelineStarts("05"));
-    assertFalse(timeline.isBeforeTimelineStarts("06"));
+    assertTrue(timeline.isArchived("00"));
+    assertTrue(timeline.isArchived("01"));
+    assertTrue(timeline.isArchived("02"));
+    assertTrue(timeline.isArchived("03"));
+    assertTrue(timeline.isArchived("04"));
+    assertFalse(timeline.isArchived("05"));
+    assertFalse(timeline.isArchived("06"));
   }
 
   @Test
@@ -459,9 +459,9 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
     timeline.setInstants(allInstants);
     timeline.createNewInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "2"));
-    allInstants.stream().map(HoodieInstant::getTimestamp).forEach(s -> assertTrue(timeline.containsOrBeforeTimelineStarts(s)));
-    assertTrue(timeline.containsOrBeforeTimelineStarts("0"));
-    assertFalse(timeline.containsOrBeforeTimelineStarts(String.valueOf(System.currentTimeMillis() + 1000)));
+    allInstants.stream().map(HoodieInstant::getTimestamp).forEach(s -> assertTrue(timeline.isValidInstant(s)));
+    assertTrue(timeline.isValidInstant("0"));
+    assertFalse(timeline.isValidInstant(String.valueOf(System.currentTimeMillis() + 1000)));
     assertFalse(timeline.getTimelineHash().isEmpty());
   }
 

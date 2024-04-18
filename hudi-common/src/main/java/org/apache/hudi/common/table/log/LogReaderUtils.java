@@ -61,7 +61,7 @@ public class LogReaderUtils {
       if (block instanceof HoodieDataBlock) {
         HoodieDataBlock lastBlock = (HoodieDataBlock) block;
         if (completedTimeline
-            .containsOrBeforeTimelineStarts(lastBlock.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME))) {
+            .isValidInstant(lastBlock.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME))) {
           writerSchema = new Schema.Parser().parse(lastBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
           break;
         }

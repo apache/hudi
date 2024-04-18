@@ -1689,7 +1689,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     expectedArchivedInstants.forEach(entry -> {
           // check safety
           if (!entry.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
-            assertTrue(timeline.containsOrBeforeTimelineStarts(entry.getTimestamp()), "Archived commits should always be safe");
+            assertTrue(timeline.isValidInstant(entry.getTimestamp()), "Archived commits should always be safe");
           }
         }
     );
