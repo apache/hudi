@@ -47,15 +47,18 @@ public class InLineFSUtils {
    * Input Path: s3a://file1, origScheme: file, startOffset = 20, length = 40
    * Output: "inlinefs://file1/s3a/?start_offset=20&length=40"
    *
-   * @param outerPath         The outer file Path
+   * @param outerPath         The outer file path
    * @param origScheme        The file schema
    * @param inLineStartOffset Start offset for the inline file
    * @param inLineLength      Length for the inline file
-   * @return InlineFS Path for the requested outer path and schema
+   * @return InlineFS {@link StoragePath} for the requested outer path and schema
    */
-  public static Path getInlineFilePath(Path outerPath, String origScheme, long inLineStartOffset, long inLineLength) {
+  public static StoragePath getInlineFilePath(StoragePath outerPath,
+                                              String origScheme,
+                                              long inLineStartOffset,
+                                              long inLineLength) {
     final String subPath = new File(outerPath.toString().substring(outerPath.toString().indexOf(":") + 1)).getPath();
-    return new Path(
+    return new StoragePath(
         InLineFileSystem.SCHEME + SCHEME_SEPARATOR
             + StoragePath.SEPARATOR + subPath + StoragePath.SEPARATOR + origScheme
             + StoragePath.SEPARATOR + "?" + START_OFFSET_STR + EQUALS_STR + inLineStartOffset
@@ -92,13 +95,28 @@ public class InLineFSUtils {
     return new Path(fullPath);
   }
 
+  public static StoragePath getOuterFilePathFromInlinePath(StoragePath inlineFSPath) {
+    assertInlineFSPath(inlineFSPath);
+
+    final String outerFileScheme = inlineFSPath.getParent().getName();
+    final StoragePath basePath = inlineFSPath.getParent().getParent();
+    checkArgument(basePath.toString().contains(SCHEME_SEPARATOR),
+        "Invalid InLineFS path: " + inlineFSPath);
+
+    final String pathExceptScheme = basePath.toString().substring(basePath.toString().indexOf(SCHEME_SEPARATOR) + 1);
+    final String fullPath = outerFileScheme + SCHEME_SEPARATOR
+        + (outerFileScheme.equals(LOCAL_FILESYSTEM_SCHEME) ? StoragePath.SEPARATOR : "")
+        + pathExceptScheme;
+    return new StoragePath(fullPath);
+  }
+
   /**
    * Returns start offset w/in the base for the block identified by the given InlineFS path
    *
    * input: "inlinefs://file1/s3a/?start_offset=20&length=40".
    * output: 20
    */
-  public static long startOffset(Path inlineFSPath) {
+  public static long startOffset(StoragePath inlineFSPath) {
     assertInlineFSPath(inlineFSPath);
 
     String[] slices = inlineFSPath.toString().split("[?&=]");
@@ -111,7 +129,7 @@ public class InLineFSUtils {
    * input: "inlinefs:/file1/s3a/?start_offset=20&length=40".
    * output: 40
    */
-  public static long length(Path inlinePath) {
+  public static long length(StoragePath inlinePath) {
     assertInlineFSPath(inlinePath);
 
     String[] slices = inlinePath.toString().split("[?&=]");
@@ -119,6 +137,11 @@ public class InLineFSUtils {
   }
 
   private static void assertInlineFSPath(Path inlinePath) {
+    String scheme = inlinePath.toUri().getScheme();
+    checkArgument(InLineFileSystem.SCHEME.equals(scheme));
+  }
+
+  private static void assertInlineFSPath(StoragePath inlinePath) {
     String scheme = inlinePath.toUri().getScheme();
     checkArgument(InLineFileSystem.SCHEME.equals(scheme));
   }

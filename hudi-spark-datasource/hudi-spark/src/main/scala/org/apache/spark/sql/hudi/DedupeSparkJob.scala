@@ -18,36 +18,41 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.common.util.FileIOUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.storage.{StoragePath, HoodieStorage}
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import java.util.stream.Collectors
+
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{Buffer, HashMap, HashSet, ListBuffer}
 
 /**
-  * Spark job to de-duplicate data present in a partition path
-  */
+ * Spark job to de-duplicate data present in a partition path
+ */
 class DedupeSparkJob(basePath: String,
                      duplicatedPartitionPath: String,
                      repairOutputPath: String,
                      sqlContext: SQLContext,
-                     fs: FileSystem,
+                     storage: HoodieStorage,
                      dedupeType: DeDupeType.Value) {
 
-  val sparkHelper = new SparkHelper(sqlContext, fs)
+  val sparkHelper = new SparkHelper(sqlContext, storage.getFileSystem.asInstanceOf[FileSystem])
   val LOG = LoggerFactory.getLogger(this.getClass)
 
   /**
-    *
-    * @param tblName
-    * @return
-    */
+   *
+   * @param tblName
+   * @return
+   */
   def getDupeKeyDF(tblName: String): DataFrame = {
     val dupeSql =
       s"""
@@ -71,9 +76,11 @@ class DedupeSparkJob(basePath: String,
     val tmpTableName = s"htbl_${System.currentTimeMillis()}"
     val dedupeTblName = s"${tmpTableName}_dupeKeys"
 
-    val metadata = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(basePath).build()
+    val metadata = HoodieTableMetaClient.builder()
+      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setBasePath(basePath).build()
 
-    val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"$basePath/$duplicatedPartitionPath"))
+    val allFiles = storage.listDirectEntries(new StoragePath(s"$basePath/$duplicatedPartitionPath"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(), allFiles)
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
     val filteredStatuses = latestFiles.map(f => f.getPath)
@@ -180,9 +187,11 @@ class DedupeSparkJob(basePath: String,
   }
 
   def fixDuplicates(dryRun: Boolean = true) = {
-    val metadata = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(basePath).build()
+    val metadata = HoodieTableMetaClient.builder()
+      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setBasePath(basePath).build()
 
-    val allFiles = fs.listStatus(new Path(s"$basePath/$duplicatedPartitionPath"))
+    val allFiles = storage.listDirectEntries(new StoragePath(s"$basePath/$duplicatedPartitionPath"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(), allFiles)
 
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
@@ -195,17 +204,19 @@ class DedupeSparkJob(basePath: String,
       val badSuffix = if (dupeFixPlan.contains(fileName)) ".bad" else ""
       val dstPath = new Path(s"$repairOutputPath/${filePath.getName}$badSuffix")
       LOG.info(s"Copying from $filePath to $dstPath")
-      FileUtil.copy(fs, filePath, fs, dstPath, false, true, fs.getConf)
+      FileIOUtils.copy(storage, new StoragePath(filePath.toUri), storage,
+        new StoragePath(dstPath.toUri), false, true, storage.getConf.asInstanceOf[Configuration])
     }
 
     // 2. Remove duplicates from the bad files
     dupeFixPlan.foreach { case (fileName, keysToSkip) =>
       val instantTime = FSUtils.getCommitTime(fileNameToPathMap(fileName).getName)
-      val badFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}.bad")
-      val newFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}")
+      val badFilePath = new StoragePath(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}.bad")
+      val newFilePath = new StoragePath(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}")
       LOG.info(" Skipping and writing new file for : " + fileName)
-      SparkHelpers.skipKeysAndWriteNewFile(instantTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
-      fs.delete(badFilePath, true)
+      SparkHelpers.skipKeysAndWriteNewFile(instantTime,
+        storage.getFileSystem.asInstanceOf[FileSystem].getConf, storage, badFilePath, newFilePath, dupeFixPlan(fileName))
+      storage.deleteFile(new StoragePath(badFilePath.toUri))
     }
 
     // 3. Check that there are no duplicates anymore.
@@ -238,7 +249,8 @@ class DedupeSparkJob(basePath: String,
       } else {
         // for real
         LOG.info(s"[FOR REAL!!!] Copying from $srcPath to $dstPath")
-        FileUtil.copy(fs, srcPath, fs, dstPath, false, true, fs.getConf)
+        FileIOUtils.copy(storage, new StoragePath(srcPath.toUri), storage,
+          new StoragePath(dstPath.toUri), false, true, storage.getConf.asInstanceOf[Configuration])
       }
     }
   }

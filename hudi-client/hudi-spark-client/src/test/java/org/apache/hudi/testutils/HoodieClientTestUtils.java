@@ -38,12 +38,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -135,7 +136,7 @@ public class HoodieClientTestUtils {
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
           HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
-      fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new Path(basePath)));
+      fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new StoragePath(basePath)));
     }
     return fileIdToFullPath;
   }
@@ -215,18 +216,26 @@ public class HoodieClientTestUtils {
       }
       throw new HoodieException("Unsupported base file format for file :" + paths[0]);
     } catch (IOException e) {
-      throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTimeOpt.get(), e);
+      throw new HoodieException(
+          "Error pulling data incrementally from commitTimestamp :" + lastCommitTimeOpt.get(), e);
     }
   }
 
-  public static List<HoodieBaseFile> getLatestBaseFiles(String basePath, FileSystem fs,
-                                                String... paths) {
+  public static List<HoodieBaseFile> getLatestBaseFiles(String basePath,
+                                                        HoodieStorage storage,
+                                                        String... paths) {
     List<HoodieBaseFile> latestFiles = new ArrayList<>();
     try {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTableMetaClient metaClient =
+          HoodieTableMetaClient.builder()
+              .setConf((Configuration) storage.getConf())
+              .setBasePath(basePath)
+              .setLoadActiveTimelineOnLoad(true).build();
       for (String path : paths) {
-        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
-            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
+        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(
+            metaClient,
+            metaClient.getCommitsTimeline().filterCompletedInstants(),
+            storage.globEntries(new StoragePath(path)));
         latestFiles.addAll(fileSystemView.getLatestBaseFiles().collect(Collectors.toList()));
       }
     } catch (Exception e) {
@@ -238,11 +247,12 @@ public class HoodieClientTestUtils {
   /**
    * Reads the paths under the hoodie table out as a DataFrame.
    */
-  public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext, FileSystem fs,
+  public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
+                                  HoodieStorage storage,
                                   String... paths) {
     List<String> filteredPaths = new ArrayList<>();
     try {
-      List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, fs, paths);
+      List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, storage, paths);
       for (HoodieBaseFile file : latestFiles) {
         filteredPaths.add(file.getPath());
       }
@@ -280,7 +290,7 @@ public class HoodieClientTestUtils {
       TimelineService timelineService = new TimelineService(context, new Configuration(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          FileSystem.get(new Configuration()),
+          HoodieStorageUtils.getStorage(new Configuration()),
           FileSystemViewManager.createViewManager(context, config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();
       LOG.info("Timeline service server port: " + timelineServicePort);

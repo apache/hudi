@@ -98,7 +98,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   public void testSqlFileBasedTransformerInvalidSQL() throws IOException {
     UtilitiesTestBase.Helpers.copyToDFS(
         "streamer-config/sql-file-transformer-invalid.sql",
-        UtilitiesTestBase.fs,
+        UtilitiesTestBase.storage,
         UtilitiesTestBase.basePath + "/sql-file-transformer-invalid.sql");
 
     // Test if the SQL file based transformer works as expected for the invalid SQL statements.
@@ -114,7 +114,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   public void testSqlFileBasedTransformerEmptyDataset() throws IOException {
     UtilitiesTestBase.Helpers.copyToDFS(
         "streamer-config/sql-file-transformer-empty.sql",
-        UtilitiesTestBase.fs,
+        UtilitiesTestBase.storage,
         UtilitiesTestBase.basePath + "/sql-file-transformer-empty.sql");
 
     // Test if the SQL file based transformer works as expected for the empty SQL statements.
@@ -131,7 +131,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   public void testSqlFileBasedTransformer() throws IOException {
     UtilitiesTestBase.Helpers.copyToDFS(
         "streamer-config/sql-file-transformer.sql",
-        UtilitiesTestBase.fs,
+        UtilitiesTestBase.storage,
         UtilitiesTestBase.basePath + "/sql-file-transformer.sql");
 
     // Test if the SQL file based transformer works as expected for the correct input.

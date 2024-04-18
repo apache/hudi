@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
@@ -25,26 +25,28 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable}
+import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
+import org.apache.hudi.storage.{StoragePath, HoodieStorage}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
+import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
 
 /**
  * Basic tests on the spark datasource for structured streaming sink
@@ -90,10 +92,10 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   def initStreamingSourceAndDestPath(sourceDirName: String, destDirName: String): (String, String) = {
-    fs.delete(new Path(basePath), true)
+    storage.deleteDirectory(new StoragePath(basePath))
     val sourcePath = basePath + "/" + sourceDirName
     val destPath = basePath + "/" + destDirName
-    fs.mkdirs(new Path(sourcePath))
+    storage.createDirectory(new StoragePath(sourcePath))
     (sourcePath, destPath)
   }
 
@@ -142,9 +144,9 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     val f2 = Future {
       inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
-      val currNumCommits = waitTillAtleastNCommits(fs, destPath, 1, 120, 5)
-      assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, destPath, "000"))
-      val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, destPath)
+      val currNumCommits = waitTillAtleastNCommits(storage, destPath, 1, 120, 5)
+      assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, destPath, "000"))
+      val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(storage, destPath)
       // Read RO View
       val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
         .load(destPath + "/*/*/*/*")
@@ -153,16 +155,16 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // When the compaction configs are added, one more commit of the compaction is expected
       val numExpectedCommits = if (addCompactionConfigs) currNumCommits + 2 else currNumCommits + 1
-      waitTillAtleastNCommits(fs, destPath, numExpectedCommits, 120, 5)
+      waitTillAtleastNCommits(storage, destPath, numExpectedCommits, 120, 5)
 
       val commitInstantTime2 = if (tableType == HoodieTableType.MERGE_ON_READ) {
         // For the records that are processed by the compaction in MOR table
         // the "_hoodie_commit_time" still reflects the latest delta commit
-        latestInstant(fs, destPath, HoodieTimeline.DELTA_COMMIT_ACTION)
+        latestInstant(storage, destPath, HoodieTimeline.DELTA_COMMIT_ACTION)
       } else {
-        HoodieDataSourceHelpers.latestCommit(fs, destPath)
+        HoodieDataSourceHelpers.latestCommit(storage, destPath)
       }
-      assertEquals(numExpectedCommits, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
+      assertEquals(numExpectedCommits, HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").size())
       // Read RO View
       val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
         .load(destPath + "/*/*/*/*")
@@ -170,7 +172,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
 
       // Read Incremental View
       // we have 2 commits, try pulling the first commit (which is not the latest)
-      val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").get(0)
+      val firstCommit = HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").get(0)
       val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
@@ -207,15 +209,17 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   @throws[InterruptedException]
-  private def waitTillAtleastNCommits(fs: FileSystem, tablePath: String,
+  private def waitTillAtleastNCommits(storage: HoodieStorage, tablePath: String,
                                       numCommits: Int, timeoutSecs: Int, sleepSecsAfterEachRun: Int) = {
     val beginTime = System.currentTimeMillis
     var currTime = beginTime
     val timeoutMsecs = timeoutSecs * 1000
     var numInstants = 0
     var success = false
-    while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
-      val timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, tablePath)
+    while ( {
+      !success && (currTime - beginTime) < timeoutMsecs
+    }) try {
+      val timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, tablePath)
       log.info("Timeline :" + timeline.getInstants.toArray.mkString("Array(", ", ", ")"))
       if (timeline.countInstants >= numCommits) {
         numInstants = timeline.countInstants
@@ -285,7 +289,8 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
 
     query1.processAllAvailable()
     var metaClient = HoodieTableMetaClient.builder
-      .setConf(fs.getConf).setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
 
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier1", "0")
 
@@ -331,7 +336,8 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     query3.processAllAvailable()
     query3.stop()
     metaClient = HoodieTableMetaClient.builder
-      .setConf(fs.getConf).setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
 
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier1", "2")
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier2", "0")
@@ -367,7 +373,8 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
 
     query1.processAllAvailable()
     val metaClient = HoodieTableMetaClient.builder
-      .setConf(fs.getConf).setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
 
     assertLatestCheckpointInfoMatched(metaClient, STREAMING_CHECKPOINT_IDENTIFIER.defaultValue(), "0")
     query1.stop()
@@ -401,19 +408,21 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     val f2 = Future {
       inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
-      var currNumCommits = waitTillAtleastNCommits(fs, destPath, 1, 120, 5)
-      assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, destPath, "000"))
+      var currNumCommits = waitTillAtleastNCommits(storage, destPath, 1, 120, 5)
+      assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, destPath, "000"))
 
       inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process second microbatch
-      currNumCommits = waitTillAtleastNCommits(fs, destPath, currNumCommits + 1, 120, 5)
+      currNumCommits = waitTillAtleastNCommits(storage, destPath, currNumCommits + 1, 120, 5)
 
       // Wait for the clustering to finish
-      this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(destPath)
+      this.metaClient = HoodieTableMetaClient.builder()
+        .setConf(storage.getConf.asInstanceOf[Configuration])
+        .setBasePath(destPath)
         .setLoadActiveTimelineOnLoad(true).build()
       checkClusteringResult(destPath)
 
-      assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
+      assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").size())
       // Check have at least one file group
       assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 0)
 
@@ -423,7 +432,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       assertEquals(200, hoodieROViewDF2.count())
       val countsPerCommit = hoodieROViewDF2.groupBy("_hoodie_commit_time").count().collect()
       assertEquals(2, countsPerCommit.length)
-      val commitInstantTime2 = latestInstant(fs, destPath, HoodieTimeline.COMMIT_ACTION)
+      val commitInstantTime2 = latestInstant(storage, destPath, HoodieTimeline.COMMIT_ACTION)
       assertEquals(commitInstantTime2, countsPerCommit.maxBy(row => row.getAs[String](0)).get(0))
 
       streamingQuery.stop()
@@ -463,9 +472,10 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     if (!success) throw new IllegalStateException("Timed-out waiting for completing replace instant appear in " + tablePath)
   }
 
-  private def latestInstant(fs: FileSystem, basePath: String, instantAction: String): String = {
+  private def latestInstant(storage: HoodieStorage, basePath: String, instantAction: String): String = {
     val metaClient = HoodieTableMetaClient.builder
-      .setConf(fs.getConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build
+      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build
     metaClient.getActiveTimeline
       .getTimelineOfActions(CollectionUtils.createSet(instantAction))
       .filterCompletedInstants
@@ -504,7 +514,9 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       inputDF.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       streamingWrite(inputDF.schema, sourcePath, destPath, opts, id)
     }
-    val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(destPath)
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setBasePath(destPath)
       .setLoadActiveTimelineOnLoad(true).build()
     assertTrue(metaClient.getActiveTimeline.getCommitTimeline.empty())
   }

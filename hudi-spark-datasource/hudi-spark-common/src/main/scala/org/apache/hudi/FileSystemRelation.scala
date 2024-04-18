@@ -19,17 +19,19 @@ package org.apache.hudi
 
 
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.model.{FileSlice, HoodieFileGroup, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
-import org.apache.spark.sql.{Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import java.util.function.{Consumer, Predicate, ToLongFunction}
+
 import scala.collection.JavaConversions
 
 /**
@@ -66,10 +68,10 @@ class FileSystemRelation(val sqlContext: SQLContext,
     val data = collection.mutable.ArrayBuffer[Row]()
     val subPath = optParams.getOrElse(DataSourceReadOptions.FILESYSTEM_RELATION_ARG_SUBPATH.key(), "")
     val path = String.format("%s/%s/*", metaClient.getBasePathV2, subPath)
-    val fileStatusList = FSUtils.getGlobStatusExcludingMetaFolder(metaClient.getFs, new Path(path))
+    val fileStatusList = FSUtils.getGlobStatusExcludingMetaFolder(metaClient.getStorage, new StoragePath(path))
 
 
-    val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getWriteTimeline, fileStatusList.toArray(new Array[FileStatus](0)))
+    val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getWriteTimeline, fileStatusList)
     val fileGroups = fsView.getAllFileGroups
 
     fileGroups.forEach(toJavaConsumer((fg: HoodieFileGroup) => {

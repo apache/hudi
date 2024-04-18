@@ -25,6 +25,7 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -47,8 +48,8 @@ import static org.mockito.Mockito.when;
 public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
 
   @Override
-  protected Path getFilePath() {
-    return new Path(tempDir.toString() + "/f1_1-0-1_000.orc");
+  protected StoragePath getFilePath() {
+    return new StoragePath(tempDir.toString() + "/f1_1-0-1_000.orc");
   }
 
   @Override
@@ -77,7 +78,7 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
 
   @Override
   protected void verifyMetadata(Configuration conf) throws IOException {
-    Reader orcReader = OrcFile.createReader(getFilePath(), OrcFile.readerOptions(conf));
+    Reader orcReader = OrcFile.createReader(new Path(getFilePath().toUri()), OrcFile.readerOptions(conf));
     assertEquals(4, orcReader.getMetadataKeys().size());
     assertTrue(orcReader.getMetadataKeys().contains(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER));
     assertTrue(orcReader.getMetadataKeys().contains(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER));
@@ -89,7 +90,7 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
 
   @Override
   protected void verifySchema(Configuration conf, String schemaPath) throws IOException {
-    Reader orcReader = OrcFile.createReader(getFilePath(), OrcFile.readerOptions(conf));
+    Reader orcReader = OrcFile.createReader(new Path(getFilePath().toUri()), OrcFile.readerOptions(conf));
     if ("/exampleSchema.avsc".equals(schemaPath)) {
       assertEquals("struct<_row_key:string,time:string,number:int>",
           orcReader.getSchema().toString());
