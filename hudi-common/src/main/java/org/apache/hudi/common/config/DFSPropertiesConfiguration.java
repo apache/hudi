@@ -104,7 +104,6 @@ public class DFSPropertiesConfiguration {
     if (configFile != null) {
       try (BufferedReader br = new BufferedReader(new InputStreamReader(configFile.openStream()))) {
         conf.addPropsFromStream(br, new Path(configFile.toURI()));
-        return conf.getProps();
       } catch (URISyntaxException e) {
         throw new HoodieException(String.format("Provided props file url is invalid %s", configFile), e);
       } catch (IOException ioe) {
@@ -113,15 +112,14 @@ public class DFSPropertiesConfiguration {
       }
     }
     // Try loading the external config file from local file system
+    try {
+      conf.addPropsFromFile(DEFAULT_PATH);
+    } catch (Exception e) {
+      LOG.warn("Cannot load default config file: " + DEFAULT_PATH, e);
+    }
     Option<Path> defaultConfPath = getConfPathFromEnv();
     if (defaultConfPath.isPresent()) {
       conf.addPropsFromFile(defaultConfPath.get());
-    } else {
-      try {
-        conf.addPropsFromFile(DEFAULT_PATH);
-      } catch (Exception e) {
-        LOG.warn("Cannot load default config file: " + DEFAULT_PATH, e);
-      }
     }
     return conf.getProps();
   }
