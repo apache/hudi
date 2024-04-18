@@ -52,21 +52,21 @@ public class LogReaderUtils {
   private static Schema readSchemaFromLogFileInReverse(FileSystem fs, HoodieActiveTimeline activeTimeline, HoodieLogFile hoodieLogFile)
       throws IOException {
     // set length for the HoodieLogFile as it will be leveraged by HoodieLogFormat.Reader with reverseReading enabled
-    Reader reader = HoodieLogFormat.newReader(fs, hoodieLogFile, null, true);
     Schema writerSchema = null;
-    HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    while (reader.hasPrev()) {
-      HoodieLogBlock block = reader.prev();
-      if (block instanceof HoodieDataBlock) {
-        HoodieDataBlock lastBlock = (HoodieDataBlock) block;
-        if (completedTimeline
-            .containsOrBeforeTimelineStarts(lastBlock.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME))) {
-          writerSchema = new Schema.Parser().parse(lastBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-          break;
+    try (Reader reader = HoodieLogFormat.newReader(fs, hoodieLogFile, null, true)) {
+      HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+      while (reader.hasPrev()) {
+        HoodieLogBlock block = reader.prev();
+        if (block instanceof HoodieDataBlock) {
+          HoodieDataBlock lastBlock = (HoodieDataBlock) block;
+          if (completedTimeline
+              .containsOrBeforeTimelineStarts(lastBlock.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME))) {
+            writerSchema = new Schema.Parser().parse(lastBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+            break;
+          }
         }
       }
     }
-    reader.close();
     return writerSchema;
   }
 
