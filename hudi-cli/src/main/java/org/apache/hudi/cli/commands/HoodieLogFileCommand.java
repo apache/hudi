@@ -114,52 +114,52 @@ public class HoodieLogFileCommand {
       MessageType schema = TableSchemaResolver.readSchemaFromLogFile(fs, path);
       Schema writerSchema = schema != null
           ? new AvroSchemaConverter().convert(Objects.requireNonNull(schema)) : null;
-      Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema);
+      try (Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema)) {
 
-      // read the avro blocks
-      while (reader.hasNext()) {
-        HoodieLogBlock n = reader.next();
-        String instantTime;
-        AtomicInteger recordCount = new AtomicInteger(0);
-        if (n instanceof HoodieCorruptBlock) {
-          try {
+        // read the avro blocks
+        while (reader.hasNext()) {
+          HoodieLogBlock n = reader.next();
+          String instantTime;
+          AtomicInteger recordCount = new AtomicInteger(0);
+          if (n instanceof HoodieCorruptBlock) {
+            try {
+              instantTime = n.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME);
+              if (instantTime == null) {
+                throw new Exception("Invalid instant time " + instantTime);
+              }
+            } catch (Exception e) {
+              numCorruptBlocks++;
+              instantTime = "corrupt_block_" + numCorruptBlocks;
+              // could not read metadata for corrupt block
+            }
+          } else {
             instantTime = n.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME);
             if (instantTime == null) {
-              throw new Exception("Invalid instant time " + instantTime);
+              // This can happen when reading archived commit files since they were written without any instant time
+              dummyInstantTimeCount++;
+              instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
             }
-          } catch (Exception e) {
-            numCorruptBlocks++;
-            instantTime = "corrupt_block_" + numCorruptBlocks;
-            // could not read metadata for corrupt block
-          }
-        } else {
-          instantTime = n.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME);
-          if (instantTime == null) {
-            // This can happen when reading archived commit files since they were written without any instant time
-            dummyInstantTimeCount++;
-            instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
-          }
-          if (n instanceof HoodieDataBlock) {
-            try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = ((HoodieDataBlock) n).getRecordIterator(HoodieRecordType.AVRO)) {
-              recordItr.forEachRemaining(r -> recordCount.incrementAndGet());
+            if (n instanceof HoodieDataBlock) {
+              try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = ((HoodieDataBlock) n).getRecordIterator(HoodieRecordType.AVRO)) {
+                recordItr.forEachRemaining(r -> recordCount.incrementAndGet());
+              }
             }
           }
-        }
-        if (commitCountAndMetadata.containsKey(instantTime)) {
-          commitCountAndMetadata.get(instantTime).add(
-              new Tuple3<>(new Tuple2<>(fileName, n.getBlockType()),
-                  new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
-        } else {
-          List<Tuple3<Tuple2<String, HoodieLogBlockType>, Tuple2<Map<HeaderMetadataType, String>,
-              Map<HeaderMetadataType, String>>, Integer>> list =
-              new ArrayList<>();
-          list.add(
-              new Tuple3<>(new Tuple2<>(fileName, n.getBlockType()),
-                  new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
-          commitCountAndMetadata.put(instantTime, list);
+          if (commitCountAndMetadata.containsKey(instantTime)) {
+            commitCountAndMetadata.get(instantTime).add(
+                new Tuple3<>(new Tuple2<>(fileName, n.getBlockType()),
+                    new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
+          } else {
+            List<Tuple3<Tuple2<String, HoodieLogBlockType>, Tuple2<Map<HeaderMetadataType, String>,
+                Map<HeaderMetadataType, String>>, Integer>> list =
+                new ArrayList<>();
+            list.add(
+                new Tuple3<>(new Tuple2<>(fileName, n.getBlockType()),
+                    new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
+            commitCountAndMetadata.put(instantTime, list);
+          }
         }
       }
-      reader.close();
     }
     List<Comparable[]> rows = new ArrayList<>();
     ObjectMapper objectMapper = new ObjectMapper();
@@ -260,23 +260,23 @@ public class HoodieLogFileCommand {
         MessageType schema = TableSchemaResolver.readSchemaFromLogFile(client.getFs(), new CachingPath(logFile));
         Schema writerSchema = schema != null
             ? new AvroSchemaConverter().convert(Objects.requireNonNull(schema)) : null;
-        HoodieLogFormat.Reader reader =
-            HoodieLogFormat.newReader(fs, new HoodieLogFile(new CachingPath(logFile)), writerSchema);
-        // read the avro blocks
-        while (reader.hasNext()) {
-          HoodieLogBlock n = reader.next();
-          if (n instanceof HoodieDataBlock) {
-            HoodieDataBlock blk = (HoodieDataBlock) n;
-            try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
-              recordItr.forEachRemaining(record -> {
-                if (allRecords.size() < limit) {
-                  allRecords.add(record.getData());
-                }
-              });
+        try (HoodieLogFormat.Reader reader =
+                 HoodieLogFormat.newReader(fs, new HoodieLogFile(new CachingPath(logFile)), writerSchema)) {
+          // read the avro blocks
+          while (reader.hasNext()) {
+            HoodieLogBlock n = reader.next();
+            if (n instanceof HoodieDataBlock) {
+              HoodieDataBlock blk = (HoodieDataBlock) n;
+              try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
+                recordItr.forEachRemaining(record -> {
+                  if (allRecords.size() < limit) {
+                    allRecords.add(record.getData());
+                  }
+                });
+              }
             }
           }
         }
-        reader.close();
         if (allRecords.size() >= limit) {
           break;
         }
