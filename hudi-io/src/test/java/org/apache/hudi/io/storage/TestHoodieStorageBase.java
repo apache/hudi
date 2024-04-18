@@ -20,6 +20,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -36,6 +37,7 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
@@ -146,6 +148,47 @@ public abstract class TestHoodieStorageBase {
     assertTrue(storage.createDirectory(path4));
     validatePathInfo(storage, path4, EMPTY_BYTES, true);
     assertTrue(storage.createDirectory(path4));
+  }
+
+  @Test
+  public void testSeekable() throws IOException {
+    HoodieStorage storage = getHoodieStorage();
+    StoragePath path = new StoragePath(getTempDir(), "testSeekable/1.file");
+    assertFalse(storage.exists(path));
+    byte[] data = new byte[] {2, 42, 49, (byte) 158, (byte) 233, 66, 9, 34, 79};
+
+    // By default, create overwrites the file
+    try (OutputStream stream = storage.create(path)) {
+      stream.write(data);
+      stream.flush();
+    }
+
+    try (SeekableDataInputStream seekableStream = storage.openSeekable(path)) {
+      validateSeekableDataInputStream(seekableStream, data);
+    }
+
+    try (SeekableDataInputStream seekableStream = storage.openSeekable(path, 2)) {
+      validateSeekableDataInputStream(seekableStream, data);
+    }
+  }
+
+  private void validateSeekableDataInputStream(SeekableDataInputStream seekableStream,
+                                               byte[] expectedData) throws IOException {
+    List<Integer> positionList = new ArrayList<>();
+    // Adding these positions for testing non-contiguous and backward seeks
+    positionList.add(1);
+    positionList.add(expectedData.length / 2);
+    positionList.add(expectedData.length - 1);
+    for (int i = 0; i < expectedData.length; i++) {
+      positionList.add(i);
+    }
+
+    assertEquals(0, seekableStream.getPos());
+    for (Integer pos : positionList) {
+      seekableStream.seek(pos);
+      assertEquals(pos, (int) seekableStream.getPos());
+      assertEquals(expectedData[pos], seekableStream.readByte());
+    }
   }
 
   @Test
