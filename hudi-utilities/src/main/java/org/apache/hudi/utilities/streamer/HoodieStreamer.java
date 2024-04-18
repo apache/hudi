@@ -116,8 +116,7 @@ public class HoodieStreamer implements Serializable {
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
-  @VisibleForTesting
-  final transient Config cfg;
+  protected final transient Config cfg;
 
   /**
    * NOTE: These properties are already consolidated w/ CLI provided config-overrides.
@@ -157,6 +156,7 @@ public class HoodieStreamer implements Serializable {
       checkPointProvider.init(conf);
       cfg.checkpoint = checkPointProvider.getCheckpoint();
     }
+
     this.cfg = cfg;
     this.bootstrapExecutor = Option.ofNullable(
         cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
@@ -164,7 +164,6 @@ public class HoodieStreamer implements Serializable {
     this.ingestionService = Option.ofNullable(
         cfg.runBootstrap ? null : new StreamSyncService(cfg, sparkEngineContext, fs, conf, Option.ofNullable(this.properties), sourceProfileSupplier));
   }
-
 
   private static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
     HoodieConfig hoodieConfig = new HoodieConfig();
