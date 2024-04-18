@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.read.HoodieFileGroupReaderState;
 import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -86,7 +85,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // Log-Blocks belonging to inflight delta-instants are filtered-out using this high-watermark.
   private final String latestInstantTime;
   protected final HoodieReaderContext<T> readerContext;
-  protected final HoodieFileGroupReaderState readerState;
   protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
@@ -152,10 +150,9 @@ public abstract class BaseHoodieLogRecordReader<T> {
                                       HoodieRecordMerger recordMerger,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
     this.readerContext = readerContext;
-    this.readerState = readerContext.getReaderState();
-    this.readerSchema = readerState.schemaHandler.getRequiredSchema();
-    this.latestInstantTime = readerState.latestCommitTime;
-    this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(readerState.tablePath).build();
+    this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
+    this.latestInstantTime = readerContext.getLatestCommitTime();
+    this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(readerContext.getTablePath()).build();
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
@@ -175,7 +172,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.forceFullScan = forceFullScan;
-    this.internalSchema = readerState.schemaHandler.getInternalSchema();
+    this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
 
     if (keyFieldOverride.isPresent()) {

@@ -91,11 +91,10 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
       val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
       assertTrue(allBaseFiles.nonEmpty)
       val readerContext = new SparkFileFormatInternalRowReaderContext(reader, HoodieRecord.RECORD_KEY_METADATA_FIELD, Seq.empty)
-      val readerState = readerContext.getReaderState
-      readerState.useRecordPosition = true
-      readerState.hasLogFiles = true
-      readerState.needsBootstrapMerge = false
-      readerState.hasBootstrapBaseFile = false
+      readerContext.setUseRecordPosition(true)
+      readerContext.setHasLogFiles(true)
+      readerContext.setNeedsBootstrapMerge(false)
+      readerContext.setHasBootstrapBaseFile(false)
       //dataschema param is set to null because it is not used
       val fileRecordIterator = readerContext.getFileRecordIterator(allBaseFiles.head.getPath, 0, allBaseFiles.head.getLen, null,
         sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), hadoopConf)

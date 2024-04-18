@@ -22,7 +22,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.read.HoodieFileGroupReaderState;
+import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
@@ -50,10 +50,86 @@ import java.util.function.UnaryOperator;
  *            and {@code RowData} in Flink.
  */
 public abstract class HoodieReaderContext<T> {
-  protected HoodieFileGroupReaderState<T> readerState = new HoodieFileGroupReaderState<>();
 
-  public HoodieFileGroupReaderState<T> getReaderState() {
-    return readerState;
+  private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
+  private String tablePath = null;
+  private String latestCommitTime = null;
+  private HoodieRecordMerger recordMerger = null;
+  private Boolean hasLogFiles = null;
+  private Boolean hasBootstrapBaseFile = null;
+  private Boolean needsBootstrapMerge = null;
+  private Boolean useRecordPosition = null;
+
+  // Getter and Setter for schemaHandler
+  public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
+    return schemaHandler;
+  }
+
+  public void setSchemaHandler(HoodieFileGroupReaderSchemaHandler<T> schemaHandler) {
+    this.schemaHandler = schemaHandler;
+  }
+
+  public String getTablePath() {
+    if (tablePath == null) {
+      throw new IllegalStateException("Table path not set in reader context.");
+    }
+    return tablePath;
+  }
+
+  public void setTablePath(String tablePath) {
+    this.tablePath = tablePath;
+  }
+
+  public String getLatestCommitTime() {
+    return latestCommitTime;
+  }
+
+  public void setLatestCommitTime(String latestCommitTime) {
+    this.latestCommitTime = latestCommitTime;
+  }
+
+  public HoodieRecordMerger getRecordMerger() {
+    return recordMerger;
+  }
+
+  public void setRecordMerger(HoodieRecordMerger recordMerger) {
+    this.recordMerger = recordMerger;
+  }
+
+  // Getter and Setter for hasLogFiles
+  public boolean getHasLogFiles() {
+    return hasLogFiles;
+  }
+
+  public void setHasLogFiles(boolean hasLogFiles) {
+    this.hasLogFiles = hasLogFiles;
+  }
+
+  // Getter and Setter for hasBootstrapBaseFile
+  public boolean getHasBootstrapBaseFile() {
+    return hasBootstrapBaseFile;
+  }
+
+  public void setHasBootstrapBaseFile(boolean hasBootstrapBaseFile) {
+    this.hasBootstrapBaseFile = hasBootstrapBaseFile;
+  }
+
+  // Getter and Setter for needsBootstrapMerge
+  public boolean getNeedsBootstrapMerge() {
+    return needsBootstrapMerge;
+  }
+
+  public void setNeedsBootstrapMerge(boolean needsBootstrapMerge) {
+    this.needsBootstrapMerge = needsBootstrapMerge;
+  }
+
+  // Getter and Setter for useRecordPosition
+  public boolean getUseRecordPosition() {
+    return useRecordPosition;
+  }
+
+  public void setUseRecordPosition(boolean useRecordPosition) {
+    this.useRecordPosition = useRecordPosition;
   }
 
   // These internal key names are only used in memory for record metadata and merging,

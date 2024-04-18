@@ -25,7 +25,6 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieFileIndex.getConfigProperties
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.HoodieMetadataConfig.{DEFAULT_METADATA_ENABLE_FOR_READERS, ENABLE}
 import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
@@ -36,7 +35,6 @@ import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
@@ -65,7 +63,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val schemaSpec: Option[StructType]
                                                 ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory {
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
-  protected var optParams: Map[String, String] = options
+  protected lazy val optParams: Map[String, String] = options
   protected lazy val hadoopConfig: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(hadoopConfig)
 
@@ -86,13 +84,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
         specifiedQueryTimestamp.map(schemaResolver.getTableInternalSchemaFromCommitMetadata)
           .getOrElse(schemaResolver.getTableInternalSchemaFromCommitMetadata)
       } match {
-        case Success(internalSchemaOpt) =>
-          if (internalSchemaOpt.isPresent) {
-            optParams = optParams + (SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA -> SerDeHelper.toJson(internalSchemaOpt.get()))
-            optParams = optParams + (SparkInternalSchemaConverter.HOODIE_TABLE_PATH -> basePath.toString)
-            optParams = optParams + (SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST -> timeline.getInstants.iterator.asScala.map(_.getFileName).mkString(","))
-          }
-          toScalaOption(internalSchemaOpt)
+        case Success(internalSchemaOpt) => toScalaOption(internalSchemaOpt)
         case Failure(e) =>
           None
       }
@@ -113,6 +105,12 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     }
 
     (avroSchema, internalSchemaOpt)
+  }
+
+  protected lazy val validCommits: String = if (internalSchemaOpt.nonEmpty) {
+    timeline.getInstants.iterator.asScala.map(_.getFileName).mkString(",")
+  } else {
+    ""
   }
 
   protected lazy val tableStructSchema: StructType = {
@@ -244,7 +242,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        true, isBootstrap, false, shouldUseRecordPosition, Seq.empty)
+        true, false, validCommits, shouldUseRecordPosition, Seq.empty)
     }
   }
 
@@ -288,7 +286,7 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        true, isBootstrap, true, shouldUseRecordPosition, fileIndex.getRequiredFilters)
+        true, true, validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
     }
   }
 }
@@ -319,7 +317,7 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        false, isBootstrap, false, shouldUseRecordPosition, Seq.empty)
+        false, false, validCommits, shouldUseRecordPosition, Seq.empty)
     }
   }
 }
@@ -347,7 +345,7 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        false, isBootstrap, true, shouldUseRecordPosition, fileIndex.getRequiredFilters)
+        false, true, validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
     }
   }
 }

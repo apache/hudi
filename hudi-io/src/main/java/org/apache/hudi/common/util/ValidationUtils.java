@@ -76,10 +76,4 @@ public class ValidationUtils {
       throw new IllegalStateException(errorMessage);
     }
   }
-
-  public static void checkNotNull(Object o) {
-    if (o == null) {
-      throw new IllegalStateException("Value is null when it should be initialized");
-    }
-  }
 }

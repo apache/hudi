@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.read.HoodieFileGroupReaderState;
 import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -213,10 +212,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
    */
   public static class Builder<T> extends BaseHoodieLogRecordReader.Builder<T> {
     private HoodieReaderContext<T> readerContext;
-    private HoodieFileGroupReaderState readerState;
     private FileSystem fs;
     private List<String> logFilePaths;
-    private String latestInstantTime;
     private boolean reverseReader;
     private int bufferSize;
     // specific configurations
@@ -316,9 +313,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       ValidationUtils.checkArgument(recordMerger != null);
       ValidationUtils.checkArgument(recordBuffer != null);
       ValidationUtils.checkArgument(readerContext != null);
-      this.readerState = readerContext.getReaderState();
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
-        this.partitionName = getRelativePartitionPath(new Path(readerState.tablePath), new Path(this.logFilePaths.get(0)).getParent());
+        this.partitionName = getRelativePartitionPath(new Path(readerContext.getTablePath()), new Path(this.logFilePaths.get(0)).getParent());
       }
 
       return new HoodieMergedLogRecordReader<>(

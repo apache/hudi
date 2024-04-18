@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
@@ -44,10 +43,6 @@ import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNest
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
 
 public class HoodieFileGroupReaderSchemaHandler<T> {
-
-  protected HoodieFileGroupReaderState<T> readerState;
-
-
 
   protected final Schema dataSchema;
 
@@ -77,19 +72,15 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
                                             Option<InternalSchema> internalSchemaOpt,
                                             HoodieTableConfig hoodieTableConfig) {
     this.readerContext = readerContext;
-    this.readerState = readerContext.getReaderState();
-    ValidationUtils.checkNotNull(readerState.hasBootstrapBaseFile);
-    this.hasBootstrapBaseFile = readerState.hasBootstrapBaseFile;
-    ValidationUtils.checkNotNull(readerState.hasLogFiles);
-    this.needsMORMerge = readerState.hasLogFiles;
-    ValidationUtils.checkNotNull(readerState.recordMerger);
-    this.recordMerger = readerState.recordMerger;
+    this.hasBootstrapBaseFile = readerContext.getHasBootstrapBaseFile();
+    this.needsMORMerge = readerContext.getHasLogFiles();
+    this.recordMerger = readerContext.getRecordMerger();
     this.dataSchema = dataSchema;
     this.requestedSchema = requestedSchema;
     this.hoodieTableConfig = hoodieTableConfig;
     this.requiredSchema = prepareSchema();
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
-    readerState.needsBootstrapMerge = this.needsBootstrapMerge;
+    readerContext.setNeedsBootstrapMerge(this.needsBootstrapMerge);
   }
 
   public Schema getDataSchema() {

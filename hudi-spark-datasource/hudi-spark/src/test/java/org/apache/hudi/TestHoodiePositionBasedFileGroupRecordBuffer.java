@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.read.HoodieFileGroupReaderState;
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.HoodiePositionBasedSchemaHandler;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark;
@@ -101,18 +100,18 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         ? Option.empty() : Option.of(partitionPaths[0]);
 
     HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getHadoopConf());
-    HoodieFileGroupReaderState state = ctx.getReaderState();
-    state.hasBootstrapBaseFile = false;
-    state.hasLogFiles = true;
-    state.needsBootstrapMerge = false;
-    state.recordMerger = useCustomMerger ? new CustomMerger() : new HoodieSparkRecordMerger();
-    state.schemaHandler = new HoodiePositionBasedSchemaHandler(ctx, avroSchema, avroSchema, Option.empty(), metaClient.getTableConfig());
+    ctx.setHasBootstrapBaseFile(false);
+    ctx.setHasLogFiles(true);
+    ctx.setNeedsBootstrapMerge(false);
+    ctx.setRecordMerger(useCustomMerger ? new CustomMerger() : new HoodieSparkRecordMerger());
+    ctx.setSchemaHandler(new HoodiePositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
+        Option.empty(), metaClient.getTableConfig()));
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
         partitionNameOpt,
         partitionFields,
-        state.recordMerger,
+        ctx.getRecordMerger(),
         new TypedProperties(),
         1024 * 1024 * 1000,
         metaClient.getTempFolderPath(),
