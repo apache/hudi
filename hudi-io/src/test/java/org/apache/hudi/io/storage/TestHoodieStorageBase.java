@@ -175,6 +175,7 @@ public abstract class TestHoodieStorageBase {
   private void validateSeekableDataInputStream(SeekableDataInputStream seekableStream,
                                                byte[] expectedData) throws IOException {
     List<Integer> positionList = new ArrayList<>();
+    // Adding these positions for testing non-contiguous and backward seeks
     positionList.add(1);
     positionList.add(expectedData.length / 2);
     positionList.add(expectedData.length - 1);
