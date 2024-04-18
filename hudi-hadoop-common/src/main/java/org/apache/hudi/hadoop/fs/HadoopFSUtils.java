@@ -172,7 +172,7 @@ public class HadoopFSUtils {
                                                        int bufferSize) {
     FSDataInputStream fsDataInputStream = null;
     try {
-      fsDataInputStream = fs.open(new Path(filePath.toUri()), bufferSize);
+      fsDataInputStream = fs.open(convertToHadoopPath(filePath), bufferSize);
     } catch (IOException e) {
       throw new HoodieIOException("Exception creating input stream from file: " + filePath, e);
     }
@@ -183,11 +183,11 @@ public class HadoopFSUtils {
     }
 
     if (isCHDFileSystem(fs)) {
-      return new BoundedFsDataInputStream(fs, new Path(filePath.toUri()), fsDataInputStream);
+      return new BoundedFsDataInputStream(fs, convertToHadoopPath(filePath), fsDataInputStream);
     }
 
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      return new TimedFSDataInputStream(new Path(filePath.toUri()), new FSDataInputStream(
+      return new TimedFSDataInputStream(convertToHadoopPath(filePath), new FSDataInputStream(
           new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
     }
 
@@ -213,14 +213,14 @@ public class HadoopFSUtils {
     // b. fsDataInputStream.getWrappedStream() not an instanceof FSInputStream, but an instance of FSDataInputStream.
     // (a) is handled in the first if block and (b) is handled in the second if block. If not, we fallback to original fsDataInputStream
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      return new TimedFSDataInputStream(new Path(filePath.toUri()), new FSDataInputStream(
+      return new TimedFSDataInputStream(convertToHadoopPath(filePath), new FSDataInputStream(
           new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
     }
 
     if (fsDataInputStream.getWrappedStream() instanceof FSDataInputStream
         && ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream() instanceof FSInputStream) {
       FSInputStream inputStream = (FSInputStream) ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream();
-      return new TimedFSDataInputStream(new Path(filePath.toUri()),
+      return new TimedFSDataInputStream(convertToHadoopPath(filePath),
           new FSDataInputStream(new BufferedFSInputStream(inputStream, bufferSize)));
     }
 
