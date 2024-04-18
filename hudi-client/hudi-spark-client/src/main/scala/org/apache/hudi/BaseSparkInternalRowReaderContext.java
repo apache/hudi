@@ -37,13 +37,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
 
-import java.util.Collections;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import scala.Function1;
@@ -143,14 +140,10 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    if (renamedColumns.isEmpty()) {
-      UnsafeProjection projection = HoodieInternalRowUtils.generateUnsafeProjectionAlias(getCachedSchema(from), getCachedSchema(to));
-      return projection::apply;
-    } else {
-      Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-          HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns);
-      return row -> (InternalRow) unsafeRowWriter.apply(row);
-    }
+    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns);
+    return row -> (InternalRow) unsafeRowWriter.apply(row);
+
   }
 
   protected UnaryOperator<InternalRow> getIdentityProjection() {
