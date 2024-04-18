@@ -141,10 +141,10 @@ public class HoodiePartitionMetadata {
       BaseFileUtils.getInstance(format.get()).writeMetaFile(fs, filePath, props);
     } else {
       // Backwards compatible properties file format
-      OutputStream os = fs.create(filePath, true);
-      props.store(os, "partition metadata");
-      os.flush();
-      os.close();
+      try (OutputStream os = fs.create(filePath, true)) {
+        props.store(os, "partition metadata");
+        os.flush();
+      }
     }
   }
 

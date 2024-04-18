@@ -140,10 +140,10 @@ public class FileIOUtils {
   }
 
   public static void writeStringToFile(String str, String filePath) throws IOException {
-    PrintStream out = new PrintStream(new FileOutputStream(filePath));
-    out.println(str);
-    out.flush();
-    out.close();
+    try (PrintStream out = new PrintStream(new FileOutputStream(filePath))) {
+      out.println(str);
+      out.flush();
+    }
   }
 
   /**
@@ -174,9 +174,9 @@ public class FileIOUtils {
       }
 
       if (content.isPresent()) {
-        OutputStream out = fileSystem.create(fullPath, true);
-        out.write(content.get());
-        out.close();
+        try (OutputStream out = fileSystem.create(fullPath, true)) {
+          out.write(content.get());
+        }
       }
     } catch (IOException e) {
       LOG.warn("Failed to create file " + fullPath, e);

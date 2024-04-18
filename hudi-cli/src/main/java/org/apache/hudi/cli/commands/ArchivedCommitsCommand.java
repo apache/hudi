@@ -114,47 +114,46 @@ public class ArchivedCommitsCommand {
     List<Comparable[]> allStats = new ArrayList<>();
     for (FileStatus fs : fsStatuses) {
       // read the archived file
-      Reader reader = HoodieLogFormat.newReader(HadoopFSUtils.getFs(basePath, HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
-
-      List<IndexedRecord> readRecords = new ArrayList<>();
-      // read the avro blocks
-      while (reader.hasNext()) {
-        HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-        blk.getRecordIterator(HoodieRecordType.AVRO).forEachRemaining(r -> readRecords.add((IndexedRecord) r.getData()));
+      try (Reader reader = HoodieLogFormat.newReader(HadoopFSUtils.getFs(basePath, HoodieCLI.conf),
+          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
+        List<IndexedRecord> readRecords = new ArrayList<>();
+        // read the avro blocks
+        while (reader.hasNext()) {
+          HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
+          blk.getRecordIterator(HoodieRecordType.AVRO).forEachRemaining(r -> readRecords.add((IndexedRecord) r.getData()));
+        }
+        List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r)
+            .filter(r -> r.get("actionType").toString().equals(HoodieTimeline.COMMIT_ACTION)
+                || r.get("actionType").toString().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
+            .flatMap(r -> {
+              HoodieCommitMetadata metadata = (HoodieCommitMetadata) SpecificData.get()
+                  .deepCopy(HoodieCommitMetadata.SCHEMA$, r.get("hoodieCommitMetadata"));
+              final String instantTime = r.get("commitTime").toString();
+              final String action = r.get("actionType").toString();
+              return metadata.getPartitionToWriteStats().values().stream().flatMap(hoodieWriteStats -> hoodieWriteStats.stream().map(hoodieWriteStat -> {
+                List<Comparable> row = new ArrayList<>();
+                row.add(action);
+                row.add(instantTime);
+                row.add(hoodieWriteStat.getPartitionPath());
+                row.add(hoodieWriteStat.getFileId());
+                row.add(hoodieWriteStat.getPrevCommit());
+                row.add(hoodieWriteStat.getNumWrites());
+                row.add(hoodieWriteStat.getNumInserts());
+                row.add(hoodieWriteStat.getNumDeletes());
+                row.add(hoodieWriteStat.getNumUpdateWrites());
+                row.add(hoodieWriteStat.getTotalLogFiles());
+                row.add(hoodieWriteStat.getTotalLogBlocks());
+                row.add(hoodieWriteStat.getTotalCorruptLogBlock());
+                row.add(hoodieWriteStat.getTotalRollbackBlocks());
+                row.add(hoodieWriteStat.getTotalLogRecords());
+                row.add(hoodieWriteStat.getTotalUpdatedRecordsCompacted());
+                row.add(hoodieWriteStat.getTotalWriteBytes());
+                row.add(hoodieWriteStat.getTotalWriteErrors());
+                return row;
+              })).map(rowList -> rowList.toArray(new Comparable[0]));
+            }).collect(Collectors.toList());
+        allStats.addAll(readCommits);
       }
-      List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r)
-          .filter(r -> r.get("actionType").toString().equals(HoodieTimeline.COMMIT_ACTION)
-              || r.get("actionType").toString().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
-          .flatMap(r -> {
-            HoodieCommitMetadata metadata = (HoodieCommitMetadata) SpecificData.get()
-                .deepCopy(HoodieCommitMetadata.SCHEMA$, r.get("hoodieCommitMetadata"));
-            final String instantTime = r.get("commitTime").toString();
-            final String action = r.get("actionType").toString();
-            return metadata.getPartitionToWriteStats().values().stream().flatMap(hoodieWriteStats -> hoodieWriteStats.stream().map(hoodieWriteStat -> {
-              List<Comparable> row = new ArrayList<>();
-              row.add(action);
-              row.add(instantTime);
-              row.add(hoodieWriteStat.getPartitionPath());
-              row.add(hoodieWriteStat.getFileId());
-              row.add(hoodieWriteStat.getPrevCommit());
-              row.add(hoodieWriteStat.getNumWrites());
-              row.add(hoodieWriteStat.getNumInserts());
-              row.add(hoodieWriteStat.getNumDeletes());
-              row.add(hoodieWriteStat.getNumUpdateWrites());
-              row.add(hoodieWriteStat.getTotalLogFiles());
-              row.add(hoodieWriteStat.getTotalLogBlocks());
-              row.add(hoodieWriteStat.getTotalCorruptLogBlock());
-              row.add(hoodieWriteStat.getTotalRollbackBlocks());
-              row.add(hoodieWriteStat.getTotalLogRecords());
-              row.add(hoodieWriteStat.getTotalUpdatedRecordsCompacted());
-              row.add(hoodieWriteStat.getTotalWriteBytes());
-              row.add(hoodieWriteStat.getTotalWriteErrors());
-              return row;
-            })).map(rowList -> rowList.toArray(new Comparable[0]));
-          }).collect(Collectors.toList());
-      allStats.addAll(readCommits);
-      reader.close();
     }
     TableHeader header = new TableHeader().addTableHeaderField("action").addTableHeaderField("instant")
         .addTableHeaderField("partition").addTableHeaderField("file_id").addTableHeaderField("prev_instant")
@@ -188,21 +187,20 @@ public class ArchivedCommitsCommand {
     List<Comparable[]> allCommits = new ArrayList<>();
     for (FileStatus fs : fsStatuses) {
       // read the archived file
-      HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(HadoopFSUtils.getFs(basePath, HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
-
-      List<IndexedRecord> readRecords = new ArrayList<>();
-      // read the avro blocks
-      while (reader.hasNext()) {
-        HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-        try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
-          recordItr.forEachRemaining(r -> readRecords.add(r.getData()));
+      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(HadoopFSUtils.getFs(basePath, HoodieCLI.conf),
+          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
+        List<IndexedRecord> readRecords = new ArrayList<>();
+        // read the avro blocks
+        while (reader.hasNext()) {
+          HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
+          try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
+            recordItr.forEachRemaining(r -> readRecords.add(r.getData()));
+          }
         }
+        List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r)
+            .map(r -> readCommit(r, skipMetadata)).collect(Collectors.toList());
+        allCommits.addAll(readCommits);
       }
-      List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r)
-          .map(r -> readCommit(r, skipMetadata)).collect(Collectors.toList());
-      allCommits.addAll(readCommits);
-      reader.close();
     }
 
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType");
