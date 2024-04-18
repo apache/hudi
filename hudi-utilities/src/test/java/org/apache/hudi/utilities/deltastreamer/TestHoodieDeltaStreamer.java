@@ -2450,10 +2450,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         TestHelpers.makeConfigForHudiIncrSrc(tableBasePath, downstreamTableBasePath,
             WriteOperationType.BULK_INSERT, true, null);
     downstreamCfg.configs.add("hoodie.streamer.source.hoodieincr.num_instants=1");
-    downstreamCfg.configs.add("hoodie.parquet.small.file.limit=0");
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
 
-    insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
+    insertInTable(tableBasePath, 10, WriteOperationType.UPSERT);
     //No change as this fails with Path not exist error
     assertThrows(SparkException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
@@ -2482,11 +2481,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     if (cfg.configs == null) {
       cfg.configs = new ArrayList<>();
     }
-    cfg.configs.add("hoodie.clean.commits.retained=2");
+    cfg.configs.add("hoodie.clean.commits.retained=1");
     cfg.configs.add("hoodie.keep.min.commits=4");
     cfg.configs.add("hoodie.keep.max.commits=5");
     cfg.configs.add("hoodie.test.source.generate.inserts=true");
-    cfg.configs.add("hoodie.parquet.small.file.limit=0");
 
     for (int i = 0; i < count; i++) {
       new HoodieDeltaStreamer(cfg, jsc).sync();
