@@ -130,14 +130,6 @@ public class HoodieStreamer implements Serializable {
 
   public static final String STREAMSYNC_POOL_NAME = "hoodiedeltasync";
 
-  @VisibleForTesting
-  HoodieStreamer(Config cfg, TypedProperties properties, Configuration conf) throws IOException {
-    this.cfg = cfg;
-    this.properties = properties;
-    this.bootstrapExecutor = Option.empty();
-    initializeCheckpoint(cfg, conf, properties);
-  }
-
   public HoodieStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, HadoopFSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
         jssc.hadoopConfiguration(), Option.empty());
@@ -159,8 +151,13 @@ public class HoodieStreamer implements Serializable {
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
+    if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
+      InitialCheckPointProvider checkPointProvider =
+          UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, this.properties);
+      checkPointProvider.init(conf);
+      cfg.checkpoint = checkPointProvider.getCheckpoint();
+    }
     this.cfg = cfg;
-    initializeCheckpoint(cfg, conf, properties);
     this.bootstrapExecutor = Option.ofNullable(
         cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
     HoodieSparkEngineContext sparkEngineContext = new HoodieSparkEngineContext(jssc);
@@ -168,17 +165,6 @@ public class HoodieStreamer implements Serializable {
         cfg.runBootstrap ? null : new StreamSyncService(cfg, sparkEngineContext, fs, conf, Option.ofNullable(this.properties), sourceProfileSupplier));
   }
 
-  private void initializeCheckpoint(Config cfg, Configuration conf, TypedProperties properties) throws IOException {
-    boolean ignoreCheckpoint = StringUtils.nonEmpty(cfg.ignoreCheckpoint);
-    if (ignoreCheckpoint) {
-      cfg.checkpoint = null;
-    } else if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
-      InitialCheckPointProvider checkPointProvider =
-          UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, properties);
-      checkPointProvider.init(conf);
-      cfg.checkpoint = checkPointProvider.getCheckpoint();
-    }
-  }
 
   private static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
     HoodieConfig hoodieConfig = new HoodieConfig();
