@@ -20,6 +20,8 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -63,16 +65,36 @@ public class HoodieHFileUtils {
   }
 
   /**
-   * Creates HFile reader for byte array with default `primaryReplicaReader` as true.
+   * Creates HFile reader for a file with default `primaryReplicaReader` as true.
    *
-   * @param fs        File system.
-   * @param dummyPath Dummy path to file to read.
-   * @param content   Content in byte array.
+   * @param storage       {@link HoodieStorage} instance.
+   * @param path          path of file to read.
+   * @param cacheConfig   Cache configuration.
+   * @param configuration Configuration
    * @return HFile reader
    * @throws IOException Upon error.
    */
   public static HFile.Reader createHFileReader(
-      FileSystem fs, Path dummyPath, byte[] content) {
+      HoodieStorage storage, StoragePath path, CacheConfig cacheConfig, Configuration configuration) {
+    try {
+      return HFile.createReader((FileSystem) storage.getFileSystem(),
+          new Path(path.toUri()), cacheConfig, USE_PRIMARY_REPLICA_READER, configuration);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to initialize HFile reader for  " + path, e);
+    }
+  }
+
+  /**
+   * Creates HFile reader for byte array with default `primaryReplicaReader` as true.
+   *
+   * @param storage       {@link HoodieStorage} instance.
+   * @param dummyPath Dummy path to file to read.
+   * @param content       Content in byte array.
+   * @return HFile reader
+   * @throws IOException Upon error.
+   */
+  public static HFile.Reader createHFileReader(
+      HoodieStorage storage, StoragePath dummyPath, byte[] content) {
     // Avoid loading default configs, from the FS, since this configuration is mostly
     // used as a stub to initialize HFile reader
     Configuration conf = new Configuration(false);
@@ -81,10 +103,10 @@ public class HoodieHFileUtils {
     FSDataInputStream fsdis = new FSDataInputStream(bis);
     FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
     ReaderContext context = new ReaderContextBuilder()
-        .withFilePath(dummyPath)
+        .withFilePath(new Path(dummyPath.toUri()))
         .withInputStreamWrapper(stream)
         .withFileSize(content.length)
-        .withFileSystem(fs)
+        .withFileSystem((FileSystem) storage.getFileSystem())
         .withPrimaryReplicaReader(USE_PRIMARY_REPLICA_READER)
         .withReaderType(ReaderContext.ReaderType.STREAM)
         .build();

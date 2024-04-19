@@ -33,6 +33,7 @@ import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
 
@@ -64,8 +65,9 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   }
 
   @Override
-  Schema getAvroSchema(Path sourceFilePath) throws IOException {
-    ParquetMetadata readFooter = ParquetFileReader.readFooter(table.getHadoopConf(), sourceFilePath,
+  Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
+    ParquetMetadata readFooter = ParquetFileReader.readFooter(
+        table.getHadoopConf(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
     MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
     return new AvroSchemaConverter().convert(parquetSchema);
@@ -73,14 +75,14 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
 
   @Override
   protected void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
-                                  Path sourceFilePath,
+                                  StoragePath sourceFilePath,
                                   KeyGeneratorInterface keyGenerator,
                                   String partitionPath,
                                   Schema schema) throws Exception {
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
 
     HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(recordType)
-            .getFileReader(table.getConfig(), table.getHadoopConf(), sourceFilePath);
+        .getFileReader(table.getConfig(), table.getHadoopConf(), sourceFilePath);
 
     HoodieExecutor<Void> executor = null;
     try {

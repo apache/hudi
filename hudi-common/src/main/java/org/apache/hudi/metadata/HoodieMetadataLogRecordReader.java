@@ -24,9 +24,9 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -159,8 +159,8 @@ public class HoodieMetadataLogRecordReader implements Closeable {
             .withReverseReader(false)
             .withOperationField(false);
 
-    public Builder withFileSystem(FileSystem fs) {
-      scannerBuilder.withFileSystem(fs);
+    public Builder withStorage(HoodieStorage storage) {
+      scannerBuilder.withStorage(storage);
       return this;
     }
 

@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,9 +50,9 @@ public class SimpleDirectMarkerBasedDetectionStrategy extends DirectMarkerBasedD
   private final Set<HoodieInstant> completedCommitInstants;
   private final long maxAllowableHeartbeatIntervalInMs;
 
-  public SimpleDirectMarkerBasedDetectionStrategy(HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+  public SimpleDirectMarkerBasedDetectionStrategy(HoodieStorage storage, String partitionPath, String fileId, String instantTime,
                                                   HoodieActiveTimeline activeTimeline, HoodieWriteConfig config) {
-    super(fs, partitionPath, fileId, instantTime, activeTimeline, config);
+    super(storage, partitionPath, fileId, instantTime, activeTimeline, config);
     this.basePath = config.getBasePath();
     this.checkCommitConflict = config.earlyConflictDetectionCheckCommitConflict();
     this.completedCommitInstants = new HashSet<>(activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants());

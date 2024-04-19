@@ -27,6 +27,9 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -98,30 +101,34 @@ public class TestHoodieLogFormatAppendFailure {
 
     // Use some fs like LocalFileSystem, that does not support appends
     String uuid = UUID.randomUUID().toString();
-    Path localPartitionPath = new Path("/tmp/");
-    FileSystem fs = cluster.getFileSystem();
-    Path testPath = new Path(localPartitionPath, uuid);
-    fs.mkdirs(testPath);
+    StoragePath localPartitionPath = new StoragePath("/tmp/");
+    HoodieStorage storage = HoodieStorageUtils.getStorage(cluster.getFileSystem());
+    StoragePath testPath = new StoragePath(localPartitionPath, uuid);
+    storage.createDirectory(testPath);
 
     // Some data & append.
-    List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(0, 10).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
+    List<HoodieRecord> records =
+        SchemaTestUtil.generateTestRecords(0, 10).stream().map(HoodieAvroIndexedRecord::new)
+            .collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    HoodieAvroDataBlock dataBlock =
+        new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
 
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
         .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
-        .withDeltaCommit("").withFs(fs).build();
+        .withDeltaCommit("").withStorage(storage).build();
 
     writer.appendBlock(dataBlock);
     // get the current log file version to compare later
     int logFileVersion = writer.getLogFile().getLogVersion();
-    Path logFilePath = writer.getLogFile().getPath();
+    StoragePath logFilePath = writer.getLogFile().getPath();
     writer.close();
 
     // Wait for 3 times replication of file
-    DFSTestUtil.waitReplication(fs, logFilePath, (short) 3);
+    FileSystem fs = (FileSystem) storage.getFileSystem();
+    DFSTestUtil.waitReplication(fs, new Path(logFilePath.toUri()), (short) 3);
     // Shut down all DNs that have the last block location for the file
     LocatedBlocks lbs = cluster.getFileSystem().getClient().getNamenode()
         .getBlockLocations("/tmp/" + uuid + "/" + logFilePath.getName(), 0, Long.MAX_VALUE);
@@ -137,13 +144,13 @@ public class TestHoodieLogFormatAppendFailure {
       }
     }
     // Wait for the replication of this file to go down to 0
-    DFSTestUtil.waitReplication(fs, logFilePath, (short) 0);
+    DFSTestUtil.waitReplication(fs, new Path(logFilePath.toUri()), (short) 0);
 
     // Opening a new Writer right now will throw IOException. The code should handle this, rollover the logfile and
     // return a new writer with a bumped up logVersion
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
         .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
-        .withDeltaCommit("").withFs(fs).build();
+        .withDeltaCommit("").withStorage(storage).build();
     header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));

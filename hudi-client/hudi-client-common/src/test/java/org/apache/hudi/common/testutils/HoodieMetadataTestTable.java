@@ -33,8 +33,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.storage.HoodieStorage;
 
 import java.io.IOException;
 import java.util.List;
@@ -50,9 +49,11 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
 
   private final HoodieTableMetadataWriter writer;
 
-  protected HoodieMetadataTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, HoodieTableMetadataWriter writer,
+  protected HoodieMetadataTestTable(String basePath, HoodieStorage storage,
+                                    HoodieTableMetaClient metaClient,
+                                    HoodieTableMetadataWriter writer,
                                     Option<HoodieEngineContext> context) {
-    super(basePath, fs, metaClient, context);
+    super(basePath, storage, metaClient, context);
     this.writer = writer;
   }
 
@@ -60,9 +61,13 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     return HoodieMetadataTestTable.of(metaClient, null, Option.empty());
   }
 
-  public static HoodieTestTable of(HoodieTableMetaClient metaClient, HoodieTableMetadataWriter writer, Option<HoodieEngineContext> context) {
+  public static HoodieTestTable of(HoodieTableMetaClient metaClient,
+                                   HoodieTableMetadataWriter writer,
+                                   Option<HoodieEngineContext> context) {
     testTableState = HoodieTestTableState.of();
-    return new HoodieMetadataTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient, writer, context);
+    return new HoodieMetadataTestTable(metaClient.getBasePath(), metaClient.getRawHoodieStorage(),
+        metaClient,
+        writer, context);
   }
 
   /**

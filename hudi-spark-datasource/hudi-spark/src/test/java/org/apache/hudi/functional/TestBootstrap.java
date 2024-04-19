@@ -58,6 +58,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.storage.HoodieAvroParquetReader;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.bootstrap.BootstrapUtils;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
@@ -166,17 +167,22 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
   public Schema generateNewDataSetAndReturnSchema(long timestamp, int numRecords, List<String> partitionPaths,
       String srcPath) throws Exception {
     boolean isPartitioned = partitionPaths != null && !partitionPaths.isEmpty();
-    Dataset<Row> df = generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths, jsc, sqlContext);
+    Dataset<Row> df =
+        generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths, jsc, sqlContext);
     df.printSchema();
     if (isPartitioned) {
       df.write().partitionBy("datestr").format("parquet").mode(SaveMode.Overwrite).save(srcPath);
     } else {
       df.write().format("parquet").mode(SaveMode.Overwrite).save(srcPath);
     }
-    String filePath = FileStatusUtils.toPath(BootstrapUtils.getAllLeafFoldersWithFiles(getConfig().getBaseFileFormat(), metaClient.getFs(),
-            srcPath, context).stream().findAny().map(p -> p.getValue().stream().findAny())
-            .orElse(null).get().getPath()).toString();
-    HoodieAvroParquetReader parquetReader = new HoodieAvroParquetReader(metaClient.getHadoopConf(), new Path(filePath));
+    String filePath =
+        FileStatusUtils.toPath(
+            BootstrapUtils.getAllLeafFoldersWithFiles(getConfig().getBaseFileFormat(),
+                    (FileSystem) metaClient.getStorage().getFileSystem(),
+                    srcPath, context).stream().findAny().map(p -> p.getValue().stream().findAny())
+                .orElse(null).get().getPath()).toString();
+    HoodieAvroParquetReader parquetReader =
+        new HoodieAvroParquetReader(metaClient.getHadoopConf(), new StoragePath(filePath));
     return parquetReader.getSchema();
   }
 
@@ -271,13 +277,16 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     // Rollback Bootstrap
     metaClient.getActiveTimeline().reload().getInstantsAsStream()
         .filter(s -> s.equals(new HoodieInstant(State.COMPLETED,
-            deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION, bootstrapCommitInstantTs)))
-        .forEach(instant -> HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), instant));
+            deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION,
+            bootstrapCommitInstantTs)))
+        .forEach(instant -> HoodieActiveTimeline.deleteInstantFile(
+            metaClient.getStorage(), metaClient.getMetaPath(), instant));
     metaClient.reloadActiveTimeline();
     client.getTableServiceClient().rollbackFailedBootstrap();
     metaClient.reloadActiveTimeline();
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
-    assertEquals(0L, BootstrapUtils.getAllLeafFoldersWithFiles(config.getBaseFileFormat(), metaClient.getFs(), basePath, context)
+    assertEquals(0L, BootstrapUtils.getAllLeafFoldersWithFiles(config.getBaseFileFormat(),
+            (FileSystem) metaClient.getStorage().getFileSystem(), basePath, context)
         .stream().mapToLong(f -> f.getValue().size()).sum());
 
     BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
@@ -304,7 +313,8 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     String updateSPath = tmpFolder.toAbsolutePath() + "/data2";
     generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSPath);
     JavaRDD<HoodieRecord> updateBatch =
-        generateInputBatch(jsc, BootstrapUtils.getAllLeafFoldersWithFiles(config.getBaseFileFormat(), metaClient.getFs(), updateSPath, context),
+        generateInputBatch(jsc, BootstrapUtils.getAllLeafFoldersWithFiles(config.getBaseFileFormat(),
+                (FileSystem) metaClient.getStorage().getFileSystem(), updateSPath, context),
                 schema);
     String newInstantTs = client.startCommit();
     client.upsert(updateBatch, newInstantTs);
@@ -377,7 +387,9 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     bootstrapped.registerTempTable("bootstrapped");
     original.registerTempTable("original");
     if (checkNumRawFiles) {
-      List<HoodieFileStatus> files = BootstrapUtils.getAllLeafFoldersWithFiles(getConfig().getBaseFileFormat(), metaClient.getFs(),
+      List<HoodieFileStatus> files =
+          BootstrapUtils.getAllLeafFoldersWithFiles(getConfig().getBaseFileFormat(),
+              (FileSystem) metaClient.getStorage().getFileSystem(),
           bootstrapBasePath, context).stream().flatMap(x -> x.getValue().stream()).collect(Collectors.toList());
       assertEquals(files.size() * numVersions,
           sqlContext.sql("select distinct _hoodie_file_name from bootstrapped").count());

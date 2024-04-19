@@ -28,11 +28,11 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Base64CodecUtil;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import java.io.ByteArrayInputStream;
@@ -50,24 +50,24 @@ import java.util.stream.Collectors;
  */
 public class LogReaderUtils {
 
-  private static Schema readSchemaFromLogFileInReverse(FileSystem fs, HoodieActiveTimeline activeTimeline, HoodieLogFile hoodieLogFile)
+  private static Schema readSchemaFromLogFileInReverse(HoodieStorage storage, HoodieActiveTimeline activeTimeline, HoodieLogFile hoodieLogFile)
       throws IOException {
     // set length for the HoodieLogFile as it will be leveraged by HoodieLogFormat.Reader with reverseReading enabled
-    Reader reader = HoodieLogFormat.newReader(fs, hoodieLogFile, null, true);
     Schema writerSchema = null;
-    HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    while (reader.hasPrev()) {
-      HoodieLogBlock block = reader.prev();
-      if (block instanceof HoodieDataBlock) {
-        HoodieDataBlock lastBlock = (HoodieDataBlock) block;
-        if (completedTimeline
-            .containsOrBeforeTimelineStarts(lastBlock.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME))) {
-          writerSchema = new Schema.Parser().parse(lastBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-          break;
+    try (Reader reader = HoodieLogFormat.newReader(storage, hoodieLogFile, null, true)) {
+      HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+      while (reader.hasPrev()) {
+        HoodieLogBlock block = reader.prev();
+        if (block instanceof HoodieDataBlock) {
+          HoodieDataBlock lastBlock = (HoodieDataBlock) block;
+          if (completedTimeline
+              .containsOrBeforeTimelineStarts(lastBlock.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME))) {
+            writerSchema = new Schema.Parser().parse(lastBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+            break;
+          }
         }
       }
     }
-    reader.close();
     return writerSchema;
   }
 
@@ -80,8 +80,10 @@ public class LogReaderUtils {
       Map<String, HoodieLogFile> deltaFilePathToFileStatus = logFiles.stream().map(entry -> Pair.of(entry.getPath().toString(), entry))
           .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
       for (String logPath : deltaPaths) {
-        FileSystem fs = HadoopFSUtils.getFs(logPath, config);
-        Schema schemaFromLogFile = readSchemaFromLogFileInReverse(fs, metaClient.getActiveTimeline(), deltaFilePathToFileStatus.get(logPath));
+        HoodieStorage storage = HoodieStorageUtils.getStorage(logPath, config);
+        Schema schemaFromLogFile =
+            readSchemaFromLogFileInReverse(storage, metaClient.getActiveTimeline(),
+                deltaFilePathToFileStatus.get(logPath));
         if (schemaFromLogFile != null) {
           return schemaFromLogFile;
         }

@@ -25,13 +25,13 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,14 +65,14 @@ public class DFSPathSelector implements Serializable {
 
   protected static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
 
-  protected final transient FileSystem fs;
+  protected final transient HoodieStorage storage;
   protected final TypedProperties props;
 
   public DFSPathSelector(TypedProperties props, Configuration hadoopConf) {
     checkRequiredConfigProperties(
         props, Collections.singletonList(DFSPathSelectorConfig.ROOT_INPUT_PATH));
     this.props = props;
-    this.fs = HadoopFSUtils.getFs(
+    this.storage = HoodieStorageUtils.getStorage(
         getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH), hadoopConf);
   }
 
@@ -124,16 +124,19 @@ public class DFSPathSelector implements Serializable {
       log.info("Root path => " + getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH)
           + " source limit => " + sourceLimit);
       long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
-      List<FileStatus> eligibleFiles = listEligibleFiles(
-          fs, new Path(getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH)), lastCheckpointTime);
+      List<StoragePathInfo> eligibleFiles = listEligibleFiles(
+          storage, new StoragePath(getStringWithAltKeys(props,
+              DFSPathSelectorConfig.ROOT_INPUT_PATH)),
+          lastCheckpointTime);
       // sort them by modification time.
-      eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
+      eligibleFiles.sort(Comparator.comparingLong(StoragePathInfo::getModificationTime));
       // Filter based on checkpoint & input size, if needed
       long currentBytes = 0;
       long newCheckpointTime = lastCheckpointTime;
-      List<FileStatus> filteredFiles = new ArrayList<>();
-      for (FileStatus f : eligibleFiles) {
-        if (currentBytes + f.getLen() >= sourceLimit && f.getModificationTime() > newCheckpointTime) {
+      List<StoragePathInfo> filteredFiles = new ArrayList<>();
+      for (StoragePathInfo f : eligibleFiles) {
+        if (currentBytes + f.getLength() >= sourceLimit
+            && f.getModificationTime() > newCheckpointTime) {
           // we have enough data, we are done
           // Also, we've read up to a file with a newer modification time
           // so that some files with the same modification time won't be skipped in next read
@@ -141,7 +144,7 @@ public class DFSPathSelector implements Serializable {
         }
 
         newCheckpointTime = f.getModificationTime();
-        currentBytes += f.getLen();
+        currentBytes += f.getLength();
         filteredFiles.add(f);
       }
 
@@ -151,7 +154,9 @@ public class DFSPathSelector implements Serializable {
       }
 
       // read the files out.
-      String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
+      String pathStr =
+          filteredFiles.stream().map(f -> f.getPath().toString())
+              .collect(Collectors.joining(","));
 
       return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(newCheckpointTime));
     } catch (IOException ioe) {
@@ -162,19 +167,17 @@ public class DFSPathSelector implements Serializable {
   /**
    * List files recursively, filter out illegible files/directories while doing so.
    */
-  protected List<FileStatus> listEligibleFiles(FileSystem fs, Path path, long lastCheckpointTime) throws IOException {
+  protected List<StoragePathInfo> listEligibleFiles(HoodieStorage storage, StoragePath path,
+                                                    long lastCheckpointTime) throws IOException {
     // skip files/dirs whose names start with (_, ., etc)
-    FileStatus[] statuses = fs.listStatus(path, file ->
-      IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
-    List<FileStatus> res = new ArrayList<>();
-    for (FileStatus status: statuses) {
-      if (status.isDirectory()) {
-        // avoid infinite loop
-        if (!status.isSymlink()) {
-          res.addAll(listEligibleFiles(fs, status.getPath(), lastCheckpointTime));
-        }
-      } else if (status.getModificationTime() > lastCheckpointTime && status.getLen() > 0) {
-        res.add(status);
+    List<StoragePathInfo> pathInfoList = storage.listDirectEntries(path, file ->
+        IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
+    List<StoragePathInfo> res = new ArrayList<>();
+    for (StoragePathInfo pathInfo : pathInfoList) {
+      if (pathInfo.isDirectory()) {
+        res.addAll(listEligibleFiles(storage, pathInfo.getPath(), lastCheckpointTime));
+      } else if (pathInfo.getModificationTime() > lastCheckpointTime && pathInfo.getLength() > 0) {
+        res.add(pathInfo);
       }
     }
     return res;

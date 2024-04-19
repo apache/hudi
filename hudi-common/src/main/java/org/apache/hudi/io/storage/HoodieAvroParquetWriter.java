@@ -18,11 +18,12 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.storage.StoragePath;
+
+import org.apache.avro.generic.IndexedRecord;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -46,7 +47,7 @@ public class HoodieAvroParquetWriter
   private final HoodieAvroWriteSupport writeSupport;
 
   @SuppressWarnings({"unchecked", "rawtypes"})
-  public HoodieAvroParquetWriter(Path file,
+  public HoodieAvroParquetWriter(StoragePath file,
                                  HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig,
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,

@@ -18,16 +18,17 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
-import org.apache.hudi.HoodieBootstrapMORRDD.{CONFIG_INSTANTIATION_LOCK, getPartitionPath}
+import org.apache.hudi.HoodieBootstrapMORRDD.{getPartitionPath, CONFIG_INSTANTIATION_LOCK}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+import org.apache.hudi.storage.StoragePath
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.mapred.JobConf
+import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 
 class HoodieBootstrapMORRDD(@transient spark: SparkSession,
                             @transient config: Configuration,
@@ -81,7 +82,7 @@ class HoodieBootstrapMORRDD(@transient spark: SparkSession,
 object HoodieBootstrapMORRDD extends SparkAdapterSupport {
   val CONFIG_INSTANTIATION_LOCK = new Object()
 
-  def getPartitionPath(file: PartitionedFile): Path = {
+  def getPartitionPath(file: PartitionedFile): StoragePath = {
     sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file).getParent
   }
 }
