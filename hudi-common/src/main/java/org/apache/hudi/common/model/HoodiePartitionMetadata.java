@@ -97,9 +97,8 @@ public class HoodiePartitionMetadata {
    * Write the metadata safely into partition atomically.
    */
   public void trySave() throws HoodieIOException {
-    String extension = getMetafileExtension();
     StoragePath metaPath = new StoragePath(
-        partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + extension);
+        partitionPath, HOODIE_PARTITION_METAFILE_PREFIX + getMetafileExtension());
 
     // This retry mechanism enables an exit-fast in metaPath exists check, which avoid the
     // tasks failures when there are two or more tasks trying to create the same metaPath.
@@ -107,9 +106,7 @@ public class HoodiePartitionMetadata {
         .tryWith(() -> {
           if (!storage.exists(metaPath)) {
             if (format.isPresent()) {
-              StoragePath tmpMetaPath = new StoragePath(
-                  partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + "_" + UUID.randomUUID() + extension);
-              writeMetafileInFormat(metaPath, tmpMetaPath, format.get());
+              writeMetafileInFormat(metaPath, format.get());
             } else {
               // Backwards compatible properties file format
               try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
@@ -133,11 +130,12 @@ public class HoodiePartitionMetadata {
    * Write the partition metadata in the correct format in the given file path.
    *
    * @param filePath Path of the file to write
-   * @param tmpPath Temp file path
    * @param format Hoodie table file format
    * @throws IOException
    */
-  private void writeMetafileInFormat(StoragePath filePath, StoragePath tmpPath, HoodieFileFormat format) throws IOException {
+  private void writeMetafileInFormat(StoragePath filePath, HoodieFileFormat format) throws IOException {
+    StoragePath tmpPath = new StoragePath(partitionPath,
+        HOODIE_PARTITION_METAFILE_PREFIX + "_" + UUID.randomUUID() + getMetafileExtension());
     try {
       // write to temporary file
       BaseFileUtils.getInstance(format).writeMetaFile(storage, tmpPath, props);
