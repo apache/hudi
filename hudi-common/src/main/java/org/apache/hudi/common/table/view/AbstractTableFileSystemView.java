@@ -107,7 +107,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   private final ReentrantReadWriteLock globalLock = new ReentrantReadWriteLock();
   protected final ReadLock readLock = globalLock.readLock();
   protected final WriteLock writeLock = globalLock.writeLock();
-  private Pair<String, List<String>> timelineHashAndPendingReplaceInstants = null;
+  private Pair<String, Set<String>> timelineHashAndPendingReplaceInstants = null;
   private BootstrapIndex bootstrapIndex;
 
   private String getPartitionPathFor(HoodieBaseFile baseFile) {
@@ -150,11 +150,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @return list of pending replace instant timestamps
    */
-  private List<String> getPendingReplaceInstants() {
+  private Set<String> getPendingReplaceInstants() {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     if (timelineHashAndPendingReplaceInstants == null || !timelineHashAndPendingReplaceInstants.getKey().equals(activeTimeline.getTimelineHash())) {
       timelineHashAndPendingReplaceInstants = Pair.of(activeTimeline.getTimelineHash(), activeTimeline.filterPendingReplaceTimeline()
-          .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()));
+          .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet()));
     }
     return timelineHashAndPendingReplaceInstants.getValue();
   }
@@ -570,7 +570,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param baseFile base File
    */
   protected boolean isBaseFileDueToPendingClustering(HoodieBaseFile baseFile) {
-    List<String> pendingReplaceInstants = getPendingReplaceInstants();
+    Set<String> pendingReplaceInstants = getPendingReplaceInstants();
     return !pendingReplaceInstants.isEmpty() && pendingReplaceInstants.contains(baseFile.getCommitTime());
   }
 
