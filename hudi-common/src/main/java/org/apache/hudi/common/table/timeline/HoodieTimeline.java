@@ -406,6 +406,17 @@ public interface HoodieTimeline extends Serializable {
    */
   public Option<HoodieInstant> getLastPendingClusterInstant();
 
+
+  /**
+   * get the least recent pending cluster commit if present
+   */
+  public Option<HoodieInstant> getFirstPendingClusterInstant();
+
+  /**
+   * return true if instant is a pending clustering commit, otherwise false
+   */
+  public boolean isPendingClusterInstant(String instantTime);
+
   /**
    * Read the completed instant details.
    */

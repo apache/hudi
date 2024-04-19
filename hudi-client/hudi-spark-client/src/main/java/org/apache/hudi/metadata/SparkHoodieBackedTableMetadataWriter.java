@@ -38,7 +38,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.functional.HoodieFunctionalIndex;
-import org.apache.hudi.index.functional.HoodieSparkFunctionalIndex;
+import org.apache.hudi.HoodieSparkFunctionalIndex;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 
@@ -120,7 +120,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       } else {
         registry = Registry.getRegistry("HoodieMetadata");
       }
-      this.metrics = Option.of(new HoodieMetadataMetrics(registry));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig()));
     } else {
       this.metrics = Option.empty();
     }

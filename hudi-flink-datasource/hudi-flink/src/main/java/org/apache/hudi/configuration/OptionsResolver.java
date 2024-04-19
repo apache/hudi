@@ -398,9 +398,21 @@ public class OptionsResolver {
     return WriteConcurrencyMode.isNonBlockingConcurrencyControl(config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()));
   }
 
+  /**
+   * Returns whether Cleaner's failed writes policy is set to lazy
+   */
   public static boolean isLazyFailedWritesCleanPolicy(Configuration conf) {
-    return conf.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue())
-        .equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
+    // get all keys with alternatives as strings from Hudi's ConfigProperty
+    List<String> allKeys = new ArrayList<>();
+    allKeys.add(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key());
+    allKeys.addAll(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.getAlternatives());
+    // and check them in Flink's Configuration for all key variations support
+    for (String key : allKeys) {
+      if (conf.containsKey(key)) {
+        return conf.getString(key, "").equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
+      }
+    }
+    return HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue().equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
   }
 
   // -------------------------------------------------------------------------

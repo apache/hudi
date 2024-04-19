@@ -90,6 +90,11 @@ public class FileSliceHandler extends Handler {
         .collect(Collectors.toList());
   }
 
+  public List<FileSliceDTO> getLatestFileSlicesIncludingInflight(String basePath, String partitionPath) {
+    return viewManager.getFileSystemView(basePath).getLatestFileSlicesIncludingInflight(partitionPath).map(FileSliceDTO::fromFileSlice)
+        .collect(Collectors.toList());
+  }
+
   public List<FileSliceDTO> getLatestFileSlicesStateless(String basePath, String partitionPath) {
     return viewManager.getFileSystemView(basePath).getLatestFileSlicesStateless(partitionPath).map(FileSliceDTO::fromFileSlice)
         .collect(Collectors.toList());

@@ -54,7 +54,7 @@ public class TestInlineCompaction extends CompactionTestBase {
         .build();
   }
 
-  private HoodieWriteConfig getConfigDisableComapction(int maxDeltaCommits, int maxDeltaTime, CompactionTriggerStrategy inlineCompactionType) {
+  private HoodieWriteConfig getConfigDisableCompaction(int maxDeltaCommits, int maxDeltaTime, CompactionTriggerStrategy inlineCompactionType) {
     return getConfigBuilder(false)
           .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
           .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -111,7 +111,7 @@ public class TestInlineCompaction extends CompactionTestBase {
   @Test
   public void testSuccessfulCompactionBasedOnNumAfterCompactionRequest() throws Exception {
     // Given: make 4 commits
-    HoodieWriteConfig cfg = getConfigDisableComapction(4, 60, CompactionTriggerStrategy.NUM_COMMITS_AFTER_LAST_REQUEST);
+    HoodieWriteConfig cfg = getConfigDisableCompaction(4, 60, CompactionTriggerStrategy.NUM_COMMITS_AFTER_LAST_REQUEST);
     // turn off compaction table service to mock compaction service is down or very slow
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
       List<String> instants = IntStream.range(0, 4).mapToObj(i -> writeClient.createNewInstantTime()).collect(Collectors.toList());

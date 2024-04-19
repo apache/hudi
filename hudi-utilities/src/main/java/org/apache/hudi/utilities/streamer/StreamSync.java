@@ -278,7 +278,6 @@ public class StreamSync implements Serializable, Closeable {
     this.formatAdapter = formatAdapter;
     this.transformer = transformer;
     this.useRowWriter = useRowWriter;
-
   }
 
   @Deprecated
@@ -304,7 +303,7 @@ public class StreamSync implements Serializable, Closeable {
     this.conf = conf;
 
     HoodieWriteConfig hoodieWriteConfig = getHoodieClientConfig();
-    this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, hoodieWriteConfig);
+    this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, hoodieWriteConfig.getMetricsConfig());
     this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig);
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, hoodieSparkContext, fs);
@@ -501,7 +500,6 @@ public class StreamSync implements Serializable, Closeable {
    * @return Pair<InputBatch and Boolean> Input data read from upstream source, and boolean is true if empty.
    * @throws Exception in case of any Exception
    */
-
   public InputBatch readFromSource(String instantTime, HoodieTableMetaClient metaClient) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
@@ -563,7 +561,6 @@ public class StreamSync implements Serializable, Closeable {
 
     // handle empty batch with change in checkpoint
     hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Checking if input is empty: " + cfg.targetTableName);
-
 
     if (useRowWriter) { // no additional processing required for row writer.
       return inputBatch;
@@ -1297,5 +1294,4 @@ public class StreamSync implements Serializable, Closeable {
       return writeStatusRDD;
     }
   }
-
 }

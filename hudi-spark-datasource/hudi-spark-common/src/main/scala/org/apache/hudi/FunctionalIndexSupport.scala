@@ -22,6 +22,7 @@ package org.apache.hudi
 import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.FunctionalIndexSupport._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.HoodieSparkFunctionalIndex.SPARK_FUNCTION_MAP
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -111,6 +112,63 @@ class FunctionalIndexSupport(spark: SparkSession,
 
     colStatsDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
       .select(requiredIndexColumns: _*)
+  }
+
+  /**
+   * Searches for an index partition based on the specified index function and target column name.
+   *
+   * This method looks up the index definitions available in the metadata of a `metaClient` instance
+   * and attempts to find an index partition where the index function and the source fields match
+   * the provided arguments. If a matching index definition is found, the partition identifier for
+   * that index is returned.
+   *
+   * @param queryFilters A sequence of `Expression` objects to analyze. Each expression should involve a single column
+   *                     for the method to consider it (expressions involving multiple columns are skipped).
+   * @return An `Option` containing the index partition identifier if a matching index definition is found.
+   *         Returns `None` if no matching index definition is found.
+   */
+  def getFunctionalIndexPartition(queryFilters: Seq[Expression]): Option[String] = {
+    val functionToColumnNames = extractSparkFunctionNames(queryFilters)
+    if (functionToColumnNames.nonEmpty) {
+      // Currently, only one functional index in the query is supported. HUDI-7620 for supporting multiple functions.
+      checkState(functionToColumnNames.size == 1, "Currently, only one function with functional index in the query is supported")
+      val (indexFunction, targetColumnName) = functionToColumnNames.head
+      val indexDefinitions = metaClient.getFunctionalIndexMetadata.get().getIndexDefinitions
+      indexDefinitions.asScala.foreach {
+        case (indexPartition, indexDefinition) =>
+          if (indexDefinition.getIndexFunction.equals(indexFunction) && indexDefinition.getSourceFields.contains(targetColumnName)) {
+            Option.apply(indexPartition)
+          }
+      }
+      Option.empty
+    } else {
+      Option.empty
+    }
+  }
+
+  /**
+   * Extracts mappings from function names to column names from a sequence of expressions.
+   *
+   * This method iterates over a given sequence of Spark SQL expressions and identifies expressions
+   * that contain function calls corresponding to keys in the `SPARK_FUNCTION_MAP`. It supports only
+   * expressions that are simple binary expressions involving a single column. If an expression contains
+   * one of the functions and operates on a single column, this method maps the function name to the
+   * column name.
+   */
+  private def extractSparkFunctionNames(queryFilters: Seq[Expression]): Map[String, String] = {
+    queryFilters.flatMap { expr =>
+      // Support only simple binary expression on single column
+      if (expr.references.size == 1) {
+        val targetColumnName = expr.references.head.name
+        // Check if the expression string contains any of the function names
+        val exprString = expr.toString
+        SPARK_FUNCTION_MAP.asScala.keys
+          .find(exprString.contains)
+          .map(functionName => functionName -> targetColumnName)
+      } else {
+        None // Skip expressions that do not match the criteria
+      }
+    }.toMap
   }
 
   def loadFunctionalIndexDataFrame(indexPartition: String,

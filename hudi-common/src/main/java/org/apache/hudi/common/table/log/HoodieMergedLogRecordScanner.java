@@ -92,7 +92,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   @SuppressWarnings("unchecked")
   private HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-                                       String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
+                                       String latestInstantTime, Long maxMemorySizeInBytes,
                                        boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                        Option<InstantRange> instantRange,
                                        ExternalSpillableMap.DiskMapType diskMapType,
@@ -103,7 +103,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                        Option<String> keyFieldOverride,
                                        boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
                                       Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
         hoodieTableMetaClientOption);
     try {
@@ -206,12 +206,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = records.size();
 
-    LOG.info("Number of log files scanned => " + logFilePaths.size());
-    LOG.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
-    LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
-    LOG.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records.getCurrentInMemoryMapSize());
-    LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
-    LOG.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
+    if (LOG.isInfoEnabled()) {
+      LOG.info("Number of log files scanned => {}", logFilePaths.size());
+      LOG.info("MaxMemoryInBytes allowed for compaction => {}", maxMemorySizeInBytes);
+      LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => {}", records.getInMemoryMapNumEntries());
+      LOG.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => {}", records.getCurrentInMemoryMapSize());
+      LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => {}", records.getDiskBasedMapNumEntries());
+      LOG.info("Size of file spilled to disk => {}", records.getSizeOfFileOnDiskInBytes());
+    }
   }
 
   @Override
@@ -321,7 +323,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     private Schema readerSchema;
     private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
     private String latestInstantTime;
-    private boolean readBlocksLazily;
     private boolean reverseReader;
     private int bufferSize;
     // specific configurations
@@ -370,12 +371,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     @Override
     public Builder withLatestInstantTime(String latestInstantTime) {
       this.latestInstantTime = latestInstantTime;
-      return this;
-    }
-
-    @Override
-    public Builder withReadBlocksLazily(boolean readBlocksLazily) {
-      this.readBlocksLazily = readBlocksLazily;
       return this;
     }
 
@@ -470,7 +465,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       ValidationUtils.checkArgument(recordMerger != null);
 
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
-          latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
+          latestInstantTime, maxMemorySizeInBytes, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
           Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger,
