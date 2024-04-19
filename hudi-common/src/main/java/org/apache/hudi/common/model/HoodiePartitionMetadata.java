@@ -96,14 +96,14 @@ public class HoodiePartitionMetadata {
   /**
    * Write the metadata safely into partition atomically.
    */
-  public void trySave() throws IOException {
+  public void trySave() throws HoodieIOException {
     String extension = getMetafileExtension();
     StoragePath metaPath = new StoragePath(
         partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + extension);
 
     // This retry mechanism enables an exit-fast in metaPath exists check, which avoid the
     // tasks failures when there are two or more tasks trying to create the same metaPath.
-    RetryHelper<Void, IOException>  retryHelper = new RetryHelper(1000, 3, 1000, IOException.class.getName())
+    RetryHelper<Void, HoodieIOException>  retryHelper = new RetryHelper(1000, 3, 1000, HoodieIOException.class.getName())
         .tryWith(() -> {
           if (!storage.exists(metaPath)) {
             if (format.isPresent()) {

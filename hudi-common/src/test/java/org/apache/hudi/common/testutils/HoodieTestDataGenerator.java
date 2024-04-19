@@ -254,7 +254,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public static void writePartitionMetadataDeprecated(HoodieStorage storage,
                                                       String[] partitionPaths,
-                                                      String basePath) throws IOException {
+                                                      String basePath) {
     new HoodieTestDataGenerator().writePartitionMetadata(storage, partitionPaths, basePath);
   }
 
@@ -266,7 +266,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public void writePartitionMetadata(HoodieStorage storage,
                                      String[] partitionPaths,
-                                     String basePath) throws IOException {
+                                     String basePath) {
     for (String partitionPath : partitionPaths) {
       new HoodiePartitionMetadata(storage, "000", new StoragePath(basePath),
           new StoragePath(basePath, partitionPath), Option.empty()).trySave();
