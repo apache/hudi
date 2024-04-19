@@ -141,7 +141,7 @@ public class TestStreamSyncUnitTests {
   @MethodSource("getCheckpointToResumeCases")
   void testGetCheckpointToResume(HoodieStreamer.Config cfg, HoodieCommitMetadata commitMetadata, Option<String> expectedResumeCheckpoint) throws IOException {
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    FileSystem fs = mock(FileSystem.class);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(mock(FileSystem.class));
     TypedProperties props = new TypedProperties();
     SparkSession sparkSession = mock(SparkSession.class);
     Configuration configuration = mock(Configuration.class);
@@ -152,7 +152,7 @@ public class TestStreamSyncUnitTests {
     when(commitsTimeline.lastInstant()).thenReturn(Option.of(hoodieInstant));
 
     StreamSync streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkEngineContext,
-        fs, configuration, client -> true, null,Option.empty(),null,Option.empty(),true,true);
+        storage, configuration, client -> true, null,Option.empty(),null,Option.empty(),true,true);
     StreamSync spy = spy(streamSync);
     doReturn(Option.of(commitMetadata)).when(spy).getLatestCommitMetadataWithValidCheckpointInfo(any());
 
