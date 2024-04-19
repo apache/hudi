@@ -33,8 +33,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -173,10 +172,12 @@ public class CompactionTestUtils {
           slice.setBaseFile(new DummyHoodieBaseFile(Paths.get(basePath, partition,
               baseFileName(instantTime, fileId)).toString()));
         }
-        String logFilePath1 = Paths.get(basePath, partition, logFileName(instantTime, fileId, 1)).toString();
-        String logFilePath2 = Paths.get(basePath, partition, logFileName(instantTime, fileId, 2)).toString();
-        slice.addLogFile(new HoodieLogFile(new Path(logFilePath1)));
-        slice.addLogFile(new HoodieLogFile(new Path(logFilePath2)));
+        String logFilePath1 =
+            Paths.get(basePath, partition, logFileName(instantTime, fileId, 1)).toString();
+        String logFilePath2 =
+            Paths.get(basePath, partition, logFileName(instantTime, fileId, 2)).toString();
+        slice.addLogFile(new HoodieLogFile(new StoragePath(logFilePath1)));
+        slice.addLogFile(new HoodieLogFile(new StoragePath(logFilePath2)));
         HoodieCompactionOperation op =
             CompactionUtils.buildFromFileSlice(partition, slice, Option.empty());
         if (deltaCommitsAfterCompactionRequests) {

@@ -23,10 +23,10 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -46,17 +46,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarness {
 
   TypedProperties props;
-  Path inputPath;
+  StoragePath inputPath;
 
   @BeforeEach
   void setUp() {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     props = new TypedProperties();
     props.setProperty(ROOT_INPUT_PATH.key(), basePath);
     props.setProperty(PARTITIONS_LIST_PARALLELISM.key(), "1");
-    inputPath = new Path(basePath);
+    inputPath = new StoragePath(basePath);
   }
 
   @AfterEach
@@ -72,7 +72,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
     createBaseFile(basePath, "p1", "000", ".foo2", 1);
     createBaseFile(basePath, "p1", "000", "_foo3", 1);
 
-    List<FileStatus> eligibleFiles = selector.listEligibleFiles(fs, inputPath, 0);
+    List<StoragePathInfo> eligibleFiles = selector.listEligibleFiles(storage, inputPath, 0);
     assertEquals(1, eligibleFiles.size());
     assertTrue(eligibleFiles.get(0).getPath().getName().startsWith("foo1"));
   }
@@ -85,7 +85,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
     createBaseFile(basePath, "p1", "000", "foo2", 0);
     createBaseFile(basePath, "p1", "000", "foo3", 0);
 
-    List<FileStatus> eligibleFiles = selector.listEligibleFiles(fs, inputPath, 0);
+    List<StoragePathInfo> eligibleFiles = selector.listEligibleFiles(storage, inputPath, 0);
     assertEquals(1, eligibleFiles.size());
     assertTrue(eligibleFiles.get(0).getPath().getName().startsWith("foo1"));
   }
@@ -98,7 +98,8 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
     createBaseFile(basePath, "p1", "000", "foo2", 1);
     createBaseFile(basePath, "p1", "000", "foo3", 1);
 
-    List<FileStatus> eligibleFiles = selector.listEligibleFiles(fs, inputPath, Long.MAX_VALUE);
+    List<StoragePathInfo> eligibleFiles =
+        selector.listEligibleFiles(storage, inputPath, Long.MAX_VALUE);
     assertEquals(0, eligibleFiles.size());
   }
 

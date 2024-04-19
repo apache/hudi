@@ -107,11 +107,10 @@ public class HoodieCompactionAdminTool {
   private <T> void serializeOperationResult(FileSystem fs, T result) throws Exception {
     if ((cfg.outputPath != null) && (result != null)) {
       Path outputPath = new Path(cfg.outputPath);
-      OutputStream stream = fs.create(outputPath, true);
-      ObjectOutputStream out = new ObjectOutputStream(stream);
-      out.writeObject(result);
-      out.close();
-      stream.close();
+      try (OutputStream stream = fs.create(outputPath, true);
+           ObjectOutputStream out = new ObjectOutputStream(stream)) {
+        out.writeObject(result);
+      }
     }
   }
 

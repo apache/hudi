@@ -75,8 +75,8 @@ public class HoodieJavaWriteClientExample {
       HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(tableType)
         .setTableName(tableName)
-        .setPayloadClassName(HoodieAvroPayload.class.getName())
-        .initTable(hadoopConf, tablePath);
+          .setPayloadClassName(HoodieAvroPayload.class.getName())
+          .initTable(hadoopConf, tablePath);
     }
 
     // Create the write client to write some records in
@@ -85,38 +85,38 @@ public class HoodieJavaWriteClientExample {
         .withDeleteParallelism(2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(20, 30).build()).build();
-    HoodieJavaWriteClient<HoodieAvroPayload> client =
-        new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(hadoopConf), cfg);
 
-    // inserts
-    String newCommitTime = client.startCommit();
-    LOG.info("Starting commit " + newCommitTime);
+    try (HoodieJavaWriteClient<HoodieAvroPayload> client =
+             new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(hadoopConf), cfg)) {
 
-    List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
-    List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
-    List<HoodieRecord<HoodieAvroPayload>> writeRecords =
-        recordsSoFar.stream().map(r -> new HoodieAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
-    client.insert(writeRecords, newCommitTime);
+      // inserts
+      String newCommitTime = client.startCommit();
+      LOG.info("Starting commit " + newCommitTime);
 
-    // updates
-    newCommitTime = client.startCommit();
-    LOG.info("Starting commit " + newCommitTime);
-    List<HoodieRecord<HoodieAvroPayload>> toBeUpdated = dataGen.generateUpdates(newCommitTime, 2);
-    records.addAll(toBeUpdated);
-    recordsSoFar.addAll(toBeUpdated);
-    writeRecords =
-        recordsSoFar.stream().map(r -> new HoodieAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
-    client.upsert(writeRecords, newCommitTime);
+      List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
+      List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
+      List<HoodieRecord<HoodieAvroPayload>> writeRecords =
+          recordsSoFar.stream().map(r -> new HoodieAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
+      client.insert(writeRecords, newCommitTime);
 
-    // Delete
-    newCommitTime = client.startCommit();
-    LOG.info("Starting commit " + newCommitTime);
-    // just delete half of the records
-    int numToDelete = recordsSoFar.size() / 2;
-    List<HoodieKey> toBeDeleted =
-        recordsSoFar.stream().map(HoodieRecord::getKey).limit(numToDelete).collect(Collectors.toList());
-    client.delete(toBeDeleted, newCommitTime);
+      // updates
+      newCommitTime = client.startCommit();
+      LOG.info("Starting commit " + newCommitTime);
+      List<HoodieRecord<HoodieAvroPayload>> toBeUpdated = dataGen.generateUpdates(newCommitTime, 2);
+      records.addAll(toBeUpdated);
+      recordsSoFar.addAll(toBeUpdated);
+      writeRecords =
+          recordsSoFar.stream().map(r -> new HoodieAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
+      client.upsert(writeRecords, newCommitTime);
 
-    client.close();
+      // Delete
+      newCommitTime = client.startCommit();
+      LOG.info("Starting commit " + newCommitTime);
+      // just delete half of the records
+      int numToDelete = recordsSoFar.size() / 2;
+      List<HoodieKey> toBeDeleted =
+          recordsSoFar.stream().map(HoodieRecord::getKey).limit(numToDelete).collect(Collectors.toList());
+      client.delete(toBeDeleted, newCommitTime);
+    }
   }
 }

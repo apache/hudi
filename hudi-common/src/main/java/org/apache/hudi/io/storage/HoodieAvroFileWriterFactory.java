@@ -26,11 +26,11 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -46,9 +46,9 @@ import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.apache.hudi.io.storage.HoodieHFileConfig.PREFETCH_ON_OPEN;
 
 public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
-
+  @Override
   protected HoodieFileWriter newParquetFileWriter(
-      String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(conf, schema, config, enableBloomFilter(populateMetaFields, config));
@@ -82,7 +82,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newHFileFileWriter(
-      String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     BloomFilter filter = createBloomFilter(config);
     HoodieHFileConfig hfileConfig = new HoodieHFileConfig(conf,
@@ -97,7 +97,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newOrcFileWriter(
-      String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     BloomFilter filter = createBloomFilter(config);
     HoodieOrcConfig orcConfig = new HoodieOrcConfig(conf,

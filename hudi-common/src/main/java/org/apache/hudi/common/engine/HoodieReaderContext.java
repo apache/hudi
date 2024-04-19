@@ -24,12 +24,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -62,15 +62,15 @@ public abstract class HoodieReaderContext<T> {
    *
    * @param path File path to get the file system.
    * @param conf Hadoop {@link Configuration} instance.
-   * @return The {@link FileSystem} instance to use.
+   * @return The {@link HoodieStorage} instance to use.
    */
-  public abstract FileSystem getFs(String path, Configuration conf);
+  public abstract HoodieStorage getStorage(String path, Configuration conf);
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
    * file.
    *
-   * @param filePath       {@link Path} instance of a file.
+   * @param filePath       {@link StoragePath} instance of a file.
    * @param start          Starting byte to start reading.
    * @param length         Bytes to read.
    * @param dataSchema     Schema of records in the file in {@link Schema}.
@@ -79,7 +79,8 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf) throws IOException;
+      StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
+      Configuration conf) throws IOException;
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.

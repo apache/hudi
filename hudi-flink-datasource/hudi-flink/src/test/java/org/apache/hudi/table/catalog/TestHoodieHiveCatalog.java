@@ -28,11 +28,12 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
@@ -299,8 +300,9 @@ public class TestHoodieHiveCatalog {
     assertEquals("EXTERNAL_TABLE", table1.getTableType());
 
     catalog.dropTable(tablePath, false);
-    Path path = new Path(table1.getParameters().get(FlinkOptions.PATH.key()));
-    boolean created = StreamerUtil.fileExists(HadoopFSUtils.getFs(path, new Configuration()), path);
+    StoragePath path = new StoragePath(table1.getParameters().get(FlinkOptions.PATH.key()));
+    boolean created = StreamerUtil.fileExists(
+        HoodieStorageUtils.getStorage(path, new Configuration()), path);
     assertTrue(created, "Table should have been created");
   }
 
@@ -331,14 +333,17 @@ public class TestHoodieHiveCatalog {
     HoodieHiveCatalog catalog = HoodieCatalogTestUtils.createHiveCatalog("myCatalog", external);
     catalog.open();
 
-    CatalogTable catalogTable = new CatalogTableImpl(schema, Collections.singletonMap(FactoryUtil.CONNECTOR.key(), "hudi"), "hudi table");
+    CatalogTable catalogTable =
+        new CatalogTableImpl(schema, Collections.singletonMap(FactoryUtil.CONNECTOR.key(), "hudi"),
+            "hudi table");
     catalog.createTable(tablePath, catalogTable, false);
     Table table = catalog.getHiveTable(tablePath);
     assertEquals(external, Boolean.parseBoolean(table.getParameters().get("EXTERNAL")));
 
     catalog.dropTable(tablePath, false);
-    Path path = new Path(table.getParameters().get(FlinkOptions.PATH.key()));
-    boolean existing = StreamerUtil.fileExists(HadoopFSUtils.getFs(path, new Configuration()), path);
+    StoragePath path = new StoragePath(table.getParameters().get(FlinkOptions.PATH.key()));
+    boolean existing = StreamerUtil.fileExists(
+        HoodieStorageUtils.getStorage(path, new Configuration()), path);
     assertEquals(external, existing);
   }
 

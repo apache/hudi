@@ -39,6 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -128,7 +129,7 @@ public class HDFSParquetImporterUtils implements Serializable {
   public int dataImport(JavaSparkContext jsc) {
     FileSystem fs = HadoopFSUtils.getFs(this.targetPath, jsc.hadoopConfiguration());
     this.props = this.propsFilePath == null || this.propsFilePath.isEmpty() ? buildProperties(this.configs)
-        : readConfig(fs.getConf(), new Path(this.propsFilePath), this.configs).getProps(true);
+        : readConfig(fs.getConf(), new StoragePath(this.propsFilePath), this.configs).getProps(true);
     LOG.info("Starting data import with configs : " + props.toString());
     int ret = -1;
     try {
@@ -251,7 +252,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     return properties;
   }
 
-  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
+  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, StoragePath cfgPath, List<String> overriddenProps) {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {

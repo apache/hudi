@@ -55,8 +55,10 @@ import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -71,7 +73,6 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -130,24 +131,26 @@ public class HoodieStreamer implements Serializable {
   public static final String STREAMSYNC_POOL_NAME = "hoodiedeltasync";
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
-    this(cfg, jssc, HadoopFSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
+    this(cfg, jssc,
+        HoodieStorageUtils.getStorage(cfg.targetBasePath, jssc.hadoopConfiguration()),
         jssc.hadoopConfiguration(), Option.empty());
   }
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, Option<TypedProperties> props) throws IOException {
-    this(cfg, jssc, HadoopFSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
+    this(cfg, jssc,
+        HoodieStorageUtils.getStorage(cfg.targetBasePath, jssc.hadoopConfiguration()),
         jssc.hadoopConfiguration(), props);
   }
 
-  public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf) throws IOException {
-    this(cfg, jssc, fs, conf, Option.empty());
+  public HoodieStreamer(Config cfg, JavaSparkContext jssc, HoodieStorage storage, Configuration conf) throws IOException {
+    this(cfg, jssc, storage, conf, Option.empty());
   }
 
-  public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf, Option<TypedProperties> propsOverride) throws IOException {
-    this(cfg, jssc, fs, conf, propsOverride, Option.empty());
+  public HoodieStreamer(Config cfg, JavaSparkContext jssc, HoodieStorage storage, Configuration conf, Option<TypedProperties> propsOverride) throws IOException {
+    this(cfg, jssc, storage, conf, propsOverride, Option.empty());
   }
 
-  public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
+  public HoodieStreamer(Config cfg, JavaSparkContext jssc, HoodieStorage storage, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
@@ -159,10 +162,11 @@ public class HoodieStreamer implements Serializable {
 
     this.cfg = cfg;
     this.bootstrapExecutor = Option.ofNullable(
-        cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
+        cfg.runBootstrap ? new BootstrapExecutor(
+            cfg, jssc, (FileSystem) storage.getFileSystem(), conf, this.properties) : null);
     HoodieSparkEngineContext sparkEngineContext = new HoodieSparkEngineContext(jssc);
     this.ingestionService = Option.ofNullable(
-        cfg.runBootstrap ? null : new StreamSyncService(cfg, sparkEngineContext, fs, conf, Option.ofNullable(this.properties), sourceProfileSupplier));
+        cfg.runBootstrap ? null : new StreamSyncService(cfg, sparkEngineContext, storage, conf, Option.ofNullable(this.properties), sourceProfileSupplier));
   }
 
   private static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
@@ -176,7 +180,7 @@ public class HoodieStreamer implements Serializable {
     } else if (cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
       hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
     } else {
-      hoodieConfig.setAll(readConfig(hadoopConf, new Path(cfg.propsFilePath), cfg.configs).getProps());
+      hoodieConfig.setAll(readConfig(hadoopConf, new StoragePath(cfg.propsFilePath), cfg.configs).getProps());
     }
 
     // set any configs that Deltastreamer has to override explicitly
@@ -435,10 +439,10 @@ public class HoodieStreamer implements Serializable {
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
     }
 
-    public static TypedProperties getProps(FileSystem fs, Config cfg) {
+    public static TypedProperties getProps(Configuration conf, Config cfg) {
       return cfg.propsFilePath.isEmpty()
           ? buildProperties(cfg.configs)
-          : readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps();
+          : readConfig(conf, new StoragePath(cfg.propsFilePath), cfg.configs).getProps();
     }
 
     @Override
@@ -626,7 +630,7 @@ public class HoodieStreamer implements Serializable {
 
     private final transient HoodieSparkEngineContext hoodieSparkContext;
 
-    private transient FileSystem fs;
+    private transient HoodieStorage storage;
 
     private transient Configuration hiveConf;
 
@@ -659,14 +663,15 @@ public class HoodieStreamer implements Serializable {
 
     private final Option<ConfigurationHotUpdateStrategy> configurationHotUpdateStrategyOpt;
 
-    public StreamSyncService(Config cfg, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
+    public StreamSyncService(Config cfg, HoodieSparkEngineContext hoodieSparkContext,
+                             HoodieStorage storage, Configuration conf,
                              Option<TypedProperties> properties, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
       super(HoodieIngestionConfig.newBuilder()
           .isContinuous(cfg.continuousMode)
           .withMinSyncInternalSeconds(cfg.minSyncIntervalSeconds).build());
       this.cfg = cfg;
       this.hoodieSparkContext = hoodieSparkContext;
-      this.fs = fs;
+      this.storage = storage;
       this.hiveConf = conf;
       this.sparkSession = SparkSession.builder().config(hoodieSparkContext.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();
@@ -676,9 +681,11 @@ public class HoodieStreamer implements Serializable {
       this.configurationHotUpdateStrategyOpt = StringUtils.isNullOrEmpty(cfg.configHotUpdateStrategyClass) ? Option.empty() :
           ConfigurationHotUpdateStrategyUtils.createConfigurationHotUpdateStrategy(cfg.configHotUpdateStrategyClass, cfg, properties.get());
 
-      if (fs.exists(new Path(cfg.targetBasePath))) {
+      if (this.storage.exists(new StoragePath(cfg.targetBasePath))) {
         try {
-          HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
+          HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
+              .setConf(new Configuration((Configuration) this.storage.getConf()))
+              .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
           tableType = meta.getTableType();
           // This will guarantee there is no surprise with table type
           checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)), "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.tableType);
@@ -712,18 +719,21 @@ public class HoodieStreamer implements Serializable {
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, hoodieSparkContext.jsc()),
           props, hoodieSparkContext.jsc(), cfg.transformerClassNames);
 
-      streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkContext, fs, conf, this::onInitializingWriteClient, new DefaultStreamContext(schemaProvider, sourceProfileSupplier));
+      streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkContext,
+          this.storage, conf, this::onInitializingWriteClient, new DefaultStreamContext(schemaProvider, sourceProfileSupplier));
 
     }
 
-    public StreamSyncService(HoodieStreamer.Config cfg, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf)
+    public StreamSyncService(HoodieStreamer.Config cfg,
+                             HoodieSparkEngineContext hoodieSparkContext, HoodieStorage storage,
+                             Configuration conf)
         throws IOException {
-      this(cfg, hoodieSparkContext, fs, conf, Option.empty(), Option.empty());
+      this(cfg, hoodieSparkContext, storage, conf, Option.empty(), Option.empty());
     }
 
-    public StreamSyncService(HoodieStreamer.Config cfg, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf, Option<TypedProperties> properties)
+    public StreamSyncService(HoodieStreamer.Config cfg, HoodieSparkEngineContext hoodieSparkContext, HoodieStorage storage, Configuration conf, Option<TypedProperties> properties)
             throws IOException {
-      this(cfg, hoodieSparkContext, fs, conf, properties, Option.empty());
+      this(cfg, hoodieSparkContext, storage, conf, properties, Option.empty());
     }
 
     private void initializeTableTypeAndBaseFileFormat() {
@@ -737,7 +747,8 @@ public class HoodieStreamer implements Serializable {
       if (streamSync != null) {
         streamSync.close();
       }
-      streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkContext, fs, hiveConf, this::onInitializingWriteClient, new DefaultStreamContext(schemaProvider, Option.empty()));
+      streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkContext,
+          storage, hiveConf, this::onInitializingWriteClient, new DefaultStreamContext(schemaProvider, Option.empty()));
     }
 
     @Override
