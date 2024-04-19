@@ -26,6 +26,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -40,7 +42,7 @@ public class HoodieCLI {
   public static Configuration conf;
   public static ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
   public static HoodieTimeGeneratorConfig timeGeneratorConfig;
-  public static FileSystem fs;
+  public static HoodieStorage storage;
   public static CLIState state = CLIState.INIT;
   public static String basePath;
   protected static HoodieTableMetaClient tableMetadata;
@@ -85,8 +87,10 @@ public class HoodieCLI {
   }
 
   public static void initFS(boolean force) throws IOException {
-    if (fs == null || force) {
-      fs = (tableMetadata != null) ? tableMetadata.getFs() : FileSystem.get(conf);
+    if (storage == null || force) {
+      storage = (tableMetadata != null)
+          ? tableMetadata.getStorage()
+          : HoodieStorageUtils.getStorage(FileSystem.get(conf));
     }
   }
 

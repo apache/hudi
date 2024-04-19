@@ -18,31 +18,29 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.LogFileIterator._
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
-import org.apache.hudi.common.util.{ConfigUtils, FileIOUtils, HoodieRecordUtils}
+import org.apache.hudi.common.util.{FileIOUtils, HoodieRecordUtils}
 import org.apache.hudi.config.HoodiePayloadConfig
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.CachingIterator
 
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
@@ -50,7 +48,6 @@ import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -60,7 +57,7 @@ import scala.collection.mutable
  * Delta Log files (represented as [[InternalRow]]s)
  */
 class LogFileIterator(logFiles: List[HoodieLogFile],
-                      partitionPath: Path,
+                      partitionPath: StoragePath,
                       tableSchema: HoodieTableSchema,
                       requiredStructTypeSchema: StructType,
                       requiredAvroSchema: Schema,
@@ -69,11 +66,11 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
   extends CachingIterator[InternalRow] with AvroDeserializerSupport {
 
   def this(logFiles: List[HoodieLogFile],
-            partitionPath: Path,
-            tableSchema: HoodieTableSchema,
-            requiredSchema: HoodieTableSchema,
-            tableState: HoodieTableState,
-            config: Configuration) {
+           partitionPath: StoragePath,
+           tableSchema: HoodieTableSchema,
+           requiredSchema: HoodieTableSchema,
+           tableState: HoodieTableState,
+           config: Configuration) {
     this(logFiles, partitionPath, tableSchema, requiredSchema.structTypeSchema,
       new Schema.Parser().parse(requiredSchema.avroSchemaStr), tableState, config)
   }
@@ -188,14 +185,14 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
  * performing any combination/merging of the records w/ the same primary keys (ie producing duplicates potentially)
  */
 class SkipMergeIterator(logFiles: List[HoodieLogFile],
-                                partitionPath: Path,
-                                baseFileIterator: Iterator[InternalRow],
-                                readerSchema: StructType,
-                                dataSchema: HoodieTableSchema,
-                                requiredStructTypeSchema: StructType,
-                                requiredAvroSchema: Schema,
-                                tableState: HoodieTableState,
-                                config: Configuration)
+                        partitionPath: StoragePath,
+                        baseFileIterator: Iterator[InternalRow],
+                        readerSchema: StructType,
+                        dataSchema: HoodieTableSchema,
+                        requiredStructTypeSchema: StructType,
+                        requiredAvroSchema: Schema,
+                        tableState: HoodieTableState,
+                        config: Configuration)
   extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredStructTypeSchema, requiredAvroSchema, tableState, config) {
 
   def this(split: HoodieMergeOnReadFileSplit, baseFileReader: BaseFileReader, dataSchema: HoodieTableSchema,
@@ -224,7 +221,7 @@ class SkipMergeIterator(logFiles: List[HoodieLogFile],
  * streams
  */
 class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
-                                partitionPath: Path,
+                                partitionPath: StoragePath,
                                 baseFileIterator: Iterator[InternalRow],
                                 readerSchema: StructType,
                                 dataSchema: HoodieTableSchema,
@@ -235,7 +232,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
   extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredStructTypeSchema, requiredAvroSchema, tableState, config) {
 
   def this(logFiles: List[HoodieLogFile],
-           partitionPath: Path,
+           partitionPath: StoragePath,
            baseFileIterator: Iterator[InternalRow],
            readerSchema: StructType,
            dataSchema: HoodieTableSchema,
@@ -337,14 +334,14 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
 object LogFileIterator extends SparkAdapterSupport {
 
   def scanLog(logFiles: List[HoodieLogFile],
-              partitionPath: Path,
+              partitionPath: StoragePath,
               logSchema: Schema,
               tableState: HoodieTableState,
               maxCompactionMemoryInBytes: Long,
               hadoopConf: Configuration,
               internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): mutable.Map[String, HoodieRecord[_]] = {
     val tablePath = tableState.tablePath
-    val fs = HadoopFSUtils.getFs(tablePath, hadoopConf)
+    val storage = HoodieStorageUtils.getStorage(tablePath, hadoopConf)
 
     if (HoodieTableMetadata.isMetadataTable(tablePath)) {
       val metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -364,7 +361,8 @@ object LogFileIterator extends SparkAdapterSupport {
 
       // NOTE: In case of Metadata Table partition path equates to partition name (since there's just one level
       //       of indirection among MT partitions)
-      val relativePartitionPath = getRelativePartitionPath(new Path(tablePath), partitionPath)
+      val relativePartitionPath = getRelativePartitionPath(
+        new StoragePath(tablePath), partitionPath)
 
       val logRecordReader =
         metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath, toJavaOption(Some(forceFullScan)))
@@ -377,16 +375,13 @@ object LogFileIterator extends SparkAdapterSupport {
       mutable.HashMap(recordList.asScala.map(r => (r.getRecordKey, r)): _*)
     } else {
       val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withStorage(storage)
         .withBasePath(tablePath)
         .withLogFilePaths(logFiles.map(logFile => logFile.getPath.toString).asJava)
         .withReaderSchema(logSchema)
         // NOTE: This part shall only be reached when at least one log is present in the file-group
         //       entailing that table has to have at least one commit
         .withLatestInstantTime(tableState.latestCommitTimestamp.get)
-        .withReadBlocksLazily(
-          ConfigUtils.getBooleanWithAltKeys(hadoopConf,
-            HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
         .withReverseReader(false)
         .withInternalSchema(internalSchema)
         .withBufferSize(
@@ -404,8 +399,8 @@ object LogFileIterator extends SparkAdapterSupport {
             HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
 
       if (logFiles.nonEmpty) {
-        logRecordScannerBuilder.withPartition(
-          getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))
+        logRecordScannerBuilder.withPartition(getRelativePartitionPath(
+          new StoragePath(tableState.tablePath), logFiles.head.getPath.getParent))
       }
 
       logRecordScannerBuilder.withRecordMerger(
@@ -426,7 +421,7 @@ object LogFileIterator extends SparkAdapterSupport {
     }
   }
 
-  def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
+  def getPartitionPath(split: HoodieMergeOnReadFileSplit): StoragePath = {
     // Determine partition path as an immediate parent folder of either
     //    - The base file
     //    - Some log file

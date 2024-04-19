@@ -28,13 +28,12 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 
@@ -47,6 +46,8 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -93,8 +94,9 @@ public class TestAsyncCompaction extends CompactionTestBase {
       hoodieTable.rollbackInflightCompaction(
           new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime));
       metaClient.reloadActiveTimeline();
-      pendingCompactionInstant = metaClient.getCommitsAndCompactionTimeline().filterPendingCompactionTimeline()
-          .getInstantsAsStream().findFirst().get();
+      pendingCompactionInstant =
+          metaClient.getCommitsAndCompactionTimeline().filterPendingCompactionTimeline()
+              .getInstantsAsStream().findFirst().get();
       assertEquals("compaction", pendingCompactionInstant.getAction());
       assertEquals(State.REQUESTED, pendingCompactionInstant.getState());
       assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp());
@@ -103,9 +105,10 @@ public class TestAsyncCompaction extends CompactionTestBase {
       // time this happens, the pending compaction instant file in Hoodie Meta path becomes an empty file (Note: Hoodie
       // reads compaction plan from aux path which is untouched). TO test for regression, we simply get file status
       // and look at the file size
-      FileStatus fstatus =
-          metaClient.getFs().getFileStatus(new Path(metaClient.getMetaPath(), pendingCompactionInstant.getFileName()));
-      assertTrue(fstatus.getLen() > 0);
+      StoragePathInfo pathInfo = metaClient.getStorage()
+          .getPathInfo(new StoragePath(metaClient.getMetaPath(),
+              pendingCompactionInstant.getFileName()));
+      assertTrue(pathInfo.getLength() > 0);
     }
   }
 
@@ -242,7 +245,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
 
   @Test
   public void testScheduleIngestionBeforePendingCompaction() throws Exception {
-    // Case: Failure case. Latest pending compaction instant time can be earlier than this instant time
+    // Case: Non-serial case. Latest pending compaction instant time can be earlier than this instant time
     HoodieWriteConfig cfg = getConfig(false);
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     SparkRDDReadClient readClient = getHoodieReadClient(cfg.getBasePath());
@@ -250,7 +253,6 @@ public class TestAsyncCompaction extends CompactionTestBase {
     String firstInstantTime = "001";
     String secondInstantTime = "004";
     String failedInstantTime = "005";
-    String compactionInstantTime = client.createNewInstantTime();
     int numRecs = 2000;
 
     final List<HoodieRecord> initialRecords = dataGen.generateInserts(firstInstantTime, numRecs);
@@ -258,6 +260,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
         new ArrayList<>());
 
     // Schedule compaction but do not run them
+    String compactionInstantTime = client.createNewInstantTime();
     scheduleCompaction(compactionInstantTime, client, cfg);
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
     HoodieInstant pendingCompactionInstant =
@@ -265,8 +268,8 @@ public class TestAsyncCompaction extends CompactionTestBase {
     assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(), "Pending Compaction instant has expected instant time");
 
     assertDoesNotThrow(() -> {
-      runNextDeltaCommits(client, readClient, Arrays.asList(failedInstantTime), records, cfg, false,
-          Arrays.asList(compactionInstantTime));
+      runNextDeltaCommits(client, readClient, Collections.singletonList(failedInstantTime), records, cfg, false,
+          Collections.singletonList(compactionInstantTime));
     }, "Latest pending compaction instant time can be earlier than this instant time");
   }
 
@@ -319,22 +322,15 @@ public class TestAsyncCompaction extends CompactionTestBase {
     runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
         new ArrayList<>());
 
-    assertDoesNotThrow(() -> {
-      // Schedule compaction but do not run them
-      scheduleCompaction(compactionInstantTime, client, cfg);
-    }, "Compaction Instant can be scheduled with older timestamp");
+    // Schedule compaction but do not run them
+    assertNull(tryScheduleCompaction(compactionInstantTime, client, cfg), "Compaction Instant can be scheduled with older timestamp");
 
     // Schedule with timestamp same as that of committed instant
-    assertDoesNotThrow(() -> {
-      // Schedule compaction but do not run them
-      client.scheduleCompactionAtInstant(secondInstantTime, Option.empty());
-    }, "Compaction Instant to be scheduled can have same timestamp as committed instant");
+    assertNull(tryScheduleCompaction(secondInstantTime, client, cfg), "Compaction Instant to be scheduled can have same timestamp as committed instant");
 
-    final String compactionInstantTime2 = "006";
-    assertDoesNotThrow(() -> {
-      // Schedule compaction but do not run them
-      client.scheduleCompactionAtInstant(compactionInstantTime2, Option.empty());
-    }, "Compaction Instant can be scheduled with greater timestamp");
+    final String compactionInstantTime2 = client.createNewInstantTime();
+    // Schedule compaction but do not run them
+    assertNotNull(tryScheduleCompaction(compactionInstantTime2, client, cfg), "Compaction Instant can be scheduled with greater timestamp");
   }
 
   @Test

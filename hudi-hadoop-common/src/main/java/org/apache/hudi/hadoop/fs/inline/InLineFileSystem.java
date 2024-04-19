@@ -19,6 +19,8 @@
 
 package org.apache.hudi.hadoop.fs.inline;
 
+import org.apache.hudi.storage.StoragePath;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -68,7 +70,8 @@ public class InLineFileSystem extends FileSystem {
     Path outerPath = InLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FSDataInputStream outerStream = outerFs.open(outerPath, bufferSize);
-    return new InLineFsDataInputStream(InLineFSUtils.startOffset(inlinePath), outerStream, InLineFSUtils.length(inlinePath));
+    StoragePath inlineStoragePath = new StoragePath(inlinePath.toUri());
+    return new InLineFsDataInputStream(InLineFSUtils.startOffset(inlineStoragePath), outerStream, InLineFSUtils.length(inlineStoragePath));
   }
 
   @Override
@@ -85,7 +88,7 @@ public class InLineFileSystem extends FileSystem {
     Path outerPath = InLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FileStatus status = outerFs.getFileStatus(outerPath);
-    FileStatus toReturn = new FileStatus(InLineFSUtils.length(inlinePath), status.isDirectory(), status.getReplication(), status.getBlockSize(),
+    FileStatus toReturn = new FileStatus(InLineFSUtils.length(new StoragePath(inlinePath.toUri())), status.isDirectory(), status.getReplication(), status.getBlockSize(),
         status.getModificationTime(), status.getAccessTime(), status.getPermission(), status.getOwner(),
         status.getGroup(), inlinePath);
     return toReturn;

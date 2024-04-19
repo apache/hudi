@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -29,6 +30,7 @@ public abstract class HoodieIOHandle<T, I, K, O> {
 
   protected final String instantTime;
   protected final HoodieWriteConfig config;
+  protected final HoodieStorage storage;
   protected final FileSystem fs;
   protected final HoodieTable<T, I, K, O> hoodieTable;
 
@@ -36,8 +38,9 @@ public abstract class HoodieIOHandle<T, I, K, O> {
     this.instantTime = instantTime.orElse(StringUtils.EMPTY_STRING);
     this.config = config;
     this.hoodieTable = hoodieTable;
-    this.fs = getFileSystem();
+    this.storage = getStorage();
+    this.fs = (FileSystem) storage.getFileSystem();
   }
 
-  public abstract FileSystem getFileSystem();
+  public abstract HoodieStorage getStorage();
 }

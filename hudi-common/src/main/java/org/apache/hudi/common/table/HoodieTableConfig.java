@@ -24,12 +24,12 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -43,10 +43,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -167,14 +167,14 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .defaultValue(DefaultHoodieRecordPayload.class.getName())
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
   public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
       .key("hoodie.compaction.payload.type")
-      .defaultValue(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())
+      .defaultValue(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())
       .sinceVersion("1.0.0")
       .withDocumentation(RecordPayloadType.class);
 
@@ -300,12 +300,12 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
-  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String recordMergerStrategyId) {
+  public HoodieTableConfig(HoodieStorage storage, String metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
-    Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
+    StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
-      this.props = fetchConfigs(fs, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
+      this.props = fetchConfigs(storage, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
       boolean needStore = false;
       if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
           && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
@@ -324,7 +324,7 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       if (needStore) {
         // FIXME(vc): wonder if this can be removed. Need to look into history.
-        try (OutputStream outputStream = fs.create(propertyPath)) {
+        try (OutputStream outputStream = storage.create(propertyPath)) {
           storeProperties(props, outputStream);
         }
       }
@@ -372,51 +372,51 @@ public class HoodieTableConfig extends HoodieConfig {
     super();
   }
 
-  public static void recover(FileSystem fs, Path metadataFolder) throws IOException {
-    Path cfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
-    Path backupCfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
-    recoverIfNeeded(fs, cfgPath, backupCfgPath);
+  public static void recover(HoodieStorage storage, StoragePath metadataFolder) throws IOException {
+    StoragePath cfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
+    StoragePath backupCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
+    recoverIfNeeded(storage, cfgPath, backupCfgPath);
   }
 
-  private static void modify(FileSystem fs, Path metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
-    Path cfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
-    Path backupCfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
+  private static void modify(HoodieStorage storage, StoragePath metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
+    StoragePath cfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
+    StoragePath backupCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
     try {
       // 0. do any recovery from prior attempts.
-      recoverIfNeeded(fs, cfgPath, backupCfgPath);
+      recoverIfNeeded(storage, cfgPath, backupCfgPath);
 
       // 1. Read the existing config
-      TypedProperties props = fetchConfigs(fs, metadataFolder.toString(), HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
+      TypedProperties props = fetchConfigs(storage, metadataFolder.toString(), HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
 
       // 2. backup the existing properties.
-      try (OutputStream out = fs.create(backupCfgPath, false)) {
+      try (OutputStream out = storage.create(backupCfgPath, false)) {
         storeProperties(props, out);
       }
 
       // 3. delete the properties file, reads will go to the backup, until we are done.
-      fs.delete(cfgPath, false);
+      storage.deleteFile(cfgPath);
 
       // 4. Upsert and save back.
       String checksum;
-      try (OutputStream out = fs.create(cfgPath, true)) {
+      try (OutputStream out = storage.create(cfgPath, true)) {
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
       }
 
       // 4. verify and remove backup.
-      try (InputStream in = fs.open(cfgPath)) {
+      try (InputStream in = storage.open(cfgPath)) {
         props.clear();
         props.load(in);
         if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
           // delete the properties file and throw exception indicating update failure
           // subsequent writes will recover and update, reads will go to the backup until then
-          fs.delete(cfgPath, false);
+          storage.deleteFile(cfgPath);
           throw new HoodieIOException("Checksum property missing or does not match.");
         }
       }
 
       // 5. delete the backup properties file
-      fs.delete(backupCfgPath, false);
+      storage.deleteFile(backupCfgPath);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
     }
@@ -426,27 +426,28 @@ public class HoodieTableConfig extends HoodieConfig {
    * Upserts the table config with the set of properties passed in. We implement a fail-safe backup protocol
    * here for safely updating with recovery and also ensuring the table config continues to be readable.
    */
-  public static void update(FileSystem fs, Path metadataFolder, Properties updatedProps) {
-    modify(fs, metadataFolder, updatedProps, ConfigUtils::upsertProperties);
+  public static void update(HoodieStorage storage, StoragePath metadataFolder,
+                            Properties updatedProps) {
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties);
   }
 
-  public static void delete(FileSystem fs, Path metadataFolder, Set<String> deletedProps) {
+  public static void delete(HoodieStorage storage, StoragePath metadataFolder, Set<String> deletedProps) {
     Properties props = new Properties();
     deletedProps.forEach(p -> props.setProperty(p, ""));
-    modify(fs, metadataFolder, props, ConfigUtils::deleteProperties);
+    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties);
   }
 
   /**
    * Initialize the hoodie meta directory and any necessary files inside the meta (including the hoodie.properties).
    */
-  public static void create(FileSystem fs, Path metadataFolder, Properties properties)
+  public static void create(HoodieStorage storage, StoragePath metadataFolder, Properties properties)
       throws IOException {
-    if (!fs.exists(metadataFolder)) {
-      fs.mkdirs(metadataFolder);
+    if (!storage.exists(metadataFolder)) {
+      storage.createDirectory(metadataFolder);
     }
     HoodieConfig hoodieConfig = new HoodieConfig(properties);
-    Path propertyPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
-    try (OutputStream outputStream = fs.create(propertyPath)) {
+    StoragePath propertyPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
+    try (OutputStream outputStream = storage.create(propertyPath)) {
       if (!hoodieConfig.contains(NAME)) {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
       }
@@ -737,11 +738,13 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Checks if metadata table is enabled and the specified partition has been initialized.
    *
-   * @param partition The partition to check
+   * @param metadataPartitionType The metadata table partition type to check
    * @returns true if the specific partition has been initialized, else returns false.
    */
-  public boolean isMetadataPartitionAvailable(MetadataPartitionType partition) {
-    return getMetadataPartitions().contains(partition.getPartitionPath());
+  public boolean isMetadataPartitionAvailable(MetadataPartitionType metadataPartitionType) {
+    /*return getMetadataPartitions().stream().anyMatch(metadataPartition ->
+        metadataPartition.equals(metadataPartitionType.getPartitionPath()) || (FUNCTIONAL_INDEX.equals(metadataPartitionType) && metadataPartition.startsWith(FUNCTIONAL_INDEX.getPartitionPath())));*/
+    return getMetadataPartitions().contains(metadataPartitionType.getPartitionPath());
   }
 
   /**
@@ -769,7 +772,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
-    update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
+    update(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()), getProps());
     LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePathV2(), partitionPath, enabled ? "enabled" : "disabled"));
   }
 
@@ -787,7 +790,7 @@ public class HoodieTableConfig extends HoodieConfig {
     });
 
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
-    update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
+    update(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()), getProps());
     LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionPaths));
   }
 

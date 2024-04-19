@@ -17,28 +17,27 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieStorageConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecord}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.table.read.HoodieFileGroupReader
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecord}
+import org.apache.hudi.common.table.read.HoodieFileGroupReader
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.FileIOUtils
-import org.apache.hudi.common.util.collection.ExternalSpillableMap
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat.{ROW_INDEX, ROW_INDEX_TEMPORARY_COLUMN_NAME, getAppliedFilters, getAppliedRequiredSchema, getLogFilesFromSlice, getRecordKeyRelatedFilters, makeCloseableFileGroupMappingRecordIterator}
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat.{ROW_INDEX_TEMPORARY_COLUMN_NAME, getAppliedFilters, getAppliedRequiredSchema, getRecordKeyRelatedFilters, makeCloseableFileGroupMappingRecordIterator}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, Metadata, MetadataBuilder, StringType, StructField, StructType}
@@ -139,7 +138,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
             case Some(fileSlice) if !isCount =>
               if (requiredSchema.isEmpty && !fileSlice.getLogFiles.findAny().isPresent) {
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
-                baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen))
+                baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getStoragePath, 0, hoodieBaseFile.getFileLen))
               } else {
                 val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(
                   readerMaps)

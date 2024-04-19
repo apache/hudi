@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -68,8 +69,8 @@ public class ManifestFileWriter {
       } else {
         LOG.info("Writing base file names to manifest file: " + baseFiles.size());
       }
-      final Path manifestFilePath = getManifestFilePath(useAbsolutePath);
-      try (OutputStream outputStream = metaClient.getFs().create(manifestFilePath, true);
+      final StoragePath manifestFilePath = getManifestFilePath(useAbsolutePath);
+      try (OutputStream outputStream = metaClient.getStorage().create(manifestFilePath, true);
            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8))) {
         for (String f : baseFiles) {
           writer.write(f);
@@ -99,16 +100,16 @@ public class ManifestFileWriter {
     }
   }
 
-  public Path getManifestFolder(boolean useAbsolutePath) {
-    return new Path(metaClient.getMetaPath(), useAbsolutePath ? ABSOLUTE_PATH_MANIFEST_FOLDER_NAME : MANIFEST_FOLDER_NAME);
+  public StoragePath getManifestFolder(boolean useAbsolutePath) {
+    return new StoragePath(metaClient.getMetaPath(), useAbsolutePath ? ABSOLUTE_PATH_MANIFEST_FOLDER_NAME : MANIFEST_FOLDER_NAME);
   }
 
-  public Path getManifestFilePath(boolean useAbsolutePath) {
-    return new Path(getManifestFolder(useAbsolutePath), MANIFEST_FILE_NAME);
+  public StoragePath getManifestFilePath(boolean useAbsolutePath) {
+    return new StoragePath(getManifestFolder(useAbsolutePath), MANIFEST_FILE_NAME);
   }
 
   public String getManifestSourceUri(boolean useAbsolutePath) {
-    return new Path(getManifestFolder(useAbsolutePath), "*").toUri().toString();
+    return new Path(getManifestFolder(useAbsolutePath).toString(), "*").toUri().toString();
   }
 
   public static Builder builder() {

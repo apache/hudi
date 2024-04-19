@@ -26,15 +26,14 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -86,15 +85,12 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(HadoopFSUtils.getFs(split.getPath().toString(), jobConf))
+        .withStorage(HoodieStorageUtils.getStorage(split.getPath().toString(), jobConf))
         .withBasePath(split.getBasePath())
         .withLogFilePaths(split.getDeltaLogPaths())
         .withReaderSchema(getLogScannerReaderSchema())
         .withLatestInstantTime(split.getMaxCommitTime())
         .withMaxMemorySizeInBytes(HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf))
-        .withReadBlocksLazily(
-            ConfigUtils.getBooleanWithAltKeys(jobConf,
-                HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
         .withReverseReader(false)
         .withBufferSize(jobConf.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(),
             HoodieMemoryConfig.DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE))

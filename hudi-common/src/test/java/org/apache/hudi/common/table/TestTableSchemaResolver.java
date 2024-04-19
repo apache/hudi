@@ -19,13 +19,34 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.avro.AvroSchemaConverter;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.apache.hudi.common.functional.TestHoodieLogFormat.getDataBlock;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -34,6 +55,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests {@link TableSchemaResolver}.
  */
 public class TestTableSchemaResolver {
+
+  @TempDir
+  public java.nio.file.Path tempDir;
 
   @Test
   public void testRecreateSchemaWhenDropPartitionColumns() {
@@ -64,5 +88,38 @@ public class TestTableSchemaResolver {
     } catch (HoodieSchemaException e) {
       assertTrue(e.getMessage().contains("Partial partition fields are still in the schema"));
     }
+  }
+
+  @Test
+  public void testReadSchemaFromLogFile() throws IOException, URISyntaxException, InterruptedException {
+    String testDir = initTestDir("read_schema_from_log_file");
+    StoragePath partitionPath = new StoragePath(testDir, "partition1");
+    Schema expectedSchema = getSimpleSchema();
+    StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema);
+    assertEquals(
+        new AvroSchemaConverter().convert(expectedSchema),
+        TableSchemaResolver.readSchemaFromLogFile(
+            HoodieStorageUtils.getStorage(logFilePath, new Configuration()), logFilePath));
+  }
+
+  private String initTestDir(String folderName) throws IOException {
+    java.nio.file.Path basePath = tempDir.resolve(folderName);
+    java.nio.file.Files.createDirectories(basePath);
+    return basePath.toString();
+  }
+
+  private StoragePath writeLogFile(StoragePath partitionPath, Schema schema) throws IOException, URISyntaxException, InterruptedException {
+    HoodieStorage storage = HoodieStorageUtils.getStorage(partitionPath, new Configuration());
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withFileId("test-fileid1").withDeltaCommit("100").withStorage(storage).build();
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+    HoodieDataBlock dataBlock = getDataBlock(AVRO_DATA_BLOCK, records, header);
+    writer.appendBlock(dataBlock);
+    writer.close();
+    return writer.getLogFile().getPath();
   }
 }

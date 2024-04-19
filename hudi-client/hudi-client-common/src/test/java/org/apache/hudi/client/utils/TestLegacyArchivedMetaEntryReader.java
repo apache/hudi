@@ -44,7 +44,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
@@ -102,9 +101,10 @@ public class TestLegacyArchivedMetaEntryReader {
 
   private HoodieLogFormat.Writer openWriter(HoodieTableMetaClient metaClient) {
     try {
-      return HoodieLogFormat.newWriterBuilder().onParentPath(new Path(metaClient.getArchivePath()))
+      return HoodieLogFormat.newWriterBuilder()
+          .onParentPath(new StoragePath(metaClient.getArchivePath()))
           .withFileId("commits").withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
-          .withFs(metaClient.getFs()).withDeltaCommit("").build();
+          .withStorage(metaClient.getStorage()).withDeltaCommit("").build();
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize HoodieLogFormat writer", e);
     }

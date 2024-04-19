@@ -17,10 +17,11 @@
  * under the License.
  */
 
-package org.apache.hudi.index.functional;
+package org.apache.hudi;
 
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.index.functional.HoodieFunctionalIndex;
 
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.functions;
@@ -44,69 +45,69 @@ public class HoodieSparkFunctionalIndex implements HoodieFunctionalIndex<Column,
    * NOTE: This is not an exhaustive list of spark-sql functions. Only the common date/timestamp and string functions have been added.
    * Add more functions as needed. However, keep the key should match the exact spark-sql function name in lowercase.
    */
-  private static final Map<String, SparkFunction> SPARK_FUNCTION_MAP = CollectionUtils.createImmutableMap(
+  public static final Map<String, SparkFunction> SPARK_FUNCTION_MAP = CollectionUtils.createImmutableMap(
       // Date/Timestamp functions
-      Pair.of("date_format", (columns, options) -> {
+      Pair.of(SPARK_DATE_FORMAT, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("DATE_FORMAT requires 1 column");
         }
         return functions.date_format(columns.get(0), options.get("format"));
       }),
-      Pair.of("day", (columns, options) -> {
+      Pair.of(SPARK_DAY, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("DAY requires 1 column");
         }
         return functions.dayofmonth(columns.get(0));
       }),
-      Pair.of("year", (columns, options) -> {
+      Pair.of(SPARK_YEAR, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("YEAR requires 1 column");
         }
         return functions.year(columns.get(0));
       }),
-      Pair.of("month", (columns, options) -> {
+      Pair.of(SPARK_MONTH, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("MONTH requires 1 column");
         }
         return functions.month(columns.get(0));
       }),
-      Pair.of("hour", (columns, options) -> {
+      Pair.of(SPARK_HOUR, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("HOUR requires 1 column");
         }
         return functions.hour(columns.get(0));
       }),
-      Pair.of("from_unixtime", (columns, options) -> {
+      Pair.of(SPARK_FROM_UNIXTIME, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("FROM_UNIXTIME requires 1 column");
         }
         return functions.from_unixtime(columns.get(0), options.get("format"));
       }),
-      Pair.of("unix_timestamp", (columns, options) -> {
+      Pair.of(SPARK_UNIX_TIMESTAMP, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("UNIX_TIMESTAMP requires 1 column");
         }
         return functions.unix_timestamp(columns.get(0), options.get("format"));
       }),
-      Pair.of("to_date", (columns, options) -> {
+      Pair.of(SPARK_TO_DATE, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("TO_DATE requires 1 column");
         }
         return functions.to_date(columns.get(0));
       }),
-      Pair.of("to_timestamp", (columns, options) -> {
+      Pair.of(SPARK_TO_TIMESTAMP, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("TO_TIMESTAMP requires 1 column");
         }
         return functions.to_timestamp(columns.get(0));
       }),
-      Pair.of("date_add", (columns, options) -> {
+      Pair.of(SPARK_DATE_ADD, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("DATE_ADD requires 1 column");
         }
         return functions.date_add(columns.get(0), Integer.parseInt(options.get("days")));
       }),
-      Pair.of("date_sub", (columns, options) -> {
+      Pair.of(SPARK_DATE_SUB, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("DATE_SUB requires 1 column");
         }
@@ -114,73 +115,73 @@ public class HoodieSparkFunctionalIndex implements HoodieFunctionalIndex<Column,
       }),
 
       // String functions
-      Pair.of("concat", (columns, options) -> {
+      Pair.of(SPARK_CONCAT, (columns, options) -> {
         if (columns.size() < 2) {
           throw new IllegalArgumentException("CONCAT requires at least 2 columns");
         }
         return functions.concat(columns.toArray(new Column[0]));
       }),
-      Pair.of("substring", (columns, options) -> {
+      Pair.of(SPARK_SUBSTRING, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("SUBSTRING requires 1 column");
         }
         return functions.substring(columns.get(0), Integer.parseInt(options.get("pos")), Integer.parseInt(options.get("len")));
       }),
-      Pair.of("lower", (columns, options) -> {
+      Pair.of(SPARK_LOWER, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("LOWER requires 1 column");
         }
         return functions.lower(columns.get(0));
       }),
-      Pair.of("upper", (columns, options) -> {
+      Pair.of(SPARK_UPPER, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("UPPER requires 1 column");
         }
         return functions.upper(columns.get(0));
       }),
-      Pair.of("trim", (columns, options) -> {
+      Pair.of(SPARK_TRIM, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("TRIM requires 1 column");
         }
         return functions.trim(columns.get(0));
       }),
-      Pair.of("ltrim", (columns, options) -> {
+      Pair.of(SPARK_LTRIM, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("LTRIM requires 1 column");
         }
         return functions.ltrim(columns.get(0));
       }),
-      Pair.of("rtrim", (columns, options) -> {
+      Pair.of(SPARK_RTRIM, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("RTRIM requires 1 column");
         }
         return functions.rtrim(columns.get(0));
       }),
-      Pair.of("length", (columns, options) -> {
+      Pair.of(SPARK_LENGTH, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("LENGTH requires 1 column");
         }
         return functions.length(columns.get(0));
       }),
-      Pair.of("regexp_replace", (columns, options) -> {
+      Pair.of(SPARK_REGEXP_REPLACE, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("REGEXP_REPLACE requires 1 column");
         }
         return functions.regexp_replace(columns.get(0), options.get("pattern"), options.get("replacement"));
       }),
-      Pair.of("regexp_extract", (columns, options) -> {
+      Pair.of(SPARK_REGEXP_EXTRACT, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("REGEXP_EXTRACT requires 1 column");
         }
         return functions.regexp_extract(columns.get(0), options.get("pattern"), Integer.parseInt(options.get("idx")));
       }),
-      Pair.of("split", (columns, options) -> {
+      Pair.of(SPARK_SPLIT, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("SPLIT requires 1 column");
         }
         return functions.split(columns.get(0), options.get("pattern"));
       }),
-      Pair.of("identity", (columns, options) -> {
+      Pair.of(SPARK_IDENTITY, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("IDENTITY requires 1 column");
         }

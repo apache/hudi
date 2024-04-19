@@ -236,11 +236,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       commit(table, commitActionType, instantTime, metadata, stats, writeStatuses);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
-      releaseResources(instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
       this.txnManager.endTransaction(Option.of(inflightInstant));
+      releaseResources(instantTime);
     }
 
     // trigger clean and archival.
@@ -345,30 +345,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
     HoodieTable table = createTable(config, hadoopConf);
     resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
-  }
-
-  /**
-   * Write the HoodieCommitMetadata to metadata table if available.
-   *
-   * @param table         {@link HoodieTable} of interest.
-   * @param instantTime   instant time of the commit.
-   * @param metadata      instance of {@link HoodieCommitMetadata}.
-   * @param writeStatuses WriteStatuses for the completed action.
-   */
-  protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
-    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
-    if (metadataWriterOpt.isPresent()) {
-      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-        metadataWriter.updateFromWriteStatuses(metadata, writeStatuses, instantTime);
-      } catch (Exception e) {
-        if (e instanceof HoodieException) {
-          throw (HoodieException) e;
-        } else {
-          throw new HoodieException("Failed to update metadata", e);
-        }
-      }
-    }
   }
 
   /**

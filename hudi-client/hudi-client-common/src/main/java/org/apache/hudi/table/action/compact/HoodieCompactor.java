@@ -43,13 +43,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -161,7 +161,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
                                    CompactionExecutionHelper executionHelper) throws IOException {
-    FileSystem fs = metaClient.getFs();
+    HoodieStorage storage = metaClient.getStorage();
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
@@ -185,11 +185,12 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
 
-    List<String> logFiles = operation.getDeltaFileNames().stream().map(
-        p -> new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
+    List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
+            new StoragePath(FSUtils.getPartitionPath(
+                metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withStorage(storage)
         .withBasePath(metaClient.getBasePath())
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
@@ -197,7 +198,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withInstantRange(instantRange)
         .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-        .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
         .withReverseReader(config.getCompactionReverseLogReadEnabled())
         .withBufferSize(config.getMaxDFSStreamBufferSize())
         .withSpillableMapBasePath(config.getSpillableMapBasePath())

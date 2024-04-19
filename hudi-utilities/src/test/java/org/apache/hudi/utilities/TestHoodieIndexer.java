@@ -207,7 +207,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
         context(), metadataConfig, metaClient.getBasePathV2().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
-    String mdtCommitTime = HoodieTableMetadataUtil.createAsyncIndexerTimestamp(indexUptoInstantTime);
+    String mdtCommitTime = indexingInstant.getTimestamp();
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
 
     // Reverts both instants to inflight state, to simulate inflight indexing instants
@@ -221,7 +221,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metadataMetaClient = reload(metadataMetaClient);
     // Simulate heartbeats for ongoing write from async indexer in the metadata table
     HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
-        metadataMetaClient.getFs(), metadataMetaClient.getBasePathV2().toString(),
+        metadataMetaClient.getStorage(), metadataMetaClient.getBasePathV2().toString(),
         CLIENT_HEARTBEAT_INTERVAL_IN_MS.defaultValue().longValue(),
         CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.defaultValue());
     heartbeatClient.start(mdtCommitTime);

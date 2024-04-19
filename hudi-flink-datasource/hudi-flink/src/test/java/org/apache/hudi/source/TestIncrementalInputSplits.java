@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -45,7 +46,6 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
-import org.apache.hadoop.fs.FileStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -67,6 +67,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -142,18 +143,20 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testFilterInstantsByCondition() throws IOException {
-    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+  void testFilterInstantsByConditionForMOR() throws IOException {
     metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieActiveTimeline timelineMOR = metaClient.getActiveTimeline();
 
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    // commit1: delta commit
     HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "1");
+    timelineMOR.createCompleteInstant(commit1);
+    // commit2: delta commit
     HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
+    // commit3: clustering
+    timelineMOR.createCompleteInstant(commit2);
     HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "3");
-    timeline.createCompleteInstant(commit1);
-    timeline.createCompleteInstant(commit2);
-    timeline.createNewInstant(commit3);
-    commit3 = timeline.transitionReplaceRequestedToInflight(commit3, Option.empty());
+    timelineMOR.createNewInstant(commit3);
+    commit3 = timelineMOR.transitionReplaceRequestedToInflight(commit3, Option.empty());
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(
             new ArrayList<>(),
             new HashMap<>(),
@@ -161,15 +164,139 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             WriteOperationType.CLUSTER,
             "",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
-    timeline.transitionReplaceInflightToComplete(true,
+    timelineMOR.transitionReplaceInflightToComplete(true,
         HoodieTimeline.getReplaceCommitInflightInstant(commit3.getTimestamp()),
         serializeCommitMetadata(commitMetadata));
-    timeline = timeline.reload();
+    // commit4: insert overwrite
+    HoodieInstant commit4 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4");
+    timelineMOR.createNewInstant(commit4);
+    commit4 = timelineMOR.transitionReplaceRequestedToInflight(commit4, Option.empty());
+    commitMetadata = CommitUtils.buildMetadata(
+            new ArrayList<>(),
+            new HashMap<>(),
+            Option.empty(),
+            WriteOperationType.INSERT_OVERWRITE,
+            "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION);
+    timelineMOR.transitionReplaceInflightToComplete(true,
+            HoodieTimeline.getReplaceCommitInflightInstant(commit4.getTimestamp()),
+            serializeCommitMetadata(commitMetadata));
+    // commit5: insert overwrite table
+    HoodieInstant commit5 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "5");
+    timelineMOR.createNewInstant(commit5);
+    commit5 = timelineMOR.transitionReplaceRequestedToInflight(commit5, Option.empty());
+    commitMetadata = CommitUtils.buildMetadata(
+            new ArrayList<>(),
+            new HashMap<>(),
+            Option.empty(),
+            WriteOperationType.INSERT_OVERWRITE_TABLE,
+            "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION);
+    timelineMOR.transitionReplaceInflightToComplete(true,
+            HoodieTimeline.getReplaceCommitInflightInstant(commit5.getTimestamp()),
+            serializeCommitMetadata(commitMetadata));
+    // commit6:  compaction
+    HoodieInstant commit6 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "6");
+    timelineMOR.createNewInstant(commit6);
+    commit6 = timelineMOR.transitionCompactionRequestedToInflight(commit6);
+    commit6 = timelineMOR.transitionCompactionInflightToComplete(false, commit6, Option.empty());
+    timelineMOR.createCompleteInstant(commit6);
+    timelineMOR = timelineMOR.reload();
 
-    conf.set(FlinkOptions.READ_END_COMMIT, "3");
-    HoodieTimeline resTimeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timeline, false, false);
-    // will not filter cluster commit by default
+    // will not filter commits by default
+    HoodieTimeline resTimeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timelineMOR, false, false, false);
+    assertEquals(6, resTimeline.getInstants().size());
+
+    // filter cluster commits
+    resTimeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timelineMOR, false, true, false);
+    assertEquals(5, resTimeline.getInstants().size());
+    assertFalse(resTimeline.containsInstant(commit3));
+
+    // filter compaction commits for mor table
+    resTimeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timelineMOR, true, false, false);
+    assertFalse(resTimeline.containsInstant(commit6));
+
+    // filter insert overwriter commits
+    resTimeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timelineMOR, false, false, true);
+    assertEquals(4, resTimeline.getInstants().size());
+    assertFalse(resTimeline.containsInstant(commit4));
+    assertFalse(resTimeline.containsInstant(commit5));
+  }
+
+  @Test
+  void testFilterInstantsByConditionForCOW() throws IOException {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieActiveTimeline timelineCOW = metaClient.getActiveTimeline();
+
+    // commit1: commit
+    HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
+    timelineCOW.createCompleteInstant(commit1);
+    // commit2: commit
+    HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "2");
+    // commit3: clustering
+    timelineCOW.createCompleteInstant(commit2);
+    HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "3");
+    timelineCOW.createNewInstant(commit3);
+    commit3 = timelineCOW.transitionReplaceRequestedToInflight(commit3, Option.empty());
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(
+            new ArrayList<>(),
+            new HashMap<>(),
+            Option.empty(),
+            WriteOperationType.CLUSTER,
+            "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION);
+    timelineCOW.transitionReplaceInflightToComplete(true,
+            HoodieTimeline.getReplaceCommitInflightInstant(commit3.getTimestamp()),
+            serializeCommitMetadata(commitMetadata));
+    // commit4: insert overwrite
+    HoodieInstant commit4 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4");
+    timelineCOW.createNewInstant(commit4);
+    commit4 = timelineCOW.transitionReplaceRequestedToInflight(commit4, Option.empty());
+    commitMetadata = CommitUtils.buildMetadata(
+            new ArrayList<>(),
+            new HashMap<>(),
+            Option.empty(),
+            WriteOperationType.INSERT_OVERWRITE,
+            "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION);
+    timelineCOW.transitionReplaceInflightToComplete(true,
+            HoodieTimeline.getReplaceCommitInflightInstant(commit4.getTimestamp()),
+            serializeCommitMetadata(commitMetadata));
+    // commit5: insert overwrite table
+    HoodieInstant commit5 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "5");
+    timelineCOW.createNewInstant(commit5);
+    commit5 = timelineCOW.transitionReplaceRequestedToInflight(commit5, Option.empty());
+    commitMetadata = CommitUtils.buildMetadata(
+            new ArrayList<>(),
+            new HashMap<>(),
+            Option.empty(),
+            WriteOperationType.INSERT_OVERWRITE_TABLE,
+            "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION);
+    timelineCOW.transitionReplaceInflightToComplete(true,
+            HoodieTimeline.getReplaceCommitInflightInstant(commit5.getTimestamp()),
+            serializeCommitMetadata(commitMetadata));
+
+    timelineCOW = timelineCOW.reload();
+
+    // will not filter commits by default
+    HoodieTimeline resTimeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timelineCOW, false, false, false);
+    assertEquals(5, resTimeline.getInstants().size());
+
+    // filter cluster commits
+    resTimeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timelineCOW, false, true, false);
+    assertEquals(4, resTimeline.getInstants().size());
+    assertFalse(resTimeline.containsInstant(commit3));
+
+    // cow table skip-compact does not take effect (because if it take effect will affect normal commits)
+    resTimeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timelineCOW, true, false, false);
+    assertEquals(5, resTimeline.getInstants().size());
+
+    // filter insert overwriter commits
+    resTimeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timelineCOW, false, false, true);
     assertEquals(3, resTimeline.getInstants().size());
+    assertFalse(resTimeline.containsInstant(commit4));
+    assertFalse(resTimeline.containsInstant(commit5));
   }
 
   @Test
@@ -273,16 +400,19 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    HoodieTimeline commitsTimeline = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitsTimeline =
+        metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> instants = commitsTimeline.getInstants();
-    String lastInstant  = commitsTimeline.lastInstant().map(HoodieInstant::getTimestamp).get();
+    String lastInstant = commitsTimeline.lastInstant().map(HoodieInstant::getTimestamp).get();
     List<HoodieCommitMetadata> metadataList = instants.stream()
-            .map(instant -> WriteProfiles.getCommitMetadata(tableName, new Path(basePath), instant, commitsTimeline)).collect(Collectors.toList());
-    FileStatus[] fileStatuses = WriteProfiles.getFilesFromMetadata(new Path(basePath), metaClient.getHadoopConf(), metadataList, metaClient.getTableType());
+        .map(instant -> WriteProfiles.getCommitMetadata(tableName, new Path(basePath), instant,
+            commitsTimeline)).collect(Collectors.toList());
+    List<StoragePathInfo> pathInfoList = WriteProfiles.getFilesFromMetadata(
+        new Path(basePath), metaClient.getHadoopConf(), metadataList, metaClient.getTableType());
     HoodieTableFileSystemView fileSystemView =
-            new HoodieTableFileSystemView(metaClient, commitsTimeline, fileStatuses);
+        new HoodieTableFileSystemView(metaClient, commitsTimeline, pathInfoList);
     Map<String, String> fileIdToBaseInstant = fileSystemView.getAllFileSlices("par1")
-            .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
+        .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
 
     IncrementalInputSplits iis = IncrementalInputSplits.builder()
             .conf(conf)
