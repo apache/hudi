@@ -385,7 +385,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
           HoodieSparkTable.create(config, context()), newCommitTime);
       HoodieLogFormat.Writer fakeLogWriter = HoodieLogFormat.newWriterBuilder()
           .onParentPath(
-              FSUtils.getPartitionPath(config.getBasePath(),
+              FSUtils.constructAbsolutePath(config.getBasePath(),
                   correctWriteStat.getPartitionPath()))
           .withFileId(correctWriteStat.getFileId())
           .withDeltaCommit(newCommitTime)

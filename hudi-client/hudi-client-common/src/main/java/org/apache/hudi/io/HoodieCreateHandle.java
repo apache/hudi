@@ -98,7 +98,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     try {
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
           new StoragePath(config.getBasePath()),
-          FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+          FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave(getPartitionId());
       createMarkerFile(partitionPath,

@@ -370,7 +370,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           // Pairs of relative partition path and absolute partition path
           List<Pair<String, StoragePath>> absolutePartitionPathList = partitionSet.stream()
               .map(partition -> Pair.of(
-                  partition, FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition)))
+                  partition, FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partition)))
               .collect(Collectors.toList());
           long beginLsTs = System.currentTimeMillis();
           Map<Pair<String, StoragePath>, List<StoragePathInfo>> pathInfoMap =
@@ -442,7 +442,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   private List<StoragePathInfo> getAllFilesInPartition(String relativePartitionPath)
       throws IOException {
-    StoragePath partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(),
+    StoragePath partitionPath = FSUtils.constructAbsolutePath(metaClient.getBasePathV2(),
         relativePartitionPath);
     long beginLsTs = System.currentTimeMillis();
     List<StoragePathInfo> pathInfoList = listPartition(partitionPath);

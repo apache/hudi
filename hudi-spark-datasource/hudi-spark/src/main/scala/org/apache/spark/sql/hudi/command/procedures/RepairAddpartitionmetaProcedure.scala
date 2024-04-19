@@ -62,7 +62,7 @@ class RepairAddpartitionmetaProcedure extends BaseProcedure with ProcedureBuilde
 
     val rows = new util.ArrayList[Row](partitionPaths.size)
     for (partition <- partitionPaths) {
-      val partitionPath: StoragePath = FSUtils.getPartitionPath(basePath, partition)
+      val partitionPath: StoragePath = FSUtils.constructAbsolutePath(basePath, partition)
       var isPresent = "Yes"
       var action = "None"
       if (!HoodiePartitionMetadata.hasPartitionMetadata(metaClient.getStorage, partitionPath)) {

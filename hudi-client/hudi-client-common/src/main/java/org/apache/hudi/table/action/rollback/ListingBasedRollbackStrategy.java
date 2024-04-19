@@ -191,7 +191,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       return false;
     };
     return ((FileSystem) metaClient.getStorage().getFileSystem())
-        .listStatus(FSUtils.getPartitionPathInHadoopPath(config.getBasePath(), partitionPath),
+        .listStatus(FSUtils.constructAbsolutePathInHadoopPath(config.getBasePath(), partitionPath),
             filter);
   }
 
@@ -221,7 +221,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       }
       return false;
     };
-    return fs.listStatus(FSUtils.getPartitionPathInHadoopPath(config.getBasePath(), partitionPath), filter);
+    return fs.listStatus(FSUtils.constructAbsolutePathInHadoopPath(config.getBasePath(), partitionPath), filter);
   }
 
   private FileStatus[] fetchFilesFromInstant(HoodieInstant instantToRollback, String partitionPath, String basePath,
@@ -282,7 +282,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
   }
 
   private static Path[] listFilesToBeDeleted(String basePath, String partitionPath) {
-    return new Path[] {FSUtils.getPartitionPathInHadoopPath(basePath, partitionPath)};
+    return new Path[] {FSUtils.constructAbsolutePathInHadoopPath(basePath, partitionPath)};
   }
 
   private static Path[] getFilesFromCommitMetadata(String basePath, HoodieCommitMetadata commitMetadata, String partitionPath) {

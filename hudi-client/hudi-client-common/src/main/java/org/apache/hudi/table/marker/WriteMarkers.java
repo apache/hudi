@@ -181,7 +181,7 @@ public abstract class WriteMarkers implements Serializable {
    * @return path of the marker file
    */
   protected StoragePath getMarkerPath(String partitionPath, String fileName, IOType type) {
-    StoragePath path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
+    StoragePath path = FSUtils.constructAbsolutePath(markerDirPath, partitionPath);
     String markerFileName = getMarkerFileName(fileName, type);
     return new StoragePath(path, markerFileName);
   }

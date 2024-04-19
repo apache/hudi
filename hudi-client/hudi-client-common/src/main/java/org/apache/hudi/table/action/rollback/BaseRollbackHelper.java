@@ -129,7 +129,7 @@ public class BaseRollbackHelper implements Serializable {
           String fileId = rollbackRequest.getFileId();
 
           writer = HoodieLogFormat.newWriterBuilder()
-              .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
+              .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
               .withDeltaCommit(instantToRollback.getTimestamp())
               .withStorage(metaClient.getStorage())

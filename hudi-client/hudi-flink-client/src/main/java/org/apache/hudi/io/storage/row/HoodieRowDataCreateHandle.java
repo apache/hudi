@@ -103,7 +103,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
               storage,
               instantTime,
               new StoragePath(writeConfig.getBasePath()),
-              FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath),
+              FSUtils.constructAbsolutePath(writeConfig.getBasePath(), partitionPath),
               table.getPartitionMetafileFormat());
       partitionMetadata.trySave(taskPartitionId);
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, getWriteToken(), this.fileId, table.getBaseFileExtension()));
@@ -189,7 +189,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
 
   private Path makeNewPath(String partitionPath) {
     StoragePath path =
-        FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath);
+        FSUtils.constructAbsolutePath(writeConfig.getBasePath(), partitionPath);
     try {
       if (!storage.exists(path)) {
         storage.createDirectory(path); // create a new partition as needed.
