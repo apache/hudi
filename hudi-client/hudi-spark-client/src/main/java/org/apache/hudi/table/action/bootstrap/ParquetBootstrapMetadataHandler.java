@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -60,8 +60,8 @@ import static org.apache.hudi.io.HoodieBootstrapHandle.METADATA_BOOTSTRAP_RECORD
 
 class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
 
-  public ParquetBootstrapMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
-    super(config, table, srcFileStatus);
+  public ParquetBootstrapMetadataHandler(HoodieWriteConfig config, HoodieTable table, StorageLocationInfo srcFileLocationInfo) {
+    super(config, table, srcFileLocationInfo);
   }
 
   @Override

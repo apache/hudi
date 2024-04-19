@@ -19,7 +19,7 @@
 package org.apache.hudi.client.bootstrap;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -45,7 +45,7 @@ public abstract class HoodieBootstrapSchemaProvider {
    * @param partitions  List of partitions with files within them
    * @return Avro Schema
    */
-  public final Schema getBootstrapSchema(HoodieEngineContext context, List<Pair<String, List<HoodieFileStatus>>> partitions) {
+  public final Schema getBootstrapSchema(HoodieEngineContext context, List<Pair<String, List<StorageLocationInfo>>> partitions) {
     if (writeConfig.getSchema() != null) {
       // Use schema specified by user if set
       Schema userSchema = new Schema.Parser().parse(writeConfig.getSchema());
@@ -64,6 +64,6 @@ public abstract class HoodieBootstrapSchemaProvider {
    * @return Avro Schema
    */
   protected abstract Schema getBootstrapSourceSchema(HoodieEngineContext context,
-      List<Pair<String, List<HoodieFileStatus>>> partitions);
+      List<Pair<String, List<StorageLocationInfo>>> partitions);
 
 }

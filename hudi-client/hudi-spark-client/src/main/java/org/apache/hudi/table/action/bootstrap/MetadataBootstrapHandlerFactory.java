@@ -24,21 +24,21 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 public class MetadataBootstrapHandlerFactory {
 
-  public static BootstrapMetadataHandler getMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
-    Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
+  public static BootstrapMetadataHandler getMetadataHandler(HoodieWriteConfig config, HoodieTable table, StorageLocationInfo srcFileLocationInfo) {
+    Path sourceFilePath = FileStatusUtils.toPath(srcFileLocationInfo.getPath());
 
     String extension = FSUtils.getFileExtension(sourceFilePath.toString());
     if (ORC.getFileExtension().equals(extension)) {
-      return new OrcBootstrapMetadataHandler(config, table, srcFileStatus);
+      return new OrcBootstrapMetadataHandler(config, table, srcFileLocationInfo);
     } else if (PARQUET.getFileExtension().equals(extension)) {
-      return new ParquetBootstrapMetadataHandler(config, table, srcFileStatus);
+      return new ParquetBootstrapMetadataHandler(config, table, srcFileLocationInfo);
     } else {
       throw new HoodieIOException("Bootstrap Metadata Handler not implemented for base file format " + extension);
     }

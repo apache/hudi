@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.bootstrap.selector;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -53,7 +53,7 @@ public class BootstrapRegexModeSelector extends BootstrapModeSelector {
   }
 
   @Override
-  public Map<BootstrapMode, List<String>> select(List<Pair<String, List<HoodieFileStatus>>> partitions) {
+  public Map<BootstrapMode, List<String>> select(List<Pair<String, List<StorageLocationInfo>>> partitions) {
     return partitions.stream()
         .map(p -> Pair.of(pattern.matcher(p.getKey()).matches() ? bootstrapModeOnMatch : defaultMode, p.getKey()))
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));

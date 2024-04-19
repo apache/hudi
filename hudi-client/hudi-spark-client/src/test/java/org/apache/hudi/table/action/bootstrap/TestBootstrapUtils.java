@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
@@ -69,7 +69,7 @@ public class TestBootstrapUtils extends HoodieClientTestBase {
       }
     });
 
-    List<Pair<String, List<HoodieFileStatus>>> collected =
+    List<Pair<String, List<StorageLocationInfo>>> collected =
         BootstrapUtils.getAllLeafFoldersWithFiles(
             metaClient.getTableConfig().getBaseFileFormat(),
             (FileSystem) metaClient.getStorage().getFileSystem(),

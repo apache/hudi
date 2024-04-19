@@ -22,7 +22,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieFSPermission;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
@@ -742,20 +742,20 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         .filter(Option::isPresent).map(Option::get);
   }
 
-  private void checkExternalFile(HoodieFileStatus srcFileStatus,
+  private void checkExternalFile(StorageLocationInfo srcFileLocationInfo,
                                  Option<BaseFile> bootstrapBaseFile, boolean testBootstrap) {
     if (testBootstrap) {
       assertTrue(bootstrapBaseFile.isPresent());
-      assertEquals(FileStatusUtils.toPath(srcFileStatus.getPath()),
+      assertEquals(FileStatusUtils.toPath(srcFileLocationInfo.getPath()),
           new Path(bootstrapBaseFile.get().getPath()));
-      assertEquals(srcFileStatus.getPath(),
+      assertEquals(srcFileLocationInfo.getPath(),
           FileStatusUtils.fromPath(new Path(bootstrapBaseFile.get().getPath())));
-      assertEquals(srcFileStatus.getModificationTime(),
+      assertEquals(srcFileLocationInfo.getModificationTime(),
           new Long(bootstrapBaseFile.get().getPathInfo().getModificationTime()));
-      assertEquals(srcFileStatus.getBlockSize(), new Long(bootstrapBaseFile.get().getPathInfo().getBlockSize()));
-      assertEquals(srcFileStatus.getLength(),
+      assertEquals(srcFileLocationInfo.getBlockSize(), new Long(bootstrapBaseFile.get().getPathInfo().getBlockSize()));
+      assertEquals(srcFileLocationInfo.getLength(),
           new Long(bootstrapBaseFile.get().getPathInfo().getLength()));
-      assertEquals(srcFileStatus.getIsDir() != null && srcFileStatus.getIsDir(),
+      assertEquals(srcFileLocationInfo.getIsDir() != null && srcFileLocationInfo.getIsDir(),
           bootstrapBaseFile.get().getPathInfo().isDirectory());
     } else {
       assertFalse(bootstrapBaseFile.isPresent());
@@ -836,7 +836,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     new File(basePath + "/" + partitionPath).mkdirs();
     String fileId = UUID.randomUUID().toString();
     String srcName = "part_0000" + metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
-    HoodieFileStatus srcFileStatus = HoodieFileStatus.newBuilder()
+    StorageLocationInfo srcFileLocationInfo = StorageLocationInfo.newBuilder()
         .setPath(
             HoodiePath.newBuilder().setUri(BOOTSTRAP_SOURCE_PATH + partitionPath + "/" + srcName).build())
         .setLength(256 * 1024 * 1024L)
@@ -876,7 +876,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       try (IndexWriter writer = new HFileBootstrapIndex(metaClient).createWriter(BOOTSTRAP_SOURCE_PATH)) {
         writer.begin();
         BootstrapFileMapping mapping = new BootstrapFileMapping(BOOTSTRAP_SOURCE_PATH, partitionPath,
-            partitionPath, srcFileStatus, fileId);
+            partitionPath, srcFileLocationInfo, fileId);
         List<BootstrapFileMapping> b = new ArrayList<>();
         b.add(mapping);
         writer.appendNextPartition(partitionPath, b);
@@ -896,7 +896,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         fileSlice.getBaseInstantTime());
     if (!skipCreatingDataFile) {
       assertTrue(fileSlice.getBaseFile().isPresent());
-      checkExternalFile(srcFileStatus, fileSlice.getBaseFile().get().getBootstrapBaseFile(),
+      checkExternalFile(srcFileLocationInfo, fileSlice.getBaseFile().get().getBootstrapBaseFile(),
           testBootstrap);
     }
     String compactionRequestedTime = "4";
@@ -964,7 +964,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(fileId, fileSlice.getFileId());
     if (!skipCreatingDataFile) {
       assertEquals(dataFileName, fileSlice.getBaseFile().get().getFileName(), "Data file must be present");
-      checkExternalFile(srcFileStatus, fileSlice.getBaseFile().get().getBootstrapBaseFile(), testBootstrap);
+      checkExternalFile(srcFileLocationInfo, fileSlice.getBaseFile().get().getBootstrapBaseFile(), testBootstrap);
     } else {
       assertFalse(fileSlice.getBaseFile().isPresent(), "No data-file expected as it was not created");
     }
@@ -997,7 +997,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     } else {
       assertEquals(1, dataFiles.size(), "Expect only one data-file to be sent");
       dataFiles.forEach(df -> assertEquals(df.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
-      checkExternalFile(srcFileStatus, dataFiles.get(0).getBootstrapBaseFile(), testBootstrap);
+      checkExternalFile(srcFileLocationInfo, dataFiles.get(0).getBootstrapBaseFile(), testBootstrap);
     }
 
     dataFiles = roView.getLatestBaseFiles(partitionPath).collect(Collectors.toList());
@@ -1006,7 +1006,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     } else {
       assertEquals(1, dataFiles.size(), "Expect only one data-file to be sent");
       dataFiles.forEach(df -> assertEquals(df.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
-      checkExternalFile(srcFileStatus, dataFiles.get(0).getBootstrapBaseFile(), testBootstrap);
+      checkExternalFile(srcFileLocationInfo, dataFiles.get(0).getBootstrapBaseFile(), testBootstrap);
     }
 
     dataFiles = roView.getLatestBaseFilesBeforeOrOn(partitionPath, deltaInstantTime5).collect(Collectors.toList());
@@ -1015,7 +1015,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     } else {
       assertEquals(1, dataFiles.size(), "Expect only one data-file to be sent");
       dataFiles.forEach(df -> assertEquals(df.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
-      checkExternalFile(srcFileStatus, dataFiles.get(0).getBootstrapBaseFile(), testBootstrap);
+      checkExternalFile(srcFileLocationInfo, dataFiles.get(0).getBootstrapBaseFile(), testBootstrap);
     }
 
     dataFiles = roView.getLatestBaseFilesInRange(allInstantTimes).collect(Collectors.toList());
@@ -1024,7 +1024,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     } else {
       assertEquals(1, dataFiles.size(), "Expect only one data-file to be sent");
       dataFiles.forEach(df -> assertEquals(df.getCommitTime(), instantTime1, "Expect data-file for instant 1 be returned"));
-      checkExternalFile(srcFileStatus, dataFiles.get(0).getBootstrapBaseFile(), testBootstrap);
+      checkExternalFile(srcFileLocationInfo, dataFiles.get(0).getBootstrapBaseFile(), testBootstrap);
     }
 
     // Inflight/Orphan File-groups needs to be in the view

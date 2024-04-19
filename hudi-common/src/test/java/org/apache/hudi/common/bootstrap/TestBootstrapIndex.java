@@ -19,7 +19,7 @@
 package org.apache.hudi.common.bootstrap;
 
 import org.apache.hudi.avro.model.HoodieFSPermission;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
@@ -178,7 +178,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
           assertEquals(x.getFileId(), res.getFileId());
           assertEquals(x.getPartitionPath(), res.getPartitionPath());
           assertEquals(BOOTSTRAP_BASE_PATH, res.getBootstrapBasePath());
-          assertEquals(x.getBootstrapFileStatus(), res.getBootstrapFileStatus());
+          assertEquals(x.getBootstrapFileLocationInfo(), res.getBootstrapFileLocationInfo());
           assertEquals(x.getBootstrapPartitionPath(), res.getBootstrapPartitionPath());
         });
       });
@@ -191,7 +191,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
       return Pair.of(partition, IntStream.range(0, numEntriesPerPartition).mapToObj(idx -> {
         String hudiFileId = UUID.randomUUID().toString();
         String sourceFileName = idx + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
-        HoodieFileStatus sourceFileStatus = HoodieFileStatus.newBuilder()
+        StorageLocationInfo sourceFileLocationInfo = StorageLocationInfo.newBuilder()
             .setPath(HoodiePath.newBuilder().setUri(sourceBasePath + "/" + partition + "/" + sourceFileName).build())
             .setLength(256 * 1024 * 1024L)
             .setAccessTime(new Date().getTime())
@@ -203,7 +203,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
             .setPermission(HoodieFSPermission.newBuilder().setUserAction(FsAction.ALL.name())
                 .setGroupAction(FsAction.READ.name()).setOtherAction(FsAction.NONE.name()).setStickyBit(true).build())
             .build();
-        return new BootstrapFileMapping(sourceBasePath, partition, partition, sourceFileStatus, hudiFileId);
+        return new BootstrapFileMapping(sourceBasePath, partition, partition, sourceFileLocationInfo, hudiFileId);
       }).collect(Collectors.toList()));
     }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }

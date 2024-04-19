@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.bootstrap;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.collection.Pair;
@@ -54,5 +54,5 @@ public abstract class FullRecordBootstrapDataProvider<I> implements Serializable
    * @return input records
    */
   public abstract I generateInputRecords(String tableName,
-      String sourceBasePath, List<Pair<String, List<HoodieFileStatus>>> partitionPaths, HoodieWriteConfig config);
+      String sourceBasePath, List<Pair<String, List<StorageLocationInfo>>> partitionPaths, HoodieWriteConfig config);
 }

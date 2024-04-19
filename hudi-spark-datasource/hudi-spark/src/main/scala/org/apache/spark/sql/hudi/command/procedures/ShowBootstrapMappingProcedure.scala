@@ -85,7 +85,7 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
 
     val rows: java.util.List[Row] = mappingList
       .map(mapping => Row(mapping.getPartitionPath, mapping.getFileId, mapping.getBootstrapBasePath,
-        mapping.getBootstrapPartitionPath, mapping.getBootstrapFileStatus.getPath.getUri)).toList
+        mapping.getBootstrapPartitionPath, mapping.getBootstrapFileLocationInfo.getPath.getUri)).toList
 
     val df = spark.createDataFrame(rows, OUTPUT_TYPE)
 

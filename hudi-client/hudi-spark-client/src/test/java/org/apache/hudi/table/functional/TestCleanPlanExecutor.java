@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.functional;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.BootstrapFileMapping;
@@ -207,7 +207,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       if (enableBootstrapSourceClean) {
         assertEquals(1, partitionCleanStat.getSuccessDeleteBootstrapBaseFiles().size());
         assertFalse(Files.exists(Paths.get(bootstrapMapping.get(
-            p0).get(0).getBootstrapFileStatus().getPath().getUri())));
+            p0).get(0).getBootstrapFileLocationInfo().getPath().getUri())));
       }
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -383,14 +383,14 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
           + (cleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
           : cleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least 1 file");
 
-      HoodieFileStatus fstatus =
-          bootstrapMapping.get(p0).get(0).getBootstrapFileStatus();
+      StorageLocationInfo storageLocationInfo =
+          bootstrapMapping.get(p0).get(0).getBootstrapFileLocationInfo();
       // This ensures full path is recorded in metadata.
-      assertTrue(cleanStat.getSuccessDeleteBootstrapBaseFiles().contains(fstatus.getPath().getUri()),
+      assertTrue(cleanStat.getSuccessDeleteBootstrapBaseFiles().contains(storageLocationInfo.getPath().getUri()),
           "Successful delete files were " + cleanStat.getSuccessDeleteBootstrapBaseFiles()
-              + " but did not contain " + fstatus.getPath().getUri());
+              + " but did not contain " + storageLocationInfo.getPath().getUri());
       assertFalse(Files.exists(Paths.get(bootstrapMapping.get(
-          p0).get(0).getBootstrapFileStatus().getPath().getUri())));
+          p0).get(0).getBootstrapFileLocationInfo().getPath().getUri())));
 
       cleanStat = getCleanStat(hoodieCleanStatsTwo, p1);
       assertTrue(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
@@ -401,13 +401,13 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
           + (cleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
           : cleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least 1 file");
 
-      fstatus = bootstrapMapping.get(p1).get(0).getBootstrapFileStatus();
+      storageLocationInfo = bootstrapMapping.get(p1).get(0).getBootstrapFileLocationInfo();
       // This ensures full path is recorded in metadata.
-      assertTrue(cleanStat.getSuccessDeleteBootstrapBaseFiles().contains(fstatus.getPath().getUri()),
+      assertTrue(cleanStat.getSuccessDeleteBootstrapBaseFiles().contains(storageLocationInfo.getPath().getUri()),
           "Successful delete files were " + cleanStat.getSuccessDeleteBootstrapBaseFiles()
-              + " but did not contain " + fstatus.getPath().getUri());
+              + " but did not contain " + storageLocationInfo.getPath().getUri());
       assertFalse(Files.exists(Paths.get(bootstrapMapping.get(
-          p1).get(0).getBootstrapFileStatus().getPath().getUri())));
+          p1).get(0).getBootstrapFileLocationInfo().getPath().getUri())));
 
       // make next commit, with 2 updates to existing files, and 1 insert
       final String file3P0C2 = UUID.randomUUID().toString();

@@ -357,7 +357,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
             HoodieBootstrapFilePartitionInfo fileInfo = TimelineMetadataUtils.deserializeAvroMetadata(valBytes,
                 HoodieBootstrapFilePartitionInfo.class);
             BootstrapFileMapping mapping = new BootstrapFileMapping(bootstrapBasePath,
-                fileInfo.getBootstrapPartitionPath(), fileInfo.getPartitionPath(), fileInfo.getBootstrapFileStatus(),
+                fileInfo.getBootstrapPartitionPath(), fileInfo.getPartitionPath(), fileInfo.getBootstrapFileLocationInfo(),
                 fileGroupId.getFileId());
             result.put(fileGroupId, mapping);
           }
@@ -555,7 +555,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
             HoodieBootstrapFilePartitionInfo fileInfo = TimelineMetadataUtils.deserializeAvroMetadata(valBytes,
                 HoodieBootstrapFilePartitionInfo.class);
             BootstrapFileMapping mapping = new BootstrapFileMapping(bootstrapBasePath,
-                fileInfo.getBootstrapPartitionPath(), fileInfo.getPartitionPath(), fileInfo.getBootstrapFileStatus(),
+                fileInfo.getBootstrapPartitionPath(), fileInfo.getPartitionPath(), fileInfo.getBootstrapFileLocationInfo(),
                 fileGroupId.getFileId());
             result.put(fileGroupId, mapping);
           }
@@ -637,7 +637,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
         bootstrapPartitionMetadata.setPartitionPath(partitionPath);
         bootstrapPartitionMetadata.setFileIdToBootstrapFile(
             bootstrapFileMappings.stream().map(m -> Pair.of(m.getFileId(),
-                m.getBootstrapFileStatus())).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
+                m.getBootstrapFileLocationInfo())).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
         Option<byte[]> bytes = TimelineMetadataUtils.serializeAvroMetadata(bootstrapPartitionMetadata, HoodieBootstrapPartitionMetadata.class);
         if (bytes.isPresent()) {
           indexByPartitionWriter
@@ -660,7 +660,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
         HoodieBootstrapFilePartitionInfo srcFilePartitionInfo = new HoodieBootstrapFilePartitionInfo();
         srcFilePartitionInfo.setPartitionPath(mapping.getPartitionPath());
         srcFilePartitionInfo.setBootstrapPartitionPath(mapping.getBootstrapPartitionPath());
-        srcFilePartitionInfo.setBootstrapFileStatus(mapping.getBootstrapFileStatus());
+        srcFilePartitionInfo.setBootstrapFileLocationInfo(mapping.getBootstrapFileLocationInfo());
         KeyValue kv = new KeyValue(getUTF8Bytes(getFileGroupKey(mapping.getFileGroupId())), new byte[0], new byte[0],
             HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put,
             TimelineMetadataUtils.serializeAvroMetadata(srcFilePartitionInfo,

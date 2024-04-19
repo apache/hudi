@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.bootstrap;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.UniformBootstrapModeSelector;
@@ -54,8 +54,8 @@ public class TestUniformBootstrapModeSelector {
 
   private void testModeSelector(UniformBootstrapModeSelector modeSelector, BootstrapMode mode) {
     List<String> partitionPaths = Arrays.asList("2020/05/01", "2020/05/02", "2020/05/10", "2020/05/11");
-    List<Pair<String, List<HoodieFileStatus>>> input = partitionPaths.stream()
-        .map(p -> Pair.<String, List<HoodieFileStatus>>of(p, new ArrayList<>())).collect(Collectors.toList());
+    List<Pair<String, List<StorageLocationInfo>>> input = partitionPaths.stream()
+        .map(p -> Pair.<String, List<StorageLocationInfo>>of(p, new ArrayList<>())).collect(Collectors.toList());
     Map<BootstrapMode, List<String>> result = modeSelector.select(input);
     assertTrue(result.get(mode).contains("2020/05/01"));
     assertTrue(result.get(mode).contains("2020/05/02"));

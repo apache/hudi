@@ -31,8 +31,8 @@
         "default" : null
       },
       {
-        "name":"bootstrapFileStatus",
-        "type":["null", "HoodieFileStatus"],
+        "name":"bootstrapFileLocationInfo",
+        "type":["null", "StorageLocationInfo"],
         "default" : null
       },
       {

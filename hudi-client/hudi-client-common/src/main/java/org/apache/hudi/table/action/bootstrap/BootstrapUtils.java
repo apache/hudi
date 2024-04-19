@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -52,26 +52,26 @@ public class BootstrapUtils {
    * @return list of partition paths with files under them.
    * @throws IOException
    */
-  public static List<Pair<String, List<HoodieFileStatus>>> getAllLeafFoldersWithFiles(HoodieFileFormat baseFileFormat,
+  public static List<Pair<String, List<StorageLocationInfo>>> getAllLeafFoldersWithFiles(HoodieFileFormat baseFileFormat,
                                                                                       FileSystem fs, String basePathStr, HoodieEngineContext context) throws IOException {
     final Path basePath = new Path(basePathStr);
     final String baseFileExtension = baseFileFormat.getFileExtension();
     final Map<Integer, List<String>> levelToPartitions = new HashMap<>();
-    final Map<String, List<HoodieFileStatus>> partitionToFiles = new HashMap<>();
+    final Map<String, List<StorageLocationInfo>> partitionToFiles = new HashMap<>();
     PathFilter filePathFilter = getFilePathFilter(baseFileExtension);
     PathFilter metaPathFilter = getExcludeMetaPathFilter();
 
     FileStatus[] topLevelStatuses = fs.listStatus(basePath);
     List<String> subDirectories = new ArrayList<>();
 
-    List<Pair<HoodieFileStatus, Pair<Integer, String>>> result = new ArrayList<>();
+    List<Pair<StorageLocationInfo, Pair<Integer, String>>> result = new ArrayList<>();
 
     for (FileStatus topLevelStatus: topLevelStatuses) {
       if (topLevelStatus.isFile() && filePathFilter.accept(topLevelStatus.getPath())) {
         String relativePath = FSUtils.getRelativePartitionPath(basePath, topLevelStatus.getPath().getParent());
         Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
-        HoodieFileStatus hoodieFileStatus = FileStatusUtils.fromFileStatus(topLevelStatus);
-        result.add(Pair.of(hoodieFileStatus, Pair.of(level, relativePath)));
+        StorageLocationInfo storageLocationInfo = FileStatusUtils.fromFileStatus(topLevelStatus);
+        result.add(Pair.of(storageLocationInfo, Pair.of(level, relativePath)));
       } else if (topLevelStatus.isDirectory() && metaPathFilter.accept(topLevelStatus.getPath())) {
         subDirectories.add(topLevelStatus.getPath().toString());
       }
@@ -83,14 +83,14 @@ public class BootstrapUtils {
         Path path = new Path(directory);
         FileSystem fileSystem = path.getFileSystem(new Configuration());
         RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
-        List<Pair<HoodieFileStatus, Pair<Integer, String>>> res = new ArrayList<>();
+        List<Pair<StorageLocationInfo, Pair<Integer, String>>> res = new ArrayList<>();
         while (itr.hasNext()) {
           FileStatus status = itr.next();
           if (pathFilter.accept(status.getPath())) {
             String relativePath = FSUtils.getRelativePartitionPath(new Path(basePathStr), status.getPath().getParent());
             Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
-            HoodieFileStatus hoodieFileStatus = FileStatusUtils.fromFileStatus(status);
-            res.add(Pair.of(hoodieFileStatus, Pair.of(level, relativePath)));
+            StorageLocationInfo storageLocationInfo = FileStatusUtils.fromFileStatus(status);
+            res.add(Pair.of(storageLocationInfo, Pair.of(level, relativePath)));
           }
         }
         return res.stream();
@@ -99,7 +99,7 @@ public class BootstrapUtils {
 
     result.forEach(val -> {
       String relativePath = val.getRight().getRight();
-      List<HoodieFileStatus> statusList = partitionToFiles.get(relativePath);
+      List<StorageLocationInfo> statusList = partitionToFiles.get(relativePath);
       if (null == statusList) {
         Integer level = val.getRight().getLeft();
         List<String> dirs = levelToPartitions.get(level);

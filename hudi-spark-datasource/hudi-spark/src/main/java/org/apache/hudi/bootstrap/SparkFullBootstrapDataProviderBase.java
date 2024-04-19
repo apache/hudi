@@ -22,7 +22,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieSparkRecord;
@@ -60,7 +60,7 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
 
   @Override
   public JavaRDD<HoodieRecord> generateInputRecords(String tableName, String sourceBasePath,
-                                                    List<Pair<String, List<HoodieFileStatus>>> partitionPathsWithFiles, HoodieWriteConfig config) {
+                                                    List<Pair<String, List<StorageLocationInfo>>> partitionPathsWithFiles, HoodieWriteConfig config) {
     String[] filePaths = partitionPathsWithFiles.stream().map(Pair::getValue)
         .flatMap(f -> f.stream().map(fs -> FileStatusUtils.toPath(fs.getPath()).toString()))
         .toArray(String[]::new);

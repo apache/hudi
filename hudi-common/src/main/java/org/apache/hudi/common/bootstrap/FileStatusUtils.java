@@ -19,7 +19,7 @@
 package org.apache.hudi.common.bootstrap;
 
 import org.apache.hudi.avro.model.HoodieFSPermission;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
@@ -33,7 +33,7 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import java.io.IOException;
 
 /**
- * Helper functions around FileStatus and HoodieFileStatus.
+ * Helper functions around FileStatus and StorageLocationInfo.
  */
 public class FileStatusUtils {
 
@@ -74,48 +74,48 @@ public class FileStatusUtils {
         .setOtherAction(otherAction).setStickyBit(fsPermission.getStickyBit()).build();
   }
 
-  public static StoragePathInfo toStoragePathInfo(HoodieFileStatus fileStatus) {
-    if (null == fileStatus) {
+  public static StoragePathInfo toStoragePathInfo(StorageLocationInfo storageLocationInfo) {
+    if (null == storageLocationInfo) {
       return null;
     }
 
     return new StoragePathInfo(
-        new StoragePath(fileStatus.getPath().getUri()), fileStatus.getLength(),
-        fileStatus.getIsDir() == null ? false : fileStatus.getIsDir(),
-        fileStatus.getBlockReplication().shortValue(), fileStatus.getBlockSize(), fileStatus.getModificationTime());
+        new StoragePath(storageLocationInfo.getPath().getUri()), storageLocationInfo.getLength(),
+            storageLocationInfo.getIsDir() == null ? false : storageLocationInfo.getIsDir(),
+            storageLocationInfo.getBlockReplication().shortValue(), storageLocationInfo.getBlockSize(), storageLocationInfo.getModificationTime());
   }
 
-  public static HoodieFileStatus fromFileStatus(FileStatus fileStatus) {
+  public static StorageLocationInfo fromFileStatus(FileStatus fileStatus) {
     if (null == fileStatus) {
       return null;
     }
 
-    HoodieFileStatus fStatus = new HoodieFileStatus();
+    StorageLocationInfo storageLocationInfo = new StorageLocationInfo();
     try {
-      fStatus.setPath(fromPath(fileStatus.getPath()));
-      fStatus.setLength(fileStatus.getLen());
-      fStatus.setIsDir(fileStatus.isDirectory());
-      fStatus.setBlockReplication((int) fileStatus.getReplication());
-      fStatus.setBlockSize(fileStatus.getBlockSize());
-      fStatus.setModificationTime(fileStatus.getModificationTime());
-      fStatus.setAccessTime(fileStatus.getModificationTime());
-      fStatus.setSymlink(fileStatus.isSymlink() ? fromPath(fileStatus.getSymlink()) : null);
-      safeReadAndSetMetadata(fStatus, fileStatus);
+      storageLocationInfo.setPath(fromPath(fileStatus.getPath()));
+      storageLocationInfo.setLength(fileStatus.getLen());
+      storageLocationInfo.setIsDir(fileStatus.isDirectory());
+      storageLocationInfo.setBlockReplication((int) fileStatus.getReplication());
+      storageLocationInfo.setBlockSize(fileStatus.getBlockSize());
+      storageLocationInfo.setModificationTime(fileStatus.getModificationTime());
+      storageLocationInfo.setAccessTime(fileStatus.getModificationTime());
+      storageLocationInfo.setSymlink(fileStatus.isSymlink() ? fromPath(fileStatus.getSymlink()) : null);
+      safeReadAndSetMetadata(storageLocationInfo, fileStatus);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
-    return fStatus;
+    return storageLocationInfo;
   }
 
   /**
    * Used to safely handle FileStatus calls which might fail on some FileSystem implementation.
    * (DeprecatedLocalFileSystem)
    */
-  private static void safeReadAndSetMetadata(HoodieFileStatus fStatus, FileStatus fileStatus) {
+  private static void safeReadAndSetMetadata(StorageLocationInfo storageLocationInfo, FileStatus fileStatus) {
     try {
-      fStatus.setOwner(fileStatus.getOwner());
-      fStatus.setGroup(fileStatus.getGroup());
-      fStatus.setPermission(fromFSPermission(fileStatus.getPermission()));
+      storageLocationInfo.setOwner(fileStatus.getOwner());
+      storageLocationInfo.setGroup(fileStatus.getGroup());
+      storageLocationInfo.setPermission(fromFSPermission(fileStatus.getPermission()));
     } catch (IllegalArgumentException ie) {
       // Deprecated File System (testing) does not work well with this call
       // skipping

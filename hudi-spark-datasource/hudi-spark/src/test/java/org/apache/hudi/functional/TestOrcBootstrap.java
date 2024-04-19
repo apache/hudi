@@ -20,7 +20,7 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
@@ -372,7 +372,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     bootstrapped.registerTempTable("bootstrapped");
     original.registerTempTable("original");
     if (checkNumRawFiles) {
-      List<HoodieFileStatus> files =
+      List<StorageLocationInfo> files =
           BootstrapUtils.getAllLeafFoldersWithFiles(metaClient.getTableConfig().getBaseFileFormat(),
                   (FileSystem) metaClient.getStorage().getFileSystem(),
                   bootstrapBasePath, context).stream().flatMap(x -> x.getValue().stream())
@@ -408,7 +408,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
 
     @Override
     public JavaRDD<HoodieRecord> generateInputRecords(String tableName, String sourceBasePath,
-                                                      List<Pair<String, List<HoodieFileStatus>>> partitionPaths,  HoodieWriteConfig config) {
+                                                      List<Pair<String, List<StorageLocationInfo>>> partitionPaths,  HoodieWriteConfig config) {
       String[] filePaths = partitionPaths.stream().map(Pair::getValue)
           .flatMap(f -> f.stream().map(fs -> FileStatusUtils.toPath(fs.getPath()).toString()))
           .toArray(String[]::new);
@@ -432,7 +432,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
   }
 
   private static JavaRDD<HoodieRecord> generateInputBatch(JavaSparkContext jsc,
-                                                          List<Pair<String, List<HoodieFileStatus>>> partitionPaths, Schema writerSchema) {
+                                                          List<Pair<String, List<StorageLocationInfo>>> partitionPaths, Schema writerSchema) {
     List<Pair<String, Path>> fullFilePathsWithPartition = partitionPaths.stream().flatMap(p -> p.getValue().stream()
         .map(x -> Pair.of(p.getKey(), FileStatusUtils.toPath(x.getPath())))).collect(Collectors.toList());
     return jsc.parallelize(fullFilePathsWithPartition.stream().flatMap(p -> {
@@ -474,7 +474,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     }
 
     @Override
-    public Map<BootstrapMode, List<String>> select(List<Pair<String, List<HoodieFileStatus>>> partitions) {
+    public Map<BootstrapMode, List<String>> select(List<Pair<String, List<StorageLocationInfo>>> partitions) {
       List<Pair<BootstrapMode, String>> selections = new ArrayList<>();
       partitions.stream().forEach(p -> {
         final BootstrapMode mode;

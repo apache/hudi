@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 
 import java.io.Serializable;
@@ -30,11 +30,11 @@ public class BootstrapBaseFileMapping implements Serializable {
 
   private final HoodieFileGroupId fileGroupId;
 
-  private final HoodieFileStatus bootstrapFileStatus;
+  private final StorageLocationInfo bootstrapFileLocationInfo;
 
-  public BootstrapBaseFileMapping(HoodieFileGroupId fileGroupId, HoodieFileStatus bootstrapFileStatus) {
+  public BootstrapBaseFileMapping(HoodieFileGroupId fileGroupId, StorageLocationInfo bootstrapFileLocationInfo) {
     this.fileGroupId = fileGroupId;
-    this.bootstrapFileStatus = bootstrapFileStatus;
+    this.bootstrapFileLocationInfo = bootstrapFileLocationInfo;
   }
 
   public HoodieFileGroupId getFileGroupId() {
@@ -42,14 +42,14 @@ public class BootstrapBaseFileMapping implements Serializable {
   }
 
   public BaseFile getBootstrapBaseFile() {
-    return new BaseFile(FileStatusUtils.toStoragePathInfo(bootstrapFileStatus));
+    return new BaseFile(FileStatusUtils.toStoragePathInfo(bootstrapFileLocationInfo));
   }
 
   @Override
   public String toString() {
     return "BootstrapBaseFileMapping{"
         + "fileGroupId=" + fileGroupId
-        + ", bootstrapFileStatus=" + bootstrapFileStatus
+        + ", bootstrapFileLocationInfo=" + bootstrapFileLocationInfo
         + '}';
   }
 }

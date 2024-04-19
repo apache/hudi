@@ -178,7 +178,7 @@ public class BootstrapCommand {
     final List<Comparable[]> rows = new ArrayList<>();
     for (BootstrapFileMapping mapping : mappingList) {
       rows.add(new Comparable[] {mapping.getPartitionPath(), mapping.getFileId(),
-          mapping.getBootstrapBasePath(), mapping.getBootstrapPartitionPath(), mapping.getBootstrapFileStatus().getPath().getUri()});
+          mapping.getBootstrapBasePath(), mapping.getBootstrapPartitionPath(), mapping.getBootstrapFileLocationInfo().getPath().getUri()});
     }
     return rows;
   }

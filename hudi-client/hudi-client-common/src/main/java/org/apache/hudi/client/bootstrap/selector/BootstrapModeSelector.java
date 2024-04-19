@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.bootstrap.selector;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -44,5 +44,5 @@ public abstract class BootstrapModeSelector implements Serializable {
    * @param partitions List of partitions with files present in each partitions
    * @return a partitions grouped by bootstrap mode
    */
-  public abstract Map<BootstrapMode, List<String>> select(List<Pair<String, List<HoodieFileStatus>>> partitions);
+  public abstract Map<BootstrapMode, List<String>> select(List<Pair<String, List<StorageLocationInfo>>> partitions);
 }

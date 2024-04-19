@@ -20,7 +20,7 @@ package org.apache.hudi.client.bootstrap;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -51,7 +51,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
   }
 
   @Override
-  protected Schema getBootstrapSourceSchema(HoodieEngineContext context, List<Pair<String, List<HoodieFileStatus>>> partitions) {
+  protected Schema getBootstrapSourceSchema(HoodieEngineContext context, List<Pair<String, List<StorageLocationInfo>>> partitions) {
     Schema schema = partitions.stream().flatMap(p -> p.getValue().stream()).map(fs -> {
           Path filePath = FileStatusUtils.toPath(fs.getPath());
           String extension = FSUtils.getFileExtension(filePath.getName());

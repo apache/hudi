@@ -39,7 +39,7 @@
         "name":"fileIdToBootstrapFile",
         "type":["null", {
            "type":"map",
-           "values": "HoodieFileStatus"
+           "values": "StorageLocationInfo"
          }],
          "default": null
       }

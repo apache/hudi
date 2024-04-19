@@ -175,7 +175,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
                     reader.getSourceFileMappingForPartition(partition);
                 addBootstrapBaseFileMapping(sourceFileMappings.stream()
                     .map(s -> new BootstrapBaseFileMapping(new HoodieFileGroupId(s.getPartitionPath(),
-                        s.getFileId()), s.getBootstrapFileStatus())));
+                        s.getFileId()), s.getBootstrapFileLocationInfo())));
               }
             }
             storePartitionView(partition, value);
@@ -1112,7 +1112,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           reader.getSourceFileMappingForPartition(partition);
       return sourceFileMappings.stream()
           .map(s -> new BootstrapBaseFileMapping(new HoodieFileGroupId(s.getPartitionPath(),
-              s.getFileId()), s.getBootstrapFileStatus())).collect(Collectors.toMap(BootstrapBaseFileMapping::getFileGroupId, s -> s));
+              s.getFileId()), s.getBootstrapFileLocationInfo())).collect(Collectors.toMap(BootstrapBaseFileMapping::getFileGroupId, s -> s));
     }
   }
 

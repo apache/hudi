@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.bootstrap;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieBootstrapConfig;
@@ -48,8 +48,8 @@ public class TestBootstrapRegexModeSelector {
   @Test
   public void testModeSelector() {
     List<String> partitionPaths = Arrays.asList("2020/05/01", "2020/05/02", "2020/05/10", "2020/05/11");
-    List<Pair<String, List<HoodieFileStatus>>> input = partitionPaths.stream()
-        .map(p -> Pair.<String, List<HoodieFileStatus>>of(p, new ArrayList<>())).collect(Collectors.toList());
+    List<Pair<String, List<StorageLocationInfo>>> input = partitionPaths.stream()
+        .map(p -> Pair.<String, List<StorageLocationInfo>>of(p, new ArrayList<>())).collect(Collectors.toList());
     String regex = "2020/05/1[0-9]";
     BootstrapRegexModeSelector regexModeSelector = new BootstrapRegexModeSelector(getConfig(regex,
         BootstrapMode.FULL_RECORD));

@@ -19,7 +19,7 @@
 package org.apache.hudi.table.action.bootstrap;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
@@ -44,16 +44,16 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
   private static final Logger LOG = LoggerFactory.getLogger(ParquetBootstrapMetadataHandler.class);
   protected HoodieWriteConfig config;
   protected HoodieTable table;
-  protected HoodieFileStatus srcFileStatus;
+  protected StorageLocationInfo srcFileLocationInfo;
 
-  public BaseBootstrapMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
+  public BaseBootstrapMetadataHandler(HoodieWriteConfig config, HoodieTable table, StorageLocationInfo srcFileLocationInfo) {
     this.config = config;
     this.table = table;
-    this.srcFileStatus = srcFileStatus;
+    this.srcFileLocationInfo = srcFileLocationInfo;
   }
 
   public BootstrapWriteStatus runMetadataBootstrap(String srcPartitionPath, String partitionPath, KeyGeneratorInterface keyGenerator) {
-    HoodiePath path = srcFileStatus.getPath();
+    HoodiePath path = srcFileLocationInfo.getPath();
     StoragePath sourceFilePath = path != null ? new StoragePath(path.getUri()) : null;
     HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle = new HoodieBootstrapHandle(config, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
         table, partitionPath, FSUtils.createNewFileIdPfx(), table.getTaskContextSupplier());
@@ -74,7 +74,7 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
     BootstrapWriteStatus writeStatus = (BootstrapWriteStatus) bootstrapHandle.getWriteStatuses().get(0);
     BootstrapFileMapping bootstrapFileMapping = new BootstrapFileMapping(
         config.getBootstrapSourceBasePath(), srcPartitionPath, partitionPath,
-        srcFileStatus, writeStatus.getFileId());
+            srcFileLocationInfo, writeStatus.getFileId());
     writeStatus.setBootstrapSourceFileMapping(bootstrapFileMapping);
     return writeStatus;
   }

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.StorageLocationInfo;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
@@ -121,7 +121,7 @@ public class SparkBootstrapCommitActionExecutor<T>
       checkArgument(!completedInstant.isPresent(),
           "Active Timeline is expected to be empty for bootstrap to be performed. "
               + "If you want to re-bootstrap, please rollback bootstrap first !!");
-      Map<BootstrapMode, List<Pair<String, List<HoodieFileStatus>>>> partitionSelections = listAndProcessSourcePartitions();
+      Map<BootstrapMode, List<Pair<String, List<StorageLocationInfo>>>> partitionSelections = listAndProcessSourcePartitions();
 
       // First run metadata bootstrap which will auto commit
       Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> metadataResult = metadataBootstrap(partitionSelections.get(METADATA_ONLY));
@@ -143,7 +143,7 @@ public class SparkBootstrapCommitActionExecutor<T>
    * Perform Metadata Bootstrap.
    * @param partitionFilesList List of partitions and files within that partitions
    */
-  protected Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> metadataBootstrap(List<Pair<String, List<HoodieFileStatus>>> partitionFilesList) {
+  protected Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> metadataBootstrap(List<Pair<String, List<StorageLocationInfo>>> partitionFilesList) {
     if (null == partitionFilesList || partitionFilesList.isEmpty()) {
       return Option.empty();
     }
@@ -224,7 +224,7 @@ public class SparkBootstrapCommitActionExecutor<T>
    * Perform Full Bootstrap.
    * @param partitionFilesList List of partitions and files within that partitions
    */
-  protected Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> fullBootstrap(List<Pair<String, List<HoodieFileStatus>>> partitionFilesList) {
+  protected Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> fullBootstrap(List<Pair<String, List<StorageLocationInfo>>> partitionFilesList) {
     if (null == partitionFilesList || partitionFilesList.isEmpty()) {
       return Option.empty();
     }
@@ -264,8 +264,8 @@ public class SparkBootstrapCommitActionExecutor<T>
    * @return
    * @throws IOException
    */
-  private Map<BootstrapMode, List<Pair<String, List<HoodieFileStatus>>>> listAndProcessSourcePartitions() throws IOException {
-    List<Pair<String, List<HoodieFileStatus>>> folders = BootstrapUtils.getAllLeafFoldersWithFiles(
+  private Map<BootstrapMode, List<Pair<String, List<StorageLocationInfo>>>> listAndProcessSourcePartitions() throws IOException {
+    List<Pair<String, List<StorageLocationInfo>>> folders = BootstrapUtils.getAllLeafFoldersWithFiles(
         table.getBaseFileFormat(), bootstrapSourceFileSystem, config.getBootstrapSourceBasePath(), context);
 
     LOG.info("Fetching Bootstrap Schema !!");
@@ -278,7 +278,7 @@ public class SparkBootstrapCommitActionExecutor<T>
 
     Map<BootstrapMode, List<String>> result = selector.select(folders);
 
-    Map<String, List<HoodieFileStatus>> partitionToFiles = folders.stream().collect(
+    Map<String, List<StorageLocationInfo>> partitionToFiles = folders.stream().collect(
         Collectors.toMap(Pair::getKey, Pair::getValue));
 
     // Ensure all partitions are accounted for
@@ -290,7 +290,7 @@ public class SparkBootstrapCommitActionExecutor<T>
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
-  private HoodieData<BootstrapWriteStatus> runMetadataBootstrap(List<Pair<String, List<HoodieFileStatus>>> partitions) {
+  private HoodieData<BootstrapWriteStatus> runMetadataBootstrap(List<Pair<String, List<StorageLocationInfo>>> partitions) {
     if (null == partitions || partitions.isEmpty()) {
       return context.emptyHoodieData();
     }
@@ -307,7 +307,7 @@ public class SparkBootstrapCommitActionExecutor<T>
 
     BootstrapPartitionPathTranslator translator = ReflectionUtils.loadClass(config.getBootstrapPartitionPathTranslatorClass());
 
-    List<Pair<String, Pair<String, HoodieFileStatus>>> bootstrapPaths = partitions.stream()
+    List<Pair<String, Pair<String, StorageLocationInfo>>> bootstrapPaths = partitions.stream()
         .flatMap(p -> {
           String translatedPartitionPath = translator.getBootstrapTranslatedPath(p.getKey());
           return p.getValue().stream().map(f -> Pair.of(p.getKey(), Pair.of(translatedPartitionPath, f)));

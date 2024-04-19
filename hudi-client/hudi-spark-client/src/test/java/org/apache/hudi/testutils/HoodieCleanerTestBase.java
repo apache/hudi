@@ -235,7 +235,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
 
     for (Map.Entry<String, List<BootstrapFileMapping>> entry : bootstrapMapping.entrySet()) {
       new File(sourcePath + "/" + entry.getKey()).mkdirs();
-      assertTrue(new File(entry.getValue().get(0).getBootstrapFileStatus().getPath().getUri()).createNewFile());
+      assertTrue(new File(entry.getValue().get(0).getBootstrapFileLocationInfo().getPath().getUri()).createNewFile());
     }
     return bootstrapMapping;
   }
