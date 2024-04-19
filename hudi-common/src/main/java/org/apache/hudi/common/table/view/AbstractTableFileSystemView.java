@@ -154,19 +154,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Adds the provided statuses into the file system view, and also caches it inside this object.
-   * If the file statuses are limited to a single partition, use {@link #addFilesToView(String, FileStatus[])} instead.
+   * If the file statuses are limited to a single partition, use {@link #addFilesToView(String, List)} instead.
    */
   public List<HoodieFileGroup> addFilesToView(List<StoragePathInfo> statuses) {
-    Map<String, List<FileStatus>> statusesByPartitionPath = Arrays.stream(statuses)
+    Map<String, List<StoragePathInfo>> statusesByPartitionPath = statuses.stream()
         .collect(Collectors.groupingBy(fileStatus -> FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), fileStatus.getPath().getParent())));
-    return statusesByPartitionPath.entrySet().stream().map(entry -> addFilesToView(entry.getKey(), entry.getValue().toArray(new FileStatus[0])))
+    return statusesByPartitionPath.entrySet().stream().map(entry -> addFilesToView(entry.getKey(), entry.getValue()))
         .flatMap(List::stream).collect(Collectors.toList());
   }
 
   /**
    * Adds the provided statuses into the file system view for a single partition, and also caches it inside this object.
    */
-  public List<HoodieFileGroup> addFilesToView(String partitionPath, FileStatus[] statuses) {
+  public List<HoodieFileGroup> addFilesToView(String partitionPath, List<StoragePathInfo> statuses) {
     HoodieTimer timer = HoodieTimer.start();
     List<HoodieFileGroup> fileGroups = buildFileGroups(partitionPath, statuses, visibleCommitsAndCompactionTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
