@@ -26,11 +26,11 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
@@ -53,7 +53,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
 
   public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
     FileSplit fileSplit = (FileSplit) split;
-    Path path = fileSplit.getPath();
+    StoragePath path = new StoragePath(fileSplit.getPath().toUri());
     HoodieConfig hoodieConfig = getReaderConfigs(conf);
     reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, conf, path, HoodieFileFormat.HFILE, Option.empty());

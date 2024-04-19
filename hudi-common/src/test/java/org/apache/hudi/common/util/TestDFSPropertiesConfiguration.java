@@ -22,13 +22,13 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterAll;
@@ -114,7 +114,8 @@ public class TestDFSPropertiesConfiguration {
 
   @Test
   public void testParsing() {
-    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), new Path(dfsBasePath + "/t1.props"));
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(
+        dfs.getConf(), new StoragePath(dfsBasePath + "/t1.props"));
     TypedProperties props = cfg.getProps();
     assertEquals(5, props.size());
     assertThrows(IllegalArgumentException.class, () -> {
@@ -142,7 +143,8 @@ public class TestDFSPropertiesConfiguration {
 
   @Test
   public void testIncludes() {
-    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), new Path(dfsBasePath + "/t3.props"));
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(
+        dfs.getConf(), new StoragePath(dfsBasePath + "/t3.props"));
     TypedProperties props = cfg.getProps();
 
     assertEquals(123, props.getInteger("int.prop"));
@@ -151,16 +153,17 @@ public class TestDFSPropertiesConfiguration {
     assertEquals("t3.value", props.getString("string.prop"));
     assertEquals(1354354354, props.getLong("long.prop"));
     assertThrows(IllegalStateException.class, () -> {
-      cfg.addPropsFromFile(new Path(dfsBasePath + "/t4.props"));
+      cfg.addPropsFromFile(new StoragePath(dfsBasePath + "/t4.props"));
     }, "Should error out on a self-included file.");
   }
 
   @Test
   public void testLocalFileSystemLoading() throws IOException {
-    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), new Path(dfsBasePath + "/t1.props"));
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(
+        dfs.getConf(), new StoragePath(dfsBasePath + "/t1.props"));
 
     cfg.addPropsFromFile(
-        new Path(
+        new StoragePath(
             String.format(
                 "file:%s",
                 getClass().getClassLoader()
@@ -184,7 +187,8 @@ public class TestDFSPropertiesConfiguration {
     ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
     DFSPropertiesConfiguration.refreshGlobalProps();
     try {
-      if (!HadoopFSUtils.getFs(DFSPropertiesConfiguration.DEFAULT_PATH, new Configuration()).exists(DFSPropertiesConfiguration.DEFAULT_PATH)) {
+      if (!HoodieStorageUtils.getStorage(DFSPropertiesConfiguration.DEFAULT_PATH, new Configuration())
+          .exists(DFSPropertiesConfiguration.DEFAULT_PATH)) {
         assertEquals(0, DFSPropertiesConfiguration.getGlobalProps().size());
       }
     } catch (IOException e) {

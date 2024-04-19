@@ -37,6 +37,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
@@ -250,8 +252,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   /**
    * @deprecated please use non-static version
    */
-  public static void writePartitionMetadataDeprecated(FileSystem fs, String[] partitionPaths, String basePath) throws IOException {
-    new HoodieTestDataGenerator().writePartitionMetadata(fs, partitionPaths, basePath);
+  public static void writePartitionMetadataDeprecated(HoodieStorage storage,
+                                                      String[] partitionPaths,
+                                                      String basePath) throws IOException {
+    new HoodieTestDataGenerator().writePartitionMetadata(storage, partitionPaths, basePath);
   }
 
   //////////////////////////////////////////////////////////////////////////////////
@@ -260,9 +264,12 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * @implNote {@link HoodieTestDataGenerator} is supposed to just generate records with schemas. Leave HoodieTable files (metafile, basefile, logfile, etc) to {@link HoodieTestTable}.
    * @deprecated Use {@link HoodieTestTable#withPartitionMetaFiles(java.lang.String...)} instead.
    */
-  public void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) throws IOException {
+  public void writePartitionMetadata(HoodieStorage storage,
+                                     String[] partitionPaths,
+                                     String basePath) throws IOException {
     for (String partitionPath : partitionPaths) {
-      new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath), Option.empty()).trySave("0");
+      new HoodiePartitionMetadata(storage, "000", new StoragePath(basePath),
+          new StoragePath(basePath, partitionPath), Option.empty()).trySave();
     }
   }
 

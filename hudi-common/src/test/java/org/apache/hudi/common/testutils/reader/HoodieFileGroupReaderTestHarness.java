@@ -95,7 +95,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
 
     Option<FileSlice> fileSliceOpt =
         HoodieFileSliceTestUtils.getFileSlice(
-            readerContext.getFs(basePath, hadoopConf),
+            readerContext.getStorage(basePath, hadoopConf),
             keyRanges.subList(0, numFiles),
             timestamps.subList(0, numFiles),
             operationTypes.subList(0, numFiles),

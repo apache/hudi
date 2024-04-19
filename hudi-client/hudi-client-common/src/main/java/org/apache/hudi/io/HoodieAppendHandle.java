@@ -57,6 +57,7 @@ import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -204,10 +205,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
     try {
       // Save hoodie partition meta in the partition path
-      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
-          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
+          new StoragePath(config.getBasePath()),
+          FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
-      partitionMetadata.trySave(writeToken);
+      partitionMetadata.trySave();
 
       this.writer = createLogWriter(getFileInstant(record));
     } catch (Exception e) {
@@ -678,7 +680,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         return new HoodieAvroDataBlock(records, shouldWriteRecordPositions, header, keyField);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(
-            records, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()),
+            records, header, writeConfig.getHFileCompressionAlgorithm(), new StoragePath(writeConfig.getBasePath()),
             writeConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(

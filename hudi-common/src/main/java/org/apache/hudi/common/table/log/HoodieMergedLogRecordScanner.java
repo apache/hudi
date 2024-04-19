@@ -40,10 +40,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,7 +91,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
-  private HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+  private HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
                                        String latestInstantTime, Long maxMemorySizeInBytes,
                                        boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                        Option<InstantRange> instantRange,
@@ -103,7 +103,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                        Option<String> keyFieldOverride,
                                        boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
                                       Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
+    super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
         hoodieTableMetaClientOption);
     try {
@@ -317,7 +317,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
   public static class Builder extends AbstractHoodieLogRecordReader.Builder {
-    private FileSystem fs;
+    private HoodieStorage storage;
     private String basePath;
     private List<String> logFilePaths;
     private Schema readerSchema;
@@ -343,8 +343,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected HoodieTableMetaClient hoodieTableMetaClient;
 
     @Override
-    public Builder withFileSystem(FileSystem fs) {
-      this.fs = fs;
+    public Builder withStorage(HoodieStorage storage) {
+      this.storage = storage;
       return this;
     }
 
@@ -460,11 +460,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
-        this.partitionName = getRelativePartitionPath(new Path(basePath), new Path(this.logFilePaths.get(0)).getParent());
+        this.partitionName = getRelativePartitionPath(
+            new StoragePath(basePath), new StoragePath(this.logFilePaths.get(0)).getParent());
       }
       ValidationUtils.checkArgument(recordMerger != null);
 
-      return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
+      return new HoodieMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,

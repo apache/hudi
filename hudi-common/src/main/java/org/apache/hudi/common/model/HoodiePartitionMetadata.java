@@ -24,10 +24,10 @@ import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +37,7 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -58,9 +59,9 @@ public class HoodiePartitionMetadata {
   /**
    * Path to the partition, about which we have the metadata.
    */
-  private final Path partitionPath;
+  private final StoragePath partitionPath;
 
-  private final FileSystem fs;
+  private final HoodieStorage storage;
 
   // The format in which to write the partition metadata
   private Option<HoodieFileFormat> format;
@@ -68,8 +69,8 @@ public class HoodiePartitionMetadata {
   /**
    * Construct metadata from existing partition.
    */
-  public HoodiePartitionMetadata(FileSystem fs, Path partitionPath) {
-    this.fs = fs;
+  public HoodiePartitionMetadata(HoodieStorage storage, StoragePath partitionPath) {
+    this.storage = storage;
     this.props = new Properties();
     this.partitionPath = partitionPath;
     this.format = Option.empty();
@@ -78,8 +79,8 @@ public class HoodiePartitionMetadata {
   /**
    * Construct metadata object to be written out.
    */
-  public HoodiePartitionMetadata(FileSystem fs, String instantTime, Path basePath, Path partitionPath, Option<HoodieFileFormat> format) {
-    this(fs, partitionPath);
+  public HoodiePartitionMetadata(HoodieStorage storage, String instantTime, StoragePath basePath, StoragePath partitionPath, Option<HoodieFileFormat> format) {
+    this(storage, partitionPath);
     this.format = format;
     props.setProperty(COMMIT_TIME_KEY, instantTime);
     props.setProperty(PARTITION_DEPTH_KEY, String.valueOf(partitionPath.depth() - basePath.depth()));
@@ -94,27 +95,27 @@ public class HoodiePartitionMetadata {
 
   /**
    * Write the metadata safely into partition atomically.
-   * To avoid concurrent write into the same partition (for example in speculative case),
-   * please make sure writeToken is unique.
    */
-  public void trySave(String writeToken) throws IOException {
+  public void trySave() throws IOException {
     String extension = getMetafileExtension();
-    Path metaPath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + extension);
+    StoragePath metaPath = new StoragePath(
+        partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + extension);
 
     // This retry mechanism enables an exit-fast in metaPath exists check, which avoid the
     // tasks failures when there are two or more tasks trying to create the same metaPath.
     RetryHelper<Void, IOException>  retryHelper = new RetryHelper(1000, 3, 1000, IOException.class.getName())
         .tryWith(() -> {
-          if (!fs.exists(metaPath)) {
+          if (!storage.exists(metaPath)) {
             if (format.isPresent()) {
-              Path tmpMetaPath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + "_" + writeToken + extension);
+              StoragePath tmpMetaPath = new StoragePath(
+                  partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + "_" + UUID.randomUUID() + extension);
               writeMetafileInFormat(metaPath, tmpMetaPath, format.get());
             } else {
               // Backwards compatible properties file format
               try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
                 props.store(os, "partition metadata");
                 Option content = Option.of(os.toByteArray());
-                HadoopFSUtils.createImmutableFileInPath(fs, metaPath, content, true, "_" + writeToken);
+                storage.createImmutableFileInPath(metaPath, content);
               }
             }
           }
@@ -136,17 +137,17 @@ public class HoodiePartitionMetadata {
    * @param format Hoodie table file format
    * @throws IOException
    */
-  private void writeMetafileInFormat(Path filePath, Path tmpPath, HoodieFileFormat format) throws IOException {
+  private void writeMetafileInFormat(StoragePath filePath, StoragePath tmpPath, HoodieFileFormat format) throws IOException {
     try {
       // write to temporary file
-      BaseFileUtils.getInstance(format).writeMetaFile(fs, tmpPath, props);
+      BaseFileUtils.getInstance(format).writeMetaFile(storage, tmpPath, props);
       // move to actual path
-      fs.rename(tmpPath, filePath);
+      storage.rename(tmpPath, filePath);
     } finally {
       try {
         // clean up tmp file, if still lying around
-        if (fs.exists(tmpPath)) {
-          fs.delete(tmpPath, false);
+        if (storage.exists(tmpPath)) {
+          storage.deleteFile(tmpPath);
         }
       } catch (IOException ioe) {
         LOG.warn("Error trying to clean up temporary files for " + partitionPath, ioe);
@@ -173,8 +174,8 @@ public class HoodiePartitionMetadata {
 
   private boolean readTextFormatMetaFile() {
     // Properties file format
-    Path metafilePath = textFormatMetaFilePath(partitionPath);
-    try (InputStream is = fs.open(metafilePath)) {
+    StoragePath metafilePath = textFormatMetaFilePath(partitionPath);
+    try (InputStream is = storage.open(metafilePath)) {
       props.load(is);
       format = Option.empty();
       return true;
@@ -185,11 +186,12 @@ public class HoodiePartitionMetadata {
   }
 
   private boolean readBaseFormatMetaFile() {
-    for (Path metafilePath : baseFormatMetaFilePaths(partitionPath)) {
+    for (StoragePath metafilePath : baseFormatMetaFilePaths(partitionPath)) {
       try {
         BaseFileUtils reader = BaseFileUtils.getInstance(metafilePath.toString());
         // Data file format
-        Map<String, String> metadata = reader.readFooter(fs.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
+        Map<String, String> metadata = reader.readFooter(
+            (Configuration) storage.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
         props.clear();
         props.putAll(metadata);
         format = Option.of(reader.getFormat());
@@ -216,11 +218,10 @@ public class HoodiePartitionMetadata {
     }
   }
 
-  // methods related to partition meta data
-  public static boolean hasPartitionMetadata(FileSystem fs, Path partitionPath) {
+  public static boolean hasPartitionMetadata(HoodieStorage storage, StoragePath partitionPath) {
     try {
-      return textFormatMetaPathIfExists(fs, partitionPath).isPresent()
-          || baseFormatMetaPathIfExists(fs, partitionPath).isPresent();
+      return textFormatMetaPathIfExists(storage, partitionPath).isPresent()
+          || baseFormatMetaPathIfExists(storage, partitionPath).isPresent();
     } catch (IOException ioe) {
       throw new HoodieIOException("Error checking presence of partition meta file for " + partitionPath, ioe);
     }
@@ -231,43 +232,43 @@ public class HoodiePartitionMetadata {
    *
    * @return Name of the partition metafile or empty option
    */
-  public static Option<Path> getPartitionMetafilePath(FileSystem fs, Path partitionPath) {
+  public static Option<StoragePath> getPartitionMetafilePath(HoodieStorage storage, StoragePath partitionPath) {
     // The partition listing is a costly operation so instead we are searching for existence of the files instead.
     // This is in expected order as properties file based partition metafiles should be the most common.
     try {
-      Option<Path> textFormatPath = textFormatMetaPathIfExists(fs, partitionPath);
+      Option<StoragePath> textFormatPath = textFormatMetaPathIfExists(storage, partitionPath);
       if (textFormatPath.isPresent()) {
         return textFormatPath;
       } else {
-        return baseFormatMetaPathIfExists(fs, partitionPath);
+        return baseFormatMetaPathIfExists(storage, partitionPath);
       }
     } catch (IOException ioe) {
       throw new HoodieException("Error checking Hoodie partition metadata for " + partitionPath, ioe);
     }
   }
 
-  public static Option<Path> baseFormatMetaPathIfExists(FileSystem fs, Path partitionPath) throws IOException {
+  public static Option<StoragePath> baseFormatMetaPathIfExists(HoodieStorage storage, StoragePath partitionPath) throws IOException {
     // Parquet should be more common than ORC so check it first
-    for (Path metafilePath : baseFormatMetaFilePaths(partitionPath)) {
-      if (fs.exists(metafilePath)) {
+    for (StoragePath metafilePath : baseFormatMetaFilePaths(partitionPath)) {
+      if (storage.exists(metafilePath)) {
         return Option.of(metafilePath);
       }
     }
     return Option.empty();
   }
 
-  public static Option<Path> textFormatMetaPathIfExists(FileSystem fs, Path partitionPath) throws IOException {
-    Path path = textFormatMetaFilePath(partitionPath);
-    return Option.ofNullable(fs.exists(path) ? path : null);
+  public static Option<StoragePath> textFormatMetaPathIfExists(HoodieStorage storage, StoragePath partitionPath) throws IOException {
+    StoragePath path = textFormatMetaFilePath(partitionPath);
+    return Option.ofNullable(storage.exists(path) ? path : null);
   }
 
-  static Path textFormatMetaFilePath(Path partitionPath) {
-    return new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+  static StoragePath textFormatMetaFilePath(StoragePath partitionPath) {
+    return new StoragePath(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
   }
 
-  static List<Path> baseFormatMetaFilePaths(Path partitionPath) {
+  static List<StoragePath> baseFormatMetaFilePaths(StoragePath partitionPath) {
     return Stream.of(HoodieFileFormat.PARQUET.getFileExtension(), HoodieFileFormat.ORC.getFileExtension())
-        .map(ext -> new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + ext))
+        .map(ext -> new StoragePath(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + ext))
         .collect(Collectors.toList());
   }
 }

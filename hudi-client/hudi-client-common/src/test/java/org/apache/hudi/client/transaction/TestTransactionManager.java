@@ -32,16 +32,17 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.metrics.MetricsReporterType;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.junit.jupiter.api.TestInfo;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -55,7 +56,7 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     initPath();
     initMetaClient();
     this.writeConfig = getWriteConfig(testInfo.getTags().contains("useLockProviderWithRuntimeError"));
-    this.transactionManager = new TransactionManager(this.writeConfig, this.metaClient.getFs());
+    this.transactionManager = new TransactionManager(this.writeConfig, this.metaClient.getStorage());
   }
 
   private HoodieWriteConfig getWriteConfig(boolean useLockProviderWithRuntimeError) {

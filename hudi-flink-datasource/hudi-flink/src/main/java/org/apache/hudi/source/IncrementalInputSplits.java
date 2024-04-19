@@ -38,13 +38,13 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -171,7 +171,7 @@ public class IncrementalInputSplits implements Serializable {
     //   3. the start commit is archived
     //   4. the end commit is archived
     Set<String> readPartitions;
-    final FileStatus[] fileStatuses;
+    final List<StoragePathInfo> fileInfoList;
     if (fullTableScan) {
       // scans the partitions and files directly.
       FileIndex fileIndex = getFileIndex();
@@ -180,7 +180,7 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
-      fileStatuses = fileIndex.getFilesInPartitions();
+      fileInfoList = fileIndex.getFilesInPartitions();
     } else {
       if (cdcEnabled) {
         // case1: cdc change log enabled
@@ -191,13 +191,15 @@ public class IncrementalInputSplits implements Serializable {
       String tableName = conf.getString(FlinkOptions.TABLE_NAME);
       List<HoodieInstant> instants = analyzingResult.getActiveInstants();
       List<HoodieCommitMetadata> metadataList = instants.stream()
-          .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
+          .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline))
+          .collect(Collectors.toList());
       readPartitions = getReadPartitions(metadataList);
       if (readPartitions.size() == 0) {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
-      FileStatus[] files = WriteProfiles.getFilesFromMetadata(path, metaClient.getHadoopConf(), metadataList, metaClient.getTableType(), false);
+      List<StoragePathInfo> files = WriteProfiles.getFilesFromMetadata(
+          path, metaClient.getHadoopConf(), metadataList, metaClient.getTableType(), false);
       if (files == null) {
         LOG.warn("Found deleted files in metadata, fall back to full table scan.");
         // fallback to full table scan
@@ -208,19 +210,19 @@ public class IncrementalInputSplits implements Serializable {
           LOG.warn("No partitions found for reading in user provided path.");
           return Result.EMPTY;
         }
-        fileStatuses = fileIndex.getFilesInPartitions();
+        fileInfoList = fileIndex.getFilesInPartitions();
       } else {
-        fileStatuses = files;
+        fileInfoList = files;
       }
     }
 
-    if (fileStatuses.length == 0) {
+    if (fileInfoList.size() == 0) {
       LOG.warn("No files found for reading in user provided path.");
       return Result.EMPTY;
     }
 
     List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, endInstant, analyzingResult.getMaxCompletionTime(), instantRange, false);
+        fileInfoList, readPartitions, endInstant, analyzingResult.getMaxCompletionTime(), instantRange, false);
 
     return Result.instance(inputSplits, endInstant);
   }
@@ -276,14 +278,14 @@ public class IncrementalInputSplits implements Serializable {
         return Result.EMPTY;
       }
 
-      FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
-      if (fileStatuses.length == 0) {
+      List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+      if (pathInfoList.size() == 0) {
         LOG.warn("No files found for reading under path: " + path);
         return Result.EMPTY;
       }
 
       List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-          fileStatuses, readPartitions, endInstant, offsetToIssue, null, false);
+          pathInfoList, readPartitions, endInstant, offsetToIssue, null, false);
 
       return Result.instance(inputSplits, endInstant, offsetToIssue);
     } else {
@@ -329,27 +331,28 @@ public class IncrementalInputSplits implements Serializable {
       LOG.warn("No partitions found for reading under path: " + path);
       return Collections.emptyList();
     }
-    FileStatus[] fileStatuses = WriteProfiles.getFilesFromMetadata(path, hadoopConf, metadataList, metaClient.getTableType());
+    List<StoragePathInfo> pathInfoList = WriteProfiles.getFilesFromMetadata(
+        path, hadoopConf, metadataList, metaClient.getTableType());
 
-    if (fileStatuses.length == 0) {
+    if (pathInfoList.size() == 0) {
       LOG.warn("No files found for reading under path: " + path);
       return Collections.emptyList();
     }
 
     return getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, endInstant, queryContext.getMaxCompletionTime(), instantRange, skipCompaction);
+        pathInfoList, readPartitions, endInstant, queryContext.getMaxCompletionTime(), instantRange, skipCompaction);
   }
 
   private List<MergeOnReadInputSplit> getInputSplits(
       HoodieTableMetaClient metaClient,
       HoodieTimeline commitTimeline,
-      FileStatus[] fileStatuses,
+      List<StoragePathInfo> pathInfoList,
       Set<String> readPartitions,
       String endInstant,
       String maxCompletionTime,
       InstantRange instantRange,
       boolean skipBaseFiles) {
-    final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
+    final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, pathInfoList);
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     return readPartitions.stream()

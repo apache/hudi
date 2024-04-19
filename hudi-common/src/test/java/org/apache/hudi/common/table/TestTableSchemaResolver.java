@@ -27,12 +27,13 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -92,13 +93,13 @@ public class TestTableSchemaResolver {
   @Test
   public void testReadSchemaFromLogFile() throws IOException, URISyntaxException, InterruptedException {
     String testDir = initTestDir("read_schema_from_log_file");
-    Path partitionPath = new Path(testDir, "partition1");
+    StoragePath partitionPath = new StoragePath(testDir, "partition1");
     Schema expectedSchema = getSimpleSchema();
-    Path logFilePath = writeLogFile(partitionPath, expectedSchema);
+    StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema);
     assertEquals(
         new AvroSchemaConverter().convert(expectedSchema),
         TableSchemaResolver.readSchemaFromLogFile(
-            logFilePath.getFileSystem(new Configuration()), logFilePath));
+            HoodieStorageUtils.getStorage(logFilePath, new Configuration()), logFilePath));
   }
 
   private String initTestDir(String folderName) throws IOException {
@@ -107,11 +108,11 @@ public class TestTableSchemaResolver {
     return basePath.toString();
   }
 
-  private Path writeLogFile(Path partitionPath, Schema schema) throws IOException, URISyntaxException, InterruptedException {
-    FileSystem fs = partitionPath.getFileSystem(new Configuration());
+  private StoragePath writeLogFile(StoragePath partitionPath, Schema schema) throws IOException, URISyntaxException, InterruptedException {
+    HoodieStorage storage = HoodieStorageUtils.getStorage(partitionPath, new Configuration());
     HoodieLogFormat.Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withDeltaCommit("100").withFs(fs).build();
+            .withFileId("test-fileid1").withDeltaCommit("100").withStorage(storage).build();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");

@@ -19,14 +19,15 @@
 
 package org.apache.hudi.hadoop.fs;
 
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BufferedFSInputStream;
@@ -40,8 +41,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Utility functions related to accessing the file storage on Hadoop.
@@ -87,6 +89,10 @@ public class HadoopFSUtils {
     return getFs(new Path(pathStr), conf);
   }
 
+  public static FileSystem getFs(StoragePath path, Configuration conf) {
+    return getFs(new Path(path.toUri()), conf);
+  }
+
   public static FileSystem getFs(Path path, Configuration conf) {
     FileSystem fs;
     prepareHadoopConf(conf);
@@ -103,6 +109,25 @@ public class HadoopFSUtils {
       return getFs(addSchemeIfLocalPath(pathStr), conf);
     }
     return getFs(pathStr, conf);
+  }
+
+  public static HoodieStorage getStorageWithWrapperFS(StoragePath path,
+                                                      Configuration conf,
+                                                      boolean enableRetry,
+                                                      long maxRetryIntervalMs,
+                                                      int maxRetryNumbers,
+                                                      long initialRetryIntervalMs,
+                                                      String retryExceptions,
+                                                      ConsistencyGuard consistencyGuard) {
+    FileSystem fileSystem = getFs(path, new Configuration(conf));
+
+    if (enableRetry) {
+      fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
+          maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptions);
+    }
+    checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
+        "File System not expected to be that of HoodieWrapperFileSystem");
+    return new HoodieHadoopStorage(new HoodieWrapperFileSystem(fileSystem, consistencyGuard));
   }
 
   public static Path addSchemeIfLocalPath(String path) {
@@ -159,76 +184,6 @@ public class HadoopFSUtils {
         pathInfo.getBlockSize(),
         pathInfo.getModificationTime(),
         convertToHadoopPath(pathInfo.getPath()));
-  }
-
-  /**
-   * Creates a new file with overwrite set to false. This ensures files are created
-   * only once and never rewritten, also, here we take care if the content is not
-   * empty, will first write the content to a temp file if {@code needTempFile} is
-   * true, and then rename it back after the content is written.
-   *
-   * @param fs File System
-   * @param fullPath File Path
-   * @param content Content to be stored
-   * @param needTempFile If it needs to create temporary file
-   * @param tmpSuffix Suffix of the temporary file
-   */
-  public  static void createImmutableFileInPath(
-      FileSystem fs,
-      Path fullPath,
-      Option<byte[]> content,
-      boolean needTempFile,
-      String tmpSuffix) throws HoodieIOException {
-    OutputStream out = null;
-    Path tmpPath = null;
-
-    try {
-      if (!content.isPresent()) {
-        out = fs.create(fullPath, false);
-      }
-
-      if (content.isPresent() && needTempFile) {
-        Path parent = fullPath.getParent();
-        tmpPath = new Path(parent, fullPath.getName() + tmpSuffix);
-        out = fs.create(tmpPath, false);
-        out.write(content.get());
-      }
-
-      if (content.isPresent() && !needTempFile) {
-        out = fs.create(fullPath, false);
-        out.write(content.get());
-      }
-    } catch (IOException e) {
-      String errorMsg = "Failed to create file " + (tmpPath != null ? tmpPath : fullPath);
-      throw new HoodieIOException(errorMsg, e);
-    } finally {
-      try {
-        if (null != out) {
-          out.close();
-        }
-      } catch (IOException e) {
-        String errorMsg = "Failed to close file " + (needTempFile ? tmpPath : fullPath);
-        throw new HoodieIOException(errorMsg, e);
-      }
-
-      boolean renameSuccess = false;
-      try {
-        if (null != tmpPath) {
-          renameSuccess = fs.rename(tmpPath, fullPath);
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to rename " + tmpPath + " to the target " + fullPath, e);
-      } finally {
-        if (!renameSuccess && null != tmpPath) {
-          try {
-            fs.delete(tmpPath, false);
-            LOG.warn("Fail to rename " + tmpPath + " to " + fullPath + ", target file exists: " + fs.exists(fullPath));
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to delete tmp file " + tmpPath, e);
-          }
-        }
-      }
-    }
   }
 
   /**

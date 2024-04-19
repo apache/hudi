@@ -47,6 +47,7 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -106,8 +107,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected HoodieFileWriter fileWriter;
   protected boolean preserveMetadata = false;
 
-  protected Path newFilePath;
-  protected Path oldFilePath;
+  protected StoragePath newFilePath;
+  protected StoragePath oldFilePath;
   protected long recordsWritten = 0;
   protected long recordsDeleted = 0;
   protected long updatedRecordsWritten = 0;
@@ -172,10 +173,11 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       String latestValidFilePath = baseFileToMerge.getFileName();
       writeStatus.getStat().setPrevCommit(baseFileToMerge.getCommitTime());
 
-      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
-          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
+          new StoragePath(config.getBasePath()),
+          FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
-      partitionMetadata.trySave(writeToken);
+      partitionMetadata.trySave();
 
       String newFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
       makeOldAndNewFilePaths(partitionPath, latestValidFilePath, newFileName);
@@ -206,7 +208,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   protected void setWriteStatusPath() {
-    writeStatus.getStat().setPath(new Path(config.getBasePath()), newFilePath);
+    writeStatus.getStat().setPath(new StoragePath(config.getBasePath()), newFilePath);
   }
 
   protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
@@ -382,7 +384,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         writeToFile(new HoodieKey(key, partitionPath), oldRecord, oldSchema, props, true);
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
-                key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
+            key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
         LOG.debug("Old record is " + oldRecord);
         throw new HoodieUpsertException(errMsg, e);
       }
@@ -436,7 +438,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       fileWriter.close();
       fileWriter = null;
 
-      long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
+      long fileSizeInBytes = FSUtils.getFileSize(fs, new Path(newFilePath.toUri()));
       HoodieWriteStat stat = writeStatus.getStat();
 
       stat.setTotalWriteBytes(fileSizeInBytes);
@@ -492,7 +494,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     return Collections.singletonList(statuses).iterator();
   }
 
-  public Path getOldFilePath() {
+  public StoragePath getOldFilePath() {
     return oldFilePath;
   }
 

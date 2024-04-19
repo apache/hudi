@@ -41,14 +41,14 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +67,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieClient.class);
 
   private static final long serialVersionUID = 1L;
-  protected final transient FileSystem fs;
+  protected final transient HoodieStorage storage;
   protected final transient HoodieEngineContext context;
   protected final transient Configuration hadoopConf;
   protected final transient HoodieMetrics metrics;
@@ -92,16 +92,17 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
     this.hadoopConf = context.getHadoopConf().get();
-    this.fs = HadoopFSUtils.getFs(clientConfig.getBasePath(), hadoopConf);
+    this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), hadoopConf);
     this.context = context;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
     this.timelineServer = timelineServer;
     shouldStopTimelineServer = !timelineServer.isPresent();
-    this.heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
-        clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
+    this.heartbeatClient = new HoodieHeartbeatClient(storage, this.basePath,
+        clientConfig.getHoodieClientHeartbeatIntervalInMs(),
+        clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config);
-    this.txnManager = new TransactionManager(config, fs);
+    this.txnManager = new TransactionManager(config, storage);
     this.timeGenerator = TimeGenerators.getTimeGenerator(config.getTimeGeneratorConfig(), hadoopConf);
     startEmbeddedServerView();
     initWrapperFSMetrics();

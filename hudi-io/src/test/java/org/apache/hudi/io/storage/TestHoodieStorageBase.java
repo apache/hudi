@@ -68,7 +68,7 @@ public abstract class TestHoodieStorageBase {
    * @param conf configuration instance.
    * @return {@link HoodieStorage} instance based on the implementation for testing.
    */
-  protected abstract HoodieStorage getHoodieStorage(Object fs, Object conf);
+  protected abstract HoodieStorage getStorage(Object fs, Object conf);
 
   /**
    * @param conf configuration instance.
@@ -83,7 +83,7 @@ public abstract class TestHoodieStorageBase {
 
   @AfterEach
   public void cleanUpTempDir() {
-    HoodieStorage storage = getHoodieStorage();
+    HoodieStorage storage = getStorage();
     try {
       for (StoragePathInfo pathInfo : storage.listDirectEntries(new StoragePath(getTempDir()))) {
         StoragePath path = pathInfo.getPath();
@@ -100,17 +100,17 @@ public abstract class TestHoodieStorageBase {
 
   @Test
   public void testGetScheme() {
-    assertEquals("file", getHoodieStorage().getScheme());
+    assertEquals("file", getStorage().getScheme());
   }
 
   @Test
   public void testGetUri() throws URISyntaxException {
-    assertEquals(new URI("file:///"), getHoodieStorage().getUri());
+    assertEquals(new URI("file:///"), getStorage().getUri());
   }
 
   @Test
   public void testCreateWriteAndRead() throws IOException {
-    HoodieStorage storage = getHoodieStorage();
+    HoodieStorage storage = getStorage();
 
     StoragePath path = new StoragePath(getTempDir(), "testCreateAppendAndRead/1.file");
     assertFalse(storage.exists(path));
@@ -152,7 +152,7 @@ public abstract class TestHoodieStorageBase {
 
   @Test
   public void testSeekable() throws IOException {
-    HoodieStorage storage = getHoodieStorage();
+    HoodieStorage storage = getStorage();
     StoragePath path = new StoragePath(getTempDir(), "testSeekable/1.file");
     assertFalse(storage.exists(path));
     byte[] data = new byte[] {2, 42, 49, (byte) 158, (byte) 233, 66, 9, 34, 79};
@@ -193,7 +193,7 @@ public abstract class TestHoodieStorageBase {
 
   @Test
   public void testListing() throws IOException {
-    HoodieStorage storage = getHoodieStorage();
+    HoodieStorage storage = getStorage();
     // Full list:
     // w/1.file
     // w/2.file
@@ -272,7 +272,7 @@ public abstract class TestHoodieStorageBase {
 
   @Test
   public void testFileNotFound() throws IOException {
-    HoodieStorage storage = getHoodieStorage();
+    HoodieStorage storage = getStorage();
 
     StoragePath filePath = new StoragePath(getTempDir(), "testFileNotFound/1.file");
     StoragePath dirPath = new StoragePath(getTempDir(), "testFileNotFound/2");
@@ -288,7 +288,7 @@ public abstract class TestHoodieStorageBase {
 
   @Test
   public void testRename() throws IOException {
-    HoodieStorage storage = getHoodieStorage();
+    HoodieStorage storage = getStorage();
 
     StoragePath path = new StoragePath(getTempDir(), "testRename/1.file");
     assertFalse(storage.exists(path));
@@ -303,7 +303,7 @@ public abstract class TestHoodieStorageBase {
 
   @Test
   public void testDelete() throws IOException {
-    HoodieStorage storage = getHoodieStorage();
+    HoodieStorage storage = getStorage();
 
     StoragePath path = new StoragePath(getTempDir(), "testDelete/1.file");
     assertFalse(storage.exists(path));
@@ -326,7 +326,7 @@ public abstract class TestHoodieStorageBase {
 
   @Test
   public void testMakeQualified() {
-    HoodieStorage storage = getHoodieStorage();
+    HoodieStorage storage = getStorage();
     StoragePath path = new StoragePath("/tmp/testMakeQualified/1.file");
     assertEquals(
         new StoragePath("file:/tmp/testMakeQualified/1.file"),
@@ -337,7 +337,7 @@ public abstract class TestHoodieStorageBase {
   public void testGetFileSystem() {
     Object conf = getConf();
     Object fs = getFileSystem(conf);
-    HoodieStorage storage = getHoodieStorage(fs, conf);
+    HoodieStorage storage = getStorage(fs, conf);
     assertSame(fs, storage.getFileSystem());
   }
 
@@ -357,9 +357,9 @@ public abstract class TestHoodieStorageBase {
     }
   }
 
-  private HoodieStorage getHoodieStorage() {
+  private HoodieStorage getStorage() {
     Object conf = getConf();
-    return getHoodieStorage(getFileSystem(conf), conf);
+    return getStorage(getFileSystem(conf), conf);
   }
 
   private StoragePathInfo getStoragePathInfo(String subPath, boolean isDirectory) {

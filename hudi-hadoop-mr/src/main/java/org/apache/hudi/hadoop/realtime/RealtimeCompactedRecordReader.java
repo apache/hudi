@@ -29,11 +29,11 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -85,7 +85,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(HadoopFSUtils.getFs(split.getPath().toString(), jobConf))
+        .withStorage(HoodieStorageUtils.getStorage(split.getPath().toString(), jobConf))
         .withBasePath(split.getBasePath())
         .withLogFilePaths(split.getDeltaLogPaths())
         .withReaderSchema(getLogScannerReaderSchema())

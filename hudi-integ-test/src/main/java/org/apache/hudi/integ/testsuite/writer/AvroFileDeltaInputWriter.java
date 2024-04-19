@@ -20,6 +20,7 @@ package org.apache.hudi.integ.testsuite.writer;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileWriter;
@@ -67,7 +68,7 @@ public class AvroFileDeltaInputWriter implements DeltaInputWriter<GenericRecord>
     this.maxFileSize = maxFileSize;
     this.configuration = configuration;
     this.basePath = basePath;
-    Path path = new Path(basePath, new Path(UUID.randomUUID().toString() + AVRO_EXTENSION));
+    StoragePath path = new StoragePath(basePath, UUID.randomUUID().toString() + AVRO_EXTENSION);
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(path, configuration);
     this.fs = (HoodieWrapperFileSystem) this.file
         .getFileSystem(FSUtils.registerFileSystem(path, configuration));

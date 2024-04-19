@@ -18,12 +18,13 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
+
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -155,7 +156,7 @@ class Spark2Adapter extends SparkAdapter {
   override def createRelation(sqlContext: SQLContext,
                               metaClient: HoodieTableMetaClient,
                               schema: Schema,
-                              globPaths: Array[Path],
+                              globPaths: Array[StoragePath],
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
