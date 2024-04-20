@@ -20,6 +20,8 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
@@ -48,6 +50,8 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.concurrent.Immutable;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -71,13 +75,12 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
-/**
- * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
- * initializing a path as hoodie base path and never changes during the lifetime of a hoodie table.
- *
- * @see HoodieTableMetaClient
- * @since 0.3.0
- */
+@Immutable
+@ConfigClassProperty(name = "Hudi Table Basic Configs",
+    groupName = ConfigGroups.Names.TABLE_CONFIG,
+    description = "Configurations of the Hudi Table like type of ingestion, storage formats, hive table name etc."
+        + " Configurations are loaded from hoodie.properties, these properties are usually set during"
+        + " initializing a path as hoodie base path and never changes during the lifetime of a hoodie table.")
 public class HoodieTableConfig extends HoodieConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableConfig.class);
