@@ -257,7 +257,7 @@ public abstract class HoodieStorage implements Closeable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public final void createImmutableFileInPath(StoragePath path,
-                                              Option<byte[]> content) throws IOException {
+                                              Option<byte[]> content) throws HoodieIOException {
     OutputStream fsout = null;
     StoragePath tmpPath = null;
 

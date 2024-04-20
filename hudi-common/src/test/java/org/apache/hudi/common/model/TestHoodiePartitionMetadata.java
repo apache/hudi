@@ -77,7 +77,7 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
     HoodiePartitionMetadata writtenMetadata = new HoodiePartitionMetadata(
         metaClient.getStorage(), commitTime, new StoragePath(basePath), partitionPath,
         format);
-    writtenMetadata.trySave(0);
+    writtenMetadata.trySave();
 
     // when
     HoodiePartitionMetadata readMetadata = new HoodiePartitionMetadata(
