@@ -82,11 +82,11 @@ public final class TestTablePathUtils {
     HoodiePartitionMetadata partitionMetadata1 = new HoodiePartitionMetadata(
         storage, Instant.now().toString(), tablePath,
         partitionPath1, partitionMetafileFormat);
-    partitionMetadata1.trySave(1);
+    partitionMetadata1.trySave();
     HoodiePartitionMetadata partitionMetadata2 = new HoodiePartitionMetadata(
         storage, Instant.now().toString(), tablePath,
         partitionPath2, partitionMetafileFormat);
-    partitionMetadata2.trySave(2);
+    partitionMetadata2.trySave();
 
     // Create files
     URI filePathURI1 =

@@ -209,7 +209,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           new StoragePath(config.getBasePath()),
           FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
-      partitionMetadata.trySave(getPartitionId());
+      partitionMetadata.trySave();
 
       this.writer = createLogWriter(getFileInstant(record));
     } catch (Exception e) {
