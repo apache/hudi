@@ -208,7 +208,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, baseInstantTime,
             new StoragePath(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
             hoodieTable.getPartitionMetafileFormat());
-        partitionMetadata.trySave(getPartitionId());
+        partitionMetadata.trySave();
         this.writer = createLogWriter(fileSlice, baseInstantTime);
       } catch (Exception e) {
         LOG.error("Error in update task at commit " + instantTime, e);

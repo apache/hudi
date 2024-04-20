@@ -796,11 +796,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
       FileIOUtils.createFileInPath(metaClient.getStorage(), fullPath, content);
     } else {
-      try {
-        metaClient.getStorage().createImmutableFileInPath(fullPath, content);
-      } catch (IOException e) {
-        throw new HoodieIOException("Cannot create immutable file: " + fullPath, e);
-      }
+      metaClient.getStorage().createImmutableFileInPath(fullPath, content);
     }
   }
 
