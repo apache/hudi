@@ -21,6 +21,7 @@ package org.apache.hudi.config;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -30,7 +31,7 @@ import java.util.Arrays;
 @ConfigClassProperty(name = "Error table Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that are required for Error table configs")
-public class HoodieErrorTableConfig {
+public class HoodieErrorTableConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> ERROR_TABLE_ENABLED = ConfigProperty
       .key("hoodie.errortable.enable")
       .defaultValue(false)
