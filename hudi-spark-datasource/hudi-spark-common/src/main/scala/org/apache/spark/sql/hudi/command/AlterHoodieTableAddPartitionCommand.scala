@@ -66,7 +66,7 @@ case class AlterHoodieTableAddPartitionCommand(
     val format = hoodieCatalogTable.tableConfig.getPartitionMetafileFormat
     val (partitionMetadata, parts) = normalizedSpecs.map { spec =>
       val partitionPath = makePartitionPath(hoodieCatalogTable, spec)
-      val fullPartitionPath: StoragePath = FSUtils.getPartitionPath(basePath, partitionPath)
+      val fullPartitionPath: StoragePath = FSUtils.constructAbsolutePath(basePath, partitionPath)
       val metadata = if (HoodiePartitionMetadata.hasPartitionMetadata(storage, fullPartitionPath)) {
         if (!ifNotExists) {
           throw new AnalysisException(s"Partition metadata already exists for path: $fullPartitionPath")

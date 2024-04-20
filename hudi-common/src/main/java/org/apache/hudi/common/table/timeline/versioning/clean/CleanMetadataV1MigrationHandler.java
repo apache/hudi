@@ -99,6 +99,6 @@ public class CleanMetadataV1MigrationHandler extends AbstractMigratorBase<Hoodie
       return fileName;
     }
 
-    return new Path(FSUtils.getPartitionPath(basePath, partitionPath), fileName).toString();
+    return new Path(FSUtils.constructAbsolutePath(basePath, partitionPath), fileName).toString();
   }
 }

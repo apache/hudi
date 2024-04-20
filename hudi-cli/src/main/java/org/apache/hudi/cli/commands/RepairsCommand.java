@@ -128,7 +128,7 @@ public class RepairsCommand {
 
     int ind = 0;
     for (String partition : partitionPaths) {
-      StoragePath partitionPath = FSUtils.getPartitionPath(basePath, partition);
+      StoragePath partitionPath = FSUtils.constructAbsolutePath(basePath, partition);
       String[] row = new String[3];
       row[0] = partition;
       row[1] = "Yes";
@@ -237,7 +237,7 @@ public class RepairsCommand {
     int ind = 0;
     for (String partitionPath : partitionPaths) {
       StoragePath partition =
-          FSUtils.getPartitionPath(client.getBasePath(), partitionPath);
+          FSUtils.constructAbsolutePath(client.getBasePath(), partitionPath);
       Option<StoragePath> textFormatFile =
           HoodiePartitionMetadata.textFormatMetaPathIfExists(HoodieCLI.storage, partition);
       Option<StoragePath> baseFormatFile =
