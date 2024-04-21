@@ -103,7 +103,6 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.hadoop.fs.CachingPath.getPathWithoutSchemeAndAuthority;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -1244,8 +1243,8 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   private String getRelativePath(String basePath, String absoluteFilePath) {
-    String basePathStr = getPathWithoutSchemeAndAuthority(new Path(basePath)).toString();
-    String absoluteFilePathStr = getPathWithoutSchemeAndAuthority(new Path(absoluteFilePath)).toString();
+    String basePathStr = new StoragePath(basePath).getPathWithoutSchemeAndAuthority().toString();
+    String absoluteFilePathStr = new StoragePath(absoluteFilePath).getPathWithoutSchemeAndAuthority().toString();
 
     if (!absoluteFilePathStr.startsWith(basePathStr)) {
       throw new IllegalArgumentException("File path does not belong to the base path! basePath="
