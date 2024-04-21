@@ -567,6 +567,10 @@ public class FSUtils {
     return isBaseFile(path) || isLogFile(path);
   }
 
+  public static boolean isDataFile(StoragePath path) {
+    return isBaseFile(path) || isLogFile(path);
+  }
+
   /**
    * Get the names of all the base and log files in the given partition path.
    */

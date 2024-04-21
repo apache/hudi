@@ -67,18 +67,12 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.hadoop.fs.CachingPath;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.hadoop.fs.SerializablePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -593,15 +587,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
   private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime) {
-    List<SerializablePath> pathsToList = new LinkedList<>();
-    pathsToList.add(new SerializablePath(new CachingPath(dataWriteConfig.getBasePath())));
+    List<StoragePath> pathsToList = new LinkedList<>();
+    pathsToList.add(new StoragePath(dataWriteConfig.getBasePath()));
 
     List<DirectoryInfo> partitionsToBootstrap = new LinkedList<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
-    SerializableConfiguration conf = new SerializableConfiguration(dataMetaClient.getHadoopConf());
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
     final String datasetBasePath = dataMetaClient.getBasePathV2().toString();
-    SerializablePath serializableBasePath = new SerializablePath(new CachingPath(datasetBasePath));
+    StoragePath storageBasePath = new StoragePath(datasetBasePath);
 
     while (!pathsToList.isEmpty()) {
       // In each round we will list a section of directories
@@ -609,9 +602,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // List all directories in parallel
       engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing " + numDirsToList + " partitions from filesystem");
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToList.subList(0, numDirsToList), path -> {
-        FileSystem fs = path.get().getFileSystem(conf.get());
-        String relativeDirPath = FSUtils.getRelativePartitionPath(serializableBasePath.get(), path.get());
-        return new DirectoryInfo(relativeDirPath, fs.listStatus(path.get()), initializationTime);
+        String relativeDirPath = FSUtils.getRelativePartitionPath(storageBasePath, path);
+        return new DirectoryInfo(relativeDirPath, metadataMetaClient.getStorage().listDirectEntries(path), initializationTime);
       }, numDirsToList);
 
       pathsToList = new LinkedList<>(pathsToList.subList(numDirsToList, pathsToList.size()));
@@ -632,9 +624,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           partitionsToBootstrap.add(dirInfo);
         } else {
           // Add sub-dirs to the queue
-          pathsToList.addAll(dirInfo.getSubDirectories().stream()
-              .map(path -> new SerializablePath(new CachingPath(path.toUri())))
-              .collect(Collectors.toList()));
+          pathsToList.addAll(dirInfo.getSubDirectories());
         }
       }
     }
@@ -651,14 +641,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   private List<DirectoryInfo> listAllPartitionsFromMDT(String initializationTime) throws IOException {
     List<DirectoryInfo> dirinfoList = new LinkedList<>();
     List<String> allPartitionPaths = metadata.getAllPartitionPaths().stream()
-        .map(partitionPath -> dataWriteConfig.getBasePath() + "/" + partitionPath).collect(Collectors.toList());
-    Map<String, FileStatus[]> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths)
-        .entrySet()
-        .stream()
-        .collect(Collectors.toMap(e -> e.getKey(),
-            e -> e.getValue().stream().map(status -> HadoopFSUtils.convertToHadoopFileStatus(status))
-                .toArray(FileStatus[]::new)));
-    for (Map.Entry<String, FileStatus[]> entry : partitionFileMap.entrySet()) {
+        .map(partitionPath -> dataWriteConfig.getBasePath() + StoragePath.SEPARATOR_CHAR + partitionPath).collect(Collectors.toList());
+    Map<String, List<StoragePathInfo>> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths);
+    for (Map.Entry<String, List<StoragePathInfo>> entry : partitionFileMap.entrySet()) {
       dirinfoList.add(new DirectoryInfo(entry.getKey(), entry.getValue(), initializationTime));
     }
     return dirinfoList;
@@ -1495,31 +1480,31 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Map of filenames within this partition to their respective sizes
     private final HashMap<String, Long> filenameToSizeMap;
     // List of directories within this partition
-    private final List<Path> subDirectories = new ArrayList<>();
+    private final List<StoragePath> subDirectories = new ArrayList<>();
     // Is this a hoodie partition
     private boolean isHoodiePartition = false;
 
-    public DirectoryInfo(String relativePath, FileStatus[] fileStatus, String maxInstantTime) {
+    public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime) {
       this.relativePath = relativePath;
 
       // Pre-allocate with the maximum length possible
-      filenameToSizeMap = new HashMap<>(fileStatus.length);
+      filenameToSizeMap = new HashMap<>(pathInfos.size());
 
-      for (FileStatus status : fileStatus) {
-        if (status.isDirectory()) {
+      for (StoragePathInfo pathInfo : pathInfos) {
+        if (pathInfo.isDirectory()) {
           // Ignore .hoodie directory as there cannot be any partitions inside it
-          if (!status.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
-            this.subDirectories.add(status.getPath());
+          if (!pathInfo.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+            this.subDirectories.add(pathInfo.getPath());
           }
-        } else if (status.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
+        } else if (pathInfo.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
           // Presence of partition meta file implies this is a HUDI partition
           this.isHoodiePartition = true;
-        } else if (FSUtils.isDataFile(status.getPath())) {
+        } else if (FSUtils.isDataFile(pathInfo.getPath())) {
           // Regular HUDI data file (base file or log file)
-          String dataFileCommitTime = FSUtils.getCommitTime(status.getPath().getName());
+          String dataFileCommitTime = FSUtils.getCommitTime(pathInfo.getPath().getName());
           // Limit the file listings to files which were created before the maxInstant time.
           if (HoodieTimeline.compareTimestamps(dataFileCommitTime, LESSER_THAN_OR_EQUALS, maxInstantTime)) {
-            filenameToSizeMap.put(status.getPath().getName(), status.getLen());
+            filenameToSizeMap.put(pathInfo.getPath().getName(), pathInfo.getLength());
           }
         }
       }
@@ -1537,7 +1522,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       return isHoodiePartition;
     }
 
-    List<Path> getSubDirectories() {
+    List<StoragePath> getSubDirectories() {
       return subDirectories;
     }
 

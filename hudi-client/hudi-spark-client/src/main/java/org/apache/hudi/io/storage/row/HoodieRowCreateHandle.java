@@ -34,14 +34,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
@@ -67,7 +64,7 @@ public class HoodieRowCreateHandle implements Serializable {
   private final HoodieWriteConfig writeConfig;
 
   private final String partitionPath;
-  private final Path path;
+  private final StoragePath path;
   private final String fileId;
 
   private final boolean populateMetaFields;
@@ -116,12 +113,11 @@ public class HoodieRowCreateHandle implements Serializable {
     this.currTimer = HoodieTimer.start();
 
     HoodieStorage storage = table.getMetaClient().getStorage();
-    FileSystem fs = (FileSystem) storage.getFileSystem();
 
     String writeToken = getWriteToken(taskPartitionId, taskId, taskEpochId);
     String fileName = FSUtils.makeBaseFileName(instantTime, writeToken, this.fileId,
         table.getBaseFileExtension());
-    this.path = makeNewPath(fs, partitionPath, fileName, writeConfig);
+    this.path = makeNewPath(storage, partitionPath, fileName, writeConfig);
 
     this.populateMetaFields = writeConfig.populateMetaFields();
     this.fileName = UTF8String.fromString(path.getName());
@@ -147,13 +143,12 @@ public class HoodieRowCreateHandle implements Serializable {
 
       createMarkerFile(partitionPath, fileName, instantTime, table, writeConfig);
 
-      this.fileWriter = HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(
-          new StoragePath(path.toUri()), table, writeConfig, structType);
+      this.fileWriter = HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(path, table, writeConfig, structType);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
 
-    LOG.info("New handle created for partition: " + partitionPath + " with fileId " + fileId);
+    LOG.info("New handle created for partition: {} with fileId {}", partitionPath, fileId);
   }
 
   /**
@@ -242,9 +237,8 @@ public class HoodieRowCreateHandle implements Serializable {
     stat.setNumInserts(writeStatus.getTotalRecords());
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(fileId);
-    stat.setPath(new StoragePath(writeConfig.getBasePath()), new StoragePath(path.toUri()));
-    long fileSizeInBytes = FSUtils.getFileSize(table.getMetaClient().getStorage(),
-        new StoragePath(path.toUri()));
+    stat.setPath(new StoragePath(writeConfig.getBasePath()), path);
+    long fileSizeInBytes = FSUtils.getFileSize(table.getMetaClient().getStorage(), path);
     stat.setTotalWriteBytes(fileSizeInBytes);
     stat.setFileSizeInBytes(fileSizeInBytes);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
@@ -261,16 +255,16 @@ public class HoodieRowCreateHandle implements Serializable {
     return path.getName();
   }
 
-  private static Path makeNewPath(FileSystem fs, String partitionPath, String fileName, HoodieWriteConfig writeConfig) {
-    Path path = FSUtils.constructAbsolutePathInHadoopPath(writeConfig.getBasePath(), partitionPath);
+  private static StoragePath makeNewPath(HoodieStorage storage, String partitionPath, String fileName, HoodieWriteConfig writeConfig) {
+    StoragePath path = new StoragePath(writeConfig.getBasePath(), partitionPath);
     try {
-      if (!fs.exists(path)) {
-        fs.mkdirs(path); // create a new partition as needed.
+      if (!storage.exists(path)) {
+        storage.createDirectory(path); // create a new partition as needed.
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
-    return new CachingPath(path.toString(), fileName);
+    return new StoragePath(path, fileName);
   }
 
   /**
