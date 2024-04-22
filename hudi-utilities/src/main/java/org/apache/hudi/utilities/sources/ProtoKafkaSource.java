@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -31,6 +32,8 @@ import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
 import com.google.protobuf.Message;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.api.java.JavaRDD;
@@ -53,7 +56,19 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  */
 public class ProtoKafkaSource extends KafkaSource<Message> {
 
+  /**
+   * Configs specific to {@link ProtoKafkaSource}.
+   */
+  public static class Config  {
+    public static final ConfigProperty<String> KAFKA_PROTO_VALUE_DESERIALIZER_CLASS = ConfigProperty
+        .key("hoodie.deltastreamer.source.kafka.proto.value.deserializer.class")
+        .defaultValue(ByteArrayDeserializer.class.getName())
+        .sinceVersion("0.15.0")
+        .withDocumentation("Kafka Proto Payload Deserializer Class");
+  }
+
   private final String className;
+  private final String deserializerName;
 
   public ProtoKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                           SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
@@ -65,8 +80,13 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
         new DefaultStreamContext(UtilHelpers.getSchemaProviderForKafkaSource(streamContext.getSchemaProvider(), properties, sparkContext), streamContext.getSourceProfileSupplier()));
     checkRequiredConfigProperties(props, Collections.singletonList(
         ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME));
-    props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class);
-    props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, ByteArrayDeserializer.class);
+    this.deserializerName = props.getString(Config.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS.key(),
+        Config.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS.defaultValue());
+    if (!deserializerName.equals(ByteArrayDeserializer.class.getName()) && !deserializerName.equals(KafkaProtobufDeserializer.class.getName())) {
+      throw new HoodieReadFromSourceException("Only ByteArrayDeserializer and KafkaProtobufDeserializer are supported for ProtoKafkaSource");
+    }
+    props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
+    props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, deserializerName);
     className = getStringWithAltKeys(props, ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME);
     this.offsetGen = new KafkaOffsetGen(props);
     if (this.shouldAddOffsets) {
@@ -76,9 +96,14 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
 
   @Override
   JavaRDD<Message> toRDD(OffsetRange[] offsetRanges) {
-    ProtoDeserializer deserializer = new ProtoDeserializer(className);
-    return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-        LocationStrategies.PreferConsistent()).map(obj -> deserializer.parse(obj.value()));
+    if (deserializerName.equals(ByteArrayDeserializer.class.getName())) {
+      ProtoDeserializer deserializer = new ProtoDeserializer(className);
+      return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
+          LocationStrategies.PreferConsistent()).map(obj -> deserializer.parse(obj.value()));
+    } else {
+      return KafkaUtils.<String, Message>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
+          LocationStrategies.PreferConsistent()).map(ConsumerRecord::value);
+    }
   }
 
   private static class ProtoDeserializer implements Serializable {

@@ -38,6 +38,7 @@ import com.google.protobuf.DoubleValue;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
+import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
@@ -64,7 +65,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.utilities.sources.ProtoKafkaSource.Config.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -72,14 +73,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class TestProtoKafkaSource extends BaseTestKafkaSource {
   private static final Random RANDOM = new Random();
+  private static final String MOCK_REGISTRY_URL = "mock://127.0.0.1:8081";
 
   protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.streamer.source.kafka.topic", topic);
+    props.setProperty("hoodie.deltastreamer.source.kafka.topic", topic);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.setProperty("auto.offset.reset", resetStrategy);
     props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-    props.setProperty("hoodie.streamer.kafka.source.maxEvents",
+    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
             String.valueOf(KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE.defaultValue()));
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
@@ -92,6 +94,28 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     this.schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
     Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile));
     return new SourceFormatAdapter(protoKafkaSource);
+  }
+
+  @Test
+  public void testProtoKafkaSourceWithConfluentProtoDeserialization() {
+    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceWithConfluentDeserializer";
+    testUtils.createTopic(topic, 2);
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(KAFKA_PROTO_VALUE_DESERIALIZER_CLASS.key(),
+        "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer");
+    props.put("schema.registry.url", MOCK_REGISTRY_URL);
+    props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
+    Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(protoKafkaSource);
+    assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
+    sendMessagesToKafkaWithConfluentSerializer(topic, 1000, 2);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
+    assertEquals(900, fetch1.getBatch().get().count());
+    // Test Avro To DataFrame<Row> path
+    Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
+        schemaProvider.getSourceSchema().toString(), protoKafkaSource.getSparkSession());
+    assertEquals(900, fetch1AsRows.count());
   }
 
   @Test
@@ -160,7 +184,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
           .setPrimitiveFixedSignedLong(RANDOM.nextLong())
           .setPrimitiveBoolean(RANDOM.nextBoolean())
           .setPrimitiveString(UUID.randomUUID().toString())
-          .setPrimitiveBytes(ByteString.copyFrom(getUTF8Bytes(UUID.randomUUID().toString())));
+          .setPrimitiveBytes(ByteString.copyFrom(UUID.randomUUID().toString().getBytes()));
 
       // randomly set nested messages, lists, and maps to test edge cases
       if (RANDOM.nextBoolean()) {
@@ -181,7 +205,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
             .setWrappedDouble(DoubleValue.of(RANDOM.nextDouble()))
             .setWrappedFloat(FloatValue.of(RANDOM.nextFloat()))
             .setWrappedBoolean(BoolValue.of(RANDOM.nextBoolean()))
-            .setWrappedBytes(BytesValue.of(ByteString.copyFrom(getUTF8Bytes(UUID.randomUUID().toString()))))
+            .setWrappedBytes(BytesValue.of(ByteString.copyFrom(UUID.randomUUID().toString().getBytes())))
             .setEnum(SampleEnum.SECOND)
             .setTimestamp(Timestamps.fromMillis(System.currentTimeMillis()));
       }
@@ -198,7 +222,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   @Override
   void sendMessagesToKafka(String topic, int count, int numPartitions) {
     List<Sample> messages = createSampleMessages(count);
-    try (Producer<String, byte[]> producer = new KafkaProducer<>(getProducerProperties())) {
+    try (Producer<String, byte[]> producer = new KafkaProducer<>(getProducerProperties(false))) {
       for (int i = 0; i < messages.size(); i++) {
         // use consistent keys to get even spread over partitions for test expectations
         producer.send(new ProducerRecord<>(topic, Integer.toString(i % numPartitions), messages.get(i).toByteArray()));
@@ -206,11 +230,30 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     }
   }
 
-  private Properties getProducerProperties() {
+  private void sendMessagesToKafkaWithConfluentSerializer(String topic, int count, int numPartitions) {
+    List<Sample> messages = createSampleMessages(count);
+    try (Producer<String, Message> producer = new KafkaProducer<>(getProducerProperties(true))) {
+      for (int i = 0; i < messages.size(); i++) {
+        // use consistent keys to get even spread over partitions for test expectations
+        producer.send(new ProducerRecord<>(topic, Integer.toString(i % numPartitions), messages.get(i)));
+      }
+    }
+  }
+
+  private Properties getProducerProperties(boolean useConfluentProtobufSerializer) {
     Properties props = new Properties();
     props.put("bootstrap.servers", testUtils.brokerAddress());
-    props.put("value.serializer", ByteArraySerializer.class.getName());
-    // Key serializer is required.
+    if (useConfluentProtobufSerializer) {
+      props.put("value.serializer",
+          "io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer");
+      props.put("value.deserializer",
+          "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer");
+      props.put("schema.registry.url", MOCK_REGISTRY_URL);
+      props.put("auto.register.schemas", "true");
+    } else {
+      props.put("value.serializer", ByteArraySerializer.class.getName());
+      // Key serializer is required.
+    }
     props.put("key.serializer", StringSerializer.class.getName());
     // wait for all in-sync replicas to ack sends
     props.put("acks", "all");
