@@ -1210,6 +1210,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return tableServiceClient.cluster(clusteringInstant, shouldComplete);
   }
 
+  public boolean purgePendingClustering(String clusteringInstant) {
+    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
+    return tableServiceClient.purgePendingClustering(clusteringInstant);
+  }
+
   /**
    * Schedule table services such as clustering, compaction & cleaning.
    *

@@ -124,6 +124,7 @@ public class UtilHelpers {
   public static final String EXECUTE = "execute";
   public static final String SCHEDULE = "schedule";
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
+  public static final String PURGE_PENDING_INSTANT = "purge_pending_instant";
 
   private static final Logger LOG = LoggerFactory.getLogger(UtilHelpers.class);
 
