@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
@@ -44,6 +45,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.FallbackKey;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogDatabase;
@@ -98,6 +100,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -552,7 +555,12 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     hiveTable.setCreateTime((int) (System.currentTimeMillis() / 1000));
 
     Map<String, String> properties = new HashMap<>(table.getOptions());
-    hiveConf.getAllProperties().forEach((k, v) -> properties.put("hadoop." + k, String.valueOf(v)));
+    if (properties.containsKey(FlinkOptions.INDEX_TYPE.key())
+        && !properties.containsKey(HoodieIndexConfig.INDEX_TYPE.key())) {
+        properties.put(HoodieIndexConfig.INDEX_TYPE.key(), properties.get(FlinkOptions.INDEX_TYPE.key()));
+    }
+    properties.remove(FlinkOptions.INDEX_TYPE.key());
+//    hiveConf.getAllProperties().forEach((k, v) -> properties.put("hadoop." + k, String.valueOf(v)));
 
     if (external) {
       hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
