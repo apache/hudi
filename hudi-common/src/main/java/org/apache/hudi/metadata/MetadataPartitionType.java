@@ -18,8 +18,11 @@
 
 package org.apache.hudi.metadata;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Partition types for metadata table.
@@ -55,6 +58,15 @@ public enum MetadataPartitionType {
    */
   public static List<MetadataPartitionType> getMetadataPartitionsNeedingWriteStatusTracking() {
     return Collections.singletonList(MetadataPartitionType.RECORD_INDEX);
+  }
+
+  /**
+   * Returns the set of all metadata partition names.
+   */
+  public static Set<String> getAllPartitionPaths() {
+    return Arrays.stream(values())
+        .map(MetadataPartitionType::getPartitionPath)
+        .collect(Collectors.toSet());
   }
 
   @Override
