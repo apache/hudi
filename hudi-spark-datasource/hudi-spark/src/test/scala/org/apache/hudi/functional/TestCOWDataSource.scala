@@ -1102,7 +1102,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       writer.save(basePath)
       fail("should fail when invalid PartitionKeyType is provided!")
     } catch {
-      case e: Exception => assertTrue(e.getCause.getMessage.contains("Unable to instantiate class org.apache.hudi.keygen.CustomKeyGenerator"))
+      case e: Exception => assertTrue(e.getMessage.contains("Unable to instantiate class org.apache.hudi.keygen.CustomKeyGenerator"))
     }
   }
 
