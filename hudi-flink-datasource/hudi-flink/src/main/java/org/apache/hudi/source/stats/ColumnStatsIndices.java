@@ -272,7 +272,7 @@ public class ColumnStatsIndices {
       LogicalType logicalType,
       Map<LogicalType, AvroToRowDataConverters.AvroToRowDataConverter> converters) {
     AvroToRowDataConverters.AvroToRowDataConverter converter =
-        converters.computeIfAbsent(logicalType, k -> AvroToRowDataConverters.createConverter(logicalType));
+        converters.computeIfAbsent(logicalType, k -> AvroToRowDataConverters.createConverter(logicalType, true));
     return converter.convert(rawVal);
   }
 
