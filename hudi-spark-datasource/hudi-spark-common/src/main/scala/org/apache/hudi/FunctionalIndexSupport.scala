@@ -19,20 +19,18 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.FunctionalIndexSupport._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkFunctionalIndex.SPARK_FUNCTION_MAP
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil}
+import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -42,7 +40,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
-import scala.collection.{JavaConverters, mutable}
 
 class FunctionalIndexSupport(spark: SparkSession,
                              metadataConfig: HoodieMetadataConfig,
@@ -82,23 +79,6 @@ class FunctionalIndexSupport(spark: SparkSession,
     metadataConfig.enabled && metaClient.getFunctionalIndexMetadata.isPresent && !metaClient.getFunctionalIndexMetadata.get().getIndexDefinitions.isEmpty
   }
 
-  def load(indexPartition: String,
-           targetColumns: Seq[String],
-           shouldReadInMemory: Boolean): DataFrame = {
-    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePathV2.toString)
-    // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
-    val colStatsDF = spark.read.format("org.apache.hudi")
-      .options(metadataConfig.getProps.asScala)
-      .load(s"$metadataTablePath/$indexPartition")
-
-    val requiredIndexColumns =
-      targetColumnStatsIndexColumns.map(colName =>
-        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.${colName}"))
-
-    colStatsDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
-      .select(requiredIndexColumns: _*)
-  }
-
   /**
    * Searches for an index partition based on the specified index function and target column name.
    *
@@ -112,7 +92,7 @@ class FunctionalIndexSupport(spark: SparkSession,
    * @return An `Option` containing the index partition identifier if a matching index definition is found.
    *         Returns `None` if no matching index definition is found.
    */
-  def getFunctionalIndexPartition(queryFilters: Seq[Expression]): Option[String] = {
+  private def getFunctionalIndexPartition(queryFilters: Seq[Expression]): Option[String] = {
     val functionToColumnNames = extractSparkFunctionNames(queryFilters)
     if (functionToColumnNames.nonEmpty) {
       // Currently, only one functional index in the query is supported. HUDI-7620 for supporting multiple functions.
@@ -156,8 +136,8 @@ class FunctionalIndexSupport(spark: SparkSession,
     }.toMap
   }
 
-  def loadFunctionalIndexDataFrame(indexPartition: String,
-                                   shouldReadInMemory: Boolean): DataFrame = {
+  private def loadFunctionalIndexDataFrame(indexPartition: String,
+                                           shouldReadInMemory: Boolean): DataFrame = {
     val colStatsDF = {
       val indexDefinition = metaClient.getFunctionalIndexMetadata.get().getIndexDefinitions.get(indexPartition)
       val indexType = indexDefinition.getIndexType
@@ -208,32 +188,6 @@ class FunctionalIndexSupport(spark: SparkSession,
         .filter(JFunction.toJavaSerializableFunction(columnStatsRecord => columnStatsRecord != null))
 
     columnStatsRecords
-  }
-
-  /**
-   * Returns the list of candidate files which store the provided record keys based on Metadata Table Record Index.
-   *
-   * @param allFiles   - List of all files which needs to be considered for the query
-   * @param recordKeys - List of record keys.
-   * @return Sequence of file names which need to be queried
-   */
-  def getCandidateFiles(allFiles: Seq[FileStatus], recordKeys: List[String]): Set[String] = {
-    val recordKeyLocationsMap = metadataTable.readRecordIndex(seqAsJavaListConverter(recordKeys).asJava)
-    val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
-    val candidateFiles: mutable.Set[String] = mutable.Set.empty
-    for (locations <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
-      for (location <- JavaConverters.collectionAsScalaIterableConverter(locations).asScala) {
-        fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
-      }
-    }
-    for (file <- allFiles) {
-      val fileId = FSUtils.getFileIdFromFilePath(file.getPath)
-      val partitionOpt = fileIdToPartitionMap.get(fileId)
-      if (partitionOpt.isDefined) {
-        candidateFiles += file.getPath.getName
-      }
-    }
-    candidateFiles.toSet
   }
 }
 
