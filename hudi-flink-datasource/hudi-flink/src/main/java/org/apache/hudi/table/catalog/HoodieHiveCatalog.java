@@ -45,7 +45,6 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.FallbackKey;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogDatabase;
@@ -100,7 +99,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -557,7 +555,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     Map<String, String> properties = new HashMap<>(table.getOptions());
     if (properties.containsKey(FlinkOptions.INDEX_TYPE.key())
         && !properties.containsKey(HoodieIndexConfig.INDEX_TYPE.key())) {
-        properties.put(HoodieIndexConfig.INDEX_TYPE.key(), properties.get(FlinkOptions.INDEX_TYPE.key()));
+      properties.put(HoodieIndexConfig.INDEX_TYPE.key(), properties.get(FlinkOptions.INDEX_TYPE.key()));
     }
     properties.remove(FlinkOptions.INDEX_TYPE.key());
     hiveConf.getAllProperties().forEach((k, v) -> properties.put("hadoop." + k, String.valueOf(v)));
@@ -744,7 +742,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   }
 
   public void alterTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable, List tableChanges,
-      boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
+                         boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
     HoodieCatalogUtil.alterTable(this, tablePath, newCatalogTable, tableChanges, ignoreIfNotExists, hiveConf, this::inferTablePath, this::refreshHMSTable);
   }
 
@@ -813,7 +811,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     try (HoodieFlinkWriteClient<?> writeClient = HoodieCatalogUtil.createWriteClient(tablePath, table, hiveConf, this::inferTablePath)) {
       boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
       writeClient.deletePartitions(
-          Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
+              Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
               writeClient.createNewInstantTime())
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {
