@@ -218,73 +218,95 @@ uses a flat array will not be efficient.
 The [initial POC](https://github.com/apache/hudi/pull/10625) makes use of an in-memory nested maps - with the first level keyed by `secondary-key`  
 and the second level keyed by`record-key`. However, the final design should allow spilling to disk.
 
-Considering the above requirements, the proposal is to extend `HoodieKey` to support secondary keys. We will make `HoodieKey` generic and create a subclass `HoodieSecondaryKey` where the key can be a generic type.
+Considering the above requirements, the proposal is to introduce a new class hierarchy for handling merge keys in a more
+flexible and decoupled manner. It adds the `HoodieMergeKey` interface, along with two
+implementations: `HoodieSimpleMergeKey` and `HoodieCompositeMergeKey`.
 ```java
-public class HoodieKey<T extends Serializable> implements Serializable {
+public interface HoodieMergeKey extends Serializable {
 
-  private T recordKey;
-  private String partitionPath;
+   /**
+    * Get the partition path.
+    */
+   String getPartitionPath();
 
-  // Required for serializer
-  public HoodieKey() {}
 
-  public HoodieKey(T recordKey, String partitionPath) {
-    this.recordKey = recordKey;
+   /**
+    * Get the record key.
+    */
+   Serializable getRecordKey();
+
+   /**
+    * Get the hoodie key.
+    * For simple merge keys, this is used to directly fetch the HoodieKey, which is a combination of record key and partition path.
+    */
+   default HoodieKey getHoodieKey() {
+      return new HoodieKey(getRecordKey().toString(), getPartitionPath());
+   }
+}
+```
+
+`HoodieSimpleMergeKey` simply wraps `HoodieKey` for existing scenarios where the key is a
+string. `HoodieCompositeMergeKey` allows for complex types as keys, enhancing flexibility for scenarios where a simple
+string key is not sufficient.
+
+```java
+public class HoodieSimpleMergeKey implements HoodieMergeKey {
+
+  private final HoodieKey simpleKey;
+
+  public HoodieSimpleMergeKey(HoodieKey simpleKey) {
+    this.simpleKey = simpleKey;
+  }
+
+  @Override
+  public String getPartitionPath() {
+    return simpleKey.getPartitionPath();
+  }
+
+  @Override
+  public Serializable getRecordKey() {
+    return simpleKey.getRecordKey();
+  }
+
+  public HoodieKey getHoodieKey() {
+    return simpleKey;
+  }
+}
+
+public class HoodieCompositeMergeKey<K extends Serializable> implements HoodieMergeKey {
+
+  private final K compositeKey;
+  private final String partitionPath;
+
+  public HoodieCompositeMergeKey(K compositeKey, String partitionPath) {
+    this.compositeKey = compositeKey;
     this.partitionPath = partitionPath;
   }
 
-  // Getters and setters
-  public T getRecordKey() {
-    return recordKey;
-  }
-
-  public void setRecordKey(T recordKey) {
-    this.recordKey = recordKey;
-  }
-
+  @Override
   public String getPartitionPath() {
     return partitionPath;
   }
 
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
+  @Override
+  public Serializable getRecordKey() {
+    return compositeKey;
   }
 }
 ```
 
-Since `HoodieKey` is now generic, `HoodieSecondaryKey` can specify any type for its key by setting the type parameter
-when it extends `HoodieKey`.
+We also introduce a new `HoodieRecordMerger` implementation based on `HoodieMergeKey`. For other keys, it falls back to
+merge method of parent class. The new record merger will be used in `HoodieMergedLogRecordScanner` to merge records from
+MDT partition hosting SI.
 
-```java
-public class HoodieSecondaryKey<K extends Serializable> extends HoodieKey<K> {
+The primary advantage of this approach is that we do not leak any details to the upper layers such as merge handle.
+However, `HoodieMetadataLogRecordReader` should create the `HoodieMergedLogRecordScanner` with the
+correct `HoodieRecordMerger` implementation, instead of
+the [current record merger](https://github.com/apache/hudi/blob/cb6eb6785fdeb88e66016a2b8c0c6e6fa184b309/hudi-common/src/main/java/org/apache/hudi/metadata/HoodieMetadataLogRecordReader.java#L156).
 
-  // Additional properties and methods specific to HoodieSecondaryKey can be added here
-
-  public HoodieSecondaryKey(K recordKey, String partitionPath) {
-    super(recordKey, partitionPath);
-  }
-
-  // Example method that might use the generic type K
-  public void someMethod() {
-    K key = getRecordKey();
-    // Process key which is of type K
-  }
-}
-```
-
-The primary advantage of this approach is that the merge algorithm does not change. We interpret the key in the scanner
-without leaking any details to the merge handle. To interpret the key in the scanner, we will introduce a boolean flag
-that indicates whether the key is a secondary key or not ( for instance, merging secondary index MDT partition records
-or something else). This flag will be false by default, and set to true when the key is a secondary key.
-
-**Key Considerations**
-
-1. Type Safety: This refactoring ensures that we can use `HoodieSecondaryKey` with any type of key that
-   implements `Serializable`, making the code more flexible and robust.
-2. Usage Flexibility: We can now create instances of `HoodieSecondaryKey` with different types for the key. For example,
-   you might have `HoodieSecondaryKey<SomeOtherCustomType>` in the future.
-3. Backward Compatibility: Current codebase heavily relies on `HoodieKey` being a String. We need to consider the impact
-   of this change and maintain an overloaded constructor for backward compatibility.
+These changes do not affect existing functionalities that do not rely on merge keys. It introduces additional classes
+that are used explicitly for new functionalities involving various key types in merging operations. This ensures minimal
+to no risk for existing processes.
 
 ### Comparing alternate design proposals
 
