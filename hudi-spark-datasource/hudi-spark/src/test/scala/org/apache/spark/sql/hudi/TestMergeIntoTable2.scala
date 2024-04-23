@@ -917,6 +917,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | partitioned by(dt)
            | location '${tmp.getCanonicalPath}'
      """.stripMargin)
+      spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
 
       spark.sql(
         s"""
@@ -965,6 +966,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | partitioned by(dt)
            | location '${path1}'
          """.stripMargin)
+      spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
 
       spark.sql(s"insert into $sourceTable values(1, 'a1', cast(3.01 as double), 11, '2022-09-26'),(2, 'a2', cast(3.02 as double), 12, '2022-09-27'),(3, 'a3', cast(3.03 as double), 13, '2022-09-28'),(4, 'a4', cast(3.04 as double), 14, '2022-09-29')")
 
