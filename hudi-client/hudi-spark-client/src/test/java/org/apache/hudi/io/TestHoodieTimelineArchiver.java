@@ -626,17 +626,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
   }
 
-  @Disabled("HUDI-6841")
-  public void testArchivalWithMultiWritersMDTDisabled() throws Exception {
-    testArchivalWithMultiWriters(false);
-  }
-
-  @Disabled("HUDI-6386")
-  public void testArchivalWithMultiWriters() throws Exception {
-    testArchivalWithMultiWriters(true);
-  }
-
-  private void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 5, 2,
         HoodieTableType.COPY_ON_WRITE, 10,
         HoodieFailedWritesCleaningPolicy.LAZY, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
