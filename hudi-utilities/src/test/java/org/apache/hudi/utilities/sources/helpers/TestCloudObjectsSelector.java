@@ -71,7 +71,7 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
   void setUp() {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     MockitoAnnotations.initMocks(this);
 
     props = new TypedProperties();

@@ -196,7 +196,7 @@ public class HoodieCDCLogger implements Closeable {
         HoodieLogBlock block = new HoodieCDCDataBlock(records, cdcDataBlockHeader, keyField);
         AppendResult result = cdcWriter.appendBlocks(Collections.singletonList(block));
 
-        Path cdcAbsPath = result.logFile().getPath();
+        Path cdcAbsPath = new Path(result.logFile().getPath().toUri());
         if (!cdcAbsPaths.contains(cdcAbsPath)) {
           cdcAbsPaths.add(cdcAbsPath);
         }

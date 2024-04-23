@@ -21,8 +21,8 @@ package org.apache.hudi.common.fs.inline;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -49,14 +49,16 @@ public class InLineFSUtilsTest {
   @ParameterizedTest
   @MethodSource("configParams")
   void startOffset(long startOffset) {
-    Path inlinePath =  FileSystemTestUtils.getPhantomFile(FileSystemTestUtils.getRandomOuterFSPath(), startOffset, 0L);
+    StoragePath inlinePath = FileSystemTestUtils.getPhantomFile(
+        FileSystemTestUtils.getRandomOuterFSPath(), startOffset, 0L);
     assertEquals(startOffset, InLineFSUtils.startOffset(inlinePath));
   }
 
   @ParameterizedTest
   @MethodSource("configParams")
   void length(long inlineLength) {
-    Path inlinePath =  FileSystemTestUtils.getPhantomFile(FileSystemTestUtils.getRandomOuterFSPath(), 0L, inlineLength);
+    StoragePath inlinePath = FileSystemTestUtils.getPhantomFile(
+        FileSystemTestUtils.getRandomOuterFSPath(), 0L, inlineLength);
     assertEquals(inlineLength, InLineFSUtils.length(inlinePath));
   }
 }

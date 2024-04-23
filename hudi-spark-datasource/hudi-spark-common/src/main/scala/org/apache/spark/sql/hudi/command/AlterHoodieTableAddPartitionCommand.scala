@@ -18,13 +18,14 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodiePartitionMetadata
 import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTablePartition, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.execution.command.DDLUtils
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{makePartitionPath, normalizePartitionSpec}
 
@@ -60,21 +61,21 @@ case class AlterHoodieTableAddPartitionCommand(
         sparkSession.sessionState.conf.resolver)
     }
 
-    val basePath = new Path(hoodieCatalogTable.tableLocation)
-    val fileSystem = hoodieCatalogTable.metaClient.getFs
+    val basePath = new StoragePath(hoodieCatalogTable.tableLocation)
+    val storage = hoodieCatalogTable.metaClient.getStorage
     val format = hoodieCatalogTable.tableConfig.getPartitionMetafileFormat
     val (partitionMetadata, parts) = normalizedSpecs.map { spec =>
       val partitionPath = makePartitionPath(hoodieCatalogTable, spec)
-      val fullPartitionPath: Path = FSUtils.getPartitionPath(basePath, partitionPath)
-      val metadata = if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, fullPartitionPath)) {
+      val fullPartitionPath: StoragePath = FSUtils.constructAbsolutePath(basePath, partitionPath)
+      val metadata = if (HoodiePartitionMetadata.hasPartitionMetadata(storage, fullPartitionPath)) {
         if (!ifNotExists) {
           throw new AnalysisException(s"Partition metadata already exists for path: $fullPartitionPath")
         }
         None
-      } else Some(new HoodiePartitionMetadata(fileSystem, HoodieTimeline.INIT_INSTANT_TS, basePath, fullPartitionPath, format))
+      } else Some(new HoodiePartitionMetadata(storage, HoodieTimeline.INIT_INSTANT_TS, basePath, fullPartitionPath, format))
       (metadata, CatalogTablePartition(spec, table.storage.copy(locationUri = Some(fullPartitionPath.toUri))))
     }.unzip
-    partitionMetadata.flatten.foreach(_.trySave(0))
+    partitionMetadata.flatten.foreach(_.trySave)
 
     // Sync new partitions in batch, enable ignoreIfExists to be silent for existing partitions.
     val batchSize = sparkSession.sparkContext.conf.getInt("spark.sql.addPartitionInBatch.size", 100)

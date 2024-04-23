@@ -34,14 +34,14 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 public enum HoodieCleaningPolicy {
 
   @EnumFieldDescription("keeps the last N versions of the file slices written; used "
-      + "when \"hoodie.cleaner.fileversions.retained\" is explicitly set only.")
+      + "when \"hoodie.clean.fileversions.retained\" is explicitly set only.")
   KEEP_LATEST_FILE_VERSIONS,
 
   @EnumFieldDescription("keeps the file slices written by the last N commits; used "
-      + "when \"hoodie.cleaner.commits.retained\" is explicitly set only.")
+      + "when \"hoodie.clean.commits.retained\" is explicitly set only.")
   KEEP_LATEST_COMMITS,
 
   @EnumFieldDescription("keeps the file slices written in the last N hours based on "
-      + "the commit time; used when \"hoodie.cleaner.hours.retained\" is explicitly set only.")
+      + "the commit time; used when \"hoodie.clean.hours.retained\" is explicitly set only.")
   KEEP_LATEST_BY_HOURS
 }

@@ -18,16 +18,17 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePath;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -50,7 +51,9 @@ public class TestHoodieBaseParquetWriter {
     long writtenRecordCount = 0L;
     long currentDataSize = 0L;
 
-    public MockHoodieParquetWriter(Path file, HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig) throws IOException {
+    public MockHoodieParquetWriter(StoragePath file,
+                                   HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig)
+        throws IOException {
       super(file, (HoodieParquetConfig) parquetConfig);
     }
 
@@ -91,7 +94,8 @@ public class TestHoodieBaseParquetWriter {
         new HoodieParquetConfig<>(writeSupport, CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE,
             ParquetWriter.DEFAULT_PAGE_SIZE, maxFileSize, hadoopConf, 0, true);
 
-    Path filePath = new Path(new Path(tempDir.toUri()), "test_fileSize.parquet");
+    StoragePath filePath = new StoragePath(
+        new StoragePath(tempDir.toUri()), "test_fileSize.parquet");
     try (MockHoodieParquetWriter writer = new MockHoodieParquetWriter(filePath, parquetConfig)) {
       // doesn't start write, should return true
       assertTrue(writer.canWrite());

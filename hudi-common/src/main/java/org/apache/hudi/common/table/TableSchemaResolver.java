@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -45,6 +46,8 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieAvroOrcReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.JsonProperties;
@@ -74,7 +77,6 @@ import java.util.function.Supplier;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
@@ -288,13 +290,12 @@ public class TableSchemaResolver {
             Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePathV2()).values().iterator();
             return Option.of(fetchSchemaFromFiles(filePaths));
           } else {
-            LOG.warn("Could not find any data file written for commit, "
-                + "so could not get schema for table " + metaClient.getBasePath());
+            LOG.warn("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePathV2());
             return Option.empty();
           }
         default:
-          LOG.error("Unknown table type " + metaClient.getTableType());
-          throw new InvalidTableException(metaClient.getBasePath());
+          LOG.error("Unknown table type {}", metaClient.getTableType());
+          throw new InvalidTableException(metaClient.getBasePathV2().toString());
       }
     } catch (IOException e) {
       throw new HoodieException("Failed to read data schema", e);
@@ -332,29 +333,29 @@ public class TableSchemaResolver {
   }
 
   private MessageType readSchemaFromParquetBaseFile(Path parquetFilePath) throws IOException {
-    LOG.info("Reading schema from " + parquetFilePath);
+    LOG.info("Reading schema from {}", parquetFilePath);
 
-    FileSystem fs = metaClient.getRawFs();
+    FileSystem fs = (FileSystem) metaClient.getRawHoodieStorage().getFileSystem();
     ParquetMetadata fileFooter =
         ParquetFileReader.readFooter(fs.getConf(), parquetFilePath, ParquetMetadataConverter.NO_FILTER);
     return fileFooter.getFileMetaData().getSchema();
   }
 
   private MessageType readSchemaFromHFileBaseFile(Path hFilePath) throws IOException {
-    LOG.info("Reading schema from " + hFilePath);
+    LOG.info("Reading schema from {}", hFilePath);
 
-    FileSystem fs = metaClient.getRawFs();
+    FileSystem fs = (FileSystem) metaClient.getRawHoodieStorage().getFileSystem();
     try (HoodieFileReader fileReader =
              HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-                 .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, fs.getConf(), hFilePath)) {
+                 .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, fs.getConf(), new StoragePath(hFilePath.toUri()))) {
       return convertAvroSchemaToParquet(fileReader.getSchema());
     }
   }
 
-  private MessageType readSchemaFromORCBaseFile(Path orcFilePath) throws IOException {
-    LOG.info("Reading schema from " + orcFilePath);
+  private MessageType readSchemaFromORCBaseFile(StoragePath orcFilePath) throws IOException {
+    LOG.info("Reading schema from {}", orcFilePath);
 
-    FileSystem fs = metaClient.getRawFs();
+    FileSystem fs = (FileSystem) metaClient.getRawHoodieStorage().getFileSystem();
     HoodieAvroOrcReader orcReader = new HoodieAvroOrcReader(fs.getConf(), orcFilePath);
     return convertAvroSchemaToParquet(orcReader.getSchema());
   }
@@ -379,8 +380,8 @@ public class TableSchemaResolver {
     return readSchemaFromBaseFile(filePath);
   }
 
-  private MessageType readSchemaFromLogFile(Path path) throws IOException {
-    return readSchemaFromLogFile(metaClient.getRawFs(), path);
+  private MessageType readSchemaFromLogFile(StoragePath path) throws IOException {
+    return readSchemaFromLogFile(metaClient.getRawHoodieStorage(), path);
   }
 
   /**
@@ -388,11 +389,11 @@ public class TableSchemaResolver {
    *
    * @return
    */
-  public static MessageType readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
+  public static MessageType readSchemaFromLogFile(HoodieStorage storage, StoragePath path) throws IOException {
     // We only need to read the schema from the log block header,
     // so we read the block lazily to avoid reading block content
     // containing the records
-    try (Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null, true, false)) {
+    try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), null, false)) {
       HoodieDataBlock lastBlock = null;
       while (reader.hasNext()) {
         HoodieLogBlock block = reader.next();
@@ -477,7 +478,7 @@ public class TableSchemaResolver {
       Schema tableAvroSchema = getTableAvroSchemaFromDataFile();
       return tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
     } catch (Exception e) {
-      LOG.info(String.format("Failed to read operation field from avro schema (%s)", e.getMessage()));
+      LOG.info("Failed to read operation field from avro schema ({})", e.getMessage());
       return false;
     }
   }
@@ -541,7 +542,7 @@ public class TableSchemaResolver {
       String filePath = filePaths.next();
       if (filePath.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
         // this is a log file
-        type = readSchemaFromLogFile(new Path(filePath));
+        type = readSchemaFromLogFile(new StoragePath(filePath));
       } else {
         type = readSchemaFromBaseFile(filePath);
       }
@@ -555,7 +556,7 @@ public class TableSchemaResolver {
     } else if (filePath.contains(HoodieFileFormat.HFILE.getFileExtension())) {
       return readSchemaFromHFileBaseFile(new Path(filePath));
     } else if (filePath.contains(HoodieFileFormat.ORC.getFileExtension())) {
-      return readSchemaFromORCBaseFile(new Path(filePath));
+      return readSchemaFromORCBaseFile(new StoragePath(filePath));
     } else {
       throw new IllegalArgumentException("Unknown base file format :" + filePath);
     }

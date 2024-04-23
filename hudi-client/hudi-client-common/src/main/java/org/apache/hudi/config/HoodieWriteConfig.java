@@ -159,6 +159,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.datasource.write.payload.type")
       .defaultValue(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())
       .markAdvanced()
+      .sinceVersion("1.0.0")
       .withDocumentation(RecordPayloadType.class);
 
   public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
@@ -3342,7 +3343,7 @@ public class HoodieWriteConfig extends HoodieConfig {
             HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
       }
 
-      // We check if "hoodie.cleaner.policy.failed.writes"
+      // We check if "hoodie.clean.failed.writes.policy"
       // is properly set to LAZY for multi-writers
       WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
       if (writeConcurrencyMode.supportsMultiWriter()) {
@@ -3370,7 +3371,7 @@ public class HoodieWriteConfig extends HoodieConfig {
         checkArgument(!writeConfig.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)
             .equals(HoodieFailedWritesCleaningPolicy.EAGER.name()),
             String.format(
-                "To enable %s, set hoodie.cleaner.policy.failed.writes=LAZY",
+                "To enable %s, set hoodie.clean.failed.writes.policy=LAZY",
                 writeConcurrencyMode.name()));
       }
       if (writeConcurrencyMode == WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL) {

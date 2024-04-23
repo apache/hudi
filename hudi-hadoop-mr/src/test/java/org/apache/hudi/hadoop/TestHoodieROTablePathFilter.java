@@ -63,8 +63,8 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     assertFalse(pathFilter.accept(testTable.forCommit("003").getBaseFilePath(p2, "f3")));
     assertFalse(pathFilter.accept(testTable.forCommit("003").getBaseFilePath(p1, "f3")));
 
-    assertFalse(pathFilter.accept(testTable.getCommitFilePath("001")));
-    assertFalse(pathFilter.accept(testTable.getCommitFilePath("002")));
+    assertFalse(pathFilter.accept(new Path(testTable.getCommitFilePath("001").toUri())));
+    assertFalse(pathFilter.accept(new Path(testTable.getCommitFilePath("002").toUri())));
     assertFalse(pathFilter.accept(testTable.getInflightCommitFilePath("003")));
     assertFalse(pathFilter.accept(testTable.getRequestedCompactionFilePath("004")));
     assertFalse(pathFilter.accept(new Path("file:///" + basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")));

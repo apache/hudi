@@ -80,10 +80,10 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
     tablePath = basePath + StoragePath.SEPARATOR + tableName;
     sourcePath = new Path(basePath, "source");
     targetPath = new Path(tablePath);
-    schemaFile = new Path(basePath, "file.schema").toString();
+    schemaFile = new StoragePath(basePath, "file.schema").toString();
 
     // create schema file
-    try (OutputStream schemaFileOS = fs.create(new Path(schemaFile))) {
+    try (OutputStream schemaFileOS = storage.create(new StoragePath(schemaFile))) {
       schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
     }
 
@@ -171,17 +171,21 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
    * Method to verify result is equals to expect.
    */
   private void verifyResultData(List<GenericRecord> expectData) {
-    Dataset<Row> ds = HoodieClientTestUtils.read(jsc, tablePath, sqlContext, fs, tablePath + "/*/*/*/*");
+    Dataset<Row> ds = HoodieClientTestUtils.read(jsc, tablePath, sqlContext,
+        storage, tablePath + "/*/*/*/*");
 
-    List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
+    List<Row> readData =
+        ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat",
+            "end_lon").collectAsList();
     List<HoodieTripModel> result = readData.stream().map(row ->
-        new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
-            row.getDouble(5), row.getDouble(6), row.getDouble(7)))
+            new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3),
+                row.getDouble(4),
+                row.getDouble(5), row.getDouble(6), row.getDouble(7)))
         .collect(Collectors.toList());
 
     List<HoodieTripModel> expected = expectData.stream().map(g ->
-        new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
-            g.get("_row_key").toString(),
+            new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
+                g.get("_row_key").toString(),
             g.get("rider").toString(),
             g.get("driver").toString(),
             Double.parseDouble(g.get("begin_lat").toString()),

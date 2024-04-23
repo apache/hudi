@@ -81,7 +81,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.config = config;
     this.table = table;
     this.metaClient = table.getMetaClient();
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
     this.timelineWriter = LSMTimelineWriter.getInstance(config, table);
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();

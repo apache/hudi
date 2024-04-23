@@ -39,12 +39,14 @@ import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
@@ -349,7 +351,8 @@ public class InputFormatTestUtil {
           // update this record
           record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, newCommit);
           String oldSeqNo = (String) record.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
-          record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, oldSeqNo.replace(originalCommit, newCommit));
+          record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
+              oldSeqNo.replace(originalCommit, newCommit));
           numberOfRecordsToUpdate--;
         }
         parquetWriter.write(record);
@@ -357,12 +360,18 @@ public class InputFormatTestUtil {
     }
   }
 
-  public static HoodieLogFormat.Writer writeRollback(File partitionDir, FileSystem fs, String fileId, String baseCommit,
-                                                     String newCommit, String rolledBackInstant, int logVersion)
+  public static HoodieLogFormat.Writer writeRollback(File partitionDir, HoodieStorage storage,
+                                                     String fileId,
+                                                     String baseCommit,
+                                                     String newCommit, String rolledBackInstant,
+                                                     int logVersion)
       throws InterruptedException, IOException {
-    HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath())).withFileId(fileId)
-        .withDeltaCommit(baseCommit).withFs(fs).withLogVersion(logVersion).withRolloverLogWriteToken("1-0-1")
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
+            .withFileId(fileId)
+            .withDeltaCommit(baseCommit).withStorage(storage).withLogVersion(logVersion)
+            .withRolloverLogWriteToken("1-0-1")
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
     // generate metadata
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
@@ -374,20 +383,32 @@ public class InputFormatTestUtil {
     return writer;
   }
 
-  public static HoodieLogFormat.Writer writeDataBlockToLogFile(File partitionDir, FileSystem fs, Schema schema, String
-      fileId,
-                                                               String baseCommit, String newCommit, int numberOfRecords, int offset, int logVersion) throws IOException, InterruptedException {
-    return writeDataBlockToLogFile(partitionDir, fs, schema, fileId, baseCommit, newCommit, numberOfRecords, offset, logVersion, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK);
+  public static HoodieLogFormat.Writer writeDataBlockToLogFile(File partitionDir,
+                                                               HoodieStorage storage,
+                                                               Schema schema, String fileId,
+                                                               String baseCommit, String newCommit,
+                                                               int numberOfRecords, int offset,
+                                                               int logVersion)
+      throws IOException, InterruptedException {
+    return writeDataBlockToLogFile(partitionDir, storage, schema, fileId, baseCommit, newCommit,
+        numberOfRecords, offset, logVersion, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK);
   }
 
-  public static HoodieLogFormat.Writer writeDataBlockToLogFile(File partitionDir, FileSystem fs, Schema schema, String
-      fileId,
-                                                               String baseCommit, String newCommit, int numberOfRecords, int offset, int logVersion,
+  public static HoodieLogFormat.Writer writeDataBlockToLogFile(File partitionDir,
+                                                               HoodieStorage storage,
+                                                               Schema schema, String fileId,
+                                                               String baseCommit, String newCommit,
+                                                               int numberOfRecords, int offset,
+                                                               int logVersion,
                                                                HoodieLogBlock.HoodieLogBlockType logBlockType)
       throws InterruptedException, IOException {
-    HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).withLogVersion(logVersion)
-        .withRolloverLogWriteToken("1-0-1").withDeltaCommit(newCommit).withFs(fs).build();
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
+            .withLogVersion(logVersion)
+            .withRolloverLogWriteToken("1-0-1").withDeltaCommit(newCommit)
+            .withStorage(storage)
+            .build();
     List<IndexedRecord> records = new ArrayList<>();
     for (int i = offset; i < offset + numberOfRecords; i++) {
       records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
@@ -402,20 +423,28 @@ public class InputFormatTestUtil {
       dataBlock = new HoodieHFileDataBlock(
           hoodieRecords, header, Compression.Algorithm.GZ, writer.getLogFile().getPath(), HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-      dataBlock = new HoodieParquetDataBlock(hoodieRecords, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true);
+      dataBlock = new HoodieParquetDataBlock(hoodieRecords, false, header,
+          HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true);
     } else {
-      dataBlock = new HoodieAvroDataBlock(hoodieRecords, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      dataBlock = new HoodieAvroDataBlock(hoodieRecords, false, header,
+          HoodieRecord.RECORD_KEY_METADATA_FIELD);
     }
     writer.appendBlock(dataBlock);
     return writer;
   }
 
-  public static HoodieLogFormat.Writer writeRollbackBlockToLogFile(File partitionDir, FileSystem fs, Schema schema,
-                                                                   String fileId, String baseCommit, String newCommit, String oldCommit, int logVersion)
+  public static HoodieLogFormat.Writer writeRollbackBlockToLogFile(File partitionDir,
+                                                                   HoodieStorage storage,
+                                                                   Schema schema,
+                                                                   String fileId, String baseCommit,
+                                                                   String newCommit,
+                                                                   String oldCommit, int logVersion)
       throws InterruptedException, IOException {
-    HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).withDeltaCommit(baseCommit)
-        .withLogVersion(logVersion).withFs(fs).build();
+    HoodieLogFormat.Writer writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
+            .withDeltaCommit(baseCommit)
+            .withLogVersion(logVersion).withStorage(storage).build();
 
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
@@ -489,13 +518,13 @@ public class InputFormatTestUtil {
 
       HoodiePartitionMetadata partitionMetadata =
           new HoodiePartitionMetadata(
-              new LocalFileSystem(lfs),
+              HoodieStorageUtils.getStorage(new LocalFileSystem(lfs)),
               "0",
-              new Path(basePath.toAbsolutePath().toString()),
-              new Path(partitionPath.toAbsolutePath().toString()),
+              new StoragePath(basePath.toAbsolutePath().toString()),
+              new StoragePath(partitionPath.toAbsolutePath().toString()),
               Option.of(HoodieFileFormat.PARQUET));
 
-      partitionMetadata.trySave((int) (Math.random() * 1000));
+      partitionMetadata.trySave();
     }
   }
 
