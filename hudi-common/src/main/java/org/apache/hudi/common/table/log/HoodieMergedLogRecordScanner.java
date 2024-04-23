@@ -22,10 +22,12 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieMergeKey;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieSimpleMergeKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -81,7 +83,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
   // Map of compacted/merged records
-  private final ExternalSpillableMap<String, HoodieRecord> records;
+  private final ExternalSpillableMap<HoodieMergeKey, HoodieRecord> records;
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
   private final Set<String> scannedPrefixes;
   // count of merged records in log
@@ -222,7 +224,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   public Map<String, HoodieRecord> getRecords() {
-    return records;
+    return records.entrySet().stream().collect(
+        Collectors.toMap(entry -> getRecordKey(entry.getKey()), Map.Entry::getValue));
+  }
+
+  private String getRecordKey(HoodieMergeKey mergeKey) {
+    return mergeKey.getRecordKey().toString();
   }
 
   public HoodieRecordType getRecordType() {
@@ -243,32 +250,55 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   @Override
   public <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
     String key = newRecord.getRecordKey();
-    HoodieRecord<T> prevRecord = records.get(key);
+    HoodieMergeKey mergeKey = newRecord.getMergeKey();
+    if (mergeKey == null) {
+      // If mergeKey is null, then create a simple merge key using record key
+      mergeKey = new HoodieSimpleMergeKey(newRecord.getKey());
+    }
+    HoodieRecord<T> prevRecord = records.get(mergeKey);
     if (prevRecord != null) {
       // Merge and store the combined record
-      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
-          newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
-      // If pre-combine returns existing record, no need to update it
-      if (combinedRecord.getData() != prevRecord.getData()) {
-        HoodieRecord latestHoodieRecord =
-            combinedRecord.newInstance(new HoodieKey(key, newRecord.getPartitionPath()), newRecord.getOperation());
+      try {
+        HoodieMergeKey finalMergeKey = mergeKey;
+        recordMerger.fullOuterMerge(prevRecord, readerSchema, newRecord, readerSchema, this.getPayloadProps()).forEach(
+            mergedRecord -> {
+              HoodieRecord<T> combinedRecord = mergedRecord.getLeft();
+              if (combinedRecord.getData() != prevRecord.getData()) {
+                HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
+                records.put(finalMergeKey, latestHoodieRecord.copy());
+              }
+            });
+      } catch (UnsupportedOperationException e) {
+        LOG.warn("Error merging records: Full outer merge not supported, falling back to default merge for key {}", key);
+        HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
+            newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
+        // If pre-combine returns existing record, no need to update it
+        if (combinedRecord.getData() != prevRecord.getData()) {
+          HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
 
-        latestHoodieRecord.unseal();
-        latestHoodieRecord.setCurrentLocation(newRecord.getCurrentLocation());
-        latestHoodieRecord.seal();
-
-        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-        //       it since these records will be put into records(Map).
-        records.put(key, latestHoodieRecord.copy());
+          // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+          //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+          //       it since these records will be put into records(Map).
+          records.put(mergeKey, latestHoodieRecord.copy());
+        }
       }
     } else {
       // Put the record as is
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
-      records.put(key, newRecord.copy());
+      records.put(mergeKey, newRecord.copy());
     }
+  }
+
+  private static <T> HoodieRecord getLatestHoodieRecord(HoodieRecord<T> newRecord, HoodieRecord<T> combinedRecord, String key) {
+    HoodieRecord latestHoodieRecord =
+        combinedRecord.newInstance(new HoodieKey(key, newRecord.getPartitionPath()), newRecord.getOperation());
+
+    latestHoodieRecord.unseal();
+    latestHoodieRecord.setCurrentLocation(newRecord.getCurrentLocation());
+    latestHoodieRecord.seal();
+    return latestHoodieRecord;
   }
 
   @Override
@@ -294,11 +324,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
     // Put the DELETE record
     if (recordType == HoodieRecordType.AVRO) {
-      records.put(key, SpillableMapUtils.generateEmptyPayload(key,
+      records.put(new HoodieSimpleMergeKey(deleteRecord.getHoodieKey()), SpillableMapUtils.generateEmptyPayload(key,
           deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
     } else {
       HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
-      records.put(key, record);
+      records.put(new HoodieSimpleMergeKey(deleteRecord.getHoodieKey()), record);
     }
   }
 
@@ -441,7 +471,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
-    public Builder withKeyFiledOverride(String keyFieldOverride) {
+    public Builder withKeyFieldOverride(String keyFieldOverride) {
       this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
       return this;
     }
