@@ -120,6 +120,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   protected HoodieKey key;
 
+  protected HoodieMergeKey mergeKey;
+
   /**
    * Actual payload of the record.
    */
@@ -183,6 +185,13 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.operation = operation;
   }
 
+  public HoodieRecord(HoodieMergeKey mergeKey, T data, HoodieOperation operation) {
+    this.mergeKey = mergeKey;
+    this.key = mergeKey.getHoodieKey();
+    this.data = data;
+    this.operation = operation;
+  }
+
   public HoodieRecord(HoodieRecord<T> record) {
     this(record.key, record.data, record.operation, record.metaData);
     this.currentLocation = record.currentLocation;
@@ -201,6 +210,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
 
   public HoodieKey getKey() {
     return key;
+  }
+
+  public HoodieMergeKey getMergeKey() {
+    return mergeKey;
   }
 
   public HoodieOperation getOperation() {
