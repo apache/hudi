@@ -977,6 +977,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     int numErrorSamples = cfg.numRecordIndexErrorSamples;
     Pair<Long, List<String>> result = keyToLocationOnFsRdd.fullOuterJoin(keyToLocationFromRecordIndexRdd, cfg.recordIndexParallelism)
         .map(e -> {
+          String recordKey = e._1;
           Optional<Pair<String, String>> locationOnFs = e._2._1;
           Optional<Pair<String, String>> locationFromRecordIndex = e._2._2;
           StringBuilder sb = new StringBuilder();
@@ -986,13 +987,13 @@ public class HoodieMetadataTableValidator implements Serializable {
                 && locationOnFs.get().getRight().equals(locationFromRecordIndex.get().getRight())) {
               return Pair.of(0L, errorSampleList);
             }
-            errorSampleList.add(constructLocationInfoString(locationOnFs, locationFromRecordIndex));
+            errorSampleList.add(constructLocationInfoString(recordKey, locationOnFs, locationFromRecordIndex));
             return Pair.of(1L, errorSampleList);
           }
           if (!locationOnFs.isPresent() && !locationFromRecordIndex.isPresent()) {
             return Pair.of(0L, errorSampleList);
           }
-          errorSampleList.add(constructLocationInfoString(locationOnFs, locationFromRecordIndex));
+          errorSampleList.add(constructLocationInfoString(recordKey, locationOnFs, locationFromRecordIndex));
           return Pair.of(1L, errorSampleList);
         })
         .reduce((pair1, pair2) -> {
@@ -1050,9 +1051,10 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
-  private String constructLocationInfoString(Optional<Pair<String, String>> locationOnFs,
+  private String constructLocationInfoString(String recordKey, Optional<Pair<String, String>> locationOnFs,
                                              Optional<Pair<String, String>> locationFromRecordIndex) {
     StringBuilder sb = new StringBuilder();
+    sb.append("Record key " + recordKey + " -> ");
     sb.append("FS: ");
     if (locationOnFs.isPresent()) {
       sb.append(locationOnFs.get());
