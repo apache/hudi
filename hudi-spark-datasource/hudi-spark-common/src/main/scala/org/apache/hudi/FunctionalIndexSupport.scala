@@ -24,51 +24,55 @@ import org.apache.hudi.FunctionalIndexSupport._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkFunctionalIndex.SPARK_FUNCTION_MAP
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
-import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{And, Expression}
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
 
 class FunctionalIndexSupport(spark: SparkSession,
                              metadataConfig: HoodieMetadataConfig,
-                             metaClient: HoodieTableMetaClient) {
-
-  @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-  @transient private lazy val metadataTable: HoodieTableMetadata =
-    HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString)
+                             metaClient: HoodieTableMetaClient)
+  extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) {
 
   // NOTE: Since [[metadataConfig]] is transient this has to be eagerly persisted, before this will be passed on to the executor
   private val inMemoryProjectionThreshold = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
 
-  /**
-   * Determines whether it would be more optimal to read Column Stats Index a) in-memory of the invoking process,
-   * or b) executing it on-cluster via Spark [[Dataset]] and [[RDD]] APIs
-   */
-  def shouldReadInMemory(fileIndex: HoodieFileIndex, queryReferencedColumns: Seq[String]): Boolean = {
-    Option(metadataConfig.getColumnStatsIndexProcessingModeOverride) match {
-      case Some(mode) =>
-        mode == HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY
-      case None =>
-        fileIndex.getFileSlicesCount * queryReferencedColumns.length < inMemoryProjectionThreshold
+  override def getIndexName: String = FunctionalIndexSupport.INDEX_NAME
+
+  override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
+                                         queryFilters: Seq[Expression],
+                                         queryReferencedColumns: Seq[String],
+                                         prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                         shouldPushDownFilesFilter: Boolean
+                                        ): Option[Set[String]] = {
+    lazy val functionalIndexPartitionOpt = getFunctionalIndexPartition(queryFilters)
+    if (isIndexAvailable && queryFilters.nonEmpty && functionalIndexPartitionOpt.nonEmpty) {
+      val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
+      val indexDf = loadFunctionalIndexDataFrame(functionalIndexPartitionOpt.get, readInMemory)
+      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
+      Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
+    } else {
+      Option.empty
     }
+  }
+
+  override def invalidateCaches(): Unit = {
+    // no caches for this index type, do nothing
   }
 
   /**
@@ -76,25 +80,6 @@ class FunctionalIndexSupport(spark: SparkSession,
    */
   def isIndexAvailable: Boolean = {
     metadataConfig.enabled && metaClient.getFunctionalIndexMetadata.isPresent && !metaClient.getFunctionalIndexMetadata.get().getIndexDefinitions.isEmpty
-  }
-
-  def getPrunedCandidateFileNames(indexPartition: String,
-                                  shouldReadInMemory: Boolean,
-                                  queryFilters: Seq[Expression]): Set[String] = {
-    val indexDf = loadFunctionalIndexDataFrame(indexPartition, shouldReadInMemory)
-    val indexSchema = indexDf.schema
-    val indexFilter =
-      queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
-        .reduce(And)
-
-    val prunedCandidateFileNames =
-      indexDf.where(new Column(indexFilter))
-        .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-        .collect()
-        .map(_.getString(0))
-        .toSet
-
-    prunedCandidateFileNames
   }
 
   def load(indexPartition: String,
@@ -253,7 +238,7 @@ class FunctionalIndexSupport(spark: SparkSession,
 }
 
 object FunctionalIndexSupport {
-
+  val INDEX_NAME = "FUNCTIONAL"
   /**
    * Target Column Stats Index columns which internally are mapped onto fields of the corresponding
    * Column Stats record payload ([[HoodieMetadataColumnStats]]) persisted w/in Metadata Table
