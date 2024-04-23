@@ -416,6 +416,10 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs, basePath + "/" + propsFileName);
   }
 
+  protected static void prepareORCDFSFiles(int numRecords) throws IOException {
+    prepareORCDFSFiles(numRecords, ORC_SOURCE_ROOT);
+  }
+
   protected static void prepareORCDFSFiles(int numRecords, String baseORCPath) throws IOException {
     prepareORCDFSFiles(numRecords, baseORCPath, FIRST_ORC_FILE_NAME, false, null, null);
   }
@@ -666,7 +670,6 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     }
 
     static void waitTillCondition(Function<Boolean, Boolean> condition, Future dsFuture, long timeoutInSecs) throws Exception {
-      // TODO audit all executors
       Future<Boolean> res = Executors.newSingleThreadExecutor().submit(() -> {
         boolean ret = false;
         while (!ret && !dsFuture.isDone()) {
@@ -674,7 +677,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
             Thread.sleep(2000);
             ret = condition.apply(true);
           } catch (Throwable error) {
-            // Ignore
+            LOG.warn("Got error :", error);
+            ret = false;
           }
         }
         return ret;

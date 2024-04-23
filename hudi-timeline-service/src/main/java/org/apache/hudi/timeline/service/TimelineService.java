@@ -427,7 +427,7 @@ public class TimelineService {
       this.requestHandler.stop();
     }
     if (this.app != null) {
-      this.app.close();
+      this.app.stop();
       this.app = null;
     }
     this.fsViewsManager.close();
