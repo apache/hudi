@@ -107,7 +107,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
   //  Inner Class
   // -------------------------------------------------------------------------
   static class TestHelpers {
-    static void assertNCompletedCommits(int expected, String tablePath, FileSystem fs) {
+    static void assertNCompletedCommits(int expected, String tablePath) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getWriteTimeline().filterCompletedInstants();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
@@ -115,7 +115,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
       assertEquals(expected, numCommits, "Got=" + numCommits + ", exp =" + expected);
     }
 
-    static void assertNCleanCommits(int expected, String tablePath, FileSystem fs) {
+    static void assertNCleanCommits(int expected, String tablePath) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
@@ -123,7 +123,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
       assertEquals(expected, numCleanCommits, "Got=" + numCleanCommits + ", exp =" + expected);
     }
 
-    static void assertNClusteringCommits(int expected, String tablePath, FileSystem fs) {
+    static void assertNClusteringCommits(int expected, String tablePath) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
