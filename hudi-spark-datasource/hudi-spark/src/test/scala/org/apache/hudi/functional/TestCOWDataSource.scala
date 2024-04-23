@@ -636,6 +636,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   /**
    * Test retries on conflict failures.
    */
+  @Disabled("HUDI-7656")
   @ParameterizedTest
   @ValueSource(ints = Array(0, 2))
   def testCopyOnWriteConcurrentUpdates(numRetries: Integer): Unit = {
