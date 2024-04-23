@@ -377,6 +377,6 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   private static Throwable getNestedConstructorErrorCause(Exception e) {
     // custom key generator will fail in the constructor, and we must unwrap the cause for asserting error messages
-    return e.getCause().getCause().getCause();
+    return e.getCause().getCause();
   }
 }
