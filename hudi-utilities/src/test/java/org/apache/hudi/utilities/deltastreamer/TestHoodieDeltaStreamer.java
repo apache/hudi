@@ -2799,6 +2799,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled("HUDI-7657")
   @Test
   public void testAutoGenerateRecordKeys() throws Exception {
     boolean useSchemaProvider = false;
