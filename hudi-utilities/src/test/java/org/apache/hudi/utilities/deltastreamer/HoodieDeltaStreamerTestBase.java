@@ -154,11 +154,9 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   public static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices(false, true, false);
     // basePath is defined in UtilitiesTestBase.initTestServices
-    PARQUET_SOURCE_ROOT = basePath + "/parquetFiles";
-    ORC_SOURCE_ROOT = basePath + "/orcFiles";
-    JSON_KAFKA_SOURCE_ROOT = basePath + "/jsonKafkaFiles";
-    prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
-    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
+    PARQUET_SOURCE_ROOT = basePath + "parquetFiles";
+    ORC_SOURCE_ROOT = basePath + "orcFiles";
+    JSON_KAFKA_SOURCE_ROOT = basePath + "jsonKafkaFiles";
   }
 
   @AfterAll

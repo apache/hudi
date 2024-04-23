@@ -1814,6 +1814,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private void testORCDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
     // prepare ORCDFSSource
+    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
     TypedProperties orcProps = new TypedProperties();
 
     // Properties used for testing delta-streamer with orc source

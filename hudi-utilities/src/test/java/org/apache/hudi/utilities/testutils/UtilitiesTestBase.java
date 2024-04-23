@@ -84,7 +84,9 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import scala.Tuple2;
@@ -158,7 +160,7 @@ public class UtilitiesTestBase {
       zookeeperTestService.start();
     }
 
-    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[8]");
+    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[*]", sparkConf());
     context = new HoodieSparkEngineContext(jsc);
     sqlContext = new SQLContext(jsc);
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
@@ -259,6 +261,17 @@ public class UtilitiesTestBase {
   @AfterEach
   public void teardown() throws Exception {
     TestDataSource.resetDataGen();
+  }
+
+  private static Map<String, String> sparkConf() {
+    Map<String, String> conf = new HashMap<>();
+    conf.put("spark.default.parallelism", "4");
+    conf.put("spark.sql.shuffle.partitions", "4");
+    conf.put("spark.executor.memory", "512M");
+    conf.put("spark.driver.memory", "512M");
+    conf.put("spark.hadoop.mapred.output.compress", "true");
+    conf.put("spark.ui.enable", "false");
+    return conf;
   }
 
   /**
