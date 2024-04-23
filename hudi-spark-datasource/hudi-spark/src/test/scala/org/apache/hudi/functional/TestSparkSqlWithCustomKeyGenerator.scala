@@ -34,8 +34,6 @@ import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.slf4j.LoggerFactory
 
-import java.io.IOException
-
 /**
  * Tests Spark SQL DML with custom key generator and write configs.
  */
@@ -289,7 +287,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
         // INSERT INTO should fail for tableNameCustom1
         val sourceTableName = tableNameCustom1 + "_source"
         prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
-        assertThrows[IOException] {
+        assertThrows[HoodieException] {
           spark.sql(
             s"""
                | INSERT INTO $tableNameCustom1
