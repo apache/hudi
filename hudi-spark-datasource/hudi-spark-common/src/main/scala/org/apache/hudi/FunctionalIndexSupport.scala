@@ -75,7 +75,7 @@ class FunctionalIndexSupport(spark: SparkSession,
    * Return true if metadata table is enabled and functional index metadata partition is available.
    */
   def isIndexAvailable: Boolean = {
-    metadataConfig.enabled && metaClient.getFunctionalIndexMetadata.isPresent && !metaClient.getFunctionalIndexMetadata.get().getIndexDefinitions.isEmpty
+    metadataConfig.isEnabled && metaClient.getFunctionalIndexMetadata.isPresent && !metaClient.getFunctionalIndexMetadata.get().getIndexDefinitions.isEmpty
   }
 
   def getPrunedCandidateFileNames(indexPartition: String,

@@ -306,7 +306,7 @@ public class FileIndex {
     //          - Any expression not directly referencing top-level column (for ex, sub-queries, since there's
     //          nothing CSI in particular could be applied for)
     if (dataSkippingEnabled) {
-      if (metadataConfig.enabled()) {
+      if (metadataConfig.isEnabled()) {
         return true;
       } else {
         LOG.warn("Data skipping requires Metadata Table to be enabled! Disable the data skipping");

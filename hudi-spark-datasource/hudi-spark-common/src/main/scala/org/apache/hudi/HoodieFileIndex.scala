@@ -456,7 +456,7 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isDataSkippingEnabled: Boolean = getConfigValue(options, spark.sessionState.conf,
     DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, DataSourceReadOptions.ENABLE_DATA_SKIPPING.defaultValue.toString).toBoolean
 
-  private def isMetadataTableEnabled: Boolean = metadataConfig.enabled()
+  private def isMetadataTableEnabled: Boolean = metadataConfig.isEnabled()
 
   private def isColumnStatsIndexEnabled: Boolean = metadataConfig.isColumnStatsIndexEnabled
 
