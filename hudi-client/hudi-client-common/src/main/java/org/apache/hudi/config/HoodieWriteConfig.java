@@ -2439,7 +2439,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isRecordIndexEnabled() {
-    return metadataConfig.enableRecordIndex();
+    return metadataConfig.isRecordIndexEnabled();
   }
 
   public int getRecordIndexMinFileGroupCount() {

@@ -532,7 +532,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   }
 
   public void syncTableMetadata(HoodieWriteConfig writeConfig) {
-    if (!writeConfig.getMetadataConfig().enabled()) {
+    if (!writeConfig.getMetadataConfig().isEnabled()) {
       return;
     }
     // Open up the metadata table again, for syncing
