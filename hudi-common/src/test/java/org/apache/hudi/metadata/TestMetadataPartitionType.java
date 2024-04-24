@@ -49,7 +49,7 @@ public class TestMetadataPartitionType {
     Mockito.when(metaClient.getFunctionalIndexMetadata()).thenReturn(Option.empty());
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
 
-    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
+    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig.getProps(), metaClient);
 
     // Verify FILES is enabled due to config
     assertEquals(1, enabledPartitions.size(), "Only one partition should be enabled");
@@ -68,7 +68,7 @@ public class TestMetadataPartitionType {
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)).thenReturn(true);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(false).build();
 
-    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
+    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig.getProps(), metaClient);
 
     // Verify RECORD_INDEX and FILES is enabled due to availability
     assertEquals(2, enabledPartitions.size(), "RECORD_INDEX and FILES should be available");
@@ -87,7 +87,7 @@ public class TestMetadataPartitionType {
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(Mockito.any())).thenReturn(false);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
 
-    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
+    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig.getProps(), metaClient);
 
     // Verify no partitions are enabled
     assertTrue(enabledPartitions.isEmpty(), "No partitions should be enabled");
@@ -105,7 +105,7 @@ public class TestMetadataPartitionType {
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FUNCTIONAL_INDEX)).thenReturn(true);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
 
-    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
+    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig.getProps(), metaClient);
 
     // Verify FUNCTIONAL_INDEX and FILES is enabled due to availability
     assertEquals(2, enabledPartitions.size(), "FUNCTIONAL_INDEX and FILES should be available");

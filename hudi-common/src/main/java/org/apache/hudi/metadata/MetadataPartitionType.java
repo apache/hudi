@@ -18,52 +18,80 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.function.BiPredicate;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 
 /**
  * Partition types for metadata table.
  */
 public enum MetadataPartitionType {
-  FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-",
-      HoodieMetadataConfig::enabled,
-      (metaClient, partitionType) -> metaClient.getTableConfig().isMetadataPartitionAvailable(partitionType)),
-  COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-",
-      HoodieMetadataConfig::isColumnStatsIndexEnabled,
-      (metaClient, partitionType) -> metaClient.getTableConfig().isMetadataPartitionAvailable(partitionType)),
-  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-",
-      HoodieMetadataConfig::isBloomFilterIndexEnabled,
-      (metaClient, partitionType) -> metaClient.getTableConfig().isMetadataPartitionAvailable(partitionType)),
-  RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-",
-      HoodieMetadataConfig::isRecordIndexEnabled,
-      (metaClient, partitionType) -> metaClient.getTableConfig().isMetadataPartitionAvailable(partitionType)),
-  FUNCTIONAL_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX, "func-index-",
-      metadataConfig -> false, // no config for functional index, it is created using sql
-      (metaClient, partitionType) -> metaClient.getFunctionalIndexMetadata().isPresent());
+  FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-") {
+    @Override
+    public boolean isMetadataPartitionEnabled(TypedProperties properties) {
+      return properties.getBoolean(ENABLE.key(), ENABLE.defaultValue());
+    }
+  },
+  COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-") {
+    @Override
+    public boolean isMetadataPartitionEnabled(TypedProperties properties) {
+      return properties.getBoolean(ENABLE_METADATA_INDEX_COLUMN_STATS.key(), ENABLE_METADATA_INDEX_COLUMN_STATS.defaultValue());
+    }
+  },
+  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-") {
+    @Override
+    public boolean isMetadataPartitionEnabled(TypedProperties properties) {
+      return properties.getBoolean(ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), ENABLE_METADATA_INDEX_BLOOM_FILTER.defaultValue());
+    }
+  },
+  RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-") {
+    @Override
+    public boolean isMetadataPartitionEnabled(TypedProperties properties) {
+      return properties.getBoolean(RECORD_INDEX_ENABLE_PROP.key(), RECORD_INDEX_ENABLE_PROP.defaultValue());
+    }
+  },
+  FUNCTIONAL_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX, "func-index-") {
+    @Override
+    public boolean isMetadataPartitionEnabled(TypedProperties properties) {
+      return false;
+    }
+
+    @Override
+    public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
+      return metaClient.getFunctionalIndexMetadata().isPresent();
+    }
+  };
 
   // Partition path in metadata table.
   private final String partitionPath;
   // FileId prefix used for all file groups in this partition.
   private final String fileIdPrefix;
-  private final Predicate<HoodieMetadataConfig> isMetadataPartitionEnabled;
-  private final BiPredicate<HoodieTableMetaClient, MetadataPartitionType> isMetadataPartitionAvailable;
 
-  MetadataPartitionType(final String partitionPath, final String fileIdPrefix,
-                        Predicate<HoodieMetadataConfig> isMetadataPartitionEnabled,
-                        BiPredicate<HoodieTableMetaClient, MetadataPartitionType> isMetadataPartitionAvailable) {
+  /**
+   * Check if the metadata partition is enabled based on the metadata config.
+   */
+  public abstract boolean isMetadataPartitionEnabled(TypedProperties properties);
+
+  /**
+   * Check if the metadata partition is available based on the table config.
+   */
+  public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
+    return metaClient.getTableConfig().isMetadataPartitionAvailable(this);
+  }
+
+  MetadataPartitionType(final String partitionPath, final String fileIdPrefix) {
     this.partitionPath = partitionPath;
     this.fileIdPrefix = fileIdPrefix;
-    this.isMetadataPartitionEnabled = isMetadataPartitionEnabled;
-    this.isMetadataPartitionAvailable = isMetadataPartitionAvailable;
   }
 
   public String getPartitionPath() {
@@ -95,14 +123,10 @@ public enum MetadataPartitionType {
   /**
    * Returns the list of metadata partition types enabled based on the metadata config and table config.
    */
-  public static List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
-    List<MetadataPartitionType> enabledTypes = new ArrayList<>(4);
-    for (MetadataPartitionType type : values()) {
-      if (type.isMetadataPartitionEnabled.test(metadataConfig) || type.isMetadataPartitionAvailable.test(metaClient, type)) {
-        enabledTypes.add(type);
-      }
-    }
-    return enabledTypes;
+  public static List<MetadataPartitionType> getEnabledPartitions(TypedProperties properties, HoodieTableMetaClient metaClient) {
+    return Arrays.stream(values())
+        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(properties) || partitionType.isMetadataPartitionAvailable(metaClient))
+        .collect(Collectors.toList());
   }
 
   @Override
