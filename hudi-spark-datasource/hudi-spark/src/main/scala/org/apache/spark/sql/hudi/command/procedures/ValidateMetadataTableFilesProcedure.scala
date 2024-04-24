@@ -19,11 +19,10 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
-import org.apache.hudi.storage.{StoragePathInfo, StoragePath}
+import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -32,7 +31,6 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
-
 import scala.collection.JavaConversions._
 import scala.jdk.CollectionConverters.asScalaBufferConverter
 
@@ -62,12 +60,12 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     val verbose = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
 
     val basePath = getBasePath(table)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
     val metadataReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
       config, basePath)
 
-    if (!metadataReader.enabled){
+    if (!metadataReader.enabled) {
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }
 

@@ -21,6 +21,7 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.model.{BootstrapFileMapping, HoodieFileGroupId}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -62,7 +63,7 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
     val desc = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[Boolean]
 
     val basePath: String = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
 
     if (partitionPath.isEmpty && fileIds.nonEmpty) throw new IllegalStateException("PartitionPath is mandatory when passing fileIds.")
 

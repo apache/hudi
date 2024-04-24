@@ -34,13 +34,14 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.avro.generic.GenericRecord;
@@ -51,6 +52,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -226,11 +228,7 @@ public class HoodieClientTestUtils {
                                                         String... paths) {
     List<HoodieBaseFile> latestFiles = new ArrayList<>();
     try {
-      HoodieTableMetaClient metaClient =
-          HoodieTableMetaClient.builder()
-              .setConf((Configuration) storage.getConf())
-              .setBasePath(basePath)
-              .setLoadActiveTimelineOnLoad(true).build();
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, basePath);
       for (String path : paths) {
         BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(
             metaClient,
@@ -307,6 +305,24 @@ public class HoodieClientTestUtils {
     } else {
       return Option.empty();
     }
+  }
+
+  /**
+   * @param jsc      {@link JavaSparkContext} instance.
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(JavaSparkContext jsc, String basePath) {
+    return HoodieTestUtils.createMetaClient(jsc.hadoopConfiguration(), basePath);
+  }
+
+  /**
+   * @param spark    {@link SparkSession} instance.
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(SparkSession spark, String basePath) {
+    return HoodieTestUtils.createMetaClient(spark.sessionState().newHadoopConf(), basePath);
   }
 
   private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {

@@ -23,7 +23,6 @@ import org.apache.hudi.client.validator.{SqlQueryEqualityPreCommitValidator, Sql
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.model.WriteOperationType
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -31,13 +30,15 @@ import org.apache.hudi.config.{HoodiePreCommitValidatorConfig, HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieUpsertException, HoodieValidationException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.function.Executable
@@ -278,8 +279,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     }
 
     assertRecordCount(basePath, expectedRecCount + 500)
-    val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
-      .setLoadActiveTimelineOnLoad(true).build()
+    val metaClient = createMetaClient(spark, basePath)
     val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
       .map(instant => instant.asInstanceOf[HoodieInstant].getAction)
     // assert replace commit is archived and not part of active timeline.

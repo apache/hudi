@@ -17,15 +17,15 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
-import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
+
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCleanMetadata
@@ -473,9 +473,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         )
 
         // check schema
-        val hadoopConf = spark.sessionState.newHadoopConf()
-        val metaClient = HoodieTableMetaClient.builder().setBasePath(s"${tmp.getCanonicalPath}/$tableName")
-          .setConf(hadoopConf).build()
+        val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
         val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.lastInstant()
         val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(
           lastInstant.get()).get(), classOf[HoodieCommitMetadata])

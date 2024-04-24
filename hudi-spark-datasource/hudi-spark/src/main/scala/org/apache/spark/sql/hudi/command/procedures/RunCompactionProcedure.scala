@@ -19,8 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.HoodieCommitMetadata
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{CompactionUtils, HoodieTimer, Option => HOption}
 import org.apache.hudi.config.HoodieLockConfig
 import org.apache.hudi.exception.HoodieException
@@ -84,7 +83,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     }
 
     val basePath = getBasePath(tableName, tablePath)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
 
     if (metaClient.getTableConfig.isMetadataTableAvailable) {
       if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {

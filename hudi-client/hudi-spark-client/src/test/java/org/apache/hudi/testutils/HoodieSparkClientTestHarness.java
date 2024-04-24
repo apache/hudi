@@ -405,7 +405,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(Configuration conf, String basePath) {
-    metaClient = HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).build();
+    metaClient = HoodieTestUtils.createMetaClient(conf, basePath);
     return metaClient;
   }
 
@@ -618,7 +618,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     HoodieWriteConfig metadataWriteConfig = metadataWriter.getWriteConfig();
     assertFalse(metadataWriteConfig.isMetadataTableEnabled(), "No metadata table for metadata table");
 
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(hadoopConf, metadataTableBasePath);
 
     // Metadata table is MOR
     assertEquals(metadataMetaClient.getTableType(), HoodieTableType.MERGE_ON_READ, "Metadata Table should be MOR");
@@ -677,5 +677,17 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata, isEmptyForAll, isEmptyCompleted);
     }
     return new HoodieInstant(inflightOnly, "clean", instantTime);
+  }
+
+  protected HoodieTableMetaClient createMetaClient(String basePath) {
+    return HoodieTestUtils.createMetaClient(hadoopConf, basePath);
+  }
+
+  protected HoodieTableMetaClient createMetaClient(SparkSession spark, String basePath) {
+    return HoodieClientTestUtils.createMetaClient(spark, basePath);
+  }
+
+  protected HoodieTableMetaClient createMetaClient(JavaSparkContext context, String basePath) {
+    return HoodieClientTestUtils.createMetaClient(context, basePath);
   }
 }
