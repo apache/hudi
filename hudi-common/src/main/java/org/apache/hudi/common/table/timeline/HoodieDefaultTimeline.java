@@ -63,6 +63,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   private List<HoodieInstant> instants;
   // for efficient #contains queries.
   private transient volatile Set<String> instantTimeSet;
+  // for efficient #isPendingClusterInstant queries
+  private transient volatile Set<String> pendingReplaceCommitInstants;
   // for efficient #isBeforeTimelineStarts check.
   private transient volatile Option<HoodieInstant> firstNonSavepointCommit;
   private String timelineHash;
@@ -540,10 +542,10 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean isPendingClusterInstant(String instantTime) {
-    HoodieTimeline potentialTimeline = getCommitsTimeline().filterPendingReplaceTimeline().filter(i -> i.getTimestamp().equals(instantTime));
-    if (potentialTimeline.countInstants() == 0) {
+    if (!getOrCreatePendingReplaceInstantSet().contains(instantTime)) {
       return false;
     }
+    HoodieTimeline potentialTimeline = getCommitsTimeline().filterPendingReplaceTimeline().filter(i -> i.getTimestamp().equals(instantTime));
     if (potentialTimeline.countInstants() > 1) {
       throw new IllegalStateException("Multiple instants with same timestamp: " + potentialTimeline);
     }
@@ -574,6 +576,18 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
       }
     }
     return this.instantTimeSet;
+  }
+
+  private Set<String> getOrCreatePendingReplaceInstantSet() {
+    if (this.pendingReplaceCommitInstants == null) {
+      synchronized (this) {
+        if (this.pendingReplaceCommitInstants == null) {
+          this.pendingReplaceCommitInstants = getCommitsTimeline().filterPendingReplaceTimeline().getInstants().stream()
+              .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+        }
+      }
+    }
+    return this.pendingReplaceCommitInstants;
   }
 
   /**

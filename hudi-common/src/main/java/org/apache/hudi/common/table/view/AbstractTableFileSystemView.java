@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -107,7 +106,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   private final ReentrantReadWriteLock globalLock = new ReentrantReadWriteLock();
   protected final ReadLock readLock = globalLock.readLock();
   protected final WriteLock writeLock = globalLock.writeLock();
-  private Pair<String, Set<String>> timelineHashAndPendingReplaceInstants = null;
+
   private BootstrapIndex bootstrapIndex;
 
   private String getPartitionPathFor(HoodieBaseFile baseFile) {
@@ -141,22 +140,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
     this.visibleCommitsAndCompactionTimeline = visibleActiveTimeline.getWriteTimeline();
-    this.timelineHashAndPendingReplaceInstants = null;
-  }
-
-  /**
-   * Get a list of pending replace instants. Caches the result for the active timeline.
-   * The cache is invalidated when {@link #refreshTimeline(HoodieTimeline)} is called.
-   *
-   * @return list of pending replace instant timestamps
-   */
-  private Set<String> getPendingReplaceInstants() {
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    if (timelineHashAndPendingReplaceInstants == null || !timelineHashAndPendingReplaceInstants.getKey().equals(activeTimeline.getTimelineHash())) {
-      timelineHashAndPendingReplaceInstants = Pair.of(activeTimeline.getTimelineHash(), activeTimeline.filterPendingReplaceTimeline()
-          .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet()));
-    }
-    return timelineHashAndPendingReplaceInstants.getValue();
   }
 
   /**
@@ -337,7 +320,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     addedPartitions.clear();
     resetViewState();
     bootstrapIndex = null;
-    timelineHashAndPendingReplaceInstants = null;
   }
 
   /**
@@ -388,7 +370,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           // Pairs of relative partition path and absolute partition path
           List<Pair<String, StoragePath>> absolutePartitionPathList = partitionSet.stream()
               .map(partition -> Pair.of(
-                  partition, FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition)))
+                  partition, FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partition)))
               .collect(Collectors.toList());
           long beginLsTs = System.currentTimeMillis();
           Map<Pair<String, StoragePath>, List<StoragePathInfo>> pathInfoMap =
@@ -460,7 +442,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   private List<StoragePathInfo> getAllFilesInPartition(String relativePartitionPath)
       throws IOException {
-    StoragePath partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(),
+    StoragePath partitionPath = FSUtils.constructAbsolutePath(metaClient.getBasePathV2(),
         relativePartitionPath);
     long beginLsTs = System.currentTimeMillis();
     List<StoragePathInfo> pathInfoList = listPartition(partitionPath);
@@ -577,8 +559,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param baseFile base File
    */
   protected boolean isBaseFileDueToPendingClustering(HoodieBaseFile baseFile) {
-    Set<String> pendingReplaceInstants = getPendingReplaceInstants();
-    return !pendingReplaceInstants.isEmpty() && pendingReplaceInstants.contains(baseFile.getCommitTime());
+    return metaClient.getActiveTimeline().isPendingClusterInstant(baseFile.getCommitTime());
   }
 
   /**
