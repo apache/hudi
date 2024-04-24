@@ -15,7 +15,7 @@ Here are few ways, you can get involved.
  - Author blogs on our wiki
  - Testing; Improving out-of-box experience by reporting bugs
  - Share new ideas/directions to pursue or propose a new RFC
- - Contributing code to the project ([newbie JIRAs](https://issues.apache.org/jira/issues/?jql=project+%3D+HUDI+AND+component+%3D+newbie))
+ - Contributing code to the project: check out [newbie JIRAs](https://issues.apache.org/jira/issues?filter=12350891).
 
 ## Become a Committer
 
