@@ -165,7 +165,7 @@ public class UtilitiesTestBase {
       zookeeperTestService.start();
     }
 
-    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[*]", sparkConf());
+    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4]", sparkConf());
     context = new HoodieSparkEngineContext(jsc);
     sqlContext = new SQLContext(jsc);
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
@@ -270,10 +270,10 @@ public class UtilitiesTestBase {
 
   private static Map<String, String> sparkConf() {
     Map<String, String> conf = new HashMap<>();
-    conf.put("spark.default.parallelism", "4");
-    conf.put("spark.sql.shuffle.partitions", "4");
-    conf.put("spark.executor.memory", "512M");
-    conf.put("spark.driver.memory", "512M");
+    conf.put("spark.default.parallelism", "2");
+    conf.put("spark.sql.shuffle.partitions", "2");
+    conf.put("spark.executor.memory", "1G");
+    conf.put("spark.driver.memory", "1G");
     conf.put("spark.hadoop.mapred.output.compress", "true");
     conf.put("spark.ui.enable", "false");
     return conf;
