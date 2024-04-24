@@ -56,7 +56,7 @@ public class HadoopFSUtils {
     // look for all properties, prefixed to be picked up
     for (Map.Entry<String, String> prop : System.getenv().entrySet()) {
       if (prop.getKey().startsWith(HOODIE_ENV_PROPS_PREFIX)) {
-        LOG.info("Picking up value for hoodie env var :" + prop.getKey());
+        LOG.info("Picking up value for hoodie env var : {}", prop.getKey());
         conf.set(prop.getKey().replace(HOODIE_ENV_PROPS_PREFIX, "").replaceAll("_DOT_", "."), prop.getValue());
       }
     }
@@ -99,7 +99,7 @@ public class HadoopFSUtils {
     try {
       fs = path.getFileSystem(conf);
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to get instance of " + FileSystem.class.getName(), e);
+      throw new HoodieIOException(String.format("Failed to get instance of %s", FileSystem.class.getName()), e);
     }
     return fs;
   }
@@ -135,10 +135,10 @@ public class HadoopFSUtils {
     File localFile = new File(path);
     if (!providedPath.isAbsolute() && localFile.exists()) {
       Path resolvedPath = new Path("file://" + localFile.getAbsolutePath());
-      LOG.info("Resolving file " + path + " to be a local file.");
+      LOG.info("Resolving file {} to be a local file.", path);
       return resolvedPath;
     }
-    LOG.info("Resolving file " + path + "to be a remote file.");
+    LOG.info("Resolving file {} to be a remote file.", path);
     return providedPath;
   }
 
@@ -201,7 +201,7 @@ public class HadoopFSUtils {
     try {
       fsDataInputStream = fs.open(convertToHadoopPath(filePath), bufferSize);
     } catch (IOException e) {
-      throw new HoodieIOException("Exception creating input stream from file: " + filePath, e);
+      throw new HoodieIOException(String.format("Exception creating input stream from file: %s", filePath), e);
     }
 
     if (isGCSFileSystem(fs)) {

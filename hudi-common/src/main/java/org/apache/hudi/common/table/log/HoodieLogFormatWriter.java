@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieLogFormat.WriterBuilder;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -29,7 +28,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
 import org.apache.hadoop.ipc.RemoteException;
 import org.slf4j.Logger;
@@ -50,7 +48,6 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private FSDataOutputStream output;
 
   private final HoodieStorage storage;
-  private final FileSystem fs;
   private final long sizeThreshold;
   private final Integer bufferSize;
   private final Short replication;
@@ -68,19 +65,13 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       String rolloverLogWriteToken,
       LogFileCreationCallback fileCreationHook) {
     this.storage = storage;
-    this.fs = (FileSystem) storage.getFileSystem();
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
-    this.bufferSize = bufferSize != null ? bufferSize : FSUtils.getDefaultBufferSize(fs);
-    this.replication = replication != null ? replication
-        : FSUtils.getDefaultReplication(fs, new Path(logFile.getPath().getParent().toString()));
+    this.bufferSize = bufferSize != null ? bufferSize : storage.getDefaultBufferSize();
+    this.replication = replication != null ? replication : storage.getDefaultReplication(logFile.getPath().getParent());
     this.rolloverLogWriteToken = rolloverLogWriteToken;
     this.fileCreationHook = fileCreationHook;
     addShutDownHook();
-  }
-
-  public FileSystem getFs() {
-    return (FileSystem) storage.getFileSystem();
   }
 
   @Override
@@ -119,7 +110,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
           rollOver();
         } catch (RemoteException re) {
           if (re.getClassName().contentEquals(AlreadyBeingCreatedException.class.getName())) {
-            LOG.warn("Another task executor writing to the same log file(" + logFile + ", rolling over");
+            LOG.warn("Another task executor writing to the same log file({}), rolling over", logFile);
             // Rollover the current log file (since cannot get a stream handle) and create new one
             rollOver();
           } else {
@@ -146,7 +137,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     long startPos = originalOutputStream.getPos();
     long sizeWritten = 0;
     // HUDI-2655. here we wrap originalOutputStream to ensure huge blocks can be correctly written
-    FSDataOutputStream outputStream = new FSDataOutputStream(originalOutputStream, new FileSystem.Statistics(fs.getScheme()), startPos);
+    FSDataOutputStream outputStream = new FSDataOutputStream(originalOutputStream, new FileSystem.Statistics(storage.getScheme()), startPos);
     for (HoodieLogBlock block: blocks) {
       long startSize = outputStream.size();
 
@@ -218,8 +209,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private void rolloverIfNeeded() throws IOException {
     // Roll over if the size is past the threshold
     if (getCurrentSize() > sizeThreshold) {
-      LOG.info("CurrentSize " + getCurrentSize() + " has reached threshold " + sizeThreshold
-          + ". Rolling over to the next version");
+      LOG.info("CurrentSize {} has reached threshold {}. Rolling over to the next version", getCurrentSize(), sizeThreshold);
       rollOver();
     }
   }
@@ -232,12 +222,10 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void createNewFile() throws IOException {
     fileCreationHook.preFileCreation(this.logFile);
-    this.output =
-        ((FileSystem) storage.getFileSystem()).create(
-            new Path(this.logFile.getPath().toUri()), false,
-            bufferSize,
-            replication,
-            WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
+    this.output = new FSDataOutputStream(
+        storage.create(this.logFile.getPath(), false, bufferSize, replication, WriterBuilder.DEFAULT_SIZE_THRESHOLD),
+        new FileSystem.Statistics(storage.getScheme())
+    );
   }
 
   @Override
@@ -291,7 +279,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
             closeStream();
           }
         } catch (Exception e) {
-          LOG.warn("unable to close output stream for log file " + logFile, e);
+          LOG.warn(String.format("unable to close output stream for log file %s", logFile), e);
           // fail silently for any sort of exception
         }
       }
