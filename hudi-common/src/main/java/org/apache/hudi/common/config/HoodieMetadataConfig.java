@@ -346,7 +346,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return Math.max(getInt(HoodieMetadataConfig.FILE_LISTING_PARALLELISM_VALUE), 1);
   }
 
-  public boolean enabled() {
+  public boolean isEnabled() {
     return getBoolean(ENABLE);
   }
 
@@ -359,7 +359,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isRecordIndexEnabled() {
-    return getBooleanOrDefault(RECORD_INDEX_ENABLE_PROP);
+    return isEnabled() && getBooleanOrDefault(RECORD_INDEX_ENABLE_PROP);
   }
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
@@ -398,7 +398,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getIntOrDefault(METADATA_INDEX_CHECK_TIMEOUT_SECONDS);
   }
 
-  public boolean enableMetrics() {
+  public boolean isMetricsEnabled() {
     return getBoolean(METRICS_ENABLE);
   }
 
@@ -406,20 +406,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getString(DIR_FILTER_REGEX);
   }
 
-  public boolean ignoreSpuriousDeletes() {
+  public boolean shouldIgnoreSpuriousDeletes() {
     return getBoolean(IGNORE_SPURIOUS_DELETES);
   }
 
-  public boolean doEnableOptimizedLogBlocksScan() {
+  public boolean isOptimizedLogBlocksScanEnabled() {
     return getBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
   }
 
   public int getMaxNumDeltacommitsWhenPending() {
     return getIntOrDefault(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING);
-  }
-
-  public boolean enableRecordIndex() {
-    return enabled() && getBoolean(RECORD_INDEX_ENABLE_PROP);
   }
 
   public int getRecordIndexMinFileGroupCount() {
