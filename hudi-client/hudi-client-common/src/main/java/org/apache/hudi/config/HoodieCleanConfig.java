@@ -201,6 +201,16 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
           + "base files are also physically deleted, to comply with data privacy enforcement processes.");
 
+  public static final ConfigProperty<Boolean> USE_LOCAL_ENGINE_FOR_METADATA_NON_PARTITIONED_DATASETS = ConfigProperty
+      .key("hoodie.clean.planner.use.local.engine.on.metadata.and.non-partitioned.tables")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Some datasets have huge record_index partition, listing this partition is causing OOM errors on clean planner. "
+          + "So, if we increase executor memory it will increase for all the executors. So, by passing local engine context to clean "
+          + "planner, listing is done on the driver. In that case, if OOM error were come we can increase driver memory alone to "
+          + "handle the memory requirement. Once this config is enabled, both non-partitioned datasets and metadata table uses driver "
+          + "for scheduling the cleans.");
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -359,6 +369,13 @@ public class HoodieCleanConfig extends HoodieConfig {
 
     public HoodieCleanConfig.Builder withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy failedWritesPolicy) {
       cleanConfig.setValue(FAILED_WRITES_CLEANER_POLICY, failedWritesPolicy.name());
+      return this;
+    }
+
+    public HoodieCleanConfig.Builder useLocalEngineForMetadataAndPartitionedDatasets(
+            Boolean useLocalEngineForMetadataAndPartitionedDatasets) {
+      cleanConfig.setValue(USE_LOCAL_ENGINE_FOR_METADATA_NON_PARTITIONED_DATASETS,
+              String.valueOf(useLocalEngineForMetadataAndPartitionedDatasets));
       return this;
     }
 
