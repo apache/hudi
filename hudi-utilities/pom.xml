@@ -373,6 +373,11 @@
       <artifactId>kafka-json-schema-serializer</artifactId>
       <version>${confluent.version}</version>
     </dependency>
+    <dependency>
+      <groupId>io.confluent</groupId>
+      <artifactId>kafka-protobuf-serializer</artifactId>
+      <version>${confluent.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>org.apache.kafka</groupId>

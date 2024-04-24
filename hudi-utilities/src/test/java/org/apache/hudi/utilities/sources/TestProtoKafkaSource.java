@@ -38,9 +38,11 @@ import com.google.protobuf.DoubleValue;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
+import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+import com.google.protobuf.util.JsonFormat;
 import com.google.protobuf.util.Timestamps;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -56,6 +58,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -64,13 +67,16 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests against {@link ProtoKafkaSource}.
  */
 public class TestProtoKafkaSource extends BaseTestKafkaSource {
+  private static final JsonFormat.Printer PRINTER = JsonFormat.printer().omittingInsignificantWhitespace();
   private static final Random RANDOM = new Random();
+  private static final String MOCK_REGISTRY_URL = "mock://127.0.0.1:8081";
 
   protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
@@ -91,6 +97,36 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     this.schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
     Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile));
     return new SourceFormatAdapter(protoKafkaSource);
+  }
+
+  @Test
+  public void testProtoKafkaSourceWithConfluentProtoDeserialization() {
+    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceWithConfluentDeserializer";
+    testUtils.createTopic(topic, 2);
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(KAFKA_PROTO_VALUE_DESERIALIZER_CLASS.key(),
+        "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer");
+    props.put("schema.registry.url", MOCK_REGISTRY_URL);
+    props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
+    ProtoKafkaSource protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(protoKafkaSource);
+    assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
+    List<Sample> messages = createSampleMessages(1000);
+    sendMessagesToKafkaWithConfluentSerializer(topic, 2, messages);
+    // Assert messages are read correctly
+    JavaRDD<Message> messagesRead = protoKafkaSource.fetchNext(Option.empty(), 1000).getBatch().get();
+    assertEquals(messages.stream().map(this::protoToJson).collect(Collectors.toSet()),
+        new HashSet<>(messagesRead.map(message -> PRINTER.print(message)).collect()));
+    // Assert messages can be read into Avro records
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
+    JavaRDD<GenericRecord> firstBatch = fetch1.getBatch().get();
+    // Collect records to assert the data goes through full translation path
+    assertEquals(900, firstBatch.collect().size());
+    // Test Avro To DataFrame<Row> path
+    Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
+        schemaProvider.getSourceSchema().toString(), protoKafkaSource.getSparkSession());
+    assertEquals(900, fetch1AsRows.collectAsList().size());
   }
 
   @Test
@@ -197,7 +233,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   @Override
   void sendMessagesToKafka(String topic, int count, int numPartitions) {
     List<Sample> messages = createSampleMessages(count);
-    try (Producer<String, byte[]> producer = new KafkaProducer<>(getProducerProperties())) {
+    try (Producer<String, byte[]> producer = new KafkaProducer<>(getProducerProperties(false))) {
       for (int i = 0; i < messages.size(); i++) {
         // use consistent keys to get even spread over partitions for test expectations
         producer.send(new ProducerRecord<>(topic, Integer.toString(i % numPartitions), messages.get(i).toByteArray()));
@@ -205,14 +241,40 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     }
   }
 
-  private Properties getProducerProperties() {
+  private void sendMessagesToKafkaWithConfluentSerializer(String topic, int numPartitions, List<Sample> messages) {
+    try (Producer<String, Message> producer = new KafkaProducer<>(getProducerProperties(true))) {
+      for (int i = 0; i < messages.size(); i++) {
+        // use consistent keys to get even spread over partitions for test expectations
+        producer.send(new ProducerRecord<>(topic, Integer.toString(i % numPartitions), messages.get(i)));
+      }
+    }
+  }
+
+  private Properties getProducerProperties(boolean useConfluentProtobufSerializer) {
     Properties props = new Properties();
     props.put("bootstrap.servers", testUtils.brokerAddress());
-    props.put("value.serializer", ByteArraySerializer.class.getName());
-    // Key serializer is required.
+    if (useConfluentProtobufSerializer) {
+      props.put("value.serializer",
+          "io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer");
+      props.put("value.deserializer",
+          "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer");
+      props.put("schema.registry.url", MOCK_REGISTRY_URL);
+      props.put("auto.register.schemas", "true");
+    } else {
+      props.put("value.serializer", ByteArraySerializer.class.getName());
+      // Key serializer is required.
+    }
     props.put("key.serializer", StringSerializer.class.getName());
     // wait for all in-sync replicas to ack sends
     props.put("acks", "all");
     return props;
+  }
+
+  private String protoToJson(Message input) {
+    try {
+      return PRINTER.print(input);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to convert proto to json", e);
+    }
   }
 }

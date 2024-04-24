@@ -127,6 +127,7 @@
                   <include>io.confluent:kafka-avro-serializer</include>
                   <include>io.confluent:kafka-schema-serializer</include>
                   <include>io.confluent:kafka-json-schema-serializer</include>
+                  <include>io.confluent:kafka-protobuf-serializer</include>
                   <include>io.confluent:common-config</include>
                   <include>io.confluent:common-utils</include>
                   <include>io.confluent:kafka-schema-registry-client</include>
