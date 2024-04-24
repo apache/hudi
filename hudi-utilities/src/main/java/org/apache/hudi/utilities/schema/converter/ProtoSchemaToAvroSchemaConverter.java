@@ -28,10 +28,10 @@ import java.io.IOException;
 /**
  * Converts a protobuf schema from the schema registry to an Avro schema.
  */
-public class ProtoRegistryToAvroSchemaConverter implements SchemaRegistryProvider.SchemaConverter {
+public class ProtoSchemaToAvroSchemaConverter implements SchemaRegistryProvider.SchemaConverter {
   private final ProtoConversionUtil.SchemaConfig schemaConfig;
 
-  public ProtoRegistryToAvroSchemaConverter(TypedProperties config) {
+  public ProtoSchemaToAvroSchemaConverter(TypedProperties config) {
     this.schemaConfig = ProtoConversionUtil.SchemaConfig.fromProperties(config);
   }
 

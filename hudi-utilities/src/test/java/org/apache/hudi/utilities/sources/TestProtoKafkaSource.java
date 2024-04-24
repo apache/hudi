@@ -42,6 +42,7 @@ import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+import com.google.protobuf.util.JsonFormat;
 import com.google.protobuf.util.Timestamps;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -57,6 +58,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -65,13 +67,14 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.utilities.sources.ProtoKafkaSource.Config.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests against {@link ProtoKafkaSource}.
  */
 public class TestProtoKafkaSource extends BaseTestKafkaSource {
+  private static final JsonFormat.Printer PRINTER = JsonFormat.printer().omittingInsignificantWhitespace();
   private static final Random RANDOM = new Random();
   private static final String MOCK_REGISTRY_URL = "mock://127.0.0.1:8081";
 
@@ -106,16 +109,24 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     props.put("schema.registry.url", MOCK_REGISTRY_URL);
     props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
     SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
-    Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    ProtoKafkaSource protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(protoKafkaSource);
     assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
-    sendMessagesToKafkaWithConfluentSerializer(topic, 1000, 2);
+    List<Sample> messages = createSampleMessages(1000);
+    sendMessagesToKafkaWithConfluentSerializer(topic, 2, messages);
+    // Assert messages are read correctly
+    JavaRDD<Message> messagesRead = protoKafkaSource.fetchNext(Option.empty(), 1000).getBatch().get();
+    assertEquals(messages.stream().map(this::protoToJson).collect(Collectors.toSet()),
+        new HashSet<>(messagesRead.map(message -> PRINTER.print(message)).collect()));
+    // Assert messages can be read into Avro records
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
-    assertEquals(900, fetch1.getBatch().get().count());
+    JavaRDD<GenericRecord> firstBatch = fetch1.getBatch().get();
+    // Collect records to assert the data goes through full translation path
+    assertEquals(900, firstBatch.collect().size());
     // Test Avro To DataFrame<Row> path
     Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
         schemaProvider.getSourceSchema().toString(), protoKafkaSource.getSparkSession());
-    assertEquals(900, fetch1AsRows.count());
+    assertEquals(900, fetch1AsRows.collectAsList().size());
   }
 
   @Test
@@ -230,8 +241,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     }
   }
 
-  private void sendMessagesToKafkaWithConfluentSerializer(String topic, int count, int numPartitions) {
-    List<Sample> messages = createSampleMessages(count);
+  private void sendMessagesToKafkaWithConfluentSerializer(String topic, int numPartitions, List<Sample> messages) {
     try (Producer<String, Message> producer = new KafkaProducer<>(getProducerProperties(true))) {
       for (int i = 0; i < messages.size(); i++) {
         // use consistent keys to get even spread over partitions for test expectations
@@ -258,5 +268,13 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     // wait for all in-sync replicas to ack sends
     props.put("acks", "all");
     return props;
+  }
+
+  private String protoToJson(Message input) {
+    try {
+      return PRINTER.print(input);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to convert proto to json", e);
+    }
   }
 }

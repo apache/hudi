@@ -31,13 +31,13 @@ import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class TestProtoRegistryToAvroSchemaConverter {
+class TestProtoSchemaToAvroSchemaConverter {
   @Test
   void testConvert() throws Exception {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
     Schema.Parser parser = new Schema.Parser();
-    String actual = new ProtoRegistryToAvroSchemaConverter(properties).convert(getProtoSchemaString());
+    String actual = new ProtoSchemaToAvroSchemaConverter(properties).convert(getProtoSchemaString());
     Schema actualSchema = new Schema.Parser().parse(actual);
 
     Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_default_limit.avsc"));
