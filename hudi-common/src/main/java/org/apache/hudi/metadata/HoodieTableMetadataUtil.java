@@ -1700,7 +1700,7 @@ public class HoodieTableMetadataUtil {
     }
 
     // Does any enabled partition being enabled need to track the written records
-    return config.enableRecordIndex();
+    return config.isRecordIndexEnabled();
   }
 
   /**

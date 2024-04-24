@@ -495,7 +495,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withLogBlockTimestamps(validInstantTimestamps)
         .enableFullScan(allowFullScan)
         .withPartition(partitionName)
-        .withEnableOptimizedLogBlocksScan(metadataConfig.doEnableOptimizedLogBlocksScan())
+        .withEnableOptimizedLogBlocksScan(metadataConfig.isOptimizedLogBlocksScanEnabled())
         .withTableMetaClient(metadataMetaClient)
         .build();
 

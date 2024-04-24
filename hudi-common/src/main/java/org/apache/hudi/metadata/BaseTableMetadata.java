@@ -97,7 +97,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     this.metadataConfig = metadataConfig;
     this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableAvailable();
 
-    if (metadataConfig.enableMetrics()) {
+    if (metadataConfig.isMetricsEnabled()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(HoodieMetricsConfig.newBuilder().fromProperties(metadataConfig.getProps()).build()));
     } else {
       this.metrics = Option.empty();
@@ -415,7 +415,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    */
   private void checkForSpuriousDeletes(HoodieMetadataPayload metadataPayload, String partitionName) {
     if (!metadataPayload.getDeletions().isEmpty()) {
-      if (metadataConfig.ignoreSpuriousDeletes()) {
+      if (metadataConfig.shouldIgnoreSpuriousDeletes()) {
         LOG.warn("Metadata record for " + partitionName + " encountered some files to be deleted which was not added before. "
             + "Ignoring the spurious deletes as the `" + HoodieMetadataConfig.IGNORE_SPURIOUS_DELETES.key() + "` config is set to true");
       } else {
