@@ -351,7 +351,7 @@ public class MergeOnReadInputFormat
     final Schema requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
     final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
     final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
-        AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
+        AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType(), conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
     final HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(split, tableSchema, internalSchemaManager.getQuerySchema(), conf, hadoopConf);
     final Iterator<String> logRecordsKeyIterator = scanner.getRecords().keySet().iterator();
     final int[] pkOffset = tableState.getPkOffsetsInRequired();
@@ -431,7 +431,7 @@ public class MergeOnReadInputFormat
     final Schema requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
     final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
     final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
-        AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
+        AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType(), conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
     final FormatUtils.BoundedMemoryRecords records = new FormatUtils.BoundedMemoryRecords(split, tableSchema, internalSchemaManager.getQuerySchema(), hadoopConf, conf);
     final Iterator<HoodieRecord<?>> recordsIterator = records.getRecordsIterator();
 
@@ -478,7 +478,7 @@ public class MergeOnReadInputFormat
   protected ClosableIterator<RowData> getFullLogFileIterator(MergeOnReadInputSplit split) {
     final Schema tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
     final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
-        AvroToRowDataConverters.createRowConverter(tableState.getRowType());
+        AvroToRowDataConverters.createRowConverter(tableState.getRowType(), conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
     final HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(split, tableSchema, InternalSchema.getEmptyInternalSchema(), conf, hadoopConf);
     final Iterator<String> logRecordsKeyIterator = scanner.getRecords().keySet().iterator();
 
@@ -736,7 +736,7 @@ public class MergeOnReadInputFormat
       this.operationPos = operationPos;
       this.avroProjection = avroProjection;
       this.rowDataToAvroConverter = RowDataToAvroConverters.createConverter(tableRowType, flinkConf.getBoolean(FlinkOptions.WRITE_UTC_TIMEZONE));
-      this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
+      this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType, flinkConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
       this.projection = projection;
       this.instantRange = split.getInstantRange().orElse(null);
       List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
