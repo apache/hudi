@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
@@ -202,7 +204,15 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       lastClean = table.getCleanTimeline().filterCompletedInstants().lastInstant();
     }
 
-    final HoodieCleanerPlan cleanerPlan = requestClean(context);
+    HoodieEngineContext cleanerEngineContext;
+    if (config.useLocalEngineForMetadataAndNonParitionedDatasets()
+        && (HoodieTableMetadata.isMetadataTable(config.getBasePath())
+            || !table.isPartitioned())) {
+      cleanerEngineContext = new HoodieLocalEngineContext(context.getStorageConf());
+    } else {
+      cleanerEngineContext = context;
+    }
+    final HoodieCleanerPlan cleanerPlan = requestClean(cleanerEngineContext);
     Option<HoodieCleanerPlan> option = Option.empty();
     if (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())
         && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0) {
