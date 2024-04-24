@@ -1026,11 +1026,11 @@ public class StreamSync implements Serializable, Closeable {
       Map<String, HoodieException> failedMetaSyncs = new HashMap<>();
       for (String impl : syncClientToolClasses) {
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
-        HoodieMetaSyncException metaSyncException = null;
+        Option<HoodieMetaSyncException> metaSyncException = Option.empty();
         try {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
         } catch (HoodieMetaSyncException e) {
-          metaSyncException = e;
+          metaSyncException = Option.of(e);
         }
         logMetaSync(impl, syncContext, failedMetaSyncs,  metaSyncException);
       }
@@ -1040,13 +1040,13 @@ public class StreamSync implements Serializable, Closeable {
     }
   }
 
-  private void logMetaSync(String impl, Timer.Context syncContext, Map<String, HoodieException> failedMetaSyncs, HoodieMetaSyncException metaSyncException) {
+  private void logMetaSync(String impl, Timer.Context syncContext, Map<String, HoodieException> failedMetaSyncs, Option<HoodieMetaSyncException> metaSyncException) {
     long metaSyncTimeNanos = syncContext != null ? syncContext.stop() : 0;
     metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeNanos);
     long timeMs = metaSyncTimeNanos / 1000000L;
-    if (metaSyncException != null) {
-      LOG.error("[MetaSync] SyncTool class {} failed with exception {} and took {} s {} ms ", impl.trim(), metaSyncException, timeMs / 1000L, timeMs % 1000L);
-      failedMetaSyncs.put(impl, metaSyncException);
+    if (metaSyncException.isPresent()) {
+      LOG.error("[MetaSync] SyncTool class {} failed with exception {} and took {} s {} ms ", impl.trim(), metaSyncException.get(), timeMs / 1000L, timeMs % 1000L);
+      failedMetaSyncs.put(impl, metaSyncException.get());
     } else {
       LOG.info("[MetaSync] SyncTool class {} completed successfully and took {} s {} ms ", impl.trim(), timeMs / 1000L, timeMs % 1000L);
     }
