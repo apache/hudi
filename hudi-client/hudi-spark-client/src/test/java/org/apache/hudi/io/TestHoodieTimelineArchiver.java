@@ -65,7 +65,6 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -689,17 +688,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
 
-  @Disabled("HUDI-6841")
-  public void testArchivalWithMultiWritersMDTDisabled() throws Exception {
-    testArchivalWithMultiWriters(false);
-  }
-
-  @Disabled("HUDI-6386")
-  public void testArchivalWithMultiWriters() throws Exception {
-    testArchivalWithMultiWriters(true);
-  }
-
-  private void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 5, 2,
         HoodieTableType.COPY_ON_WRITE, false, 10, 209715200,
         HoodieFailedWritesCleaningPolicy.LAZY, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
