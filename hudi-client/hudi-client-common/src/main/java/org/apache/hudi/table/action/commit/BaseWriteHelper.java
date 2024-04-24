@@ -24,16 +24,15 @@ import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.HoodieRecordUtils;
-import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
+import java.time.Duration;
+import java.time.Instant;
 
-  protected HoodieTimer preWriteTimer = null; // time taken from dedup -> tag location -> building workload profile
+public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
 
   protected BaseWriteHelper(SerializableFunctionUnchecked<I, Integer> partitionNumberExtractor) {
     super(partitionNumberExtractor);
@@ -48,19 +47,21 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       WriteOperationType operationType) {
     try {
-      preWriteTimer = HoodieTimer.start();
       // De-dupe/merge if needed
       I dedupedRecords =
           combineOnCondition(shouldCombine, inputRecords, configuredShuffleParallelism, table);
 
+      Instant lookupBegin = Instant.now();
       I taggedRecords = dedupedRecords;
       if (table.getIndex().requiresTagging(operationType)) {
         // perform index loop up to get existing location of records
         context.setJobStatus(this.getClass().getSimpleName(), "Tagging: " + table.getConfig().getTableName());
         taggedRecords = tag(dedupedRecords, context, table);
       }
+      Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
 
-      HoodieWriteMetadata<O> result = executor.execute(taggedRecords, Option.of(preWriteTimer));
+      HoodieWriteMetadata<O> result = executor.execute(taggedRecords);
+      result.setIndexLookupDuration(indexLookupDuration);
       return result;
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {

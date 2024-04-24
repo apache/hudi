@@ -39,7 +39,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
-import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -111,10 +110,6 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   }
 
   public abstract HoodieWriteMetadata<O> execute(I inputRecords);
-
-  public HoodieWriteMetadata<O> execute(I inputRecords, Option<HoodieTimer> preWriteTimer) {
-    return this.execute(inputRecords);
-  }
 
   /**
    * Save the workload profile in an intermediate file (here re-using commit files) This is useful when performing
