@@ -19,8 +19,9 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, DATA_BEFORE_AFTER, OP_KEY_ONLY}
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -71,10 +72,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
            | )
            | location '$basePath'
       """.stripMargin)
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(basePath)
-        .setConf(spark.sessionState.newHadoopConf())
-        .build()
+      val metaClient = createMetaClient(spark, basePath)
       spark.sql(s"insert into $tableName values (1, 11, 1000, 'a1'), (2, 12, 1000, 'a2')")
       assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 2)
       val fgForID1 = spark.sql(s"select _hoodie_file_name from $tableName where id=1").head().get(0)
@@ -129,10 +127,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | location '$basePath'
         """.stripMargin)
 
-          val metaClient = HoodieTableMetaClient.builder()
-            .setBasePath(basePath)
-            .setConf(spark.sessionState.newHadoopConf())
-            .build()
+          val metaClient = createMetaClient(spark, basePath)
 
           spark.sql(s"insert into $tableName values (1, 'a1', 11, 1000), (2, 'a2', 12, 1000), (3, 'a3', 13, 1000)")
           val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
@@ -254,10 +249,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | location '$basePath'
         """.stripMargin)
 
-          val metaClient = HoodieTableMetaClient.builder()
-            .setBasePath(basePath)
-            .setConf(spark.sessionState.newHadoopConf())
-            .build()
+          val metaClient = createMetaClient(spark, basePath)
 
           spark.sql(
             s"""

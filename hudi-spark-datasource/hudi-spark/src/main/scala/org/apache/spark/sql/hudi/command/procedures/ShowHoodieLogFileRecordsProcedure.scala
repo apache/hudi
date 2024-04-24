@@ -21,9 +21,9 @@ import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, Ho
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecordPayload}
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{FileIOUtils, ValidationUtils}
 import org.apache.hudi.storage.StoragePath
 
@@ -55,7 +55,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     val merge: Boolean = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Boolean]
     val limit: Int = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Int]
     val basePath = getBasePath(table)
-    val client = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val client = createMetaClient(jsc, basePath)
     val storage = client.getStorage
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList

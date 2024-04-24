@@ -21,11 +21,12 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithCustomKeyGenerator._
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.util.SparkKeyGenUtils
+
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.joda.time.DateTime
@@ -456,10 +457,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
       .save(tablePath)
 
     // Validate that the generated table has expected table configs of key generator and partition path fields
-    val metaClient = HoodieTableMetaClient.builder()
-      .setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(tablePath)
-      .build()
+    val metaClient = createMetaClient(spark, tablePath)
     assertEquals(keyGenClassName, metaClient.getTableConfig.getKeyGeneratorClassName)
     // Validate that that partition path fields in the table config should always
     // contain the field names only (no key generator type like "segment:simple")

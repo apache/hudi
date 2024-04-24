@@ -18,7 +18,8 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestTimeTravelTable extends HoodieSparkSqlTestBase {
@@ -45,10 +46,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
         // 1st commit instant
         spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
 
-        val metaClient1 = HoodieTableMetaClient.builder()
-          .setBasePath(s"${tmp.getCanonicalPath}/$tableName1")
-          .setConf(spark.sessionState.newHadoopConf())
-          .build()
+        val metaClient1 = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName1")
         val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
           .lastInstant().get().getTimestamp
 
@@ -91,10 +89,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
 
         spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
 
-        val metaClient1 = HoodieTableMetaClient.builder()
-          .setBasePath(s"${tmp.getCanonicalPath}/$tableName1")
-          .setConf(spark.sessionState.newHadoopConf())
-          .build()
+        val metaClient1 = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName1")
 
         val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
           .lastInstant().get().getTimestamp
@@ -203,15 +198,8 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
             Seq(4, "a4", 20.0, 1000)
           )
 
-          val metaClient1 = HoodieTableMetaClient.builder()
-            .setBasePath(path1)
-            .setConf(spark.sessionState.newHadoopConf())
-            .build()
-
-          val metaClient2 = HoodieTableMetaClient.builder()
-            .setBasePath(path2)
-            .setConf(spark.sessionState.newHadoopConf())
-            .build()
+          val metaClient1 = createMetaClient(spark, path1)
+          val metaClient2 = createMetaClient(spark, path2)
 
           val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
             .lastInstant().get().getTimestamp
@@ -271,10 +259,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
         // 1st commit instant
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
 
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(s"${tmp.getCanonicalPath}/$tableName")
-          .setConf(spark.sessionState.newHadoopConf())
-          .build()
+        val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
         val instant1 = metaClient.getActiveTimeline.getAllCommitsTimeline
           .lastInstant().get().getTimestamp
 
@@ -316,10 +301,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
 
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(s"${tmp.getCanonicalPath}/$tableName")
-          .setConf(spark.sessionState.newHadoopConf())
-          .build()
+        val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
         val instant1 = metaClient.reloadActiveTimeline().getAllCommitsTimeline
           .lastInstant().get().getTimestamp
 

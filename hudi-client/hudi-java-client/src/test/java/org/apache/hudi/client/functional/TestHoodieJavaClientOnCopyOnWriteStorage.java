@@ -533,7 +533,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
 
     final HoodieWriteConfig cfg = hoodieWriteConfig;
     final String instantTime = "007";
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient();
     String basePathStr = basePath;
     HoodieTable table = getHoodieTable(metaClient, cfg);
     String extension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
@@ -844,7 +844,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     assertNoWriteErrors(statuses);
     client.commit(commitTime1, statuses);
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient();
     List<Pair<HoodieInstant, HoodieClusteringPlan>> pendingClusteringPlans =
         ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
     if (scheduleInlineClustering) {
@@ -1123,7 +1123,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     try (HoodieJavaWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+      HoodieTableMetaClient metaClient = createMetaClient();
       HoodieJavaTable table = HoodieJavaTable.create(cfgBuilder.build(), context, metaClient);
 
       String instantTime = "000";
@@ -1226,7 +1226,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testConsistencyCheckDuringFinalize(boolean enableOptimisticConsistencyGuard) throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient();
     String instantTime = "000";
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
         .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build();
@@ -1255,7 +1255,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   private void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean rollbackUsingMarkers, boolean enableOptimisticConsistencyGuard,
                                                                      boolean populateMetaFields) throws Exception {
     String instantTime = "00000000000010";
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient();
 
     Properties properties = new Properties();
     if (!populateMetaFields) {
@@ -1335,7 +1335,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     writeBatch(client, "400", "300", Option.of(Arrays.asList("400")), "400",
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, true);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient();
 
     assertTrue(metaClient.getActiveTimeline().getTimelineOfActions(
         CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 0);
@@ -1475,7 +1475,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         "400", "300", Option.of(Arrays.asList("400")), "300", 100, dataGen::generateInserts,
         HoodieJavaWriteClient::bulkInsert, false, 100, 100, 0, true));
     commit3.get();
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient();
 
     assertTrue(metaClient.getActiveTimeline().getTimelineOfActions(
         CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 0);

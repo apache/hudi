@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -183,6 +184,45 @@ public class HoodieTestUtils {
       props.put("hoodie.datasource.write.partitionpath.field", "datestr");
     }
     return init(getDefaultHadoopConf(), basePath, tableType, props);
+  }
+
+  /**
+   * @param conf     file system configuration.
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(Configuration conf,
+                                                       String basePath) {
+    return HoodieTableMetaClient.builder()
+        .setConf(conf).setBasePath(basePath).build();
+  }
+
+  /**
+   * @param storage  {@link HoodieStorage} instance.
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(HoodieStorage storage,
+                                                       String basePath) {
+    return createMetaClient((Configuration) storage.getConf(), basePath);
+  }
+
+  /**
+   * @param context  Hudi engine context.
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(HoodieEngineContext context,
+                                                       String basePath) {
+    return createMetaClient(context.getHadoopConf().get(), basePath);
+  }
+
+  /**
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance with default configuration for tests.
+   */
+  public static HoodieTableMetaClient createMetaClient(String basePath) {
+    return createMetaClient(getDefaultHadoopConf(), basePath);
   }
 
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {
