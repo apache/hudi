@@ -87,8 +87,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
     HoodieCompactor hoodieCompactorSchedule =
         init(tableBasePath, true, "SCHEDULE", false);
     hoodieCompactorSchedule.compact(0);
-    TestHelpers.assertNCompletedCommits(2, tableBasePath, fs);
-    TestHelpers.assertNCleanCommits(0, tableBasePath, fs);
+    TestHelpers.assertNCompletedCommits(2, tableBasePath);
+    TestHelpers.assertNCleanCommits(0, tableBasePath);
 
     writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
     writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
@@ -97,8 +97,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
     HoodieCompactor hoodieCompactorExecute =
         init(tableBasePath, false, "EXECUTE", true);
     hoodieCompactorExecute.compact(0);
-    TestHelpers.assertNCompletedCommits(5, tableBasePath, fs);
-    TestHelpers.assertNCleanCommits(1, tableBasePath, fs);
+    TestHelpers.assertNCompletedCommits(5, tableBasePath);
+    TestHelpers.assertNCleanCommits(1, tableBasePath);
   }
 
   // -------------------------------------------------------------------------
