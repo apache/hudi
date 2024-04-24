@@ -21,8 +21,7 @@ import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils}
 import org.apache.hudi.storage.StoragePath
-
-import org.apache.spark.api.java.JavaSparkContext
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import java.io.IOException
 import java.time.Instant
@@ -52,10 +51,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       checkExceptionContain(s"""call downgrade_table(table => '$tableName')""")(
         s"Argument: to_version is required")
 
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       // verify hoodie.table.version of the original table
       assertResult(HoodieTableVersion.SIX.versionCode) {
@@ -107,10 +103,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 
       // downgrade table to THREE
       checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'THREE')""")(Seq(true))
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
       val storage = metaClient.getStorage
       // verify hoodie.table.version of the table is THREE
       assertResult(HoodieTableVersion.THREE.versionCode) {

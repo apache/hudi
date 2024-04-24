@@ -510,6 +510,10 @@ public class FSUtils {
     return isBaseFile(path) || isLogFile(path);
   }
 
+  public static boolean isDataFile(StoragePath path) {
+    return isBaseFile(path) || isLogFile(path);
+  }
+
   /**
    * Get the names of all the base and log files in the given partition path.
    */
@@ -592,14 +596,6 @@ public class FSUtils {
     return Option.empty();
   }
 
-  public static int getDefaultBufferSize(final FileSystem fs) {
-    return fs.getConf().getInt("io.file.buffer.size", 4096);
-  }
-
-  public static Short getDefaultReplication(FileSystem fs, Path path) {
-    return fs.getDefaultReplication(path);
-  }
-
   /**
    * When a file was opened and the task died without closing the stream, another task executor cannot open because the
    * existing lease will be active. We will try to recover the lease, from HDFS. If a data node went down, it takes
@@ -607,11 +603,11 @@ public class FSUtils {
    */
   public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
       throws IOException, InterruptedException {
-    LOG.info("Recover lease on dfs file " + p);
+    LOG.info("Recover lease on dfs file {}", p);
     // initiate the recovery
     boolean recovered = false;
     for (int nbAttempt = 0; nbAttempt < MAX_ATTEMPTS_RECOVER_LEASE; nbAttempt++) {
-      LOG.info("Attempt " + nbAttempt + " to recover lease on dfs file " + p);
+      LOG.info("Attempt {} to recover lease on dfs file {}", nbAttempt, p);
       recovered = dfs.recoverLease(p);
       if (recovered) {
         break;
@@ -634,40 +630,40 @@ public class FSUtils {
     return sizeInBytes / (1024 * 1024);
   }
 
-  public static Path getPartitionPathInHadoopPath(String basePath, String partitionPath) {
-    if (StringUtils.isNullOrEmpty(partitionPath)) {
+  public static Path constructAbsolutePathInHadoopPath(String basePath, String relativePartitionPath) {
+    if (StringUtils.isNullOrEmpty(relativePartitionPath)) {
       return new Path(basePath);
     }
 
     // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
     //       absolute path
-    String properPartitionPath = partitionPath.startsWith("/")
-        ? partitionPath.substring(1)
-        : partitionPath;
-    return getPartitionPath(new CachingPath(basePath), properPartitionPath);
+    String properPartitionPath = relativePartitionPath.startsWith(PATH_SEPARATOR)
+        ? relativePartitionPath.substring(1)
+        : relativePartitionPath;
+    return constructAbsolutePath(new CachingPath(basePath), properPartitionPath);
   }
 
-  public static StoragePath getPartitionPath(String basePath, String partitionPath) {
-    if (StringUtils.isNullOrEmpty(partitionPath)) {
+  public static StoragePath constructAbsolutePath(String basePath, String relativePartitionPath) {
+    if (StringUtils.isNullOrEmpty(relativePartitionPath)) {
       return new StoragePath(basePath);
     }
 
     // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
     //       absolute path
-    String properPartitionPath = partitionPath.startsWith("/")
-        ? partitionPath.substring(1)
-        : partitionPath;
-    return getPartitionPath(new StoragePath(basePath), properPartitionPath);
+    String properPartitionPath = relativePartitionPath.startsWith(PATH_SEPARATOR)
+        ? relativePartitionPath.substring(1)
+        : relativePartitionPath;
+    return constructAbsolutePath(new StoragePath(basePath), properPartitionPath);
   }
 
-  public static Path getPartitionPath(Path basePath, String partitionPath) {
+  public static Path constructAbsolutePath(Path basePath, String relativePartitionPath) {
     // For non-partitioned table, return only base-path
-    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new CachingPath(basePath, partitionPath);
+    return StringUtils.isNullOrEmpty(relativePartitionPath) ? basePath : new CachingPath(basePath, relativePartitionPath);
   }
 
-  public static StoragePath getPartitionPath(StoragePath basePath, String partitionPath) {
+  public static StoragePath constructAbsolutePath(StoragePath basePath, String relativePartitionPath) {
     // For non-partitioned table, return only base-path
-    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new StoragePath(basePath, partitionPath);
+    return StringUtils.isNullOrEmpty(relativePartitionPath) ? basePath : new StoragePath(basePath, relativePartitionPath);
   }
 
   /**

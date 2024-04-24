@@ -184,7 +184,7 @@ public class HoodieCDCExtractor {
     try {
       List<StoragePathInfo> touchedFiles = new ArrayList<>();
       for (String touchedPartition : touchedPartitions) {
-        StoragePath partitionPath = FSUtils.getPartitionPath(basePath, touchedPartition);
+        StoragePath partitionPath = FSUtils.constructAbsolutePath(basePath, touchedPartition);
         touchedFiles.addAll(storage.listDirectEntries(partitionPath));
       }
       return new HoodieTableFileSystemView(
@@ -313,7 +313,7 @@ public class HoodieCDCExtractor {
       HoodieFileGroupId fgId,
       HoodieInstant instant,
       String currentLogFile) {
-    StoragePath partitionPath = FSUtils.getPartitionPath(basePath, fgId.getPartitionPath());
+    StoragePath partitionPath = FSUtils.constructAbsolutePath(basePath, fgId.getPartitionPath());
     if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
       String currentLogFileName = new StoragePath(currentLogFile).getName();
       Option<Pair<String, List<String>>> fileSliceOpt =

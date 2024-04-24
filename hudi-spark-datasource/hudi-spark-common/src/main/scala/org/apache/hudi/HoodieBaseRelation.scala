@@ -39,7 +39,7 @@ import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hadoop.fs.{CachingPath, HadoopFSUtils}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
@@ -68,7 +68,6 @@ import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 
-import java.net.URI
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -492,14 +491,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def getPartitionColumnsAsInternalRowInternal(file: StoragePathInfo, basePath: Path,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     if (extractPartitionValuesFromPartitionPath) {
-      val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(basePath)
-      val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(new Path(file.getPath.getParent.toUri))
-      val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
+      val tablePathWithoutScheme = new StoragePath(basePath.toUri).getPathWithoutSchemeAndAuthority
+      val partitionPathWithoutScheme = new StoragePath(file.getPath.getParent.toUri).getPathWithoutSchemeAndAuthority
+      val relativePath = tablePathWithoutScheme.toUri.relativize(partitionPathWithoutScheme.toUri).toString
       val timeZoneId = conf.get("timeZone", sparkSession.sessionState.conf.sessionLocalTimeZone)
       val rowValues = HoodieSparkUtils.parsePartitionColumnValues(
         partitionColumns,
         relativePath,
-        basePath,
+        new StoragePath(basePath.toUri),
         tableStructSchema,
         timeZoneId,
         sparkAdapter.getSparkParsePartitionUtil,

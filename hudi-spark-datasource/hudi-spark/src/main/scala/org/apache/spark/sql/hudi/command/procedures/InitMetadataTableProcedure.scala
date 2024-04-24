@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.metadata.{HoodieTableMetadata, SparkHoodieBackedTableMetadataWriter}
 import org.apache.hudi.storage.StoragePath
@@ -52,7 +51,7 @@ class InitMetadataTableProcedure extends BaseProcedure with ProcedureBuilder wit
     val readOnly = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
 
     val basePath = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val metadataPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))
     try {
       metaClient.getStorage.listDirectEntries(metadataPath)

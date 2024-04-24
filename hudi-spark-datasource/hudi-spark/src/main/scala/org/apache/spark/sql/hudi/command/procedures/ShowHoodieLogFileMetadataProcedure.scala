@@ -20,11 +20,11 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.HoodieLogFormat
-import org.apache.hudi.common.table.log.block.{HoodieCorruptBlock, HoodieDataBlock}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.{HeaderMetadataType, HoodieLogBlockType}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.storage.{StoragePath, HoodieStorageUtils}
+import org.apache.hudi.common.table.log.block.{HoodieCorruptBlock, HoodieDataBlock}
+import org.apache.hudi.storage.StoragePath
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.parquet.avro.AvroSchemaConverter
@@ -34,7 +34,6 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util.Objects
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter}
 
 class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBuilder {
@@ -58,7 +57,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     val logFilePathPattern: String = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
     val limit: Int = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Int]
     val basePath = getBasePath(table)
-    val storage = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build.getStorage
+    val storage = createMetaClient(jsc, basePath).getStorage
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
     val commitCountAndMetadata =

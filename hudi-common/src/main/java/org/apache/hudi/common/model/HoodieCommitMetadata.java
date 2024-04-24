@@ -137,7 +137,7 @@ public class HoodieCommitMetadata implements Serializable {
     HashMap<String, String> fullPaths = new HashMap<>();
     for (Map.Entry<String, String> entry : getFileIdAndRelativePaths().entrySet()) {
       String fullPath = entry.getValue() != null
-          ? FSUtils.getPartitionPath(basePath, entry.getValue()).toString()
+          ? FSUtils.constructAbsolutePath(basePath, entry.getValue()).toString()
           : null;
       fullPaths.put(entry.getKey(), fullPath);
     }
@@ -149,7 +149,7 @@ public class HoodieCommitMetadata implements Serializable {
     if (getPartitionToWriteStats().get(partitionPath) != null) {
       for (HoodieWriteStat stat : getPartitionToWriteStats().get(partitionPath)) {
         if ((stat.getFileId() != null)) {
-          String fullPath = FSUtils.getPartitionPathInHadoopPath(basePath, stat.getPath()).toString();
+          String fullPath = FSUtils.constructAbsolutePathInHadoopPath(basePath, stat.getPath()).toString();
           fullPaths.add(fullPath);
         }
       }
@@ -186,7 +186,7 @@ public class HoodieCommitMetadata implements Serializable {
       for (HoodieWriteStat stat : stats) {
         String relativeFilePath = stat.getPath();
         StoragePath fullPath = relativeFilePath != null
-            ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
+            ? FSUtils.constructAbsolutePath(basePath, relativeFilePath) : null;
         if (fullPath != null) {
           long blockSize =
               HoodieStorageUtils.getStorage(fullPath.toString(), hadoopConf).getDefaultBlockSize(fullPath);
@@ -220,7 +220,7 @@ public class HoodieCommitMetadata implements Serializable {
       for (HoodieWriteStat stat : stats) {
         String relativeFilePath = stat.getPath();
         StoragePath fullPath =
-            relativeFilePath != null ? FSUtils.getPartitionPath(basePath,
+            relativeFilePath != null ? FSUtils.constructAbsolutePath(basePath,
                 relativeFilePath) : null;
         if (fullPath != null) {
           StoragePathInfo pathInfo =

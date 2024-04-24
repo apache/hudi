@@ -58,7 +58,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   }
 
   private void createInvalidFile(String partitionPath, String invalidFileName) {
-    StoragePath path = FSUtils.getPartitionPath(markerFolderPath, partitionPath);
+    StoragePath path = FSUtils.constructAbsolutePath(markerFolderPath, partitionPath);
     StoragePath invalidFilePath = new StoragePath(path, invalidFileName);
     try {
       storage.create(invalidFilePath, false).close();

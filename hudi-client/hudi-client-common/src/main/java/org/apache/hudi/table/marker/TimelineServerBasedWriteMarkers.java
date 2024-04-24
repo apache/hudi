@@ -137,7 +137,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     LOG.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
         + " in " + timer.endTimer() + " ms");
     if (success) {
-      return Option.of(new StoragePath(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
+      return Option.of(new StoragePath(FSUtils.constructAbsolutePath(markerDirPath, partitionPath), markerFileName));
     } else {
       return Option.empty();
     }
@@ -156,7 +156,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
         + " in " + timer.endTimer() + " ms");
 
     if (success) {
-      return Option.of(new StoragePath(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
+      return Option.of(new StoragePath(FSUtils.constructAbsolutePath(markerDirPath, partitionPath), markerFileName));
     } else {
       // this failed may due to early conflict detection, so we need to throw out.
       throw new HoodieEarlyConflictDetectionException(new ConcurrentModificationException("Early conflict detected but cannot resolve conflicts for overlapping writes"));

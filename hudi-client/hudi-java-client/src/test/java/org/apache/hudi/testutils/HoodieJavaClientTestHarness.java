@@ -68,10 +68,10 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.utils.HoodieWriterClientTestHarness;
@@ -251,7 +251,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   }
 
   public void syncTableMetadata(HoodieWriteConfig writeConfig) {
-    if (!writeConfig.getMetadataConfig().enabled()) {
+    if (!writeConfig.getMetadataConfig().isEnabled()) {
       return;
     }
     // Open up the metadata table again, for syncing
@@ -396,7 +396,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       HoodieWriteConfig metadataWriteConfig = metadataWriter.getWriteConfig();
       assertFalse(metadataWriteConfig.isMetadataTableEnabled(), "No metadata table for metadata table");
 
-      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+      HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(hadoopConf, metadataTableBasePath);
 
       // Metadata table is MOR
       assertEquals(metadataMetaClient.getTableType(), HoodieTableType.MERGE_ON_READ, "Metadata Table should be MOR");
@@ -694,7 +694,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     assertPartitionMetadataForRecords(basePath, records, storage);
 
     // verify that there is a commit
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient();
     HoodieTimeline timeline = metaClient.getCommitsTimeline();
 
     if (assertForCommit) {
@@ -785,7 +785,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     return (commit, numRecords) -> {
       final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords);
-      final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(hadoopConf, basePath);
       HoodieJavaTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
       return tagLocation(index, context, records, table);
     };
@@ -809,7 +809,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     return (commit, numRecords, partition) -> {
       final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords, partition);
-      final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(hadoopConf, basePath);
       HoodieJavaTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
       return tagLocation(index, context, records, table);
     };
@@ -850,7 +850,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     return (numRecords) -> {
       final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
-      final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(hadoopConf, basePath);
       HoodieTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
       List<HoodieRecord> recordsToDelete = records.stream()
           .map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
@@ -869,7 +869,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     assertNoWriteErrors(result);
 
     // verify that there is a commit
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient();
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
 
     if (assertForCommit) {
@@ -952,9 +952,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
                                                         String... paths) {
     List<HoodieBaseFile> latestFiles = new ArrayList<>();
     try {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-          .setConf((Configuration) storage.getConf())
-          .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient((Configuration) storage.getConf(), basePath);
       for (String path : paths) {
         TableFileSystemView.BaseFileOnlyView fileSystemView =
             new HoodieTableFileSystemView(metaClient,
@@ -1029,5 +1027,9 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   public static BaseFileUtils getFileUtilsInstance(HoodieTableMetaClient metaClient) {
     return BaseFileUtils.getInstance(metaClient.getTableConfig().getBaseFileFormat());
+  }
+
+  protected HoodieTableMetaClient createMetaClient() {
+    return HoodieTestUtils.createMetaClient(hadoopConf, basePath);
   }
 }

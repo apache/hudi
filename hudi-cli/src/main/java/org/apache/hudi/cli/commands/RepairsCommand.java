@@ -128,7 +128,7 @@ public class RepairsCommand {
 
     int ind = 0;
     for (String partition : partitionPaths) {
-      StoragePath partitionPath = FSUtils.getPartitionPath(basePath, partition);
+      StoragePath partitionPath = FSUtils.constructAbsolutePath(basePath, partition);
       String[] row = new String[3];
       row[0] = partition;
       row[1] = "Yes";
@@ -139,7 +139,7 @@ public class RepairsCommand {
           HoodiePartitionMetadata partitionMetadata =
               new HoodiePartitionMetadata(HoodieCLI.storage, latestCommit, basePath, partitionPath,
                   client.getTableConfig().getPartitionMetafileFormat());
-          partitionMetadata.trySave(0);
+          partitionMetadata.trySave();
           row[2] = "Repaired";
         }
       }
@@ -237,7 +237,7 @@ public class RepairsCommand {
     int ind = 0;
     for (String partitionPath : partitionPaths) {
       StoragePath partition =
-          FSUtils.getPartitionPath(client.getBasePath(), partitionPath);
+          FSUtils.constructAbsolutePath(client.getBasePath(), partitionPath);
       Option<StoragePath> textFormatFile =
           HoodiePartitionMetadata.textFormatMetaPathIfExists(HoodieCLI.storage, partition);
       Option<StoragePath> baseFormatFile =
@@ -257,7 +257,7 @@ public class RepairsCommand {
           HoodiePartitionMetadata partitionMetadata =
               new HoodiePartitionMetadata(HoodieCLI.storage, latestCommit, basePath, partition,
                   Option.of(client.getTableConfig().getBaseFileFormat()));
-          partitionMetadata.trySave(0);
+          partitionMetadata.trySave();
         }
 
         // delete it, in case we failed midway last time.

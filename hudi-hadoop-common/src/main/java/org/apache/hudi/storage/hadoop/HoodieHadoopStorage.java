@@ -76,6 +76,21 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
+  public OutputStream create(StoragePath path, boolean overwrite, Integer bufferSize, Short replication, Long sizeThreshold) throws IOException {
+    return fs.create(convertToHadoopPath(path), false, bufferSize, replication, sizeThreshold, null);
+  }
+
+  @Override
+  public int getDefaultBufferSize() {
+    return fs.getConf().getInt("io.file.buffer.size", 4096);
+  }
+
+  @Override
+  public short getDefaultReplication(StoragePath path) {
+    return fs.getDefaultReplication(convertToHadoopPath(path));
+  }
+
+  @Override
   public InputStream open(StoragePath path) throws IOException {
     return fs.open(convertToHadoopPath(path));
   }
