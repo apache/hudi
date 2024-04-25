@@ -153,8 +153,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return; // no-op
     }
 
+    Set<String> existingKeys = records.keySet().stream()
+        .map(HoodieMergeKey::getRecordKey)
+        .map(Object::toString)
+        .collect(Collectors.toSet());
+
     List<String> missingKeys = keys.stream()
-        .filter(key -> !records.containsKey(key))
+        .filter(key -> !existingKeys.contains(key))
         .collect(Collectors.toList());
 
     if (missingKeys.isEmpty()) {
@@ -304,7 +309,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
     String key = deleteRecord.getRecordKey();
-    HoodieRecord oldRecord = records.get(key);
+    HoodieMergeKey mergeKey = deleteRecord.getMergeKey();
+    if (mergeKey == null) {
+      // If mergeKey is null, then create a simple merge key using record key
+      mergeKey = new HoodieSimpleMergeKey(deleteRecord.getHoodieKey());
+    }
+    HoodieRecord oldRecord = records.get(mergeKey);
     if (oldRecord != null) {
       // Merge and store the merged record. The ordering val is taken to decide whether the same key record
       // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
@@ -324,11 +334,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
     // Put the DELETE record
     if (recordType == HoodieRecordType.AVRO) {
-      records.put(new HoodieSimpleMergeKey(deleteRecord.getHoodieKey()), SpillableMapUtils.generateEmptyPayload(key,
+      records.put(mergeKey, SpillableMapUtils.generateEmptyPayload(key,
           deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
     } else {
       HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
-      records.put(new HoodieSimpleMergeKey(deleteRecord.getHoodieKey()), record);
+      records.put(mergeKey, record);
     }
   }
 
