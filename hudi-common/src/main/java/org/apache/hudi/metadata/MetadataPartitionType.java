@@ -31,6 +31,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 
 /**
  * Partition types for metadata table.
@@ -38,31 +39,33 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_EN
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-") {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties properties) {
-      return properties.getBoolean(ENABLE.key(), ENABLE.defaultValue());
+    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
+      return getBooleanWithAltKeys(writeConfig, ENABLE);
     }
   },
   COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-") {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties properties) {
-      return properties.getBoolean(ENABLE_METADATA_INDEX_COLUMN_STATS.key(), ENABLE_METADATA_INDEX_COLUMN_STATS.defaultValue());
+    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
+      return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_COLUMN_STATS);
     }
   },
   BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-") {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties properties) {
-      return properties.getBoolean(ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), ENABLE_METADATA_INDEX_BLOOM_FILTER.defaultValue());
+    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
+      return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_BLOOM_FILTER);
     }
   },
   RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-") {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties properties) {
-      return properties.getBoolean(RECORD_INDEX_ENABLE_PROP.key(), RECORD_INDEX_ENABLE_PROP.defaultValue());
+    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
+      return getBooleanWithAltKeys(writeConfig, RECORD_INDEX_ENABLE_PROP);
     }
   },
   FUNCTIONAL_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX, "func-index-") {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties properties) {
+    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
+      // Functional index is created via sql and not via write path.
+      // HUDI-7662 tracks adding a separate config to enable/disable functional index.
       return false;
     }
 
@@ -80,7 +83,7 @@ public enum MetadataPartitionType {
   /**
    * Check if the metadata partition is enabled based on the metadata config.
    */
-  public abstract boolean isMetadataPartitionEnabled(TypedProperties properties);
+  public abstract boolean isMetadataPartitionEnabled(TypedProperties writeConfig);
 
   /**
    * Check if the metadata partition is available based on the table config.
@@ -123,9 +126,9 @@ public enum MetadataPartitionType {
   /**
    * Returns the list of metadata partition types enabled based on the metadata config and table config.
    */
-  public static List<MetadataPartitionType> getEnabledPartitions(TypedProperties properties, HoodieTableMetaClient metaClient) {
+  public static List<MetadataPartitionType> getEnabledPartitions(TypedProperties writeConfig, HoodieTableMetaClient metaClient) {
     return Arrays.stream(values())
-        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(properties) || partitionType.isMetadataPartitionAvailable(metaClient))
+        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(writeConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
         .collect(Collectors.toList());
   }
 

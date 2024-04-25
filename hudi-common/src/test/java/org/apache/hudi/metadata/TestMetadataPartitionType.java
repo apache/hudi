@@ -26,6 +26,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
 
 import java.util.List;
@@ -38,22 +40,50 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestMetadataPartitionType {
 
-  @Test
-  public void testPartitionEnabledByConfigOnly() {
+  @ParameterizedTest
+  @EnumSource(MetadataPartitionType.class)
+  public void testPartitionEnabledByConfigOnly(MetadataPartitionType partitionType) {
     HoodieTableMetaClient metaClient = Mockito.mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
 
-    // Simulate the configuration enabling FILES but the meta client not having it available (yet to initialize files partition)
+    // Simulate the configuration enabling given partition type, but the meta client not having it available (yet to initialize the partition)
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
-    Mockito.when(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.FILES)).thenReturn(false);
+    Mockito.when(tableConfig.isMetadataPartitionAvailable(partitionType)).thenReturn(false);
     Mockito.when(metaClient.getFunctionalIndexMetadata()).thenReturn(Option.empty());
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
+    HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder();
+    int expectedEnabledPartitions;
+    switch (partitionType) {
+      case FILES:
+      case FUNCTIONAL_INDEX:
+        metadataConfigBuilder.enable(true);
+        expectedEnabledPartitions = 1;
+        break;
+      case COLUMN_STATS:
+        metadataConfigBuilder.enable(true).withMetadataIndexColumnStats(true);
+        expectedEnabledPartitions = 2;
+        break;
+      case BLOOM_FILTERS:
+        metadataConfigBuilder.enable(true).withMetadataIndexBloomFilter(true);
+        expectedEnabledPartitions = 2;
+        break;
+      case RECORD_INDEX:
+        metadataConfigBuilder.enable(true).withEnableRecordIndex(true);
+        expectedEnabledPartitions = 2;
+        break;
+      default:
+        throw new IllegalArgumentException("Unknown partition type: " + partitionType);
+    }
 
-    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig.getProps(), metaClient);
+    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfigBuilder.build().getProps(), metaClient);
 
-    // Verify FILES is enabled due to config
-    assertEquals(1, enabledPartitions.size(), "Only one partition should be enabled");
-    assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES), "FILES should be enabled by config");
+    // Verify partition type is enabled due to config
+    if (partitionType == MetadataPartitionType.FUNCTIONAL_INDEX) {
+      assertEquals(1, enabledPartitions.size(), "FUNCTIONAL_INDEX should be enabled by SQL, only FILES is enabled in this case.");
+      assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES));
+    } else {
+      assertEquals(expectedEnabledPartitions, enabledPartitions.size());
+      assertTrue(enabledPartitions.contains(partitionType));
+    }
   }
 
   @Test
