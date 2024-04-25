@@ -71,7 +71,7 @@ public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
   }
 
   @Override
-  JavaRDD<String> toBatch(OffsetRange[] offsetRanges) {
+  protected JavaRDD<String> toBatch(OffsetRange[] offsetRanges) {
     JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD = KafkaUtils.createRDD(sparkContext,
             offsetGen.getKafkaParams(),
             offsetRanges,

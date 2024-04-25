@@ -89,7 +89,7 @@ public abstract class KafkaSource<T> extends Source<T> {
     return new InputBatch<>(Option.of(newBatch), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
-  abstract T toBatch(OffsetRange[] offsetRanges);
+  protected abstract T toBatch(OffsetRange[] offsetRanges);
 
   @Override
   public void onCommit(String lastCkptStr) {

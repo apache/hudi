@@ -106,7 +106,7 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
   }
 
   @Override
-  JavaRDD<GenericRecord> toBatch(OffsetRange[] offsetRanges) {
+  protected JavaRDD<GenericRecord> toBatch(OffsetRange[] offsetRanges) {
     JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD;
     if (deserializerClassName.equals(ByteArrayDeserializer.class.getName())) {
       if (schemaProvider == null) {
