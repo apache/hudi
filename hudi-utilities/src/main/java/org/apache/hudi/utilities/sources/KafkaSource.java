@@ -85,11 +85,11 @@ public abstract class KafkaSource<T> extends Source<T> {
       return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
     }
     metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, totalNewMsgs);
-    T newDataRDD = toRDD(offsetRanges);
-    return new InputBatch<>(Option.of(newDataRDD), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
+    T newBatch = toBatch(offsetRanges);
+    return new InputBatch<>(Option.of(newBatch), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
-  abstract T toRDD(OffsetRange[] offsetRanges);
+  abstract T toBatch(OffsetRange[] offsetRanges);
 
   @Override
   public void onCommit(String lastCkptStr) {
