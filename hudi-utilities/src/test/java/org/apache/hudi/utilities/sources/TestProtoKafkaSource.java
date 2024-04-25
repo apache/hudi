@@ -93,7 +93,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   }
 
   @Override
-  SourceFormatAdapter createSource(TypedProperties props) {
+  protected SourceFormatAdapter createSource(TypedProperties props) {
     this.schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
     Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile));
     return new SourceFormatAdapter(protoKafkaSource);
@@ -231,7 +231,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   }
 
   @Override
-  void sendMessagesToKafka(String topic, int count, int numPartitions) {
+  protected void sendMessagesToKafka(String topic, int count, int numPartitions) {
     List<Sample> messages = createSampleMessages(count);
     try (Producer<String, byte[]> producer = new KafkaProducer<>(getProducerProperties(false))) {
       for (int i = 0; i < messages.size(); i++) {

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -62,7 +61,7 @@ import static org.mockito.Mockito.when;
 /**
  * Generic tests for all {@link KafkaSource} to ensure all implementations properly handle offsets, fetch limits, failure modes, etc.
  */
-abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
+public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
   protected static final String TEST_TOPIC_PREFIX = "hoodie_test_";
   protected static KafkaTestUtils testUtils;
 
@@ -82,11 +81,11 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
     testUtils.teardown();
   }
 
-  abstract TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy);
+  protected abstract TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy);
 
-  abstract SourceFormatAdapter createSource(TypedProperties props);
+  protected abstract SourceFormatAdapter createSource(TypedProperties props);
 
-  abstract void sendMessagesToKafka(String topic, int count, int numPartitions);
+  protected abstract void sendMessagesToKafka(String topic, int count, int numPartitions);
 
   @Test
   public void testKafkaSource() {
@@ -103,8 +102,7 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
     assertEquals(900, fetch1.getBatch().get().count());
     // Test Avro To DataFrame<Row> path
-    Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
-        schemaProvider.getSourceSchema().toString(), kafkaSource.getSource().getSparkSession());
+    Dataset<Row> fetch1AsRows = kafkaSource.fetchNewDataInRowFormat(Option.empty(), 900).getBatch().get();
     assertEquals(900, fetch1AsRows.count());
 
     // 2. Produce new data, extract new data

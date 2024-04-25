@@ -61,7 +61,7 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
 /**
  * Read json kafka data.
  */
-public class JsonKafkaSource extends KafkaSource<String> {
+public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
   private static final Logger LOG = LoggerFactory.getLogger(JsonKafkaSource.class);
 
   /**
@@ -92,7 +92,7 @@ public class JsonKafkaSource extends KafkaSource<String> {
   }
 
   @Override
-  JavaRDD<String> toRDD(OffsetRange[] offsetRanges) {
+  protected JavaRDD<String> toBatch(OffsetRange[] offsetRanges) {
     String deserializerClass = props.getString(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP);
     JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD = KafkaUtils.createRDD(sparkContext,
             offsetGen.getKafkaParams(),
