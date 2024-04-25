@@ -53,7 +53,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_DICTIONA
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE_SIZE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_PAGE_SIZE;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.common.util.HoodieConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * HoodieParquetDataBlock contains a list of records serialized using Parquet.

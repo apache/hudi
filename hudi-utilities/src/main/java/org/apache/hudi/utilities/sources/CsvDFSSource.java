@@ -35,8 +35,8 @@ import org.apache.spark.sql.types.StructType;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
-import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.STREAMER_CONFIG_PREFIX;
 
 /**
  * Reads data from CSV files on DFS as the data source.

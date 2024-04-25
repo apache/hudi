@@ -26,8 +26,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
-import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.STREAMER_CONFIG_PREFIX;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 
 /**

@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
-import static org.apache.hudi.common.util.TestConfigUtils.TEST_BOOLEAN_CONFIG_PROPERTY;
+import static org.apache.hudi.hadoop.config.TestHadoopConfigUtils.TEST_BOOLEAN_CONFIG_PROPERTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**

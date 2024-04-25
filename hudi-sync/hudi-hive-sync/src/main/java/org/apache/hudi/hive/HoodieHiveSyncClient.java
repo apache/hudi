@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -386,7 +386,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         StorageDescriptor sd = table.getSd();
         sd.setLocation(basePath);
         SerDeInfo serdeInfo = sd.getSerdeInfo();
-        serdeInfo.putToParameters(ConfigUtils.TABLE_SERDE_PATH, basePath);
+        serdeInfo.putToParameters(HoodieConfigUtils.TABLE_SERDE_PATH, basePath);
         table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
         table.putToParameters(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionSynced.get());
         client.alter_table(databaseName, tableName, table);

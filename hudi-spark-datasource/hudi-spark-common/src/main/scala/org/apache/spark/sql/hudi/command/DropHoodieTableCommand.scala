@@ -20,12 +20,12 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.util.ConfigUtils
-import org.apache.hudi.storage.{StoragePath, HoodieStorageUtils}
+import org.apache.hudi.common.util.HoodieConfigUtils
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
 
 /**
  * Physical plan node for dropping a table.
@@ -105,7 +105,7 @@ case class DropHoodieTableCommand(
     if (catalog.tableExists(rtIdt)) {
       val rtTable = catalog.getTableMetadata(rtIdt)
       if (rtTable.storage.locationUri.equals(hoodieTable.table.storage.locationUri)) {
-        rtTable.storage.properties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE) match {
+        rtTable.storage.properties.get(HoodieConfigUtils.IS_QUERY_AS_RO_TABLE) match {
           case Some(v) if v.equalsIgnoreCase("false") => rtTableOpt = Some(rtTable)
           case _ => // do-nothing
         }
@@ -114,7 +114,7 @@ case class DropHoodieTableCommand(
     if (catalog.tableExists(roIdt)) {
       val roTable = catalog.getTableMetadata(roIdt)
       if (roTable.storage.locationUri.equals(hoodieTable.table.storage.locationUri)) {
-        roTable.storage.properties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE) match {
+        roTable.storage.properties.get(HoodieConfigUtils.IS_QUERY_AS_RO_TABLE) match {
           case Some(v) if v.equalsIgnoreCase("true") => roTableOpt = Some(roTable)
           case _ => // do-nothing
         }

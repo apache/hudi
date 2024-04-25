@@ -72,7 +72,7 @@ import scala.Tuple2;
 
 import static java.util.Map.Entry.comparingByValue;
 import static java.util.stream.Collectors.toMap;
-import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.common.util.HoodieConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * This class helps to generate updates from an already existing hoodie dataset. It supports generating updates in across partitions, files and records.

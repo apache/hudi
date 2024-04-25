@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -90,7 +90,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       return 0;
     }
 
-    String orderingFieldName = ConfigUtils.getOrderingField(props);
+    String orderingFieldName = HoodieConfigUtils.getOrderingField(props);
     Object value = getFieldValueFromInternalRow(rowOption.get(), schema, orderingFieldName);
     return value != null ? (Comparable) value : 0;
   }

@@ -21,7 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -106,7 +106,7 @@ public class FirstValueAvroPayload extends DefaultHoodieRecordPayload {
      * or an insert/update record. In any case, if it is older absolutely than the record in disk, the currentValue
      * in disk is returned (to be rewritten with new commit time).
      */
-    String orderField = ConfigUtils.getOrderingField(properties);
+    String orderField = HoodieConfigUtils.getOrderingField(properties);
     if (orderField == null) {
       return true;
     }

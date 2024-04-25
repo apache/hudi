@@ -56,9 +56,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -94,6 +94,7 @@ import java.util.concurrent.Executors;
 
 import static java.lang.String.format;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.hadoop.config.HadoopConfigUtils.getPropsFromHoodieConfig;
 import static org.apache.hudi.utilities.UtilHelpers.buildProperties;
 import static org.apache.hudi.utilities.UtilHelpers.readConfig;
 
@@ -192,7 +193,7 @@ public class HoodieStreamer implements Serializable {
       hoodieConfig.setValue(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     }
 
-    return hoodieConfig.getProps(true);
+    return getPropsFromHoodieConfig(hoodieConfig, true);
   }
 
   public void shutdownGracefully() {

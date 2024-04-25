@@ -32,11 +32,11 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.CorruptedLogFileException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.hadoop.config.HadoopConfigUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.util.IOUtils;
@@ -202,7 +202,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         return new HoodieHFileDataBlock(
             () -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
             Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath(),
-            ConfigUtils.getBooleanWithAltKeys((Configuration) storage.getConf(), HoodieReaderConfig.USE_NATIVE_HFILE_READER));
+            HadoopConfigUtils.getBooleanWithAltKeys((Configuration) storage.getConf(), HoodieReaderConfig.USE_NATIVE_HFILE_READER));
 
       case PARQUET_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,

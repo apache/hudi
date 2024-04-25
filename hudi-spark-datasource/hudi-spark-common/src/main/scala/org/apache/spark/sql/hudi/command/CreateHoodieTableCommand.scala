@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.ConfigUtils
+import org.apache.hudi.common.util.HoodieConfigUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
@@ -65,7 +65,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     // check if there are conflict between table configs defined in hoodie table and properties defined in catalog.
     CreateHoodieTableCommand.validateTblProperties(hoodieCatalogTable)
 
-    val queryAsProp = hoodieCatalogTable.catalogProperties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE)
+    val queryAsProp = hoodieCatalogTable.catalogProperties.get(HoodieConfigUtils.IS_QUERY_AS_RO_TABLE)
     if (queryAsProp.isEmpty) {
       // init hoodie table for a normal table (not a ro/rt table)
       hoodieCatalogTable.initHoodieTable()
@@ -133,7 +133,7 @@ object CreateHoodieTableCommand {
       Some(outputFormat),
       Some(serdeFormat),
       table.storage.compressed,
-      storageProperties + ("path" -> path) ++ queryAsProp.map(ConfigUtils.IS_QUERY_AS_RO_TABLE -> _)
+      storageProperties + ("path" -> path) ++ queryAsProp.map(HoodieConfigUtils.IS_QUERY_AS_RO_TABLE -> _)
     )
 
     val tableName = HoodieSqlCommonUtils.formatName(sparkSession, table.identifier.table)

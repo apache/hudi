@@ -30,8 +30,8 @@ import javax.annotation.concurrent.Immutable;
 
 import java.util.Arrays;
 
-import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
-import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.STREAMER_CONFIG_PREFIX;
 
 /**
  * Hudi Incremental Pulling Source Configs

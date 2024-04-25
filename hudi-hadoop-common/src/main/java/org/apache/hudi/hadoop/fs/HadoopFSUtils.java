@@ -71,6 +71,14 @@ public class HadoopFSUtils {
     return new HadoopStorageConfiguration(conf, copy);
   }
 
+  public static HoodieStorage getStorage(String basePath, Configuration conf) {
+    return new HoodieHadoopStorage(HadoopFSUtils.getFs(basePath, conf));
+  }
+
+  public static HoodieStorage getStorage(StoragePath path, Configuration conf) {
+    return new HoodieHadoopStorage(HadoopFSUtils.getFs(path, conf));
+  }
+
   public static <T> FileSystem getFs(String pathStr, StorageConfiguration<T> storageConf) {
     return getFs(new Path(pathStr), storageConf);
   }

@@ -19,7 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -154,8 +154,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       Option<String> partitionNameOp,
       Boolean populateMetaFields,
       Option<Schema> schemaWithoutMetaFields) {
-    String payloadClass = ConfigUtils.getPayloadClass(props);
-    String preCombineField = ConfigUtils.getOrderingField(props);
+    String payloadClass = HoodieConfigUtils.getPayloadClass(props);
+    String preCombineField = HoodieConfigUtils.getOrderingField(props);
     return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 
@@ -191,7 +191,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
     return (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data,
-        ConfigUtils.getOrderingField(props),
+        HoodieConfigUtils.getOrderingField(props),
         true, consistentLogicalTimestampEnabled);
   }
 

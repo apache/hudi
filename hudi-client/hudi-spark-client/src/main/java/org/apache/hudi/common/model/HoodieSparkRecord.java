@@ -20,7 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -314,7 +314,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
-    String orderingField = ConfigUtils.getOrderingField(props);
+    String orderingField = HoodieConfigUtils.getOrderingField(props);
     scala.Option<NestedFieldPath> cachedNestedFieldPath =
         HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
     if (cachedNestedFieldPath.isDefined()) {

@@ -35,10 +35,10 @@ import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.apache.hudi.common.util.ConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
-import static org.apache.hudi.common.util.ConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.HoodieConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**

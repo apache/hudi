@@ -33,11 +33,11 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.util.Collections;
 
-import static org.apache.hudi.common.util.ConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
-import static org.apache.hudi.common.util.ConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.HoodieConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
 
 /**
  * A simple schema provider, that reads off files on DFS.

@@ -20,7 +20,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -191,8 +191,8 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       Boolean populateMetaFields,
       Option<Schema> schemaWithoutMetaFields) throws IOException {
     IndexedRecord indexedRecord = (IndexedRecord) data.getInsertValue(recordSchema, props).get();
-    String payloadClass = ConfigUtils.getPayloadClass(props);
-    String preCombineField = ConfigUtils.getOrderingField(props);
+    String payloadClass = HoodieConfigUtils.getPayloadClass(props);
+    String preCombineField = HoodieConfigUtils.getOrderingField(props);
     return HoodieAvroUtils.createHoodieRecordFromAvro(indexedRecord, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 

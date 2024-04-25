@@ -32,6 +32,7 @@ import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -560,7 +561,7 @@ public class TestHiveSyncTool {
     assertTrue(ddl.contains(String.format("ROW FORMAT SERDE \n  '%s'", ParquetHiveSerDe.class.getName())));
     assertTrue(ddl.contains("'path'='" + HiveTestUtil.basePath + "'"));
     if (syncAsDataSourceTable) {
-      assertTrue(ddl.contains("'" + ConfigUtils.IS_QUERY_AS_RO_TABLE + "'='false'"));
+      assertTrue(ddl.contains("'" + HoodieConfigUtils.IS_QUERY_AS_RO_TABLE + "'='false'"));
     }
   }
 
@@ -694,7 +695,7 @@ public class TestHiveSyncTool {
       assertTrue(ddl.contains("'path'='" + HiveTestUtil.basePath + "'"));
       assertTrue(ddl.toLowerCase().contains("create external table"));
       if (syncAsDataSourceTable) {
-        assertTrue(ddl.contains("'" + ConfigUtils.IS_QUERY_AS_RO_TABLE + "'='" + readAsOptimized + "'"));
+        assertTrue(ddl.contains("'" + HoodieConfigUtils.IS_QUERY_AS_RO_TABLE + "'='" + readAsOptimized + "'"));
       }
     }
   }
@@ -1102,17 +1103,17 @@ public class TestHiveSyncTool {
     StorageDescriptor storageDescriptor = hiveClient.getMetastoreStorageDescriptor(HiveTestUtil.TABLE_NAME);
     assertEquals(initInputFormatClassName, storageDescriptor.getInputFormat(),
             "Table " + HiveTestUtil.TABLE_NAME + " inputFormat should be " + targetInputFormatClassName);
-    assertFalse(storageDescriptor.getSerdeInfo().getParameters().containsKey(ConfigUtils.IS_QUERY_AS_RO_TABLE),
-            "Table " + HiveTestUtil.TABLE_NAME + " serdeInfo parameter " + ConfigUtils.IS_QUERY_AS_RO_TABLE + " should not exist");
+    assertFalse(storageDescriptor.getSerdeInfo().getParameters().containsKey(HoodieConfigUtils.IS_QUERY_AS_RO_TABLE),
+            "Table " + HiveTestUtil.TABLE_NAME + " serdeInfo parameter " + HoodieConfigUtils.IS_QUERY_AS_RO_TABLE + " should not exist");
 
     reSyncHiveTable();
     storageDescriptor = hiveClient.getMetastoreStorageDescriptor(HiveTestUtil.TABLE_NAME);
     assertEquals(targetInputFormatClassName,
             storageDescriptor.getInputFormat(),
             "Table " + HiveTestUtil.TABLE_NAME + " inputFormat should be " + targetInputFormatClassName);
-    assertEquals(storageDescriptor.getSerdeInfo().getParameters().get(ConfigUtils.IS_QUERY_AS_RO_TABLE),
+    assertEquals(storageDescriptor.getSerdeInfo().getParameters().get(HoodieConfigUtils.IS_QUERY_AS_RO_TABLE),
             strategy.equals(HoodieSyncTableStrategy.RO) ? "true" : "false",
-            "Table " + HiveTestUtil.TABLE_NAME + " serdeInfo parameter " + ConfigUtils.IS_QUERY_AS_RO_TABLE + " should be ");
+            "Table " + HiveTestUtil.TABLE_NAME + " serdeInfo parameter " + HoodieConfigUtils.IS_QUERY_AS_RO_TABLE + " should be ");
 
   }
 

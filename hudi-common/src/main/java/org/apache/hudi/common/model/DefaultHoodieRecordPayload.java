@@ -19,7 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -177,7 +177,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
      * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
      * and need to be dealt with separately.
      */
-    String orderField = ConfigUtils.getOrderingField(properties);
+    String orderField = HoodieConfigUtils.getOrderingField(properties);
     if (orderField == null) {
       return true;
     }

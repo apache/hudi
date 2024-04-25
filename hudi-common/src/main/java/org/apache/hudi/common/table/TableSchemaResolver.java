@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -347,7 +347,7 @@ public class TableSchemaResolver {
     FileSystem fs = (FileSystem) metaClient.getRawHoodieStorage().getFileSystem();
     try (HoodieFileReader fileReader =
              HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-                 .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, fs.getConf(), new StoragePath(hFilePath.toUri()))) {
+                 .getFileReader(HoodieConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, fs.getConf(), new StoragePath(hFilePath.toUri()))) {
       return convertAvroSchemaToParquet(fileReader.getSchema());
     }
   }

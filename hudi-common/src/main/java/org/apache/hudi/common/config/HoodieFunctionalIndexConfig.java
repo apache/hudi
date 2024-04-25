@@ -25,8 +25,8 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.secondary.SecondaryIndexType;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -40,8 +40,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
-import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
+import static org.apache.hudi.common.util.HoodieConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 @Immutable

@@ -26,8 +26,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.common.util.ConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
-import static org.apache.hudi.common.util.ConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
 
 /**
  * JDBC-based Schema Provider Configs.

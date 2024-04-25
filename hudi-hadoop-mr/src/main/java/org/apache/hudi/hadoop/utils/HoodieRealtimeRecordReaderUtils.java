@@ -21,9 +21,9 @@ package org.apache.hudi.hadoop.utils;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.config.HadoopConfigUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.storage.StoragePath;
@@ -66,7 +66,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
+import static org.apache.hudi.common.util.HoodieConfigUtils.getReaderConfigs;
 
 public class HoodieRealtimeRecordReaderUtils {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReaderUtils.class);
@@ -78,7 +78,7 @@ public class HoodieRealtimeRecordReaderUtils {
     // jobConf.getMemoryForMapTask() returns in MB
     return (long) Math
         .ceil(Double.parseDouble(
-            ConfigUtils.getRawValueWithAltKeys(
+            HadoopConfigUtils.getRawValueWithAltKeys(
                     jobConf, HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION)
                 .orElse(HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION))
             * jobConf.getMemoryForMapTask() * 1024 * 1024L);

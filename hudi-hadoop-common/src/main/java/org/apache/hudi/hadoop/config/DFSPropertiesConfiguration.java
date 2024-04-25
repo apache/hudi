@@ -7,24 +7,27 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.common.config;
+package org.apache.hudi.hadoop.config;
 
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
@@ -43,6 +46,8 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.HashSet;
 import java.util.Set;
+
+import static org.apache.hudi.hadoop.config.HadoopConfigUtils.getPropsFromHoodieConfig;
 
 /**
  * A simplified versions of Apache commons - PropertiesConfiguration, that supports limited field types and hierarchical
@@ -145,10 +150,9 @@ public class DFSPropertiesConfiguration {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
 
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
+    HoodieStorage storage = HadoopFSUtils.getStorage(
         filePath,
-        Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
-    );
+        Option.ofNullable(hadoopConfig).orElseGet(Configuration::new));
 
     try {
       if (filePath.equals(DEFAULT_PATH) && !storage.exists(filePath)) {
@@ -183,7 +187,7 @@ public class DFSPropertiesConfiguration {
         String[] split = splitProperty(line);
         if (line.startsWith("include=") || line.startsWith("include =")) {
           StoragePath providedPath = new StoragePath(split[1]);
-          HoodieStorage providedStorage = HoodieStorageUtils.getStorage(split[1], hadoopConfig);
+          HoodieStorage providedStorage = HadoopFSUtils.getStorage(split[1], hadoopConfig);
           // In the case that only filename is provided, assume it's in the same directory.
           if ((!providedPath.isAbsolute() || StringUtils.isNullOrEmpty(providedStorage.getScheme()))
               && cfgFilePath != null) {
@@ -217,7 +221,7 @@ public class DFSPropertiesConfiguration {
   }
 
   public TypedProperties getProps(boolean includeGlobalProps) {
-    return new TypedProperties(hoodieConfig.getProps(includeGlobalProps));
+    return new TypedProperties(getPropsFromHoodieConfig(hoodieConfig, includeGlobalProps));
   }
 
   private static Option<StoragePath> getConfPathFromEnv() {

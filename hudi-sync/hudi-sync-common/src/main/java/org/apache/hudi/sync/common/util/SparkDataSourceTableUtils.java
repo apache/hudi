@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sync.common.util;
 
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.parquet.schema.GroupType;
@@ -99,8 +99,8 @@ public class SparkDataSourceTableUtils {
 
   public static Map<String, String> getSparkSerdeProperties(boolean readAsOptimized, String basePath) {
     Map<String, String> sparkSerdeProperties = new HashMap<>();
-    sparkSerdeProperties.put(ConfigUtils.TABLE_SERDE_PATH, basePath);
-    sparkSerdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(readAsOptimized));
+    sparkSerdeProperties.put(HoodieConfigUtils.TABLE_SERDE_PATH, basePath);
+    sparkSerdeProperties.put(HoodieConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(readAsOptimized));
     return sparkSerdeProperties;
   }
 

@@ -236,16 +236,6 @@ public class HoodieConfig implements Serializable {
     return props;
   }
 
-  public TypedProperties getProps(boolean includeGlobalProps) {
-    if (includeGlobalProps) {
-      TypedProperties mergedProps = DFSPropertiesConfiguration.getGlobalProps();
-      mergedProps.putAll(props);
-      return mergedProps;
-    } else {
-      return props;
-    }
-  }
-
   public void setDefaultOnCondition(boolean condition, HoodieConfig config) {
     if (condition) {
       setDefault(config);

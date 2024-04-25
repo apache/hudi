@@ -38,7 +38,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.apache.hudi.common.util.ConfigUtils.getOrderingField;
+import static org.apache.hudi.common.util.HoodieConfigUtils.getOrderingField;
 
 public class HoodieRecordTestPayload extends OverwriteWithLatestAvroPayload {
   public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";

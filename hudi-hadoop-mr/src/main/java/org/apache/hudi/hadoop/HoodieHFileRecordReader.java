@@ -41,7 +41,7 @@ import org.apache.hadoop.mapred.RecordReader;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
+import static org.apache.hudi.common.util.HoodieConfigUtils.getReaderConfigs;
 
 public class HoodieHFileRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 

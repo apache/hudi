@@ -21,8 +21,8 @@ package org.apache.hudi.utilities.config;
 
 import org.apache.hudi.common.config.ConfigProperty;
 
-import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
-import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.HoodieConfigUtils.STREAMER_CONFIG_PREFIX;
 
 /**
  * Configurations for Test Data Sources.

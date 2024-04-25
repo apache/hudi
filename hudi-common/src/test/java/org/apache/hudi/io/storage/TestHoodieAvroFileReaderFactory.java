@@ -27,7 +27,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.common.util.HoodieConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

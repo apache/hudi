@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils}
+import org.apache.hudi.common.util.{BinaryUtil, HoodieConfigUtils, StringUtils}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -111,7 +111,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       }
       val metaPathDir = new StoragePath(metaClient.getBasePathV2, HoodieTableMetaClient.METAFOLDER_NAME)
       // delete checksum from hoodie.properties
-      val props = ConfigUtils.fetchConfigs(
+      val props = HoodieConfigUtils.fetchConfigs(
         storage,
         metaPathDir.toString,
         HoodieTableConfig.HOODIE_PROPERTIES_FILE,

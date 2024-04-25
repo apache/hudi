@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -129,7 +129,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       return 0;
     }
 
-    String orderingFieldName = ConfigUtils.getOrderingField(props);
+    String orderingFieldName = HoodieConfigUtils.getOrderingField(props);
     Object value = getFieldValueFromIndexedRecord(recordOpt.get(), schema, orderingFieldName);
     return value != null ? (Comparable) value : 0;
   }

@@ -17,14 +17,15 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.common.util.{ConfigUtils, HoodieConfigUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sql.InsertMode
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
@@ -46,7 +47,7 @@ case class CreateHoodieTableAsSelectCommand(
     checkState(table.tableType != CatalogTableType.VIEW)
     checkState(table.provider.isDefined)
 
-    val hasQueryAsProp = (table.storage.properties ++ table.properties).contains(ConfigUtils.IS_QUERY_AS_RO_TABLE)
+    val hasQueryAsProp = (table.storage.properties ++ table.properties).contains(HoodieConfigUtils.IS_QUERY_AS_RO_TABLE)
     if (hasQueryAsProp) {
       throw new AnalysisException("Not support CTAS for the ro/rt table")
     }
