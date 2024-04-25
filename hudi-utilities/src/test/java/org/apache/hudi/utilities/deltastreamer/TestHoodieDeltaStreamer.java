@@ -2458,7 +2458,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     downstreamCfg.configs.add("hoodie.streamer.source.hoodieincr.num_instants=1");
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
 
-    insertInTable(tableBasePath, 10, WriteOperationType.UPSERT);
+    insertInTable(tableBasePath, 12, WriteOperationType.UPSERT);
     //No change as this fails with Path not exist error
     assertThrows(SparkException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
