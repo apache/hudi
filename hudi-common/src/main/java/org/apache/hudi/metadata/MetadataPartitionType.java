@@ -33,6 +33,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -76,7 +77,28 @@ public enum MetadataPartitionType {
 
     @Override
     public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
-      return metaClient.getFunctionalIndexMetadata().isPresent();
+      if (metaClient.getFunctionalIndexMetadata().isPresent()) {
+        return metaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().values().stream()
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX));
+      }
+      return false;
+    }
+  },
+  SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-") {
+    @Override
+    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
+      // Secondary index is created via sql and not via write path.
+      // HUDI-7662 tracks adding a separate config to enable/disable secondary index.
+      return getBooleanWithAltKeys(writeConfig, SECONDARY_INDEX_ENABLE_PROP) && RECORD_INDEX.isMetadataPartitionEnabled(writeConfig);
+    }
+
+    @Override
+    public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
+      if (metaClient.getFunctionalIndexMetadata().isPresent()) {
+        return metaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().values().stream()
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX));
+      }
+      return false;
     }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-") {

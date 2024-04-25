@@ -904,6 +904,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String tableName;
     private String tableCreateSchema;
     private String recordKeyFields;
+    private String secondaryKeyFields;
     private String archiveLogFolder;
     private String payloadClassName;
     private String payloadType;
@@ -968,6 +969,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setRecordKeyFields(String recordKeyFields) {
       this.recordKeyFields = recordKeyFields;
+      return this;
+    }
+
+    public PropertyBuilder setSecondaryKeyFields(String secondaryKeyFields) {
+      this.secondaryKeyFields = secondaryKeyFields;
       return this;
     }
 

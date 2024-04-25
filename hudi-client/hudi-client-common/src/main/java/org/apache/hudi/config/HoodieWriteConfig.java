@@ -2742,6 +2742,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieTTLConfig.MAX_PARTITION_TO_DELETE);
   }
 
+  public boolean isSecondaryIndexEnabled() {
+    return metadataConfig.isSecondaryIndexEnabled();
+  }
+
+  public int getSecondaryIndexParallelism() {
+    return metadataConfig.getSecondaryIndexParallelism();
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();

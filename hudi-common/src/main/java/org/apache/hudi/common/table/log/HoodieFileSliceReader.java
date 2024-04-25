@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 
 import org.apache.avro.Schema;
@@ -84,7 +84,7 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
           return true;
         }
       } catch (IOException e) {
-        throw new HoodieClusteringException("Failed to wrapIntoHoodieRecordPayloadWithParams: " + e.getMessage());
+        throw new HoodieIOException("Failed to wrapIntoHoodieRecordPayloadWithParams: " + e.getMessage());
       }
     }
     return super.doHasNext();

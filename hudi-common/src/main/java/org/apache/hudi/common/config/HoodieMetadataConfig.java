@@ -351,6 +351,25 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating partition stats index.");
 
+  public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".index.secondary.enable")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable secondary index within the Metadata Table.");
+
+  public static final ConfigProperty<String> SECONDARY_INDEX_COLUMN = ConfigProperty
+      .key(METADATA_PREFIX + ".index.secondary.column")
+      .noDefaultValue()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable secondary index within the Metadata Table.");
+
+  public static final ConfigProperty<Integer> SECONDARY_INDEX_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".index.secondary.parallelism")
+      .defaultValue(200)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Parallelism to use, when generating secondary index.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -493,6 +512,19 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getPartitionStatsIndexParallelism() {
     return getInt(PARTITION_STATS_INDEX_PARALLELISM);
+  }
+
+  public boolean isSecondaryIndexEnabled() {
+    // Secondary index is enabled only iff record index (primary key index) is also enabled
+    return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP);
+  }
+
+  public String getSecondaryIndexColumn() {
+    return getString(SECONDARY_INDEX_COLUMN);
+  }
+
+  public int getSecondaryIndexParallelism() {
+    return getInt(SECONDARY_INDEX_PARALLELISM);
   }
 
   public static class Builder {
