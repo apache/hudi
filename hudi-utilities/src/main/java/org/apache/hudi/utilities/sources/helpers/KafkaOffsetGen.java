@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
@@ -176,10 +177,12 @@ public class KafkaOffsetGen {
       }
       // We need to ensure every partition is part of returned offset ranges even if we are not consuming any new msgs (for instance, if its already caught up).
       // as this will be tracked as the checkpoint, we need to ensure all partitions are part of final ranges.
-      fromOffsetMap.entrySet()
-          .stream()
-          .filter((kv) -> !finalRanges.containsKey(kv.getKey()))
-          .forEach((kv) -> finalRanges.put(kv.getKey(), Collections.singletonList(OffsetRange.create(kv.getKey(), kv.getValue(), kv.getValue()))));
+      Map<TopicPartition, List<OffsetRange>> missedRanges = fromOffsetMap.entrySet().stream()
+              .filter((kv) -> !finalRanges.containsKey(kv.getKey()))
+              .map((kv) -> Pair.of(kv.getKey(), Collections.singletonList(
+                      OffsetRange.create(kv.getKey(), kv.getValue(), kv.getValue()))))
+              .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+      finalRanges.putAll(missedRanges);
 
       OffsetRange[] sortedRangeArray = finalRanges.values().stream().flatMap(Collection::stream)
           .sorted(SORT_BY_PARTITION).toArray(OffsetRange[]::new);
