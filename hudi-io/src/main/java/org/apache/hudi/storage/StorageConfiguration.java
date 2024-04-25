@@ -22,9 +22,6 @@ package org.apache.hudi.storage;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 
 /**
@@ -42,25 +39,7 @@ public abstract class StorageConfiguration<T> implements Serializable {
    * @return a new copy of the storage configuration.
    */
   public abstract T newCopy();
-
-  /**
-   * Serializes the storage configuration.
-   * DO NOT change the signature, as required by {@link Serializable}.
-   *
-   * @param out stream to write.
-   * @throws IOException on I/O error.
-   */
-  public abstract void writeObject(ObjectOutputStream out) throws IOException;
-
-  /**
-   * Deserializes the storage configuration.
-   * DO NOT change the signature, as required by {@link Serializable}.
-   *
-   * @param in stream to read.
-   * @throws IOException on I/O error.
-   */
-  public abstract void readObject(ObjectInputStream in) throws IOException;
-
+  
   /**
    * Sets the configuration key-value pair.
    *
