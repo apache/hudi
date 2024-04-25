@@ -196,4 +196,9 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected HoodieTable getHoodieTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
     return HoodieFlinkTable.create(writeConfig, engineContext, metaClient);
   }
+
+  @Override
+  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieFunctionalIndexDefinition indexDefinition) {
+    throw new HoodieNotSupportedException("Flink metadata table does not support secondary index yet.");
+  }
 }

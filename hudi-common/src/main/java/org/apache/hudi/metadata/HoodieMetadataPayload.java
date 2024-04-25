@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
+import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -108,6 +109,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final int METADATA_TYPE_BLOOM_FILTER = 4;
   private static final int METADATA_TYPE_RECORD_INDEX = 5;
   private static final int METADATA_TYPE_PARTITION_STATS = 6;
+  private static final int METADATA_TYPE_SECONDARY_INDEX = 7;
 
   /**
    * HoodieMetadata schema field ids
@@ -118,6 +120,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String SCHEMA_FIELD_ID_COLUMN_STATS = "ColumnStatsMetadata";
   public static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
   public static final String SCHEMA_FIELD_ID_RECORD_INDEX = "recordIndexMetadata";
+  public static final String SCHEMA_FIELD_ID_SECONDARY_INDEX = "SecondaryIndexMetadata";
 
   /**
    * HoodieMetadata bloom filter payload field ids
@@ -160,6 +163,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final int RECORD_INDEX_MISSING_FILEINDEX_FALLBACK = -1;
 
   /**
+   * HoodieMetadata secondary index payload field ids
+   */
+  public static final String SECONDARY_INDEX_FIELD_RECORD_KEY = "recordKey";
+  public static final String SECONDARY_INDEX_FIELD_IS_DELETED = FIELD_IS_DELETED;
+
+  /**
    * NOTE: PLEASE READ CAREFULLY
    * <p>
    * In Avro 1.10 generated builders rely on {@code SpecificData.getForSchema} invocation that in turn
@@ -182,6 +191,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private HoodieMetadataBloomFilter bloomFilterMetadata = null;
   private HoodieMetadataColumnStats columnStatMetadata = null;
   private HoodieRecordIndexInfo recordIndexMetadata;
+  private HoodieSecondaryIndexInfo secondaryIndexMetadata;
   private boolean isDeletedRecord = false;
 
   public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
@@ -258,6 +268,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID).toString(),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
             Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()));
+      } else if (type == METADATA_TYPE_SECONDARY_INDEX) {
+        GenericRecord secondaryIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_SECONDARY_INDEX);
+        checkState(secondaryIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + METADATA_TYPE_SECONDARY_INDEX);
+        secondaryIndexMetadata = new HoodieSecondaryIndexInfo(
+            secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_RECORD_KEY).toString(),
+            (Boolean) secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_IS_DELETED));
       }
     } else {
       this.isDeletedRecord = true;
@@ -291,6 +307,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this.bloomFilterMetadata = metadataBloomFilter;
     this.columnStatMetadata = columnStats;
     this.recordIndexMetadata = recordIndexMetadata;
+  }
+
+  public HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
+    this(key, METADATA_TYPE_SECONDARY_INDEX, null, null, null, null);
+    this.secondaryIndexMetadata = secondaryIndexMetadata;
   }
 
   /**
@@ -402,6 +423,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
         // No need to merge with previous record index, always pick the latest payload.
         return this;
+      case METADATA_TYPE_SECONDARY_INDEX:
+        // Secondary Index combine()/merge() always returns the current (*this*)
+        // record and discards the prevRecord. Based on the 'isDeleted' marker in the payload,
+        // the merger running on top takes the right action (discard current or retain current record).
+        return this;
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
@@ -427,6 +453,17 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return mergeColumnStatsRecords(previousColStatsRecord, newColumnStatsRecord);
   }
 
+  public static Option<HoodieRecord<HoodieMetadataPayload>> combineSecondaryIndexRecord(
+      HoodieRecord<HoodieMetadataPayload> oldRecord,
+      HoodieRecord<HoodieMetadataPayload> newRecord) {
+    // If the new record is tombstone, we can discard it
+    if (newRecord.getData().secondaryIndexMetadata.getIsDeleted()) {
+      return Option.empty();
+    }
+
+    return Option.of(newRecord);
+  }
+
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema, Properties properties) throws IOException {
     HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord));
@@ -446,7 +483,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
-        columnStatMetadata, recordIndexMetadata);
+        columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
     return Option.of(record);
   }
 
@@ -773,6 +810,30 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               1));
       return new HoodieAvroRecord<>(key, payload);
     }
+  }
+
+  /**
+   * Create and return a {@code HoodieMetadataPayload} to insert or update an entry for the secondary index.
+   * <p>
+   * Each entry maps the secondary key of a single record in HUDI to its record (or primary) key
+   *
+   * @param recordKey     Primary key of the record
+   * @param secondaryKey  Secondary key of the record
+   * @param isDeleted     true if this record is deleted
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createSecondaryIndex(String recordKey, String secondaryKey, String partitionPath, Boolean isDeleted) {
+
+    HoodieKey key = new HoodieKey(secondaryKey, partitionPath);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(secondaryKey, new HoodieSecondaryIndexInfo(recordKey, isDeleted));
+    return new HoodieAvroRecord<>(key, payload);
+  }
+
+  public String getRecordKeyFromSecondaryIndex() {
+    return secondaryIndexMetadata.getRecordKey();
+  }
+
+  public boolean isSecondaryIndexDeleted() {
+    return secondaryIndexMetadata.getIsDeleted();
   }
 
   /**

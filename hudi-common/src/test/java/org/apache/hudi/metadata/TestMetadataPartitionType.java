@@ -20,6 +20,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
 import org.apache.hudi.common.model.HoodieFunctionalIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,6 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
 
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -55,6 +57,7 @@ public class TestMetadataPartitionType {
     switch (partitionType) {
       case FILES:
       case FUNCTIONAL_INDEX:
+      case SECONDARY_INDEX:
         metadataConfigBuilder.enable(true);
         expectedEnabledPartitions = 1;
         break;
@@ -81,7 +84,7 @@ public class TestMetadataPartitionType {
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfigBuilder.build().getProps(), metaClient);
 
     // Verify partition type is enabled due to config
-    if (partitionType == MetadataPartitionType.FUNCTIONAL_INDEX) {
+    if (partitionType == MetadataPartitionType.FUNCTIONAL_INDEX || partitionType == MetadataPartitionType.SECONDARY_INDEX) {
       assertEquals(1, enabledPartitions.size(), "FUNCTIONAL_INDEX should be enabled by SQL, only FILES is enabled in this case.");
       assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES));
     } else {
@@ -135,7 +138,9 @@ public class TestMetadataPartitionType {
     // Simulate the meta client having FUNCTIONAL_INDEX available
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
     Mockito.when(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.FILES)).thenReturn(true);
-    Mockito.when(metaClient.getFunctionalIndexMetadata()).thenReturn(Option.of(Mockito.mock(HoodieFunctionalIndexMetadata.class)));
+    HoodieFunctionalIndexMetadata functionalIndexMetadata =
+        new HoodieFunctionalIndexMetadata(Collections.singletonMap("func_index_dummy", new HoodieFunctionalIndexDefinition("func_index_dummy", null, null, null, null)));
+    Mockito.when(metaClient.getFunctionalIndexMetadata()).thenReturn(Option.of(functionalIndexMetadata));
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FUNCTIONAL_INDEX)).thenReturn(true);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
 

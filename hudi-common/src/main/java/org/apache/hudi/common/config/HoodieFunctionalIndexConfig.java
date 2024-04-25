@@ -25,8 +25,8 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.secondary.SecondaryIndexType;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -65,7 +65,8 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
       .defaultValue(MetadataPartitionType.COLUMN_STATS.name())
       .withValidValues(
           MetadataPartitionType.COLUMN_STATS.name(),
-          MetadataPartitionType.BLOOM_FILTERS.name()
+          MetadataPartitionType.BLOOM_FILTERS.name(),
+          MetadataPartitionType.SECONDARY_INDEX.name()
       )
       .sinceVersion("1.0.0")
       .withDocumentation("Type of the functional index. Default is `column_stats` if there are no functions and expressions in the command. "

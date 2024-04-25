@@ -112,6 +112,14 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     return basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
   }
 
+  static boolean isMetadataTableSecondaryIndexPartition(String basePath, Option<String> partitionName) {
+    if (!isMetadataTable(basePath) || !partitionName.isPresent()) {
+      return false;
+    }
+
+    return partitionName.get().startsWith("secondary_index_");
+  }
+
   static HoodieTableMetadata create(HoodieEngineContext engineContext,
                                     HoodieStorage storage,
                                     HoodieMetadataConfig metadataConfig,
