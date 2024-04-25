@@ -120,7 +120,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   protected HoodieKey key;
 
-  protected HoodieMergeKey mergeKey;
+  /**
+   * For purposes of merging simple or composite keys.
+   */
+  private HoodieMergeKey mergeKey;
 
   /**
    * Actual payload of the record.

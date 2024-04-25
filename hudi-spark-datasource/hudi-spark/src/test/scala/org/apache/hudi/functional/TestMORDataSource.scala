@@ -614,7 +614,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testPreCombineFiledForReadMOR(recordType: HoodieRecordType): Unit = {
+  def testPreCombineFieldForReadMOR(recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     writeData((1, "a0", 10, 100, false), writeOpts)
