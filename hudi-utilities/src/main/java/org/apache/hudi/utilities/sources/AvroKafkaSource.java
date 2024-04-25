@@ -52,7 +52,7 @@ import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DES
 /**
  * Reads avro serialized Kafka data, based on the confluent schema-registry.
  */
-public class AvroKafkaSource extends KafkaSource<GenericRecord> {
+public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(AvroKafkaSource.class);
   // These are settings used to pass things to KafkaAvroDeserializer

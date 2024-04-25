@@ -55,7 +55,7 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
 /**
  * Read json kafka data.
  */
-public class JsonKafkaSource extends KafkaSource<String> {
+public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
 
   public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
                          SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {

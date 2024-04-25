@@ -51,7 +51,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 /**
  * Reads protobuf serialized Kafka data, based on a provided class name.
  */
-public class ProtoKafkaSource extends KafkaSource<Message> {
+public class ProtoKafkaSource extends KafkaSource<JavaRDD<Message>> {
 
   private final String className;
 
