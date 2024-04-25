@@ -199,7 +199,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // Default rules
     )
-    rules += (spark => HoodiePruneFileSourceFiles(spark))
+    if (HoodieSparkUtils.gteqSpark3_0) {
+      rules += (spark => HoodiePruneFileSourceFiles(spark))
+    }
     rules
   }
 
