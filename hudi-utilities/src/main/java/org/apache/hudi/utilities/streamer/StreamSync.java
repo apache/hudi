@@ -1035,24 +1035,30 @@ public class StreamSync implements Serializable, Closeable {
       Map<String, HoodieException> failedMetaSyncs = new HashMap<>();
       for (String impl : syncClientToolClasses) {
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
-        boolean success = false;
+        Option<HoodieMetaSyncException> metaSyncException = Option.empty();
         try {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
-          success = true;
         } catch (HoodieMetaSyncException e) {
-          LOG.error("SyncTool class {} failed with exception {}", impl.trim(), e);
-          failedMetaSyncs.put(impl, e);
+          metaSyncException = Option.of(e);
         }
-        long metaSyncTimeNanos = syncContext != null ? syncContext.stop() : 0;
-        metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeNanos);
-        if (success) {
-          long timeMs = metaSyncTimeNanos / 1000000L;
-          LOG.info("[MetaSync] SyncTool class {} completed successfully and took {} s {} ms ", impl.trim(), timeMs / 1000L, timeMs % 1000L);
-        }
+        logMetaSync(impl, syncContext, failedMetaSyncs,  metaSyncException);
       }
       if (!failedMetaSyncs.isEmpty()) {
         throw getHoodieMetaSyncException(failedMetaSyncs);
       }
+    }
+  }
+
+  private void logMetaSync(String impl, Timer.Context syncContext, Map<String, HoodieException> failedMetaSyncs, Option<HoodieMetaSyncException> metaSyncException) {
+    long metaSyncTimeNanos = syncContext != null ? syncContext.stop() : 0;
+    metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeNanos);
+    long timeMs = metaSyncTimeNanos / 1000000L;
+    String timeString = String.format("and took %d s %d ms ", timeMs / 1000L, timeMs % 1000L);
+    if (metaSyncException.isPresent()) {
+      LOG.error("[MetaSync] SyncTool class {} failed with exception {} {}", impl.trim(), metaSyncException.get(), timeString);
+      failedMetaSyncs.put(impl, metaSyncException.get());
+    } else {
+      LOG.info("[MetaSync] SyncTool class {} completed successfully {}", impl.trim(), timeString);
     }
   }
 
