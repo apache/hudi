@@ -370,3 +370,19 @@ stages:
           - script: |
               grep "testcase" scripts/ci/results/*/target/surefire-reports/*.xml scripts/ci/results/*/*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+      - job: Report_Code_Coverage
+        displayName: Report Code Coverage
+        timeoutInMinutes: '90'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -pl hudi-reporter -am
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: PublishCodeCoverageResults@2
+            displayName: Publish Code Coverage Result
+            inputs:
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
