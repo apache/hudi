@@ -86,25 +86,10 @@ public abstract class BaseFileUtils {
         .reduce(BaseFileUtils::mergeRanges).get();
   }
 
-  private static  <T extends Comparable<T>> HoodieColumnRangeMetadata<T> mergeRanges(HoodieColumnRangeMetadata<T> one,
-                                                                                     HoodieColumnRangeMetadata<T> another) {
-    final T minValue;
-    final T maxValue;
-    if (one.getMinValue() != null && another.getMinValue() != null) {
-      minValue = one.getMinValue().compareTo(another.getMinValue()) < 0 ? one.getMinValue() : another.getMinValue();
-    } else if (one.getMinValue() == null) {
-      minValue = another.getMinValue();
-    } else {
-      minValue = one.getMinValue();
-    }
-
-    if (one.getMaxValue() != null && another.getMaxValue() != null) {
-      maxValue = one.getMaxValue().compareTo(another.getMaxValue()) < 0 ? another.getMaxValue() : one.getMaxValue();
-    } else if (one.getMaxValue() == null) {
-      maxValue = another.getMaxValue();
-    } else {
-      maxValue = one.getMaxValue();
-    }
+  private static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> mergeRanges(HoodieColumnRangeMetadata<T> one,
+                                                                                    HoodieColumnRangeMetadata<T> another) {
+    final T minValue = getMinValueForColumnRanges(one, another);
+    final T maxValue = getMaxValueForColumnRanges(one, another);
 
     return HoodieColumnRangeMetadata.create(
         null, one.getColumnName(), minValue, maxValue,
@@ -112,6 +97,30 @@ public abstract class BaseFileUtils {
         one.getValueCount() + another.getValueCount(),
         one.getTotalSize() + another.getTotalSize(),
         one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
+  }
+
+  public static <T extends Comparable<T>> T getMaxValueForColumnRanges(HoodieColumnRangeMetadata<T> one, HoodieColumnRangeMetadata<T> another) {
+    final T maxValue;
+    if (one.getMaxValue() != null && another.getMaxValue() != null) {
+      maxValue = one.getMaxValue().compareTo(another.getMaxValue()) < 0 ? another.getMaxValue() : one.getMaxValue();
+    } else if (one.getMaxValue() == null) {
+      maxValue = another.getMaxValue();
+    } else {
+      maxValue = one.getMaxValue();
+    }
+    return maxValue;
+  }
+
+  public static <T extends Comparable<T>> T getMinValueForColumnRanges(HoodieColumnRangeMetadata<T> one, HoodieColumnRangeMetadata<T> another) {
+    final T minValue;
+    if (one.getMinValue() != null && another.getMinValue() != null) {
+      minValue = one.getMinValue().compareTo(another.getMinValue()) < 0 ? one.getMinValue() : another.getMinValue();
+    } else if (one.getMinValue() == null) {
+      minValue = another.getMinValue();
+    } else {
+      minValue = one.getMinValue();
+    }
+    return minValue;
   }
 
   /**

@@ -401,23 +401,8 @@ public class ParquetUtils extends BaseFileUtils {
       HoodieColumnRangeMetadata<T> one,
       HoodieColumnRangeMetadata<T> another
   ) {
-    final T minValue;
-    final T maxValue;
-    if (one.getMinValue() != null && another.getMinValue() != null) {
-      minValue = one.getMinValue().compareTo(another.getMinValue()) < 0 ? one.getMinValue() : another.getMinValue();
-    } else if (one.getMinValue() == null) {
-      minValue = another.getMinValue();
-    } else {
-      minValue = one.getMinValue();
-    }
-
-    if (one.getMaxValue() != null && another.getMaxValue() != null) {
-      maxValue = one.getMaxValue().compareTo(another.getMaxValue()) < 0 ? another.getMaxValue() : one.getMaxValue();
-    } else if (one.getMaxValue() == null) {
-      maxValue = another.getMaxValue();
-    } else {
-      maxValue = one.getMaxValue();
-    }
+    final T minValue = getMinValueForColumnRanges(one, another);
+    final T maxValue = getMaxValueForColumnRanges(one, another);
 
     return HoodieColumnRangeMetadata.create(
         one.getFilePath(),

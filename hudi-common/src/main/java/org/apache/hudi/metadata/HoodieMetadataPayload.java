@@ -654,7 +654,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                  Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
                                                                  boolean isDeleted) {
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
-      HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata),
+      HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata.getColumnName()),
           MetadataPartitionType.PARTITION_STATS.getPartitionPath());
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
@@ -674,9 +674,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     });
   }
 
-  public static String getPartitionStatsIndexKey(String partitionPath, HoodieColumnRangeMetadata<Comparable> columnRangeMetadata) {
+  public static String getPartitionStatsIndexKey(String partitionPath, String columnName) {
     final PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionPath));
-    final ColumnIndexID columnIndexID = new ColumnIndexID(columnRangeMetadata.getColumnName());
+    final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
     return columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString());
   }
 

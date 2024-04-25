@@ -20,7 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.StringUtils;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,6 +35,8 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 
 /**
  * Partition types for metadata table.
@@ -81,7 +82,7 @@ public enum MetadataPartitionType {
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-") {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_PARTITION_STATS) && StringUtils.nonEmpty(getStringWithAltKeys(writeConfig, COLUMN_STATS_INDEX_FOR_COLUMNS));
+      return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_PARTITION_STATS) && nonEmpty(getStringWithAltKeys(writeConfig, COLUMN_STATS_INDEX_FOR_COLUMNS, EMPTY_STRING));
     }
   };
 
