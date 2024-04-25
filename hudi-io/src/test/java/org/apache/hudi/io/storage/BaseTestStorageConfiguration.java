@@ -24,11 +24,17 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -85,6 +91,21 @@ public abstract class BaseTestStorageConfiguration<T> {
   public void testGet() {
     StorageConfiguration<?> storageConf = getStorageConfiguration(getConf(prepareConfigs()));
     validateConfigs(storageConf);
+  }
+
+  @Test
+  public void testSerializability() throws IOException, ClassNotFoundException {
+    StorageConfiguration<?> storageConf = getStorageConfiguration(getConf(prepareConfigs()));
+    try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+         ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+      oos.writeObject(storageConf);
+      try (ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
+           ObjectInputStream ois = new ObjectInputStream(bais)) {
+        StorageConfiguration<?> deserialized = (StorageConfiguration) ois.readObject();
+        assertNotNull(deserialized.get());
+        validateConfigs(deserialized);
+      }
+    }
   }
 
   private Map<String, String> prepareConfigs() {
