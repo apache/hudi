@@ -91,8 +91,8 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
-  public InputStream open(StoragePath path) throws IOException {
-    return fs.open(convertToHadoopPath(path));
+  public InputStream open(StoragePath path, int bufferSize) throws IOException {
+    return fs.open(convertToHadoopPath(path), bufferSize);
   }
 
   @Override

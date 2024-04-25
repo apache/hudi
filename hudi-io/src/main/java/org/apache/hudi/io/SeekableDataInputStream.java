@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io;
 
+import java.io.Closeable;
+import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,21 +29,11 @@ import java.io.InputStream;
  * A {@link InputStream} that supports random access by allowing to seek to
  * an arbitrary position within the stream and read the content.
  */
-public abstract class SeekableDataInputStream extends DataInputStream {
-  /**
-   * Creates a DataInputStream that uses the specified
-   * underlying InputStream.
-   *
-   * @param in the specified input stream
-   */
-  public SeekableDataInputStream(InputStream in) {
-    super(in);
-  }
-
+public interface SeekableDataInputStream extends DataInput, Closeable {
   /**
    * @return current position of the stream. The next read() will be from that location.
    */
-  public abstract long getPos() throws IOException;
+  long getPos() throws IOException;
 
   /**
    * Seeks to a position within the stream.
@@ -49,5 +41,5 @@ public abstract class SeekableDataInputStream extends DataInputStream {
    * @param pos target position to seek to.
    * @throws IOException upon error.
    */
-  public abstract void seek(long pos) throws IOException;
+  void seek(long pos) throws IOException;
 }

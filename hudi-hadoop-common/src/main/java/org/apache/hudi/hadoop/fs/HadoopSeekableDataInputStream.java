@@ -23,12 +23,13 @@ import org.apache.hudi.io.SeekableDataInputStream;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 
+import java.io.DataInputStream;
 import java.io.IOException;
 
 /**
  * An implementation of {@link SeekableDataInputStream} based on Hadoop's {@link FSDataInputStream}
  */
-public class HadoopSeekableDataInputStream extends SeekableDataInputStream {
+public class HadoopSeekableDataInputStream extends DataInputStream implements SeekableDataInputStream {
   private final FSDataInputStream stream;
 
   public HadoopSeekableDataInputStream(FSDataInputStream stream) {

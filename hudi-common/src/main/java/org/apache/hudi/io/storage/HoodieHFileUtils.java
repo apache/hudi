@@ -101,7 +101,7 @@ public class HoodieHFileUtils {
     HoodieHBaseAvroHFileReader.SeekableByteArrayInputStream bis =
         new HoodieHBaseAvroHFileReader.SeekableByteArrayInputStream(content);
     FSDataInputStream fsdis = new FSDataInputStream(bis);
-    FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
+    FSDataInputStreamWrapper stream = new FSDataInpıutStreamWrapper(fsdis);
     ReaderContext context = new ReaderContextBuilder()
         .withFilePath(new Path(dummyPath.toUri()))
         .withInputStreamWrapper(stream)

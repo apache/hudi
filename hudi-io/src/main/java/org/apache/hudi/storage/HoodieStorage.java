@@ -110,11 +110,12 @@ public abstract class HoodieStorage implements Closeable {
    * Opens an InputStream at the indicated path.
    *
    * @param path the file to open.
+   * @param bufferSize buffer size to use.
    * @return the InputStream to read from.
    * @throws IOException IO error.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract InputStream open(StoragePath path) throws IOException;
+  public abstract InputStream open(StoragePath path, int bufferSize) throws IOException;
 
   /**
    * Opens an SeekableDataInputStream at the indicated path with seeks supported.
@@ -378,6 +379,18 @@ public abstract class HoodieStorage implements Closeable {
       create(path, false).close();
       return true;
     }
+  }
+  
+  /**
+   * Opens an InputStream at the indicated path.
+   *
+   * @param path the file to open.
+   * @return the InputStream to read from.
+   * @throws IOException IO error.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public InputStream open(StoragePath path) throws IOException {
+    return open(path, getDefaultBlockSize(path));
   }
 
   /**
