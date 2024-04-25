@@ -1046,10 +1046,10 @@ public class StreamSync implements Serializable, Closeable {
     long timeMs = metaSyncTimeNanos / 1000000L;
     String timeString = String.format("and took %d s %d ms ", timeMs / 1000L, timeMs % 1000L);
     if (metaSyncException.isPresent()) {
-      LOG.error("[MetaSync] SyncTool class {} failed with exception {} " + timeString, impl.trim(), metaSyncException.get());
+      LOG.error("[MetaSync] SyncTool class {} failed with exception {} {}" + timeString, impl.trim(), metaSyncException.get(), timeString);
       failedMetaSyncs.put(impl, metaSyncException.get());
     } else {
-      LOG.info("[MetaSync] SyncTool class {} completed successfully " + timeString, impl.trim());
+      LOG.info("[MetaSync] SyncTool class {} completed successfully {}", impl.trim(), timeString);
     }
   }
 
