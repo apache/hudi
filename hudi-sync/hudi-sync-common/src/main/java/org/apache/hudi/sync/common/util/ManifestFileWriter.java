@@ -69,7 +69,7 @@ public class ManifestFileWriter {
         LOG.warn("No base file to generate manifest file.");
         return;
       } else {
-        LOG.info("Writing base file names to manifest file: " + baseFiles.size());
+        LOG.info("Writing base file names to manifest file: {}", baseFiles.size());
       }
       final StoragePath manifestFilePath = getManifestFilePath(useAbsolutePath);
       try (OutputStream outputStream = metaClient.getStorage().create(manifestFilePath, true);
@@ -87,15 +87,23 @@ public class ManifestFileWriter {
   public static Stream<String> fetchLatestBaseFilesForAllPartitions(HoodieTableMetaClient metaClient,
       boolean useFileListingFromMetadata, boolean assumeDatePartitioning, boolean useAbsolutePath) {
     try {
-      List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getHadoopConf()),
-          metaClient.getBasePath(), useFileListingFromMetadata, assumeDatePartitioning);
-      LOG.info("Retrieve all partitions: " + partitions.size());
       Configuration hadoopConf = metaClient.getHadoopConf();
       HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
       HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
           metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
           HoodieMetadataConfig.newBuilder().enable(useFileListingFromMetadata).withAssumeDatePartitioning(assumeDatePartitioning).build());
-      return partitions.parallelStream().flatMap(partition -> fsView.getLatestBaseFiles(partition).map(useAbsolutePath ? HoodieBaseFile::getPath : HoodieBaseFile::getFileName));
+      Stream<HoodieBaseFile> allLatestBaseFiles;
+      if (useFileListingFromMetadata) {
+        LOG.info("Fetching all base files from MDT.");
+        fsView.loadAllPartitions();
+        allLatestBaseFiles = fsView.getLatestBaseFiles();
+      } else {
+        List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getHadoopConf()),
+            metaClient.getBasePathV2().toString(), false, assumeDatePartitioning);
+        LOG.info("Retrieve all partitions from fs: {}", partitions.size());
+        allLatestBaseFiles =  partitions.parallelStream().flatMap(fsView::getLatestBaseFiles);
+      }
+      return allLatestBaseFiles.map(useAbsolutePath ? HoodieBaseFile::getPath : HoodieBaseFile::getFileName);
     } catch (Exception e) {
       throw new HoodieException("Error in fetching latest base files.", e);
     }
