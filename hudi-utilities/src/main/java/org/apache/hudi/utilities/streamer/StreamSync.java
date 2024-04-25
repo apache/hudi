@@ -1044,11 +1044,12 @@ public class StreamSync implements Serializable, Closeable {
     long metaSyncTimeNanos = syncContext != null ? syncContext.stop() : 0;
     metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeNanos);
     long timeMs = metaSyncTimeNanos / 1000000L;
+    String timeString = String.format("and took %d s %d ms ", timeMs / 1000L, timeMs % 1000L);
     if (metaSyncException.isPresent()) {
-      LOG.error("[MetaSync] SyncTool class {} failed with exception {} and took {} s {} ms ", impl.trim(), metaSyncException.get(), timeMs / 1000L, timeMs % 1000L);
+      LOG.error("[MetaSync] SyncTool class {} failed with exception {} " + timeString, impl.trim(), metaSyncException.get());
       failedMetaSyncs.put(impl, metaSyncException.get());
     } else {
-      LOG.info("[MetaSync] SyncTool class {} completed successfully and took {} s {} ms ", impl.trim(), timeMs / 1000L, timeMs % 1000L);
+      LOG.info("[MetaSync] SyncTool class {} completed successfully " + timeString, impl.trim());
     }
   }
 
