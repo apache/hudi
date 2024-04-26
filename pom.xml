@@ -601,6 +601,8 @@
           <artifactId>maven-surefire-plugin</artifactId>
           <version>${maven-surefire-plugin.version}</version>
           <configuration>
+            <reuseForks>true</reuseForks>
+            <forkCount>4</forkCount>
             <rerunFailingTestsCount>3</rerunFailingTestsCount>
             <argLine>@{argLine}</argLine>
             <trimStackTrace>false</trimStackTrace>
@@ -608,7 +610,7 @@
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
-            <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
+            <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
           </configuration>
         </plugin>
         <plugin>
