@@ -108,8 +108,8 @@ public class ConsistentBucketIndexUtils {
    */
   public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable table, String partition) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    Path metadataPath = FSUtils.getPartitionPathInHadoopPath(metaClient.getHashingMetadataPath(), partition);
-    Path partitionPath = FSUtils.getPartitionPathInHadoopPath(metaClient.getBasePathV2().toString(), partition);
+    Path metadataPath = FSUtils.constructAbsolutePathInHadoopPath(metaClient.getHashingMetadataPath(), partition);
+    Path partitionPath = FSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePathV2().toString(), partition);
     try {
       Predicate<FileStatus> hashingMetaCommitFilePredicate = fileStatus -> {
         String filename = fileStatus.getPath().getName();
@@ -186,7 +186,7 @@ public class ConsistentBucketIndexUtils {
    */
   public static boolean saveMetadata(HoodieTable table, HoodieConsistentHashingMetadata metadata, boolean overwrite) {
     HoodieStorage storage = table.getMetaClient().getStorage();
-    StoragePath dir = FSUtils.getPartitionPath(
+    StoragePath dir = FSUtils.constructAbsolutePath(
         table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     StoragePath fullPath = new StoragePath(dir, metadata.getFilename());
     try (OutputStream out = storage.create(fullPath, overwrite)) {
@@ -267,7 +267,7 @@ public class ConsistentBucketIndexUtils {
    * @return true if hashing metadata file is latest else false
    */
   private static boolean recommitMetadataFile(HoodieTable table, FileStatus metaFile, String partition) {
-    Path partitionPath = new Path(FSUtils.getPartitionPath(table.getMetaClient().getBasePathV2(), partition).toUri());
+    Path partitionPath = new Path(FSUtils.constructAbsolutePath(table.getMetaClient().getBasePathV2(), partition).toUri());
     String timestamp = getTimestampFromFile(metaFile.getPath().getName());
     if (table.getPendingCommitTimeline().containsInstant(timestamp)) {
       return false;

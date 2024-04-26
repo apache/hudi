@@ -103,7 +103,6 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.hadoop.fs.CachingPath.getPathWithoutSchemeAndAuthority;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -664,7 +663,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   @VisibleForTesting
   Option<String> getPartitionCreationInstant(HoodieStorage storage, String basePath, String partition) {
     HoodiePartitionMetadata hoodiePartitionMetadata =
-        new HoodiePartitionMetadata(storage, FSUtils.getPartitionPath(basePath, partition));
+        new HoodiePartitionMetadata(storage, FSUtils.constructAbsolutePath(basePath, partition));
     return hoodiePartitionMetadata.readPartitionCreatedCommitTime();
   }
 
@@ -681,7 +680,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     // ignore partitions created by uncommitted ingestion.
     return allPartitionPathsFromFS.stream().parallel().filter(part -> {
       HoodiePartitionMetadata hoodiePartitionMetadata =
-          new HoodiePartitionMetadata(storage, FSUtils.getPartitionPath(basePath, part));
+          new HoodiePartitionMetadata(storage, FSUtils.constructAbsolutePath(basePath, part));
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
         String instantTime = instantOption.get();
@@ -960,6 +959,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     int numErrorSamples = cfg.numRecordIndexErrorSamples;
     Pair<Long, List<String>> result = keyToLocationOnFsRdd.fullOuterJoin(keyToLocationFromRecordIndexRdd, cfg.recordIndexParallelism)
         .map(e -> {
+          String recordKey = e._1;
           Optional<Pair<String, String>> locationOnFs = e._2._1;
           Optional<Pair<String, String>> locationFromRecordIndex = e._2._2;
           List<String> errorSampleList = new ArrayList<>();
@@ -968,13 +968,13 @@ public class HoodieMetadataTableValidator implements Serializable {
                 && locationOnFs.get().getRight().equals(locationFromRecordIndex.get().getRight())) {
               return Pair.of(0L, errorSampleList);
             }
-            errorSampleList.add(constructLocationInfoString(locationOnFs, locationFromRecordIndex));
+            errorSampleList.add(constructLocationInfoString(recordKey, locationOnFs, locationFromRecordIndex));
             return Pair.of(1L, errorSampleList);
           }
           if (!locationOnFs.isPresent() && !locationFromRecordIndex.isPresent()) {
             return Pair.of(0L, errorSampleList);
           }
-          errorSampleList.add(constructLocationInfoString(locationOnFs, locationFromRecordIndex));
+          errorSampleList.add(constructLocationInfoString(recordKey, locationOnFs, locationFromRecordIndex));
           return Pair.of(1L, errorSampleList);
         })
         .reduce((pair1, pair2) -> {
@@ -1031,9 +1031,10 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
-  private String constructLocationInfoString(Optional<Pair<String, String>> locationOnFs,
+  private String constructLocationInfoString(String recordKey, Optional<Pair<String, String>> locationOnFs,
                                              Optional<Pair<String, String>> locationFromRecordIndex) {
     StringBuilder sb = new StringBuilder();
+    sb.append("Record key " + recordKey + " -> ");
     sb.append("FS: ");
     if (locationOnFs.isPresent()) {
       sb.append(locationOnFs.get());
@@ -1244,8 +1245,8 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   private String getRelativePath(String basePath, String absoluteFilePath) {
-    String basePathStr = getPathWithoutSchemeAndAuthority(new Path(basePath)).toString();
-    String absoluteFilePathStr = getPathWithoutSchemeAndAuthority(new Path(absoluteFilePath)).toString();
+    String basePathStr = new StoragePath(basePath).getPathWithoutSchemeAndAuthority().toString();
+    String absoluteFilePathStr = new StoragePath(absoluteFilePath).getPathWithoutSchemeAndAuthority().toString();
 
     if (!absoluteFilePathStr.startsWith(basePathStr)) {
       throw new IllegalArgumentException("File path does not belong to the base path! basePath="
@@ -1402,7 +1403,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return baseFileNameList.stream().flatMap(filename ->
                 new ParquetUtils().readRangeFromParquetMetadata(
                     metaClient.getHadoopConf(),
-                    new StoragePath(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath), filename),
+                    new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath), filename),
                     allColumnNameList).stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
@@ -1444,7 +1445,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
       StoragePath path = new StoragePath(
-          FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath).toString(), filename);
+          FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath).toString(), filename);
       BloomFilter bloomFilter;
       HoodieConfig hoodieConfig = new HoodieConfig();
       hoodieConfig.setValue(HoodieReaderConfig.USE_NATIVE_HFILE_READER,

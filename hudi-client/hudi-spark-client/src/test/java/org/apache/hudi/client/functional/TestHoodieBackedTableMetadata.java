@@ -255,10 +255,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     // 2nd commit
     doWriteOperation(testTable, "0000001", INSERT);
 
-    final HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf)
-        .setBasePath(metadataTableBasePath)
-        .build();
+    final HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
     metadataMetaClient.reloadActiveTimeline();
     final HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient);
@@ -328,10 +325,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     HoodieCommitMetadata commitMetadata2 =
         testTable.doWriteOperation(instant2, BULK_INSERT, emptyList(), asList(partition), 1);
 
-    final HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf)
-        .setBasePath(metadataTableBasePath)
-        .build();
+    final HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
     while (getNumCompactions(metadataMetaClient) == 0) {
       // Write until the compaction happens in the metadata table
       testTable.doWriteOperation(

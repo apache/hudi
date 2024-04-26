@@ -118,7 +118,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       StoragePathFilter filter = (path) -> path.toString().contains(finalCompactionCommit);
       for (String pPath : dataGen.getPartitionPaths()) {
         assertEquals(0, storage.listDirectEntries(
-            FSUtils.getPartitionPath(hoodieWriteConfig.getBasePath(), pPath),
+            FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath),
             filter).size());
       }
     }
@@ -163,7 +163,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     StoragePathFilter filter = (path) -> path.toString().contains(secondCommit);
     for (String pPath : dataGen.getPartitionPaths()) {
       assertEquals(1, storage.listDirectEntries(
-              FSUtils.getPartitionPath(hoodieWriteConfig.getBasePath(), pPath), filter)
+              FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath), filter)
           .size());
     }
 
@@ -202,7 +202,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     filter = (path) -> path.toString().contains(secondCommit);
     for (String pPath : dataGen.getPartitionPaths()) {
       assertEquals(0, storage.listDirectEntries(
-              FSUtils.getPartitionPath(hoodieWriteConfig.getBasePath(), pPath), filter)
+              FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath), filter)
           .size());
     }
     // ensure files matching 1st commit is intact
@@ -210,7 +210,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     for (String pPath : dataGen.getPartitionPaths()) {
       assertEquals(1,
           storage.listDirectEntries(
-              FSUtils.getPartitionPath(hoodieWriteConfig.getBasePath(), pPath),
+              FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath),
               filter).size());
     }
   }

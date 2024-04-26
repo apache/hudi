@@ -18,10 +18,10 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Dataset, Row}
@@ -153,8 +153,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
         result.length
       }
 
-      val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
-        .setConf(spark.sessionState.newHadoopConf()).build()
+      val metaClient = createMetaClient(spark, tablePath)
 
       assertResult("true") {
         metaClient.getTableConfig.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)

@@ -207,9 +207,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // Save hoodie partition meta in the partition path
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
           new StoragePath(config.getBasePath()),
-          FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+          FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
-      partitionMetadata.trySave(getPartitionId());
+      partitionMetadata.trySave();
 
       this.writer = createLogWriter(getFileInstant(record));
     } catch (Exception e) {

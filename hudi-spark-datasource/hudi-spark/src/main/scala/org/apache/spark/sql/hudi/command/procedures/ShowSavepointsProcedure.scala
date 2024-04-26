@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -47,7 +47,7 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
 
     val basePath: String = getBasePath(tableName, tablePath)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
 
     val activeTimeline: HoodieActiveTimeline = metaClient.getActiveTimeline
     val timeline: HoodieTimeline = activeTimeline.getSavePointTimeline.filterCompletedInstants

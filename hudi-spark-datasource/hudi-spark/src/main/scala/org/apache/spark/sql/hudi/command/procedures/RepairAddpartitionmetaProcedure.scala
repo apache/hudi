@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodiePartitionMetadata
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.internal.Logging
@@ -28,7 +27,6 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-
 import scala.collection.JavaConversions._
 
 class RepairAddpartitionmetaProcedure extends BaseProcedure with ProcedureBuilder with Logging {
@@ -54,7 +52,7 @@ class RepairAddpartitionmetaProcedure extends BaseProcedure with ProcedureBuilde
     val dryRun = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
     val tablePath = getBasePath(tableName)
 
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(tablePath).build
+    val metaClient = createMetaClient(jsc, tablePath)
 
     val latestCommit: String = metaClient.getActiveTimeline.getCommitTimeline.lastInstant.get.getTimestamp
     val partitionPaths: util.List[String] = FSUtils.getAllPartitionFoldersThreeLevelsDown(metaClient.getStorage, tablePath);
@@ -62,7 +60,7 @@ class RepairAddpartitionmetaProcedure extends BaseProcedure with ProcedureBuilde
 
     val rows = new util.ArrayList[Row](partitionPaths.size)
     for (partition <- partitionPaths) {
-      val partitionPath: StoragePath = FSUtils.getPartitionPath(basePath, partition)
+      val partitionPath: StoragePath = FSUtils.constructAbsolutePath(basePath, partition)
       var isPresent = "Yes"
       var action = "None"
       if (!HoodiePartitionMetadata.hasPartitionMetadata(metaClient.getStorage, partitionPath)) {
@@ -70,7 +68,7 @@ class RepairAddpartitionmetaProcedure extends BaseProcedure with ProcedureBuilde
         if (!dryRun) {
           val partitionMetadata: HoodiePartitionMetadata = new HoodiePartitionMetadata(
             metaClient.getStorage, latestCommit, basePath, partitionPath, metaClient.getTableConfig.getPartitionMetafileFormat)
-          partitionMetadata.trySave(0)
+          partitionMetadata.trySave()
           action = "Repaired"
         }
       }

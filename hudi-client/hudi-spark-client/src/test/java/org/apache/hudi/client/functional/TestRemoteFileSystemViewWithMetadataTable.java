@@ -174,10 +174,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
   private void runAssertionsForBasePath(boolean useExistingTimelineServer, String basePathStr, SparkRDDWriteClient writeClient) throws IOException {
     // At this point, there are three deltacommits and one compaction commit in the Hudi timeline,
     // and the file system view of timeline server is not yet synced
-    HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf)
-        .setBasePath(basePathStr)
-        .build();
+    HoodieTableMetaClient newMetaClient = createMetaClient(basePathStr);
     HoodieActiveTimeline timeline = newMetaClient.getActiveTimeline();
     HoodieInstant compactionCommit = timeline.lastInstant().get();
     assertTrue(timeline.lastInstant().get().getAction().equals(COMMIT_ACTION));

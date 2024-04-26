@@ -25,7 +25,9 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
@@ -220,8 +222,8 @@ public class TestHoodieHiveCatalog {
     assertEquals("id", table2.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
 
     // validate key generator for partitioned table
-    HoodieTableMetaClient metaClient =
-        StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(tablePath, table), createHiveConf());
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        createHiveConf(), hoodieCatalog.inferTablePath(tablePath, table));
     String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
 
@@ -231,8 +233,9 @@ public class TestHoodieHiveCatalog {
         new CatalogTableImpl(singleKeyMultiPartitionTableSchema, multiPartitions, options, "hudi table");
     hoodieCatalog.createTable(singleKeyMultiPartitionPath, singleKeyMultiPartitionTable, false);
 
-    HoodieTableMetaClient singleKeyMultiPartitionTableMetaClient =
-        StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(singleKeyMultiPartitionPath, singleKeyMultiPartitionTable), createHiveConf());
+    HoodieTableMetaClient singleKeyMultiPartitionTableMetaClient = HoodieTestUtils.createMetaClient(
+        createHiveConf(),
+        hoodieCatalog.inferTablePath(singleKeyMultiPartitionPath, singleKeyMultiPartitionTable));
     assertThat(singleKeyMultiPartitionTableMetaClient.getTableConfig().getKeyGeneratorClassName(), is(ComplexAvroKeyGenerator.class.getName()));
 
     // validate multiple key and single partition for partitioned table
@@ -243,8 +246,9 @@ public class TestHoodieHiveCatalog {
         new CatalogTableImpl(multiKeySinglePartitionTableSchema, partitions, options, "hudi table");
     hoodieCatalog.createTable(multiKeySinglePartitionPath, multiKeySinglePartitionTable, false);
 
-    HoodieTableMetaClient multiKeySinglePartitionTableMetaClient =
-        StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(multiKeySinglePartitionPath, multiKeySinglePartitionTable), createHiveConf());
+    HoodieTableMetaClient multiKeySinglePartitionTableMetaClient = HoodieTestUtils.createMetaClient(
+        createHiveConf(),
+        hoodieCatalog.inferTablePath(multiKeySinglePartitionPath, multiKeySinglePartitionTable));
     assertThat(multiKeySinglePartitionTableMetaClient.getTableConfig().getKeyGeneratorClassName(), is(ComplexAvroKeyGenerator.class.getName()));
 
     // validate key generator for non partitioned table
@@ -253,9 +257,49 @@ public class TestHoodieHiveCatalog {
         new CatalogTableImpl(schema, new ArrayList<>(), options, "hudi table");
     hoodieCatalog.createTable(nonPartitionPath, nonPartitionTable, false);
 
-    metaClient = StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(nonPartitionPath, nonPartitionTable), createHiveConf());
+    metaClient = HoodieTestUtils.createMetaClient(
+        createHiveConf(), hoodieCatalog.inferTablePath(nonPartitionPath, nonPartitionTable));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
+  }
+
+  @Test
+  void testCreateTableWithIndexType() throws TableNotExistException, TableAlreadyExistException, DatabaseNotExistException {
+    Map<String, String> options = new HashMap<>();
+    options.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    // hoodie.index.type
+    options.put(HoodieIndexConfig.INDEX_TYPE.key(), "BUCKET");
+    CatalogTable table =
+        new CatalogTableImpl(schema, partitions, options, "hudi table");
+    hoodieCatalog.createTable(tablePath, table, false);
+    Map<String, String> params = hoodieCatalog.getHiveTable(tablePath).getParameters();
+    assertResult(params, "BUCKET");
+    options.remove(HoodieIndexConfig.INDEX_TYPE.key());
+
+    // index.type
+    options.put(FlinkOptions.INDEX_TYPE.key(), FlinkOptions.INDEX_TYPE.defaultValue());
+    table =
+        new CatalogTableImpl(schema, partitions, options, "hudi table");
+    ObjectPath newTablePath1 = new ObjectPath("default", "test" + System.currentTimeMillis());
+    hoodieCatalog.createTable(newTablePath1, table, false);
+
+    params = hoodieCatalog.getHiveTable(newTablePath1).getParameters();
+    assertResult(params, FlinkOptions.INDEX_TYPE.defaultValue());
+
+    // index.type + hoodie.index.type
+    options.put(HoodieIndexConfig.INDEX_TYPE.key(), "BUCKET");
+    table = new CatalogTableImpl(schema, partitions, options, "hudi table");
+    ObjectPath newTablePath2 = new ObjectPath("default", "test" + System.currentTimeMillis());
+    hoodieCatalog.createTable(newTablePath2, table, false);
+
+    params = hoodieCatalog.getHiveTable(newTablePath2).getParameters();
+    assertResult(params, "BUCKET");
+  }
+
+  private void assertResult(Map<String, String> params, String index) {
+    assertTrue(params.containsKey(HoodieIndexConfig.INDEX_TYPE.key()));
+    assertFalse(params.containsKey(FlinkOptions.INDEX_TYPE.key()));
+    assertThat(params.get(HoodieIndexConfig.INDEX_TYPE.key()), is(index));
   }
 
   @Test
@@ -282,7 +326,8 @@ public class TestHoodieHiveCatalog {
         new CatalogTableImpl(schema, partitions, options, "hudi table");
     hoodieCatalog.createTable(tablePath, table, true);
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(tablePath, table), createHiveConf());
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        createHiveConf(), hoodieCatalog.inferTablePath(tablePath, table));
     return metaClient.getTableConfig().getProps();
   }
 
@@ -409,7 +454,7 @@ public class TestHoodieHiveCatalog {
     hoodieCatalog.dropPartition(tablePath, partitionSpec, false);
 
     String tablePathStr = hoodieCatalog.inferTablePath(tablePath, hoodieCatalog.getTable(tablePath));
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tablePathStr, hoodieCatalog.getHiveConf());
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(hoodieCatalog.getHiveConf(), tablePathStr);
     HoodieInstant latestInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().orElse(null);
     assertNotNull(latestInstant, "Delete partition commit should be completed");
     HoodieCommitMetadata commitMetadata = WriteProfiles.getCommitMetadata(tablePath.getObjectName(), new org.apache.flink.core.fs.Path(tablePathStr),
