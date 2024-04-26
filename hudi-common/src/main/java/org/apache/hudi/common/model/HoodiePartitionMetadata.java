@@ -189,7 +189,7 @@ public class HoodiePartitionMetadata {
         BaseFileUtils reader = BaseFileUtils.getInstance(metafilePath.toString());
         // Data file format
         Map<String, String> metadata = reader.readFooter(
-            (Configuration) storage.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
+            (Configuration) storage.unwrapConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
         props.clear();
         props.putAll(metadata);
         format = Option.of(reader.getFormat());

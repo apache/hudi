@@ -104,7 +104,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
                              boolean enableRecordLookups, String keyField, InternalSchema internalSchema) throws IOException {
     this.storage = storage;
-    this.hadoopConf = (Configuration) this.storage.getConf();
+    this.hadoopConf = (Configuration) this.storage.unwrapConf();
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
     //       further
@@ -202,7 +202,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         return new HoodieHFileDataBlock(
             () -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
             Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath(),
-            ConfigUtils.getBooleanWithAltKeys((Configuration) storage.getConf(), HoodieReaderConfig.USE_NATIVE_HFILE_READER));
+            ConfigUtils.getBooleanWithAltKeys((Configuration) storage.unwrapConf(), HoodieReaderConfig.USE_NATIVE_HFILE_READER));
 
       case PARQUET_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,

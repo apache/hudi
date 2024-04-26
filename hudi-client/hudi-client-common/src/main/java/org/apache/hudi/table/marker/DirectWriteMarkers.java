@@ -114,7 +114,7 @@ public class DirectWriteMarkers extends WriteMarkers {
 
     if (subDirectories.size() > 0) {
       parallelism = Math.min(subDirectories.size(), parallelism);
-      SerializableConfiguration serializedConf = new SerializableConfiguration((Configuration) storage.getConf());
+      SerializableConfiguration serializedConf = new SerializableConfiguration((Configuration) storage.unwrapConf());
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
       dataFiles.addAll(context.flatMap(subDirectories, directory -> {
         Path path = new Path(directory);

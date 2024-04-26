@@ -1636,9 +1636,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     assertTrue(archiver.archiveIfRequired(context) > 0);
     // Simulate archival failing to delete by re-adding the .commit instant files
     // (101.commit, 102.commit, and 103.commit instant files)
-    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "101_1001", (Configuration) storage.getConf());
-    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "102_1021", (Configuration) storage.getConf());
-    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "103_1031", (Configuration) storage.getConf());
+    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "101_1001", (Configuration) storage.unwrapConf());
+    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "102_1021", (Configuration) storage.unwrapConf());
+    HoodieTestDataGenerator.createOnlyCompletedCommitFile(basePath, "103_1031", (Configuration) storage.unwrapConf());
     timeline = metaClient.getActiveTimeline().reload().getWriteTimeline();
     assertEquals(5, timeline.countInstants(), "Due to simulating partial archival deletion, there should"
         + "be 5 instants (as instant times 101-103 .commit files should remain in timeline)");
