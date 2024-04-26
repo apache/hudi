@@ -139,7 +139,6 @@ public class UtilitiesTestBase {
 
   public static void initTestServices(boolean needsHdfs, boolean needsHive, boolean needsZookeeper) throws Exception {
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    hadoopConf.set("hive.exec.scratchdir", System.getenv("java.io.tmpdir") + "/hive");
 
     if (needsHdfs) {
       hdfsTestService = new HdfsTestService(hadoopConf);
@@ -153,6 +152,7 @@ public class UtilitiesTestBase {
     }
     storage = HoodieStorageUtils.getStorage(fs);
 
+    hadoopConf.set("hive.exec.scratchdir", basePath + "/.tmp/hive");
     if (needsHive) {
       hiveTestService = new HiveTestService(hadoopConf);
       hiveServer = hiveTestService.start();
