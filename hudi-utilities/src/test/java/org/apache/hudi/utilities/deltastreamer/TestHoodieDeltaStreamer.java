@@ -147,6 +147,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -717,7 +718,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition, String jobId) throws Exception {
-    Future dsFuture = Executors.newSingleThreadExecutor().submit(() -> {
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    Future dsFuture = executor.submit(() -> {
       try {
         ds.sync();
       } catch (Exception ex) {
@@ -732,6 +734,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       ds.shutdownGracefully();
       dsFuture.get();
     }
+    executor.shutdown();
   }
 
   static void awaitDeltaStreamerShutdown(HoodieDeltaStreamer ds) throws InterruptedException {
@@ -1421,7 +1424,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         PARQUET_SOURCE_ROOT, false, "partition_path", testEmptyBatch ? "1" : "");
 
     // generate data asynchronously.
-    Future inputGenerationFuture = Executors.newSingleThreadExecutor().submit(() -> {
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    Future inputGenerationFuture = executor.submit(() -> {
       try {
         int counter = 2;
         while (counter < 100) { // lets keep going. if the test times out, we will cancel the future within finally. So, safe to generate 100 batches.
@@ -1461,6 +1465,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       ds.shutdownGracefully();
       inputGenerationFuture.cancel(true);
       UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+      executor.shutdown();
     }
     testNum++;
   }
@@ -1797,6 +1802,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private void testORCDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
     // prepare ORCDFSSource
+    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
     TypedProperties orcProps = new TypedProperties();
 
     // Properties used for testing delta-streamer with orc source
