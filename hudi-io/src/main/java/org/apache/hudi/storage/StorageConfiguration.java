@@ -31,9 +31,14 @@ import java.io.Serializable;
  */
 public abstract class StorageConfiguration<T> implements Serializable {
   /**
+   * @return a new {@link StorageConfiguration} instance with a new copy of the configuration.
+   */
+  public abstract StorageConfiguration<T> newInstance();
+
+  /**
    * @return the storage configuration.
    */
-  public abstract T get();
+  public abstract T unwrap();
 
   /**
    * @return a new copy of the storage configuration.
@@ -107,5 +112,18 @@ public abstract class StorageConfiguration<T> implements Serializable {
     return value.isPresent()
         ? Enum.valueOf(defaultValue.getDeclaringClass(), value.get())
         : defaultValue;
+  }
+
+  /**
+   * Sets a property key with a value in the configuration, if the property key
+   * does not already exist.
+   *
+   * @param key   property key.
+   * @param value property value.
+   */
+  public final void setIfUnset(String key, String value) {
+    if (getString(key).isEmpty()) {
+      set(key, value);
+    }
   }
 }

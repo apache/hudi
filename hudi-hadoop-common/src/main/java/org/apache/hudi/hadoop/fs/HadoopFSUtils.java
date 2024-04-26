@@ -80,7 +80,7 @@ public class HadoopFSUtils {
   }
 
   public static <T> FileSystem getFs(Path path, StorageConfiguration<T> storageConf, boolean newCopy) {
-    T conf = newCopy ? storageConf.newCopy() : storageConf.get();
+    T conf = newCopy ? storageConf.newCopy() : storageConf.unwrap();
     ValidationUtils.checkArgument(conf instanceof Configuration);
     return getFs(path, (Configuration) conf);
   }
