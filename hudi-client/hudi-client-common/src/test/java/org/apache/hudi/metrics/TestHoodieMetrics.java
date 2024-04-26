@@ -112,6 +112,14 @@ public class TestHoodieMetrics {
       }
     }
 
+    // PreWrite metrics
+    timer = hoodieMetrics.getPreWriteTimerCtx();
+    Thread.sleep(5); // Ensure timer duration is > 0
+    hoodieMetrics.updatePreWriteMetrics("some_action", hoodieMetrics.getDurationInMs(timer.stop()));
+    metricName = hoodieMetrics.getMetricsName("pre_write", "some_action.duration");
+    msec = (Long)metrics.getRegistry().getGauges().get(metricName).getValue();
+    assertTrue(msec > 0);
+
     // Rollback metrics
     timer = hoodieMetrics.getRollbackCtx();
     Thread.sleep(5); // Ensure timer duration is > 0
