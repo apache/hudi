@@ -205,7 +205,7 @@ class DedupeSparkJob(basePath: String,
       val dstPath = new Path(s"$repairOutputPath/${filePath.getName}$badSuffix")
       LOG.info(s"Copying from $filePath to $dstPath")
       FileIOUtils.copy(storage, new StoragePath(filePath.toUri), storage,
-        new StoragePath(dstPath.toUri), false, true, storage.getConf.asInstanceOf[Configuration])
+        new StoragePath(dstPath.toUri), false, true)
     }
 
     // 2. Remove duplicates from the bad files
@@ -250,7 +250,7 @@ class DedupeSparkJob(basePath: String,
         // for real
         LOG.info(s"[FOR REAL!!!] Copying from $srcPath to $dstPath")
         FileIOUtils.copy(storage, new StoragePath(srcPath.toUri), storage,
-          new StoragePath(dstPath.toUri), false, true, storage.getConf.asInstanceOf[Configuration])
+          new StoragePath(dstPath.toUri), false, true)
       }
     }
   }

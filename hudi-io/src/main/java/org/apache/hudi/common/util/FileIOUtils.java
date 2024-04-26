@@ -24,9 +24,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,18 +109,18 @@ public class FileIOUtils {
   /**
    * Copies the file content from source path to destination path.
    *
-   * @param fileSystem     {@link FileSystem} instance.
+   * @param storage     {@link HoodieStorage} instance.
    * @param sourceFilePath Source file path.
    * @param destFilePath   Destination file path.
    */
-  public static void copy(
-      FileSystem fileSystem, org.apache.hadoop.fs.Path sourceFilePath,
-      org.apache.hadoop.fs.Path destFilePath) {
+  public static void copy(HoodieStorage storage,
+                          StoragePath sourceFilePath,
+                          StoragePath destFilePath) {
     InputStream inputStream = null;
     OutputStream outputStream = null;
     try {
-      inputStream = fileSystem.open(sourceFilePath);
-      outputStream = fileSystem.create(destFilePath, false);
+      inputStream = storage.open(sourceFilePath);
+      outputStream = storage.create(destFilePath, false);
       copy(inputStream, outputStream);
     } catch (IOException e) {
       throw new HoodieIOException(String.format("Cannot copy from %s to %s",
@@ -200,10 +197,9 @@ public class FileIOUtils {
   public static boolean copy(HoodieStorage srcStorage, StoragePath src,
                              HoodieStorage dstStorage, StoragePath dst,
                              boolean deleteSource,
-                             boolean overwrite,
-                             Configuration conf) throws IOException {
+                             boolean overwrite) throws IOException {
     StoragePathInfo pathInfo = srcStorage.getPathInfo(src);
-    return copy(srcStorage, pathInfo, dstStorage, dst, deleteSource, overwrite, conf);
+    return copy(srcStorage, pathInfo, dstStorage, dst, deleteSource, overwrite);
   }
 
   /**
@@ -212,8 +208,7 @@ public class FileIOUtils {
   public static boolean copy(HoodieStorage srcStorage, StoragePathInfo srcPathInfo,
                              HoodieStorage dstStorage, StoragePath dst,
                              boolean deleteSource,
-                             boolean overwrite,
-                             Configuration conf) throws IOException {
+                             boolean overwrite) throws IOException {
     StoragePath src = srcPathInfo.getPath();
     if (srcPathInfo.isDirectory()) {
       if (!dstStorage.createDirectory(dst)) {
@@ -223,19 +218,15 @@ public class FileIOUtils {
       for (StoragePathInfo subPathInfo : contents) {
         copy(srcStorage, subPathInfo, dstStorage,
             new StoragePath(dst, subPathInfo.getPath().getName()),
-            deleteSource, overwrite, conf);
+            deleteSource, overwrite);
       }
     } else {
-      InputStream in = null;
-      OutputStream out = null;
-      try {
-        in = srcStorage.open(src);
-        out = dstStorage.create(dst, overwrite);
-        IOUtils.copyBytes(in, out, conf, true);
+      try (InputStream in = srcStorage.open(src);
+           OutputStream out = dstStorage.create(dst, overwrite)) {
+        copy(in, out);
       } catch (IOException e) {
-        IOUtils.closeStream(out);
-        IOUtils.closeStream(in);
-        throw e;
+        throw new IOException(
+            "Error copying source file " + src + " to the destination file " + dst, e);
       }
     }
     if (deleteSource) {
@@ -246,7 +237,6 @@ public class FileIOUtils {
     } else {
       return true;
     }
-
   }
 
   public static Option<byte[]> readDataFromPath(HoodieStorage storage, StoragePath detailPath, boolean ignoreIOE) {
