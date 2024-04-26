@@ -24,12 +24,16 @@ import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
+
+  protected HoodieTimer preWriteTimer = null; // time taken from dedup -> tag location -> building workload profile
 
   protected BaseWriteHelper(SerializableFunctionUnchecked<I, Integer> partitionNumberExtractor) {
     super(partitionNumberExtractor);
@@ -43,6 +47,18 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                       int configuredShuffleParallelism,
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       WriteOperationType operationType) {
+    return this.write(instantTime, inputRecords, context, table, shouldCombine, configuredShuffleParallelism, executor, operationType, Option.empty());
+  }
+
+  public HoodieWriteMetadata<O> write(String instantTime,
+                                      I inputRecords,
+                                      HoodieEngineContext context,
+                                      HoodieTable<T, I, K, O> table,
+                                      boolean shouldCombine,
+                                      int configuredShuffleParallelism,
+                                      BaseCommitActionExecutor<T, I, K, O, R> executor,
+                                      WriteOperationType operationType,
+                                      Option<HoodieTimer> sourceReadAndIndexTimer) {
     try {
       // De-dupe/merge if needed
       I dedupedRecords =
@@ -55,7 +71,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         taggedRecords = tag(dedupedRecords, context, table);
       }
 
-      HoodieWriteMetadata<O> result = executor.execute(taggedRecords);
+      HoodieWriteMetadata<O> result = executor.execute(taggedRecords, sourceReadAndIndexTimer);
       return result;
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {
