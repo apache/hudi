@@ -30,7 +30,6 @@ import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.OffsetRange;
@@ -42,7 +41,7 @@ import java.util.Arrays;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 
-abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
+public abstract class KafkaSource<T> extends Source<T> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
   // these are native kafka's config. do not change the config names.
   protected static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
@@ -64,7 +63,7 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   }
 
   @Override
-  protected InputBatch<JavaRDD<T>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
+  protected InputBatch<T> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
     try {
       return toInputBatch(getOffsetRanges(props, sourceProfileSupplier, offsetGen, metrics,
           lastCheckpointStr, sourceLimit));
@@ -98,7 +97,7 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
     return offsetRanges;
   }
 
-  private InputBatch<JavaRDD<T>> toInputBatch(OffsetRange[] offsetRanges) {
+  private InputBatch<T> toInputBatch(OffsetRange[] offsetRanges) {
     long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
     LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
     if (totalNewMsgs <= 0) {
@@ -106,11 +105,11 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
       return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
     }
     metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, totalNewMsgs);
-    JavaRDD<T> newDataRDD = toRDD(offsetRanges);
-    return new InputBatch<>(Option.of(newDataRDD), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
+    T newBatch = toBatch(offsetRanges);
+    return new InputBatch<>(Option.of(newBatch), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
-  abstract JavaRDD<T> toRDD(OffsetRange[] offsetRanges);
+  protected abstract T toBatch(OffsetRange[] offsetRanges);
 
   @Override
   public void onCommit(String lastCkptStr) {
