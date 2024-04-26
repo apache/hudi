@@ -21,6 +21,7 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,11 +31,16 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
+import jodd.io.FileUtil;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -63,7 +69,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
   @Test
   public void testMetadataTableValidation() {
-
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
     writeOptions.put("hoodie.table.name", "test_table");
@@ -75,11 +80,17 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     Dataset<Row> inserts = makeInsertDf("000", 5).cache();
     inserts.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
+        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Overwrite)
         .save(basePath);
     Dataset<Row> updates = makeUpdateDf("001", 5).cache();
     updates.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
+        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Append)
         .save(basePath);
 
@@ -201,6 +212,110 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     @Override
     Option<String> getPartitionCreationInstant(HoodieStorage storage, String basePath, String partition) {
       return this.partitionCreationTime;
+    }
+  }
+
+  @Test
+  public void testRliValidationFalsePositiveCase() throws IOException {
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+
+    Dataset<Row> inserts = makeInsertDf("000", 5).cache();
+    inserts.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
+        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+    Dataset<Row> updates = makeUpdateDf("001", 5).cache();
+    updates.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
+        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .mode(SaveMode.Append)
+        .save(basePath);
+
+    Dataset<Row> inserts2 = makeInsertDf("002", 5).cache();
+    inserts2.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
+        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .mode(SaveMode.Append)
+        .save(basePath);
+
+    // validate MDT
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file://" + basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+
+    // lets ensure we have a pending commit when FS based polling is done. and the commit completes when MDT is polled.
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(jsc.hadoopConfiguration()).build();
+    // moving out the completed commit meta file to a temp location
+    HoodieInstant lastInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get();
+    String latestCompletedCommitMetaFile = basePath + "/.hoodie/" + lastInstant.getFileName();
+    String tempDir = getTempLocation();
+    String destFilePath = tempDir + "/" + lastInstant.getFileName();
+    FileUtil.move(latestCompletedCommitMetaFile, destFilePath);
+
+    MockHoodieMetadataTableValidatorForRli validator = new MockHoodieMetadataTableValidatorForRli(jsc, config);
+    validator.setOriginalFilePath(latestCompletedCommitMetaFile);
+    validator.setDestFilePath(destFilePath);
+    assertTrue(validator.run());
+    assertFalse(validator.hasValidationFailure());
+    assertTrue(validator.getThrowables().isEmpty());
+  }
+
+  /**
+   * Class to assist with testing a false positive case with RLI validation.
+   */
+  static class MockHoodieMetadataTableValidatorForRli extends HoodieMetadataTableValidator {
+
+    private String destFilePath;
+    private String originalFilePath;
+
+    public MockHoodieMetadataTableValidatorForRli(JavaSparkContext jsc, Config cfg) {
+      super(jsc, cfg);
+    }
+
+    @Override
+    JavaPairRDD<String, Pair<String, String>> getRecordLocationsFromRLI(HoodieSparkEngineContext sparkEngineContext,
+                                                                        String basePath,
+                                                                        String latestCompletedCommit) {
+      // move the completed file back to ".hoodie" to simuate the false positive case.
+      try {
+        FileUtil.move(destFilePath, originalFilePath);
+        return super.getRecordLocationsFromRLI(sparkEngineContext, basePath, latestCompletedCommit);
+      } catch (IOException e) {
+        throw new HoodieException("Move should not have failed");
+      }
+    }
+
+    public void setDestFilePath(String destFilePath) {
+      this.destFilePath = destFilePath;
+    }
+
+    public void setOriginalFilePath(String originalFilePath) {
+      this.originalFilePath = originalFilePath;
+    }
+  }
+
+  private String getTempLocation() {
+    try {
+      String folderName = "temp_location";
+      java.nio.file.Path tempPath = tempDir.resolve(folderName);
+      java.nio.file.Files.createDirectories(tempPath);
+      return tempPath.toAbsolutePath().toString();
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
     }
   }
 
