@@ -130,3 +130,18 @@ d74f32b21 [ENG-8577][HUDI-7617] Fix issues for bulk insert user defined partitio
 7d65c9134 [ENG-6353][HUDI-7378] Fix Spark SQL DML with custom key generator (#535)
 60023c101 [ENG-6324][HUDI-7391] HoodieMetadataMetrics should use Metrics instance for metrics registry (#536)
 8689cc42e [AUDIT-737] Upgrade to version release-v1.9.0 (#647)
+
+---[2024-04-26 08:08:32] [release-v1.12.0] Upgrade to version release-v1.12.0---
+c3355cacb [ENG-8953][HUDI-7673] Fixing false positive validation failure for RLI with MDT validation tool (#679)
+d03bfcf30 [ENG-9141][HUDI-7467] Fixing flaky deltastreamer tests for auto record key gen (#678)
+6d3d0c930 [ENG-8115][HUDI-7624] Fixing index tagging duration (#671)
+d2985612f [ENG-9123][MINOR] Make KafkaSource abstraction public and more flexible (#677)
+10c8f301a [ENG-8880][HUDI-6089] Handle default insert behaviour to ingest duplicates (#676)
+954c2c282 [ENG-9084][INTERNAL] Run spark tests on every PR (#672)
+e3502338b [ENG-8880][HUDI-6089] Handle default insert behaviour to ingest duplicates (#674)
+efd85e62c [ENG-9037][HUDI-7657] Disable a flaky test in deltastreamer (#668)
+add86c42c [ENG-9034][HUDI-7656] Disable a flaky test (#667)
+e5723499f [AUDIT-759] Revert [ENG-8115][HUDI-7624] Fixing index tagging duration (#669)
+e2c193a09 [ENG-8914][HUDI-4732] Add support for confluent schema registry with proto (#663)
+03463bc3e [ENG-8431][HUDI-7655] Minor fix to rli validation with MDT validator (#660)
+0379a4842 [ENG-880][HUDI-6089] Handle default insert behaviour to ingest duplicates (#666)
