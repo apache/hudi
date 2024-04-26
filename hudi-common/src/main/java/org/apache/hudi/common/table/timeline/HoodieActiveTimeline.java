@@ -33,7 +33,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -923,7 +922,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       HoodieStorage srcStorage = HoodieStorageUtils.getStorage(srcPath, metaClient.getHadoopConf());
       HoodieStorage dstStorage = HoodieStorageUtils.getStorage(dstPath, metaClient.getHadoopConf());
       dstStorage.createDirectory(dstDir);
-      FileIOUtils.copy(srcStorage, srcPath, dstStorage, dstPath, false, true, (Configuration) srcStorage.getConf());
+      FileIOUtils.copy(srcStorage, srcPath, dstStorage, dstPath, false, true);
     } catch (IOException e) {
       throw new HoodieIOException("Could not copy instant from " + srcPath + " to " + dstPath, e);
     }
