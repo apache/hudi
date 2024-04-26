@@ -479,7 +479,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     prepareTestDirectory(storage, rootDir);
 
     assertTrue(FSUtils.deleteSubPath(
-        subDir.toString(), new SerializableConfiguration((Configuration) storage.getConf()), true));
+        subDir.toString(), new SerializableConfiguration((Configuration) storage.unwrapConf()), true));
   }
 
   @Test
@@ -492,7 +492,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertThrows(
         HoodieIOException.class,
         () -> FSUtils.deleteSubPath(
-            subDir.toString(), new SerializableConfiguration((Configuration) storage.getConf()), false));
+            subDir.toString(), new SerializableConfiguration((Configuration) storage.unwrapConf()), false));
   }
 
   @Test
@@ -503,7 +503,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     prepareTestDirectory(storage, rootDir);
 
     assertTrue(FSUtils.deleteSubPath(
-        subDir.toString(), new SerializableConfiguration((Configuration) storage.getConf()), false));
+        subDir.toString(), new SerializableConfiguration((Configuration) storage.unwrapConf()), false));
   }
 
   @Test
@@ -514,7 +514,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     cleanUpTestDirectory(storage, rootDir);
 
     assertFalse(FSUtils.deleteSubPath(
-        subDir.toString(), new SerializableConfiguration((Configuration) storage.getConf()), true));
+        subDir.toString(), new SerializableConfiguration((Configuration) storage.unwrapConf()), true));
   }
 
   @Test
@@ -523,7 +523,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     HoodieStorage storage = metaClient.getStorage();
     prepareTestDirectory(storage, rootDir);
     Map<String, List<String>> result = FSUtils.parallelizeSubPathProcess(
-        new HoodieLocalEngineContext((Configuration) storage.getConf()), storage, rootDir, 2,
+        new HoodieLocalEngineContext((Configuration) storage.unwrapConf()), storage, rootDir, 2,
         fileStatus -> !fileStatus.getPath().getName().contains("1"),
         pairOfSubPathAndConf -> {
           Path subPath = new Path(pairOfSubPathAndConf.getKey());
@@ -555,7 +555,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     HoodieStorage storage = metaClient.getStorage();
     prepareTestDirectory(storage, hoodieTempDir);
     List<FileStatus> fileStatusList = FSUtils.getFileStatusAtLevel(
-        new HoodieLocalEngineContext((Configuration) storage.getConf()), (FileSystem) storage.getFileSystem(),
+        new HoodieLocalEngineContext((Configuration) storage.unwrapConf()), (FileSystem) storage.getFileSystem(),
         new Path(baseUri), 3, 2);
     assertEquals(CollectionUtils.createImmutableSet(
             new Path(baseUri.toString(), ".hoodie/.temp/subdir1/file1.txt"),

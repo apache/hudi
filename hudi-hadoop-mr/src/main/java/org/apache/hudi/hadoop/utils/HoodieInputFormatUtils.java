@@ -377,7 +377,7 @@ public class HoodieInputFormatUtils {
     }
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
     return HoodieTableMetaClient.builder().setConf(
-        (Configuration) storage.getConf()).setBasePath(baseDir.toString()).build();
+        (Configuration) storage.unwrapConf()).setBasePath(baseDir.toString()).build();
   }
 
   public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
