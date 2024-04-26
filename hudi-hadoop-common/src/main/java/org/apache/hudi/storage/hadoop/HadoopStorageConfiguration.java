@@ -54,7 +54,7 @@ public class HadoopStorageConfiguration extends StorageConfiguration<Configurati
   }
 
   public HadoopStorageConfiguration(HadoopStorageConfiguration configuration) {
-    this.configuration = configuration.newCopy();
+    this.configuration = configuration.unwrapCopy();
   }
 
   @Override
@@ -68,7 +68,7 @@ public class HadoopStorageConfiguration extends StorageConfiguration<Configurati
   }
 
   @Override
-  public Configuration newCopy() {
+  public Configuration unwrapCopy() {
     return new Configuration(configuration);
   }
 

@@ -31,19 +31,20 @@ import java.io.Serializable;
  */
 public abstract class StorageConfiguration<T> implements Serializable {
   /**
-   * @return a new {@link StorageConfiguration} instance with a new copy of the configuration.
+   * @return a new {@link StorageConfiguration} instance with a new copy of
+   * the configuration of type {@link T}.
    */
   public abstract StorageConfiguration<T> newInstance();
 
   /**
-   * @return the storage configuration.
+   * @return the underlying configuration of type {@link T}.
    */
   public abstract T unwrap();
 
   /**
-   * @return a new copy of the storage configuration.
+   * @return a new copy of the underlying configuration of type {@link T}.
    */
-  public abstract T newCopy();
+  public abstract T unwrapCopy();
   
   /**
    * Sets the configuration key-value pair.

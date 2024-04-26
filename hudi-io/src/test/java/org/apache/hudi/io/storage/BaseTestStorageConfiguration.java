@@ -70,14 +70,14 @@ public abstract class BaseTestStorageConfiguration<T> {
   protected abstract T getConf(Map<String, String> mapping);
 
   @Test
-  public void testConstructorNewInstanceUnwrapNewCopy() {
+  public void testConstructorNewInstanceUnwrapCopy() {
     T conf = getConf(EMPTY_MAP);
     StorageConfiguration<T> storageConf = getStorageConfiguration(conf);
     StorageConfiguration<T> newStorageConf = storageConf.newInstance();
     assertNotSame(storageConf, newStorageConf);
     assertNotSame(storageConf.unwrap(), newStorageConf.unwrap());
     assertSame(storageConf.unwrap(), storageConf.unwrap());
-    assertNotSame(storageConf.unwrap(), storageConf.newCopy());
+    assertNotSame(storageConf.unwrap(), storageConf.unwrapCopy());
   }
 
   @Test
