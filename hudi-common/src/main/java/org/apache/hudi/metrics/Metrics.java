@@ -23,12 +23,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import com.codahale.metrics.MetricRegistry;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,10 +98,10 @@ public class Metrics {
   private List<MetricsReporter> addAdditionalMetricsExporters(HoodieMetricsConfig metricConfig) {
     List<MetricsReporter> reporterList = new ArrayList<>();
     List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
-    try (FileSystem fs = HadoopFSUtils.getFs(propPathList.get(0), new Configuration())) {
+    try (HoodieStorage storage = HoodieStorageUtils.getStorage(propPathList.get(0), new Configuration())) {
       for (String propPath : propPathList) {
         HoodieMetricsConfig secondarySourceConfig = HoodieMetricsConfig.newBuilder().fromInputStream(
-            fs.open(new Path(propPath))).withPath(metricConfig.getBasePath()).build();
+            storage.open(new StoragePath(propPath))).withPath(metricConfig.getBasePath()).build();
         Option<MetricsReporter> reporter = MetricsReporterFactory.createReporter(secondarySourceConfig, registry);
         if (reporter.isPresent()) {
           reporterList.add(reporter.get());
@@ -192,7 +192,7 @@ public class Metrics {
   private static String getBasePath(HoodieMetricsConfig metricsConfig) {
     String basePath = metricsConfig.getBasePath();
     if (basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH)) {
-      String toRemoveSuffix = Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
+      String toRemoveSuffix = StoragePath.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
       basePath = basePath.substring(0, basePath.length() - toRemoveSuffix.length());
     }
     return basePath;
