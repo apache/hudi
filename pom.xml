@@ -1941,7 +1941,7 @@
             </dependencies>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>2</forkCount>
+              <forkCount>4</forkCount>
               <reuseForks>true</reuseForks>
               <includes>
                 <include>**/*FunctionalTestSuite.java</include>
