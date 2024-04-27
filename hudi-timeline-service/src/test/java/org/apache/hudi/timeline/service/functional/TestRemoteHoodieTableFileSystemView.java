@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TestHoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
@@ -67,11 +68,12 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     FileSystemViewStorageConfig sConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
 
     try {
       server = new TimelineService(localEngineContext, new Configuration(),
-          TimelineService.Config.builder().serverPort(0).build(), HoodieStorageUtils.getStorage(new Configuration()),
+          TimelineService.Config.builder().serverPort(0).build(),
+          HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(new Configuration())),
           FileSystemViewManager.createViewManager(localEngineContext, sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {

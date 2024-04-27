@@ -41,6 +41,7 @@ import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 
@@ -57,7 +58,9 @@ public abstract class HoodieSparkTable<T>
 
   public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
+        HoodieTableMetaClient.builder()
+            .setConf(context.getStorageConf().newInstance())
+            .setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
@@ -106,7 +109,7 @@ public abstract class HoodieSparkTable<T>
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
       HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          context.getHadoopConf().get(), config, failedWritesCleaningPolicy, context,
+          context.getStorageConf(), config, failedWritesCleaningPolicy, context,
           Option.of(triggeringInstantTimestamp));
       try {
         if (isMetadataTableExists || metaClient.getStorage().exists(new StoragePath(
@@ -139,8 +142,8 @@ public abstract class HoodieSparkTable<T>
       if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
         Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
         Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
-                getMetaClient().getTableConfig().getBootstrapBasePath().get(),
-                upsertHandle.getWriterSchema(), getHadoopConf());
+            getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+            upsertHandle.getWriterSchema(), (Configuration) getStorageConf().unwrap());
         upsertHandle.setPartitionFields(partitionFields);
         upsertHandle.setPartitionValues(partitionValues);
       }

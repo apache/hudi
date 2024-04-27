@@ -53,6 +53,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_ENABLED;
@@ -262,7 +263,7 @@ public class HoodieJavaStreamingApp {
         if (timeline.countInstants() >= numCommits) {
           return;
         }
-        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
+        HoodieTableMetaClient metaClient = createMetaClient(fs.getConf(), tablePath);
         System.out.println("Instants :" + metaClient.getActiveTimeline().getInstants());
       } catch (TableNotFoundException te) {
         LOG.info("Got table not found exception. Retrying");

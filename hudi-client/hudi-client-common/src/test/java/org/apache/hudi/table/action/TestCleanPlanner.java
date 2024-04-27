@@ -45,6 +45,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 
@@ -74,7 +76,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TestCleanPlanner {
-  private static final Configuration CONF = new Configuration();
+  private static final StorageConfiguration<Configuration> CONF =
+      HadoopFSUtils.getStorageConf(new Configuration());
   private final HoodieEngineContext context = new HoodieLocalEngineContext(CONF);
 
   private final HoodieTable<?, ?, ?, ?> mockHoodieTable = mock(HoodieTable.class);

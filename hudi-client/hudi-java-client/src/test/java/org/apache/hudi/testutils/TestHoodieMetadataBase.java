@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -95,7 +96,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
                    boolean enableMetrics, boolean validateMetadataPayloadStateConsistency) throws IOException {
     this.tableType = tableType;
     initPath();
-    initFileSystem(basePath, hadoopConf);
+    initFileSystem(basePath, storageConf);
     storage.createDirectory(new StoragePath(basePath));
     initMetaClient(tableType);
     initTestDataGenerator();
@@ -111,7 +112,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
   protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
     this.writeConfig = writeConfig;
     if (enableMetadataTable) {
-      metadataWriter = JavaHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context, Option.empty());
+      metadataWriter = JavaHoodieBackedTableMetadataWriter.create(storageConf, writeConfig, context, Option.empty());
       // reload because table configs could have been updated
       metaClient = HoodieTableMetaClient.reload(metaClient);
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
@@ -123,10 +124,10 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
   @BeforeEach
   protected void initResources() {
     basePath = tempDir.resolve("java_client_tests" + System.currentTimeMillis()).toUri().getPath();
-    hadoopConf = new Configuration();
+    storageConf = HadoopFSUtils.getStorageConf(new Configuration());
     taskContextSupplier = new TestJavaTaskContextSupplier();
-    context = new HoodieJavaEngineContext(hadoopConf, taskContextSupplier);
-    initFileSystem(basePath, hadoopConf);
+    context = new HoodieJavaEngineContext(storageConf, taskContextSupplier);
+    initFileSystem(basePath, storageConf);
     initTestDataGenerator();
   }
 
@@ -317,6 +318,6 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
   }
 
   protected HoodieTableMetaClient createMetaClientForMetadataTable() {
-    return HoodieTestUtils.createMetaClient(hadoopConf, metadataTableBasePath);
+    return HoodieTestUtils.createMetaClient(storageConf, metadataTableBasePath);
   }
 }

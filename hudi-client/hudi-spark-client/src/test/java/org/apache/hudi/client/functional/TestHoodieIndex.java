@@ -125,7 +125,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     initHoodieStorage();
 
     Properties keyGenProps = getPropsForKeyGen(indexType, populateMetaFields);
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, keyGenProps);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, keyGenProps);
     HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(indexType)
         .fromProperties(keyGenProps)
         .withIndexType(indexType);

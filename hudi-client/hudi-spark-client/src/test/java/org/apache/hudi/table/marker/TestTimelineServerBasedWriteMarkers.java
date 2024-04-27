@@ -59,12 +59,12 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     this.jsc = new JavaSparkContext(
         HoodieClientTestUtils.getSparkConfForTest(TestTimelineServerBasedWriteMarkers.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
-    this.storage = HoodieStorageUtils.getStorage(metaClient.getBasePathV2(), metaClient.getHadoopConf());
+    this.storage = HoodieStorageUtils.getStorage(metaClient.getBasePathV2(), metaClient.getStorageConf());
     this.markerFolderPath = new StoragePath(metaClient.getMarkerFolderPath("000"));
 
     FileSystemViewStorageConfig storageConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
 
     try {
       timelineService = new TimelineService(localEngineContext, new Configuration(),

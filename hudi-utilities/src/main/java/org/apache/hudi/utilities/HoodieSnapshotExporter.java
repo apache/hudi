@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -39,6 +38,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
 
@@ -46,6 +46,7 @@ import com.beust.jcommander.IValueValidator;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
@@ -152,7 +153,9 @@ public class HoodieSnapshotExporter {
   }
 
   private Option<String> getLatestCommitTimestamp(FileSystem fs, Config cfg) {
-    final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(cfg.sourceBasePath).build();
+    final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
+        .setBasePath(cfg.sourceBasePath).build();
     Option<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline().getWriteTimeline()
         .filterCompletedInstants().lastInstant();
     return latestCommit.isPresent() ? Option.of(latestCommit.get().getTimestamp()) : Option.empty();
@@ -205,7 +208,7 @@ public class HoodieSnapshotExporter {
     final int parallelism = cfg.parallelism == 0 ? jsc.defaultParallelism() : cfg.parallelism;
     final BaseFileOnlyView fsView = getBaseFileOnlyView(sourceFs, cfg);
     final HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
-    final SerializableConfiguration serConf = context.getHadoopConf();
+    final StorageConfiguration<?> storageConf = context.getStorageConf();
     context.setJobStatus(this.getClass().getSimpleName(), "Exporting as HUDI dataset");
     List<Pair<String, String>> partitionAndFileList = context.flatMap(partitions, partition -> {
       // Only take latest version files <= latestCommit.
@@ -214,7 +217,7 @@ public class HoodieSnapshotExporter {
           .map(f -> Pair.of(partition, f.getPath()))
           .collect(Collectors.toList());
       // also need to copy over partition metadata
-      HoodieStorage storage = HoodieStorageUtils.getStorage(cfg.sourceBasePath, serConf.newCopy());
+      HoodieStorage storage = HoodieStorageUtils.getStorage(cfg.sourceBasePath, storageConf);
       StoragePath partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(storage,
           FSUtils.constructAbsolutePath(cfg.sourceBasePath, partition)).get();
       if (storage.exists(partitionMetaFile)) {
@@ -227,8 +230,8 @@ public class HoodieSnapshotExporter {
       String partition = partitionAndFile.getLeft();
       Path sourceFilePath = new Path(partitionAndFile.getRight());
       Path toPartitionPath = FSUtils.constructAbsolutePathInHadoopPath(cfg.targetOutputPath, partition);
-      FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
-      FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
+      FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, storageConf.newInstance());
+      FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, storageConf.newInstance());
 
       if (!executorOutputFs.exists(toPartitionPath)) {
         executorOutputFs.mkdirs(toPartitionPath);
@@ -262,8 +265,8 @@ public class HoodieSnapshotExporter {
     context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {
       Path targetFilePath =
           new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitFile.getPath().getName());
-      FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
-      FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
+      FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, (Configuration) storageConf.unwrapCopy());
+      FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, (Configuration) storageConf.unwrapCopy());
 
       if (!executorOutputFs.exists(targetFilePath.getParent())) {
         executorOutputFs.mkdirs(targetFilePath.getParent());
@@ -281,7 +284,7 @@ public class HoodieSnapshotExporter {
 
   private BaseFileOnlyView getBaseFileOnlyView(FileSystem sourceFs, Config cfg) {
     HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder()
-        .setConf(sourceFs.getConf())
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(sourceFs.getConf()))
         .setBasePath(cfg.sourceBasePath)
         .build();
     return new HoodieTableFileSystemView(tableMetadata, tableMetadata

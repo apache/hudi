@@ -358,7 +358,8 @@ public class HoodieInputFormatUtils {
    */
   public static HoodieTableMetaClient getTableMetaClientForBasePathUnchecked(Configuration conf, Path partitionPath) throws IOException {
     Path baseDir = partitionPath;
-    HoodieStorage storage = HoodieStorageUtils.getStorage(partitionPath.toString(), conf);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+        partitionPath.toString(), HadoopFSUtils.getStorageConf(conf));
     if (HoodiePartitionMetadata.hasPartitionMetadata(storage, new StoragePath(partitionPath.toUri()))) {
       HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, new StoragePath(partitionPath.toUri()));
       metadata.readFromFS();
@@ -376,8 +377,8 @@ public class HoodieInputFormatUtils {
       }
     }
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
-    return HoodieTableMetaClient.builder().setConf(
-        (Configuration) storage.unwrapConf()).setBasePath(baseDir.toString()).build();
+    return HoodieTableMetaClient.builder()
+        .setConf(storage.getConf().newInstance()).setBasePath(baseDir.toString()).build();
   }
 
   public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
@@ -495,7 +496,7 @@ public class HoodieInputFormatUtils {
     StoragePath dataPath = dataFile.getPathInfo().getPath();
     try {
       if (dataFile.getFileSize() == 0) {
-        HoodieStorage storage = HoodieStorageUtils.getStorage(dataPath, conf);
+        HoodieStorage storage = HoodieStorageUtils.getStorage(dataPath, HadoopFSUtils.getStorageConf(conf));
         LOG.info("Refreshing file status " + dataFile.getPath());
         return new HoodieBaseFile(storage.getPathInfo(dataPath),
             dataFile.getBootstrapBaseFile().orElse(null));
@@ -523,7 +524,8 @@ public class HoodieInputFormatUtils {
     HashMap<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata : metadataList) {
-      fullPathToInfoMap.putAll(metadata.getFullPathToInfo(hadoopConf, basePath.toString()));
+      fullPathToInfoMap.putAll(metadata.getFullPathToInfo(
+          HadoopFSUtils.getStorageConf(hadoopConf), basePath.toString()));
     }
     return new ArrayList<>(fullPathToInfoMap.values());
   }

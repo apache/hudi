@@ -889,7 +889,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   protected void createCompleteFileInMetaPath(boolean shouldLock, HoodieInstant instant, Option<byte[]> content) {
     TimeGenerator timeGenerator = TimeGenerators
-        .getTimeGenerator(metaClient.getTimeGeneratorConfig(), metaClient.getHadoopConf());
+        .getTimeGenerator(metaClient.getTimeGeneratorConfig(), metaClient.getStorageConf());
     timeGenerator.consumeTimestamp(!shouldLock, currentTimeMillis -> {
       String completionTime = HoodieInstantTimeGenerator.formatDate(new Date(currentTimeMillis));
       String fileName = instant.getFileName(completionTime);
@@ -919,8 +919,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     StoragePath srcPath = new StoragePath(metaClient.getMetaPath(), getInstantFileName(instant));
     StoragePath dstPath = new StoragePath(dstDir, getInstantFileName(instant));
     try {
-      HoodieStorage srcStorage = HoodieStorageUtils.getStorage(srcPath, metaClient.getHadoopConf());
-      HoodieStorage dstStorage = HoodieStorageUtils.getStorage(dstPath, metaClient.getHadoopConf());
+      HoodieStorage srcStorage = HoodieStorageUtils.getStorage(srcPath, metaClient.getStorageConf());
+      HoodieStorage dstStorage = HoodieStorageUtils.getStorage(dstPath, metaClient.getStorageConf());
       dstStorage.createDirectory(dstDir);
       FileIOUtils.copy(srcStorage, srcPath, dstStorage, dstPath, false, true);
     } catch (IOException e) {

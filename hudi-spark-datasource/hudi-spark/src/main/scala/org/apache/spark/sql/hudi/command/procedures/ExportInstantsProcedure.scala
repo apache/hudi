@@ -115,7 +115,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
   private def copyArchivedInstants(basePath: String, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
     import scala.collection.JavaConversions._
     var copyCount = 0
-    val storage = HoodieStorageUtils.getStorage(basePath, jsc.hadoopConfiguration())
+    val storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
     for (fs <- statuses) {
       // read the archived file
       val reader = HoodieLogFormat.newReader(
@@ -180,7 +180,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
     var copyCount = 0
     if (instants.nonEmpty) {
       val timeline = metaClient.getActiveTimeline
-      val storage = HoodieStorageUtils.getStorage(metaClient.getBasePath, jsc.hadoopConfiguration())
+      val storage = HoodieStorageUtils.getStorage(metaClient.getBasePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
       for (instant <- instants) {
         val localPath = localFolder + StoragePath.SEPARATOR + instant.getFileName
         val data: Array[Byte] = instant.getAction match {

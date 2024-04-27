@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
 import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
@@ -53,7 +54,6 @@ import io.javalin.Javalin;
 import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.Handler;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -76,7 +76,8 @@ public class RequestHandler {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
   private static final Logger LOG = LoggerFactory.getLogger(RequestHandler.class);
-  private static final TypeReference<List<String>> LIST_TYPE_REFERENCE = new TypeReference<List<String>>() {};
+  private static final TypeReference<List<String>> LIST_TYPE_REFERENCE = new TypeReference<List<String>>() {
+  };
 
   private final TimelineService.Config timelineServiceConfig;
   private final FileSystemViewManager viewManager;
@@ -89,7 +90,7 @@ public class RequestHandler {
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
 
-  public RequestHandler(Javalin app, Configuration conf, TimelineService.Config timelineServiceConfig,
+  public RequestHandler(Javalin app, StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
                         HoodieEngineContext hoodieEngineContext, HoodieStorage storage,
                         FileSystemViewManager viewManager) throws IOException {
     this.timelineServiceConfig = timelineServiceConfig;

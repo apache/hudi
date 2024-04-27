@@ -199,7 +199,8 @@ public class IncrementalInputSplits implements Serializable {
         return Result.EMPTY;
       }
       List<StoragePathInfo> files = WriteProfiles.getFilesFromMetadata(
-          path, metaClient.getHadoopConf(), metadataList, metaClient.getTableType(), false);
+          path, (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap(),
+          metadataList, metaClient.getTableType(), false);
       if (files == null) {
         LOG.warn("Found deleted files in metadata, fall back to full table scan.");
         // fallback to full table scan
@@ -289,7 +290,9 @@ public class IncrementalInputSplits implements Serializable {
 
       return Result.instance(inputSplits, endInstant, offsetToIssue);
     } else {
-      List<MergeOnReadInputSplit> inputSplits = getIncInputSplits(metaClient, metaClient.getHadoopConf(), commitTimeline, queryContext, instantRange.get(), endInstant, cdcEnabled);
+      List<MergeOnReadInputSplit> inputSplits = getIncInputSplits(
+          metaClient, (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap(),
+          commitTimeline, queryContext, instantRange.get(), endInstant, cdcEnabled);
       return Result.instance(inputSplits, endInstant, offsetToIssue);
     }
   }

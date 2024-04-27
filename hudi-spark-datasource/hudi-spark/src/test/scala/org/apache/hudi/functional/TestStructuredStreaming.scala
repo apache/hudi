@@ -33,7 +33,6 @@ import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
@@ -503,10 +502,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       inputDF.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       streamingWrite(inputDF.schema, sourcePath, destPath, opts, id)
     }
-    val metaClient = HoodieTableMetaClient.builder()
-      .setConf(storage.unwrapConf.asInstanceOf[Configuration])
-      .setBasePath(destPath)
-      .setLoadActiveTimelineOnLoad(true).build()
+    val metaClient = HoodieTestUtils.createMetaClient(storage, destPath);
     assertTrue(metaClient.getActiveTimeline.getCommitTimeline.empty())
   }
 }

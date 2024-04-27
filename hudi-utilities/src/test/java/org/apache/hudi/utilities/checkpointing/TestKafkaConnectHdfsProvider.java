@@ -24,6 +24,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -64,7 +65,7 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
     final TypedProperties props = new TypedProperties();
     props.put("hoodie.streamer.checkpoint.provider.path", topicPath.toString());
     final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
-    provider.init(HoodieTestUtils.getDefaultHadoopConf());
+    provider.init((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap());
     assertEquals("topic1,0:300,1:200", provider.getCheckpoint());
   }
 
@@ -85,7 +86,7 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
     final TypedProperties props = new TypedProperties();
     props.put("hoodie.streamer.checkpoint.provider.path", topicPath.toString());
     final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
-    provider.init(HoodieTestUtils.getDefaultHadoopConf());
+    provider.init((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap());
     assertThrows(HoodieException.class, provider::getCheckpoint);
   }
 }

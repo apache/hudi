@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,7 +43,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     initMetaClient();
-    pathFilter = new HoodieROTablePathFilter(metaClient.getHadoopConf());
+    pathFilter = new HoodieROTablePathFilter((Configuration) metaClient.getStorageConf().unwrap());
     testTable = HoodieTestTable.of(metaClient);
   }
 

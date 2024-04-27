@@ -266,7 +266,7 @@ public class StreamerUtil {
           .setCDCEnabled(conf.getBoolean(FlinkOptions.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
           .setTimelineLayoutVersion(1)
-          .initTable(hadoopConf, basePath);
+          .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
       LOG.info("Table initialized under base path {}", basePath);
     } else {
       LOG.info("Table [path={}, name={}] already exists, no need to initialize the table",
@@ -342,7 +342,7 @@ public class StreamerUtil {
   public static HoodieTableMetaClient createMetaClient(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
     return HoodieTableMetaClient.builder()
         .setBasePath(basePath)
-        .setConf(hadoopConf)
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
         .build();
   }
 
@@ -359,7 +359,7 @@ public class StreamerUtil {
   public static HoodieTableMetaClient createMetaClient(Configuration conf, org.apache.hadoop.conf.Configuration hadoopConf) {
     return HoodieTableMetaClient.builder()
         .setBasePath(conf.getString(FlinkOptions.PATH))
-        .setConf(hadoopConf)
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
         .setTimeGeneratorConfig(getTimeGeneratorConfig(conf))
         .build();
   }
@@ -368,7 +368,7 @@ public class StreamerUtil {
    * Returns the table config or empty if the table does not exist.
    */
   public static Option<HoodieTableConfig> getTableConfig(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, hadoopConf);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf));
     StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     try {
       if (storage.exists(new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))) {

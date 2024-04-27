@@ -20,9 +20,10 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -32,19 +33,19 @@ import java.io.IOException;
 
 public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
   @Override
-  protected HoodieFileReader newParquetFileReader(Configuration conf, StoragePath path) {
+  protected HoodieFileReader newParquetFileReader(StorageConfiguration<?> conf, StoragePath path) {
     return new HoodieAvroParquetReader(conf, path);
   }
 
   @Override
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
-                                                Configuration conf,
+                                                StorageConfiguration<?> conf,
                                                 StoragePath path,
                                                 Option<Schema> schemaOption) throws IOException {
     if (isUseNativeHFileReaderEnabled(hoodieConfig)) {
       return new HoodieNativeAvroHFileReader(conf, path, schemaOption);
     }
-    CacheConfig cacheConfig = new CacheConfig(conf);
+    CacheConfig cacheConfig = new CacheConfig((Configuration) conf.unwrap());
     if (schemaOption.isPresent()) {
       return new HoodieHBaseAvroHFileReader(conf, path, cacheConfig, HoodieStorageUtils.getStorage(path, conf), schemaOption);
     }
@@ -53,7 +54,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
 
   @Override
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
-                                                Configuration conf,
+                                                StorageConfiguration<?> conf,
                                                 StoragePath path,
                                                 HoodieStorage storage,
                                                 byte[] content,
@@ -62,12 +63,12 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     if (isUseNativeHFileReaderEnabled(hoodieConfig)) {
       return new HoodieNativeAvroHFileReader(conf, content, schemaOption);
     }
-    CacheConfig cacheConfig = new CacheConfig(conf);
+    CacheConfig cacheConfig = new CacheConfig((Configuration) conf.unwrap());
     return new HoodieHBaseAvroHFileReader(conf, path, cacheConfig, storage, content, schemaOption);
   }
 
   @Override
-  protected HoodieFileReader newOrcFileReader(Configuration conf, StoragePath path) {
+  protected HoodieFileReader newOrcFileReader(StorageConfiguration<?> conf, StoragePath path) {
     return new HoodieAvroOrcReader(conf, path);
   }
 

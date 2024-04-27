@@ -100,7 +100,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     Properties props = getPropertiesForKeyGen(true);
     props.putAll(options);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, props);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ, props);
     config = getConfigBuilder().withProps(props)
         .withAutoCommit(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props)

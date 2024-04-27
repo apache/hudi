@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 
@@ -60,7 +61,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         .fromProperties(props)
         .build();
 
-    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), tableBasePath, metaClientProps);
+    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(
+        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath, metaClientProps);
     client = new SparkRDDWriteClient(context, config);
 
     writeData(false, client.createNewInstantTime(), 100, true);
@@ -96,7 +98,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         .fromProperties(props)
         .build();
 
-    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), tableBasePath, metaClientProps);
+    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(
+        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath, metaClientProps);
     client = new SparkRDDWriteClient(context, config);
 
     writeData(false, client.createNewInstantTime(), 100, true);

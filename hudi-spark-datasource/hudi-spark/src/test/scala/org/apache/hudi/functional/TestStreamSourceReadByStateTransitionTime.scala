@@ -27,7 +27,9 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+
 import org.apache.spark.api.java.JavaRDD
 
 import scala.collection.JavaConversions.asScalaBuffer
@@ -48,7 +50,7 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
           .setTableName(s"test_stream_${tableType.name()}")
           .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
           .setPreCombineField("timestamp")
-          .initTable(spark.sessionState.newHadoopConf(), tablePath)
+          .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
         val writeConfig = HoodieWriteConfig.newBuilder()
           .withEngineType(EngineType.SPARK)

@@ -29,6 +29,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -244,7 +245,8 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
       records.add(new HoodieTestDataGenerator().generateGenericRecord(Long.toString(recordNum), "0", "rider-" + recordNum, "driver-" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
-        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
+        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
+        .withConf((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap()).build()) {
       for (GenericRecord record : records) {
         writer.write(record);
       }
@@ -270,7 +272,8 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
               "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
-        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
+        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
+        .withConf((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap()).build()) {
       for (GenericRecord record : records) {
         writer.write(record);
       }

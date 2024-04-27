@@ -18,16 +18,19 @@
 
 package org.apache.hudi.aws.sync;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieAWSConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.sync.common.model.FieldSchema;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,12 +88,12 @@ public class ITTestGluePartitionPushdown {
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, new Configuration());
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
     fileSystem.mkdirs(new Path(tablePath));
-    Configuration configuration = new Configuration();
+    StorageConfiguration<?> configuration = HadoopFSUtils.getStorageConf(new Configuration());
     HoodieTableMetaClient.withPropertyBuilder()
-            .setTableType(HoodieTableType.COPY_ON_WRITE)
-            .setTableName(TABLE_NAME)
-            .setPayloadClass(HoodieAvroPayload.class)
-            .initTable(configuration, tablePath);
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName(TABLE_NAME)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(configuration, tablePath);
 
     glueSync = new AWSGlueCatalogSyncClient(new HiveSyncConfig(hiveSyncProps));
     glueSync.awsGlue.createDatabase(CreateDatabaseRequest.builder().databaseInput(DatabaseInput.builder().name(DB_NAME).build()).build()).get();

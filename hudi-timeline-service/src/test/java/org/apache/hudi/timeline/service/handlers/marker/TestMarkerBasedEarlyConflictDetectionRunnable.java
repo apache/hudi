@@ -22,9 +22,10 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
 import org.apache.hadoop.conf.Configuration;
@@ -85,11 +86,13 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
   public void testMarkerConflictDetectionRunnable() throws IOException, InterruptedException {
 
     AtomicBoolean hasConflict = new AtomicBoolean(false);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, new Configuration());
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+        basePath, HadoopFSUtils.getStorageConf(new Configuration()));
     MarkerHandler markerHandler = mock(MarkerHandler.class);
     String rootBaseMarkerDir = basePath + "/.hoodie/.temp";
     String partition = "2016";
-    metaClient = HoodieTestUtils.init(new Configuration(), basePath, HoodieTableType.COPY_ON_WRITE);
+    metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), basePath, HoodieTableType.COPY_ON_WRITE);
 
     String oldInstant = "001";
     Set<String> oldMarkers = Stream.of(partition + "/b21adfa2-7013-4452-a565-4cc39fea5b73-0_4-17-21_001.parquet.marker.CREATE",

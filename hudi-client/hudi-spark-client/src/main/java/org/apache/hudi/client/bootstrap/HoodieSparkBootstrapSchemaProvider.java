@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
@@ -90,7 +91,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
   private static Schema getBootstrapSourceSchemaOrc(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
     Reader orcReader = null;
     try {
-      orcReader = OrcFile.createReader(filePath, OrcFile.readerOptions(context.getHadoopConf().get()));
+      orcReader = OrcFile.createReader(filePath, OrcFile.readerOptions((Configuration) context.getStorageConf().unwrap()));
     } catch (IOException e) {
       throw new HoodieException("Could not determine schema from the ORC data files.");
     }

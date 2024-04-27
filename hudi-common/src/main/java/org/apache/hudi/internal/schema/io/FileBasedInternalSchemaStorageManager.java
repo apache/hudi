@@ -31,9 +31,9 @@ import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,10 +57,10 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   public static final String SCHEMA_NAME = ".schema";
   private final StoragePath baseSchemaPath;
-  private final Configuration conf;
+  private final StorageConfiguration<?> conf;
   private HoodieTableMetaClient metaClient;
 
-  public FileBasedInternalSchemaStorageManager(Configuration conf, StoragePath baseTablePath) {
+  public FileBasedInternalSchemaStorageManager(StorageConfiguration<?> conf, StoragePath baseTablePath) {
     StoragePath metaPath = new StoragePath(baseTablePath, ".hoodie");
     this.baseSchemaPath = new StoragePath(metaPath, SCHEMA_NAME);
     this.conf = conf;
@@ -69,7 +69,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public FileBasedInternalSchemaStorageManager(HoodieTableMetaClient metaClient) {
     StoragePath metaPath = new StoragePath(metaClient.getBasePath(), ".hoodie");
     this.baseSchemaPath = new StoragePath(metaPath, SCHEMA_NAME);
-    this.conf = metaClient.getHadoopConf();
+    this.conf = metaClient.getStorageConf();
     this.metaClient = metaClient;
   }
 
@@ -78,7 +78,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     if (metaClient == null) {
       metaClient = HoodieTableMetaClient.builder()
           .setBasePath(baseSchemaPath.getParent().getParent().toString())
-          .setConf(conf)
+          .setConf(conf.newInstance())
           .setTimeGeneratorConfig(
               HoodieTimeGeneratorConfig.defaultConfig(baseSchemaPath.getParent().getParent().toString()))
           .build();

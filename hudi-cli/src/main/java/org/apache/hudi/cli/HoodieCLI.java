@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -39,7 +40,7 @@ import java.io.IOException;
  */
 public class HoodieCLI {
 
-  public static Configuration conf;
+  public static StorageConfiguration<?> conf;
   public static ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
   public static HoodieTimeGeneratorConfig timeGeneratorConfig;
   public static HoodieStorage storage;
@@ -80,7 +81,8 @@ public class HoodieCLI {
 
   public static boolean initConf() {
     if (HoodieCLI.conf == null) {
-      HoodieCLI.conf = HadoopFSUtils.prepareHadoopConf(new Configuration());
+      HoodieCLI.conf = HadoopFSUtils.getStorageConf(
+          HadoopFSUtils.prepareHadoopConf(new Configuration()));
       return true;
     }
     return false;
@@ -90,12 +92,13 @@ public class HoodieCLI {
     if (storage == null || force) {
       storage = (tableMetadata != null)
           ? tableMetadata.getStorage()
-          : HoodieStorageUtils.getStorage(FileSystem.get(conf));
+          : HoodieStorageUtils.getStorage(FileSystem.get((Configuration) conf.unwrap()));
     }
   }
 
   public static void refreshTableMetadata() {
-    setTableMetaClient(HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(basePath).setLoadActiveTimelineOnLoad(false)
+    setTableMetaClient(HoodieTableMetaClient.builder()
+        .setConf(HoodieCLI.conf.newInstance()).setBasePath(basePath).setLoadActiveTimelineOnLoad(false)
         .setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
         .setTimeGeneratorConfig(timeGeneratorConfig == null ? HoodieTimeGeneratorConfig.defaultConfig(basePath) : timeGeneratorConfig)
         .setLayoutVersion(Option.of(layoutVersion)).build());

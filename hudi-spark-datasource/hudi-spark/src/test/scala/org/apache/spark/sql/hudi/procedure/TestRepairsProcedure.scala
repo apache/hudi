@@ -37,6 +37,7 @@ import java.io.IOException
 import java.net.URL
 import java.nio.file.{Files, Paths}
 import java.util.Properties
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
 import scala.jdk.CollectionConverters.{asScalaSetConverter, iterableAsScalaIterableConverter}
 
@@ -200,7 +201,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       for (i <- 100 until 104) {
         val timestamp = String.valueOf(i)
         // Write corrupted requested Clean File
-        createEmptyCleanRequestedFile(tablePath, timestamp, metaClient.getHadoopConf)
+        createEmptyCleanRequestedFile(tablePath, timestamp, metaClient.getStorageConf.unwrap().asInstanceOf[Configuration])
       }
 
       // reload meta client

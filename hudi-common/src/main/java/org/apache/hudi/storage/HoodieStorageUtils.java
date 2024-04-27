@@ -29,7 +29,7 @@ import org.apache.hadoop.fs.FileSystem;
 public class HoodieStorageUtils {
   public static final String DEFAULT_URI = "file:///";
 
-  public static HoodieStorage getStorage(Configuration conf) {
+  public static HoodieStorage getStorage(StorageConfiguration<?> conf) {
     return getStorage(DEFAULT_URI, conf);
   }
 
@@ -37,12 +37,12 @@ public class HoodieStorageUtils {
     return new HoodieHadoopStorage(fs);
   }
 
-  public static HoodieStorage getStorage(String basePath, Configuration conf) {
+  public static HoodieStorage getStorage(String basePath, StorageConfiguration<?> conf) {
     return getStorage(HadoopFSUtils.getFs(basePath, conf));
   }
 
-  public static HoodieStorage getStorage(StoragePath path, Configuration conf) {
-    return getStorage(HadoopFSUtils.getFs(path, conf));
+  public static HoodieStorage getStorage(StoragePath path, StorageConfiguration<?> conf) {
+    return getStorage(HadoopFSUtils.getFs(path, (Configuration) conf.unwrap()));
   }
 
   public static HoodieStorage getRawStorage(HoodieStorage storage) {

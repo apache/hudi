@@ -46,6 +46,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -612,7 +613,7 @@ public class UtilHelpers {
   public static HoodieTableMetaClient createMetaClient(
       JavaSparkContext jsc, String basePath, boolean shouldLoadActiveTimelineOnLoad) {
     return HoodieTableMetaClient.builder()
-        .setConf(jsc.hadoopConfiguration())
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
         .setBasePath(basePath)
         .setLoadActiveTimelineOnLoad(shouldLoadActiveTimelineOnLoad)
         .build();

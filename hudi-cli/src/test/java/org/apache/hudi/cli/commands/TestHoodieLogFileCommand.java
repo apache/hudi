@@ -96,7 +96,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
 
   @BeforeEach
   public void init() throws IOException, InterruptedException, URISyntaxException {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
     // Create table and connect
     String tableName = tableName();
@@ -107,7 +107,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
     Files.createDirectories(Paths.get(partitionPath));
-    storage = HoodieStorageUtils.getStorage(tablePath, hadoopConf());
+    storage = HoodieStorageUtils.getStorage(tablePath, storageConf());
 
     try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
         .onParentPath(new StoragePath(partitionPath))

@@ -32,6 +32,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -67,16 +68,16 @@ public class HoodieJavaWriteClientExample {
     // Generator of some records to be loaded in.
     HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
 
-    Configuration hadoopConf = new Configuration();
+    StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(new Configuration());
     // initialize the table, if not done already
     Path path = new Path(tablePath);
-    FileSystem fs = HadoopFSUtils.getFs(tablePath, hadoopConf);
+    FileSystem fs = HadoopFSUtils.getFs(tablePath, storageConf);
     if (!fs.exists(path)) {
       HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(tableType)
         .setTableName(tableName)
           .setPayloadClassName(HoodieAvroPayload.class.getName())
-          .initTable(hadoopConf, tablePath);
+          .initTable(storageConf, tablePath);
     }
 
     // Create the write client to write some records in
@@ -87,7 +88,7 @@ public class HoodieJavaWriteClientExample {
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(20, 30).build()).build();
 
     try (HoodieJavaWriteClient<HoodieAvroPayload> client =
-             new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(hadoopConf), cfg)) {
+             new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), cfg)) {
 
       // inserts
       String newCommitTime = client.startCommit();

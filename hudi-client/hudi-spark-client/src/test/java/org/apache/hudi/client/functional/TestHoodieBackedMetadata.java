@@ -30,7 +30,6 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -822,7 +821,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-            table.getConfig(), context.getHadoopConf().get(), new StoragePath(baseFile.getPath()));
+            table.getConfig(), context.getStorageConf(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (populateMetaFields) {
@@ -1418,7 +1417,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-            table.getConfig(), context.getHadoopConf().get(), new StoragePath(baseFile.getPath()));
+            table.getConfig(), context.getStorageConf(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (enableMetaFields) {
@@ -2001,7 +2000,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // ensure that 000003 is after rollback of the partially failed 2nd commit.
     HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(
-        metaClient.getHadoopConf(), metaClient.getMetaPath() + "/metadata/");
+        metaClient.getStorageConf(), metaClient.getMetaPath() + "/metadata/");
     HoodieInstant rollbackInstant =
         metadataMetaClient.getActiveTimeline().getRollbackTimeline().getInstants().get(0);
 
@@ -3385,7 +3384,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(client);
 
     // Execute compaction on metadata table.
-    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, client.getConfig(), context);
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, client.getConfig(), context);
     Properties metadataProps = ((SparkHoodieBackedTableMetadataWriter) metadataWriter).getWriteConfig().getProps();
     metadataProps.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3");
     HoodieWriteConfig metadataWriteConfig = HoodieWriteConfig.newBuilder()
@@ -3526,8 +3525,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     // Partitions should match
-    FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(),
-        new SerializableConfiguration(hadoopConf), config.getBasePath());
+    FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(
+        engineContext, metaClient.getTableConfig(), storageConf, config.getBasePath());
     List<String> fsPartitions = fsBackedTableMetadata.getAllPartitionPaths();
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
 
@@ -3743,7 +3742,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> metadataWriter(SparkRDDWriteClient client) {
     return (HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>>) SparkHoodieBackedTableMetadataWriter
-        .create(hadoopConf, client.getConfig(), new HoodieSparkEngineContext(jsc));
+        .create(storageConf, client.getConfig(), new HoodieSparkEngineContext(jsc));
   }
 
   private HoodieTableMetadata metadata(SparkRDDWriteClient client) {

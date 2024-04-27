@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -28,11 +27,13 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
@@ -86,9 +87,9 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   Map<String, HoodieTableMetaClient> metaClientCache;
 
   /**
-   * Hadoop configurations for the FileSystem.
+   * Storage configurations for read.
    */
-  private SerializableConfiguration conf;
+  private StorageConfiguration<?> conf;
 
   private transient HoodieLocalEngineContext engineContext;
 
@@ -102,7 +103,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   public HoodieROTablePathFilter(Configuration conf) {
     this.hoodiePathCache = new ConcurrentHashMap<>();
     this.nonHoodiePathCache = new HashSet<>();
-    this.conf = new SerializableConfiguration(conf);
+    this.conf = HadoopFSUtils.getStorageConfWithCopy(conf);
     this.metaClientCache = new HashMap<>();
   }
 
@@ -123,7 +124,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   public boolean accept(Path path) {
 
     if (engineContext == null) {
-      this.engineContext = new HoodieLocalEngineContext(this.conf.get());
+      this.engineContext = new HoodieLocalEngineContext(this.conf);
     }
 
     if (LOG.isDebugEnabled()) {
@@ -133,7 +134,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
     try {
       if (storage == null) {
         storage =
-            HoodieStorageUtils.getStorage(new StoragePath(path.toUri()), conf.get());
+            HoodieStorageUtils.getStorage(new StoragePath(path.toUri()), conf);
       }
 
       // Assumes path is a file
@@ -186,8 +187,9 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
         try {
           HoodieTableMetaClient metaClient = metaClientCache.get(baseDir.toString());
           if (null == metaClient) {
-            metaClient = HoodieTableMetaClient.builder().setConf(
-                (Configuration) storage.unwrapConf()).setBasePath(baseDir.toString()).setLoadActiveTimelineOnLoad(true).build();
+            metaClient = HoodieTableMetaClient.builder()
+                .setConf(storage.getConf().newInstance()).setBasePath(baseDir.toString())
+                .setLoadActiveTimelineOnLoad(true).build();
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
@@ -254,11 +256,11 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
   @Override
   public void setConf(Configuration conf) {
-    this.conf = new SerializableConfiguration(conf);
+    this.conf = HadoopFSUtils.getStorageConfWithCopy(conf);
   }
 
   @Override
   public Configuration getConf() {
-    return conf.get();
+    return (Configuration) conf.unwrap();
   }
 }

@@ -20,8 +20,8 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
-import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -270,7 +270,7 @@ public class LSMTimelineWriter {
       for (String fileName : candidateFiles) {
         // Read the input source file
         try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-            .getFileReader(config, metaClient.getHadoopConf(), new StoragePath(metaClient.getArchivePath(), fileName))) {
+            .getFileReader(config, metaClient.getStorageConf(), new StoragePath(metaClient.getArchivePath(), fileName))) {
           // Read the meta entry
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), HoodieLSMTimelineInstant.getClassSchema())) {
             while (iterator.hasNext()) {
@@ -381,7 +381,7 @@ public class LSMTimelineWriter {
 
   private HoodieFileWriter openWriter(StoragePath filePath) {
     try {
-      return HoodieFileWriterFactory.getFileWriter("", filePath, metaClient.getHadoopConf(), getOrCreateWriterConfig(),
+      return HoodieFileWriterFactory.getFileWriter("", filePath, metaClient.getStorageConf(), getOrCreateWriterConfig(),
           HoodieLSMTimelineInstant.getClassSchema(), taskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize archiving writer", e);

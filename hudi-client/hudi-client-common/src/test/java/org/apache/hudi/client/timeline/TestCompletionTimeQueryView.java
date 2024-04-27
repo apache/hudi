@@ -38,7 +38,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -67,7 +66,8 @@ public class TestCompletionTimeQueryView {
   void testReadCompletionTime() throws Exception {
     String tableName = "testTable";
     String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
       // query completion time from LSM timeline
@@ -96,7 +96,8 @@ public class TestCompletionTimeQueryView {
   void testReadStartTime() throws Exception {
     String tableName = "testTable";
     String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
       // query start time from LSM timeline

@@ -60,6 +60,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
@@ -70,6 +71,7 @@ import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieJavaTable;
@@ -118,7 +120,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaClientTestHarness.class);
 
-  protected Configuration hadoopConf;
+  protected StorageConfiguration<Configuration> storageConf;
   protected HoodieJavaEngineContext context;
   protected TestJavaTaskContextSupplier taskContextSupplier;
   protected HoodieStorage storage;
@@ -134,10 +136,10 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   @BeforeEach
   protected void initResources() throws IOException {
     basePath = tempDir.resolve("java_client_tests" + System.currentTimeMillis()).toAbsolutePath().toUri().getPath();
-    hadoopConf = new Configuration(false);
+    storageConf = HadoopFSUtils.getStorageConf(new Configuration(false));
     taskContextSupplier = new TestJavaTaskContextSupplier();
-    context = new HoodieJavaEngineContext(hadoopConf, taskContextSupplier);
-    initFileSystem(basePath, hadoopConf);
+    context = new HoodieJavaEngineContext(storageConf, taskContextSupplier);
+    initFileSystem(basePath, storageConf);
     initTestDataGenerator();
     initMetaClient();
   }
@@ -185,7 +187,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     }
   }
 
-  protected void initFileSystem(String basePath, Configuration hadoopConf) {
+  protected void initFileSystem(String basePath, StorageConfiguration<?> hadoopConf) {
     if (basePath == null) {
       throw new IllegalStateException("The base path has not been initialized.");
     }
@@ -217,7 +219,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       throw new IllegalStateException("The base path has not been initialized.");
     }
 
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, tableType);
   }
 
   protected void cleanupClients() {
@@ -255,7 +257,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       return;
     }
     // Open up the metadata table again, for syncing
-    try (HoodieTableMetadataWriter writer = JavaHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context, Option.empty())) {
+    try (HoodieTableMetadataWriter writer = JavaHoodieBackedTableMetadataWriter.create(storageConf, writeConfig, context, Option.empty())) {
       LOG.info("Successfully synced to metadata table");
     } catch (Exception e) {
       throw new HoodieMetadataException("Error syncing to metadata table.", e);
@@ -284,7 +286,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     assertEquals(inflightCommits, testTable.inflightCommits());
 
     HoodieTimer timer = HoodieTimer.start();
-    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     // Partitions should match
     List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
@@ -383,7 +385,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   protected HoodieBackedTableMetadataWriter metadataWriter(HoodieWriteConfig clientConfig) {
     return (HoodieBackedTableMetadataWriter) JavaHoodieBackedTableMetadataWriter
-        .create(hadoopConf, clientConfig, new HoodieJavaEngineContext(hadoopConf), Option.empty());
+        .create(storageConf, clientConfig, new HoodieJavaEngineContext(storageConf), Option.empty());
   }
 
   private void runFullValidation(HoodieWriteConfig writeConfig,
@@ -396,7 +398,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       HoodieWriteConfig metadataWriteConfig = metadataWriter.getWriteConfig();
       assertFalse(metadataWriteConfig.isMetadataTableEnabled(), "No metadata table for metadata table");
 
-      HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(hadoopConf, metadataTableBasePath);
+      HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(storageConf, metadataTableBasePath);
 
       // Metadata table is MOR
       assertEquals(metadataMetaClient.getTableType(), HoodieTableType.MERGE_ON_READ, "Metadata Table should be MOR");
@@ -744,7 +746,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
                                                                               HoodieWriteConfig writeConfig,
                                                                               Function2<List<HoodieRecord>, String, Integer> wrapped) {
     if (isPreppedAPI) {
-      return wrapRecordsGenFunctionForPreppedCalls(basePath, hadoopConf, context, writeConfig, wrapped);
+      return wrapRecordsGenFunctionForPreppedCalls(basePath, storageConf, context, writeConfig, wrapped);
     } else {
       return wrapped;
     }
@@ -761,7 +763,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   public Function3<List<HoodieRecord>, String, Integer, String> generateWrapRecordsForPartitionFn(boolean isPreppedAPI,
                                                                                                   HoodieWriteConfig writeConfig, Function3<List<HoodieRecord>, String, Integer, String> wrapped) {
     if (isPreppedAPI) {
-      return wrapPartitionRecordsGenFunctionForPreppedCalls(basePath, hadoopConf, context, writeConfig, wrapped);
+      return wrapPartitionRecordsGenFunctionForPreppedCalls(basePath, storageConf, context, writeConfig, wrapped);
     } else {
       return wrapped;
     }
@@ -778,14 +780,14 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
    */
   public static Function2<List<HoodieRecord>, String, Integer> wrapRecordsGenFunctionForPreppedCalls(
       final String basePath,
-      final Configuration hadoopConf,
+      final StorageConfiguration<Configuration> storageConf,
       final HoodieEngineContext context,
       final HoodieWriteConfig writeConfig,
       final Function2<List<HoodieRecord>, String, Integer> recordsGenFunction) {
     return (commit, numRecords) -> {
       final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords);
-      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(hadoopConf, basePath);
+      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
       HoodieJavaTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
       return tagLocation(index, context, records, table);
     };
@@ -802,14 +804,14 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
    */
   public static Function3<List<HoodieRecord>, String, Integer, String> wrapPartitionRecordsGenFunctionForPreppedCalls(
       final String basePath,
-      final Configuration hadoopConf,
+      final StorageConfiguration<Configuration> storageConf,
       final HoodieEngineContext context,
       final HoodieWriteConfig writeConfig,
       final Function3<List<HoodieRecord>, String, Integer, String> recordsGenFunction) {
     return (commit, numRecords, partition) -> {
       final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords, partition);
-      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(hadoopConf, basePath);
+      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
       HoodieJavaTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
       return tagLocation(index, context, records, table);
     };
@@ -826,7 +828,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   public Function<Integer, List<HoodieKey>> generateWrapDeleteKeysFn(boolean isPreppedAPI,
                                                                      HoodieWriteConfig writeConfig, Function<Integer, List<HoodieKey>> wrapped) {
     if (isPreppedAPI) {
-      return wrapDeleteKeysGenFunctionForPreppedCalls(basePath, hadoopConf, context, writeConfig, wrapped);
+      return wrapDeleteKeysGenFunctionForPreppedCalls(basePath, storageConf, context, writeConfig, wrapped);
     } else {
       return wrapped;
     }
@@ -843,14 +845,14 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
    */
   public static Function<Integer, List<HoodieKey>> wrapDeleteKeysGenFunctionForPreppedCalls(
       final String basePath,
-      final Configuration hadoopConf,
+      final StorageConfiguration<Configuration> storageConf,
       final HoodieEngineContext context,
       final HoodieWriteConfig writeConfig,
       final Function<Integer, List<HoodieKey>> keyGenFunction) {
     return (numRecords) -> {
       final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
-      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(hadoopConf, basePath);
+      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
       HoodieTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
       List<HoodieRecord> recordsToDelete = records.stream()
           .map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
@@ -911,7 +913,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
       return paths.values().stream().flatMap(path ->
-              BaseFileUtils.getInstance(path).readAvroRecords(context.getHadoopConf().get(), new StoragePath(path)).stream())
+              BaseFileUtils.getInstance(path).readAvroRecords(context.getStorageConf(), new StoragePath(path)).stream())
           .filter(record -> {
             if (filterByCommitTime) {
               Object commitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
@@ -941,7 +943,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, storage, paths);
       return latestFiles.stream().mapToLong(baseFile ->
               BaseFileUtils.getInstance(baseFile.getPath())
-                  .readAvroRecords(context.getHadoopConf().get(), new StoragePath(baseFile.getPath())).size())
+                  .readAvroRecords(context.getStorageConf(), new StoragePath(baseFile.getPath())).size())
           .sum();
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie table as a dataframe", e);
@@ -952,7 +954,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
                                                         String... paths) {
     List<HoodieBaseFile> latestFiles = new ArrayList<>();
     try {
-      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient((Configuration) storage.unwrapConf(), basePath);
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, basePath);
       for (String path : paths) {
         TableFileSystemView.BaseFileOnlyView fileSystemView =
             new HoodieTableFileSystemView(metaClient,
@@ -978,7 +980,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
       String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
       if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        return Arrays.stream(paths).flatMap(path -> BaseFileUtils.getInstance(path).readAvroRecords(context.getHadoopConf().get(), new StoragePath(path)).stream())
+        return Arrays.stream(paths).flatMap(path -> BaseFileUtils.getInstance(path).readAvroRecords(context.getStorageConf(), new StoragePath(path)).stream())
             .filter(record -> {
               if (lastCommitTimeOpt.isPresent()) {
                 Object commitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
@@ -988,7 +990,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
               }
             }).count();
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
-        Stream<GenericRecord> genericRecordStream = readHFile(context.getHadoopConf().get(), paths);
+        Stream<GenericRecord> genericRecordStream = readHFile((Configuration) context.getStorageConf().unwrap(), paths);
         if (lastCommitTimeOpt.isPresent()) {
           return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
                   gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
@@ -1030,6 +1032,6 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   }
 
   protected HoodieTableMetaClient createMetaClient() {
-    return HoodieTestUtils.createMetaClient(hadoopConf, basePath);
+    return HoodieTestUtils.createMetaClient(storageConf, basePath);
   }
 }

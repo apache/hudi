@@ -27,6 +27,7 @@ import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -68,7 +69,7 @@ public class HoodieInternalRowFileWriterFactory {
   )
       throws IOException {
     HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport
-        .getHoodieRowParquetWriteSupport(table.getHadoopConf(), structType, bloomFilterOpt, writeConfig);
+        .getHoodieRowParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), structType, bloomFilterOpt, writeConfig);
 
     return new HoodieInternalRowParquetWriter(
         path,

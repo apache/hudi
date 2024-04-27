@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.util.CloseableInternalRowIterator
 
@@ -94,7 +95,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
     // Prepare the file and Parquet file reader.
     _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
     val metaClient = getHoodieMetaClient(
-      _spark.sparkContext.hadoopConfiguration, basePath)
+      HadoopFSUtils.getStorageConfWithCopy(_spark.sparkContext.hadoopConfiguration), basePath)
     val fileReader = new ParquetFileFormat().buildReaderWithPartitionValues(
       _spark,
       dataSchema,

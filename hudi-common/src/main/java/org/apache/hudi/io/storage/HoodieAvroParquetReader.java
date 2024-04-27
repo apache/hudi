@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -54,14 +55,14 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
   private final StoragePath path;
-  private final Configuration conf;
+  private final StorageConfiguration<?> conf;
   private final BaseFileUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
-  public HoodieAvroParquetReader(Configuration configuration, StoragePath path) {
+  public HoodieAvroParquetReader(StorageConfiguration<?> storageConf, StoragePath path) {
     // We have to clone the Hadoop Config as it might be subsequently modified
     // by the Reader (for proper config propagation to Parquet components)
-    this.conf = tryOverrideDefaultConfigs(new Configuration(configuration));
+    this.conf = tryOverrideDefaultConfigs(storageConf.newInstance());
     this.path = path;
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
   }
@@ -115,7 +116,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     return parquetUtils.getRowCount(conf, path);
   }
 
-  private static Configuration tryOverrideDefaultConfigs(Configuration conf) {
+  private static StorageConfiguration<?> tryOverrideDefaultConfigs(StorageConfiguration<?> conf) {
     // NOTE: Parquet uses elaborate encoding of the arrays/lists with optional types,
     //       following structure will be representing such list in Parquet:
     //
@@ -141,15 +142,15 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     //          explicitly set in the Hadoop Config
     //          - In case it's not, we override the default value from "true" to "false"
     //
-    if (conf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS) == null) {
-      conf.set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS,
-          "false", "Overriding default treatment of repeated groups in Parquet");
+    if (conf.getString(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS).isEmpty()) {
+      // Overriding default treatment of repeated groups in Parquet
+      conf.set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, "false");
     }
 
-    if (conf.get(ParquetInputFormat.STRICT_TYPE_CHECKING) == null) {
-      conf.set(ParquetInputFormat.STRICT_TYPE_CHECKING, "false",
-          "Overriding default setting of whether type-checking is strict in Parquet reader, "
-              + "to enable type promotions (in schema evolution)");
+    if (conf.getString(ParquetInputFormat.STRICT_TYPE_CHECKING).isEmpty()) {
+      // Overriding default setting of whether type-checking is strict in Parquet reader,
+      // to enable type promotions (in schema evolution)
+      conf.set(ParquetInputFormat.STRICT_TYPE_CHECKING, "false");
     }
 
     return conf;
@@ -159,15 +160,16 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     // NOTE: We have to set both Avro read-schema and projection schema to make
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
+    Configuration hadoopConf = (Configuration) conf.unwrap();
     if (!requestedSchema.isPresent()) {
-      AvroReadSupport.setAvroReadSchema(conf, schema);
-      AvroReadSupport.setRequestedProjection(conf, schema);
+      AvroReadSupport.setAvroReadSchema(hadoopConf, schema);
+      AvroReadSupport.setRequestedProjection(hadoopConf, schema);
     } else {
-      AvroReadSupport.setAvroReadSchema(conf, requestedSchema.get());
-      AvroReadSupport.setRequestedProjection(conf, requestedSchema.get());
+      AvroReadSupport.setAvroReadSchema(hadoopConf, requestedSchema.get());
+      AvroReadSupport.setRequestedProjection(hadoopConf, requestedSchema.get());
     }
     ParquetReader<IndexedRecord> reader =
-        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(conf).build();
+        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(hadoopConf).build();
     ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;

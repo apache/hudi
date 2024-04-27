@@ -32,6 +32,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
@@ -54,7 +55,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
 
   protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkClientTestHarness.class);
-  protected Configuration hadoopConf;
+  protected StorageConfiguration<Configuration> storageConf;
   protected FileSystem fs;
   protected HoodieFlinkEngineContext context;
   protected ExecutorService executorService;
@@ -64,12 +65,12 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
   protected final FlinkTaskContextSupplier supplier = new FlinkTaskContextSupplier(null);
 
   protected void initFileSystem() {
-    hadoopConf = new Configuration();
-    initFileSystemWithConfiguration(hadoopConf);
+    storageConf = (StorageConfiguration<Configuration>) HoodieTestUtils.getDefaultStorageConf();
+    initFileSystemWithConfiguration(storageConf);
     context = new HoodieFlinkEngineContext(supplier);
   }
 
-  private void initFileSystemWithConfiguration(Configuration configuration) {
+  private void initFileSystemWithConfiguration(StorageConfiguration<Configuration> configuration) {
     checkState(basePath != null);
     fs = HadoopFSUtils.getFs(basePath, configuration);
     if (fs instanceof LocalFileSystem) {
@@ -93,7 +94,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
 
   protected void initMetaClient(HoodieTableType tableType) throws IOException {
     checkState(basePath != null);
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, tableType);
   }
 
   protected List<HoodieRecord> tagLocation(

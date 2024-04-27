@@ -67,8 +67,8 @@ public class HadoopFSUtils {
     return getStorageConf(conf, false);
   }
 
-  public static StorageConfiguration<Configuration> getStorageConf(Configuration conf, boolean copy) {
-    return new HadoopStorageConfiguration(conf, copy);
+  public static StorageConfiguration<Configuration> getStorageConfWithCopy(Configuration conf) {
+    return getStorageConf(conf, true);
   }
 
   public static <T> FileSystem getFs(String pathStr, StorageConfiguration<T> storageConf) {
@@ -112,14 +112,14 @@ public class HadoopFSUtils {
   }
 
   public static HoodieStorage getStorageWithWrapperFS(StoragePath path,
-                                                      Configuration conf,
+                                                      StorageConfiguration<?> conf,
                                                       boolean enableRetry,
                                                       long maxRetryIntervalMs,
                                                       int maxRetryNumbers,
                                                       long initialRetryIntervalMs,
                                                       String retryExceptions,
                                                       ConsistencyGuard consistencyGuard) {
-    FileSystem fileSystem = getFs(path, new Configuration(conf));
+    FileSystem fileSystem = getFs(path, (Configuration) conf.unwrapCopy());
 
     if (enableRetry) {
       fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
@@ -270,5 +270,9 @@ public class HadoopFSUtils {
    */
   public static boolean isCHDFileSystem(FileSystem fs) {
     return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
+  }
+
+  private static StorageConfiguration<Configuration> getStorageConf(Configuration conf, boolean copy) {
+    return new HadoopStorageConfiguration(conf, copy);
   }
 }

@@ -219,7 +219,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         List<String> inputPaths = tableView.getLatestBaseFiles()
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
-        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
+        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
             basePath());
         assertEquals(200, recordsRead.size());
 
@@ -241,7 +241,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
         recordsRead =
-            HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
+            HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
                 basePath());
         assertEquals(200, recordsRead.size());
       }
@@ -260,7 +260,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         List<String> inputPaths = tableView.getLatestBaseFiles()
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
-        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
+        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
             basePath());
         assertEquals(200, recordsRead.size());
 
@@ -290,7 +290,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
         recordsRead =
-            HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
+            HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
                 basePath());
         // check that the number of records read is still correct after rollback operation
         assertEquals(200, recordsRead.size());
@@ -413,7 +413,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         List<String> dataFiles = tableView.getLatestBaseFiles()
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
-        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), dataFiles,
+        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), dataFiles,
             basePath());
         assertEquals(200, recordsRead.size());
 
@@ -694,7 +694,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         .map(hf -> new Path(hf.getPath()).getParent().toString())
         .collect(Collectors.toList());
     List<GenericRecord> recordsRead =
-        HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
+        HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
             basePath());
     assertRecords(expectedRecords, recordsRead);
   }

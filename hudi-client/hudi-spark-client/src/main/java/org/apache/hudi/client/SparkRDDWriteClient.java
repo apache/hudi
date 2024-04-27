@@ -290,8 +290,8 @@ public class SparkRDDWriteClient<T> extends
       return;
     }
 
-    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
-        context, inFlightInstantTimestamp)) {
+    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(
+        context.getStorageConf(), config, context, inFlightInstantTimestamp)) {
       if (writer.isInitialized()) {
         writer.performTableServices(inFlightInstantTimestamp);
       }

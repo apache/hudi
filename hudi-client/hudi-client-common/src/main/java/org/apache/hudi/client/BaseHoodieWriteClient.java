@@ -63,6 +63,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
@@ -699,7 +700,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         // or before the oldest compaction on MDT.
         // We cannot restore to before the oldest compaction on MDT as we don't have the basefiles before that time.
         HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-            .setConf(hadoopConf)
+            .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
             .setBasePath(getMetadataTableBasePath(config.getBasePath())).build();
         Option<HoodieInstant> oldestMdtCompaction = mdtMetaClient.getCommitTimeline().filterCompletedInstants().firstInstant();
         boolean deleteMDT = false;
@@ -1091,7 +1092,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void commitLogCompaction(String logCompactionInstantTime, HoodieCommitMetadata metadata,
                                   Option<Map<String, String>> extraMetadata) {
-    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    HoodieTable table = createTable(config, (Configuration) context.getStorageConf().unwrap());
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
     completeLogCompaction(metadata, table, logCompactionInstantTime);
   }
@@ -1110,7 +1111,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
-    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    HoodieTable table = createTable(config, (Configuration) context.getStorageConf().unwrap());
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
     return tableServiceClient.compact(compactionInstantTime, shouldComplete);
   }
@@ -1131,7 +1132,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
-    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    HoodieTable table = createTable(config, (Configuration) context.getStorageConf().unwrap());
     preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
     return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
   }
@@ -1169,13 +1170,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of Write Status
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete) {
-    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    HoodieTable table = createTable(config, (Configuration) context.getStorageConf().unwrap());
     preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
     return tableServiceClient.cluster(clusteringInstant, shouldComplete);
   }
 
   public boolean purgePendingClustering(String clusteringInstant) {
-    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    HoodieTable table = createTable(config, (Configuration) context.getStorageConf().unwrap());
     preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
     return tableServiceClient.purgePendingClustering(clusteringInstant);
   }

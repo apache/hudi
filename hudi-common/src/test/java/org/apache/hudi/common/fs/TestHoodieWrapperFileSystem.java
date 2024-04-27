@@ -56,7 +56,7 @@ class TestHoodieWrapperFileSystem {
     if (shouldUseExternalHdfs()) {
       fs = useExternalHdfs();
     } else {
-      hdfsTestService = new HdfsTestService(HoodieTestUtils.getDefaultHadoopConf());
+      hdfsTestService = new HdfsTestService((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap());
       dfsCluster = hdfsTestService.start(true);
       fs = dfsCluster.getFileSystem();
     }

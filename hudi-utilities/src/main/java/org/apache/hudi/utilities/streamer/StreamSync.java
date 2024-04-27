@@ -337,7 +337,7 @@ public class StreamSync implements Serializable, Closeable {
     if (storage.exists(new StoragePath(cfg.targetBasePath))) {
       try {
         HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-            .setConf(conf)
+            .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
             .setBasePath(cfg.targetBasePath)
             .setPayloadClassName(cfg.payloadClassName)
             .setRecordMergerStrategy(
@@ -372,7 +372,8 @@ public class StreamSync implements Serializable, Closeable {
             LOG.warn("Base path exists, but table is not fully initialized. Re-initializing again");
             initializeEmptyTable();
             // reload the timeline from metaClient and validate that its empty table. If there are any instants found, then we should fail the pipeline, bcoz hoodie.properties got deleted by mistake.
-            HoodieTableMetaClient metaClientToValidate = HoodieTableMetaClient.builder().setConf(conf).setBasePath(cfg.targetBasePath).build();
+            HoodieTableMetaClient metaClientToValidate = HoodieTableMetaClient.builder()
+                .setConf(HadoopFSUtils.getStorageConfWithCopy(conf)).setBasePath(cfg.targetBasePath).build();
             if (metaClientToValidate.reloadActiveTimeline().countInstants() > 0) {
               // Deleting the recreated hoodie.properties and throwing exception.
               storage.deleteDirectory(new StoragePath(String.format("%s%s/%s", basePathWithForwardSlash,
@@ -419,7 +420,7 @@ public class StreamSync implements Serializable, Closeable {
             Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
         .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
             Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
-        .initTable(new Configuration(hoodieSparkContext.hadoopConfiguration()),
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(hoodieSparkContext.hadoopConfiguration()),
             cfg.targetBasePath);
   }
 
@@ -433,7 +434,7 @@ public class StreamSync implements Serializable, Closeable {
     // Refresh Timeline
     refreshTimeline();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(conf)
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
         .setBasePath(cfg.targetBasePath)
         .setRecordMergerStrategy(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
         .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
@@ -1192,7 +1193,8 @@ public class StreamSync implements Serializable, Closeable {
       if (targetSchema == null || (SchemaCompatibility.checkReaderWriterCompatibility(targetSchema, InputBatch.NULL_SCHEMA).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE
           && SchemaCompatibility.checkReaderWriterCompatibility(InputBatch.NULL_SCHEMA, targetSchema).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE)) {
         // target schema is null. fetch schema from commit metadata and use it
-        HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(conf)
+        HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
+            .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
             .setBasePath(cfg.targetBasePath)
             .setPayloadClassName(cfg.payloadClassName)
             .build();

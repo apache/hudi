@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -122,7 +123,8 @@ public class HoodieDataTableValidator implements Serializable {
         : readConfigFromFileSystem(jsc, cfg);
 
     this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath)
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+        .setBasePath(cfg.basePath)
         .setLoadActiveTimelineOnLoad(true)
         .build();
 
@@ -298,7 +300,7 @@ public class HoodieDataTableValidator implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     try {
       HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(
-          engineContext, metaClient.getTableConfig(), engineContext.getHadoopConf(), cfg.basePath);
+          engineContext, metaClient.getTableConfig(), engineContext.getStorageConf(), cfg.basePath);
       List<StoragePath> allDataFilePaths =
           HoodieDataTableUtils.getBaseAndLogFilePathsFromFileSystem(tableMetadata, cfg.basePath);
       // verify that no data files present with commit time < earliest commit in active timeline.
