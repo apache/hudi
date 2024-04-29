@@ -65,7 +65,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
   protected final FlinkTaskContextSupplier supplier = new FlinkTaskContextSupplier(null);
 
   protected void initFileSystem() {
-    storageConf = (StorageConfiguration<Configuration>) HoodieTestUtils.getDefaultStorageConf();
+    storageConf = HoodieTestUtils.getDefaultStorageConf();
     initFileSystemWithConfiguration(storageConf);
     context = new HoodieFlinkEngineContext(supplier);
   }

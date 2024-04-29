@@ -36,7 +36,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -47,7 +46,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -62,6 +60,7 @@ import static java.util.Collections.emptyList;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 
 public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
   protected static HoodieTestTable testTable;
@@ -124,7 +123,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
   @BeforeEach
   protected void initResources() {
     basePath = tempDir.resolve("java_client_tests" + System.currentTimeMillis()).toUri().getPath();
-    storageConf = HadoopFSUtils.getStorageConf(new Configuration());
+    storageConf = getDefaultStorageConf();
     taskContextSupplier = new TestJavaTaskContextSupplier();
     context = new HoodieJavaEngineContext(storageConf, taskContextSupplier);
     initFileSystem(basePath, storageConf);

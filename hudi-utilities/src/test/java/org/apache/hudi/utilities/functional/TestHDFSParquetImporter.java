@@ -29,7 +29,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -246,7 +245,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
     }
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
         .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
-        .withConf((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap()).build()) {
+        .withConf(HoodieTestUtils.getDefaultStorageConf().unwrap()).build()) {
       for (GenericRecord record : records) {
         writer.write(record);
       }
@@ -273,7 +272,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
     }
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
         .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
-        .withConf((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap()).build()) {
+        .withConf(HoodieTestUtils.getDefaultStorageConf().unwrap()).build()) {
       for (GenericRecord record : records) {
         writer.write(record);
       }

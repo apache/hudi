@@ -26,7 +26,6 @@ import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils
 
 import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.avro.AvroParquetWriter
 import org.apache.parquet.hadoop.ParquetWriter
@@ -124,7 +123,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
     try {
       val writer: ParquetWriter[GenericRecord] = AvroParquetWriter.builder[GenericRecord](srcFile)
         .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
-        .withConf(HoodieTestUtils.getDefaultStorageConf.unwrap().asInstanceOf[Configuration]).build
+        .withConf(HoodieTestUtils.getDefaultStorageConf.unwrap()).build
       try {
         for (record <- records) {
           writer.write(record)
@@ -154,7 +153,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
     }
     try {
       val writer = AvroParquetWriter.builder[GenericRecord](srcFile).withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
-        .withConf(HoodieTestUtils.getDefaultStorageConf.unwrap().asInstanceOf[Configuration]).build
+        .withConf(HoodieTestUtils.getDefaultStorageConf.unwrap()).build
       try {
         for (record <- records) {
           writer.write(record)

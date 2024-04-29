@@ -60,7 +60,6 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
@@ -104,6 +103,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -136,7 +136,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   @BeforeEach
   protected void initResources() throws IOException {
     basePath = tempDir.resolve("java_client_tests" + System.currentTimeMillis()).toAbsolutePath().toUri().getPath();
-    storageConf = HadoopFSUtils.getStorageConf(new Configuration(false));
+    storageConf = getDefaultStorageConf();
     taskContextSupplier = new TestJavaTaskContextSupplier();
     context = new HoodieJavaEngineContext(storageConf, taskContextSupplier);
     initFileSystem(basePath, storageConf);

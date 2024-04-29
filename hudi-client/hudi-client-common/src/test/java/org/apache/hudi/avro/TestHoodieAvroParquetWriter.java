@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,7 +58,7 @@ public class TestHoodieAvroParquetWriter {
 
   @Test
   public void testProperWriting() throws IOException {
-    StorageConfiguration<Configuration> storageConf = HadoopFSUtils.getStorageConf(new Configuration());
+    StorageConfiguration<Configuration> storageConf = getDefaultStorageConf();
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
     List<GenericRecord> records = dataGen.generateGenericRecords(10);

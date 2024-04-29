@@ -196,8 +196,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   @Test
   public void multiLevelPartitionReadersRealtimeCombineHoodieInputFormat() throws Exception {
     // test for HUDI-1718
-    StorageConfiguration<Configuration> conf =
-        (StorageConfiguration<Configuration>) HoodieTestUtils.getDefaultStorageConf();
+    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
@@ -269,8 +268,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   @Test
   public void testMultiReaderRealtimeCombineHoodieInputFormat() throws Exception {
     // test for hudi-1722
-    StorageConfiguration<Configuration> conf =
-        (StorageConfiguration<Configuration>) HoodieTestUtils.getDefaultStorageConf();
+    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
@@ -341,8 +339,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   @Disabled
   public void testHoodieRealtimeCombineHoodieInputFormat() throws Exception {
 
-    StorageConfiguration<Configuration> conf =
-        (StorageConfiguration<Configuration>) HoodieTestUtils.getDefaultStorageConf();
+    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);

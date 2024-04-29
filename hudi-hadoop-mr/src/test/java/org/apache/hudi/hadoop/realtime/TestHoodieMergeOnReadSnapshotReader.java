@@ -83,7 +83,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
 
   @BeforeEach
   public void setUp() {
-    hadoopConf = (Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap();
+    hadoopConf = HoodieTestUtils.getDefaultStorageConf().unwrap();
     hadoopConf.set("fs.defaultFS", "file:///");
     hadoopConf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
     baseJobConf = new JobConf(hadoopConf);

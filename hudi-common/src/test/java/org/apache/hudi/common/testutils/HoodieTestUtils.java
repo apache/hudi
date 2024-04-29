@@ -67,8 +67,8 @@ public class HoodieTestUtils {
   public static final int DEFAULT_LOG_VERSION = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
 
-  public static StorageConfiguration<?> getDefaultStorageConf() {
-    return HadoopFSUtils.getStorageConf(new Configuration());
+  public static StorageConfiguration<Configuration> getDefaultStorageConf() {
+    return HadoopFSUtils.getStorageConf(new Configuration(false));
   }
 
   public static HoodieStorage getStorage(String path) {

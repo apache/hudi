@@ -201,7 +201,7 @@ public class HoodieMergeOnReadTestUtils {
         .map(Field::name).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",datestr";
 
-    Configuration conf = (Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap();
+    Configuration conf = HoodieTestUtils.getDefaultStorageConf().unwrap();
     String hiveColumnTypesWithDatestr = hiveColumnTypes + ",string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, hiveColumnTypesWithDatestr);

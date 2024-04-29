@@ -31,7 +31,6 @@ import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -458,7 +457,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     val conf = HoodieTestUtils.getDefaultStorageConf
     val path = new Path(pathStr)
-    val fs = path.getFileSystem(conf.unwrap.asInstanceOf[Configuration])
+    val fs = path.getFileSystem(conf.unwrap)
 
     val parquetFilePath = new StoragePath(
       fs.listStatus(path).filter(fs => fs.getPath.getName.endsWith(".parquet")).toSeq.head.getPath.toUri)

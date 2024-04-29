@@ -186,7 +186,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   public void testEnvVarVariablesPickedup() {
     environmentVariables.set("HOODIE_ENV_fs_DOT_key1", "value1");
-    Configuration conf = HadoopFSUtils.prepareHadoopConf((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap());
+    Configuration conf = HadoopFSUtils.prepareHadoopConf(HoodieTestUtils.getDefaultStorageConf().unwrap());
     assertEquals("value1", conf.get("fs.key1"));
     conf.set("fs.key1", "value11");
     conf.set("fs.key2", "value2");

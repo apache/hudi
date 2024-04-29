@@ -462,7 +462,7 @@ public class InputFormatTestUtil {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
     String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
-    Configuration conf = (Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap();
+    Configuration conf = HoodieTestUtils.getDefaultStorageConf().unwrap();
 
     String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
         .map(Schema.Field::name).collect(Collectors.joining(","));
@@ -489,7 +489,7 @@ public class InputFormatTestUtil {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
     String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
-    Configuration conf = (Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap();
+    Configuration conf = HoodieTestUtils.getDefaultStorageConf().unwrap();
 
     String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
         .map(Schema.Field::name).collect(Collectors.joining(","));
@@ -514,7 +514,7 @@ public class InputFormatTestUtil {
 
     // Create partition metadata to properly setup table's partition
     try (RawLocalFileSystem lfs = new RawLocalFileSystem()) {
-      lfs.setConf((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap());
+      lfs.setConf(HoodieTestUtils.getDefaultStorageConf().unwrap());
 
       HoodiePartitionMetadata partitionMetadata =
           new HoodiePartitionMetadata(

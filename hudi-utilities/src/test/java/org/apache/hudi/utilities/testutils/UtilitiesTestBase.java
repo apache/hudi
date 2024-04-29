@@ -139,7 +139,7 @@ public class UtilitiesTestBase {
   }
 
   public static void initTestServices(boolean needsHdfs, boolean needsHive, boolean needsZookeeper) throws Exception {
-    hadoopConf = (Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap();
+    hadoopConf = HoodieTestUtils.getDefaultStorageConf().unwrap();
     if (needsHdfs) {
       hdfsTestService = new HdfsTestService(hadoopConf);
       dfsCluster = hdfsTestService.start(true);
@@ -419,7 +419,7 @@ public class UtilitiesTestBase {
     public static void saveParquetToDFS(List<GenericRecord> records, Path targetFile, Schema schema) throws IOException {
       try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(targetFile)
           .withSchema(schema)
-          .withConf((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap())
+          .withConf(HoodieTestUtils.getDefaultStorageConf().unwrap())
           .withWriteMode(Mode.OVERWRITE)
           .build()) {
         for (GenericRecord record : records) {
@@ -434,7 +434,7 @@ public class UtilitiesTestBase {
 
     public static void saveORCToDFS(List<GenericRecord> records, Path targetFile, TypeDescription schema) throws IOException {
       OrcFile.WriterOptions options = OrcFile.writerOptions(
-          (Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap()).setSchema(schema);
+          HoodieTestUtils.getDefaultStorageConf().unwrap()).setSchema(schema);
       try (Writer writer = OrcFile.createWriter(targetFile, options)) {
         VectorizedRowBatch batch = schema.createRowBatch();
         for (GenericRecord record : records) {
@@ -455,7 +455,7 @@ public class UtilitiesTestBase {
     }
 
     public static void saveAvroToDFS(List<GenericRecord> records, Path targetFile, Schema schema) throws IOException {
-      FileSystem fs = targetFile.getFileSystem((Configuration) HoodieTestUtils.getDefaultStorageConf().unwrap());
+      FileSystem fs = targetFile.getFileSystem(HoodieTestUtils.getDefaultStorageConf().unwrap());
       OutputStream output = fs.create(targetFile);
       try (DataFileWriter<IndexedRecord> dataFileWriter = new DataFileWriter<>(new GenericDatumWriter(schema)).create(schema, output)) {
         for (GenericRecord record : records) {
