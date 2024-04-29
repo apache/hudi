@@ -524,7 +524,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
           Path subPath = new Path(pairOfSubPathAndConf.getKey());
           List<String> listFiles = new ArrayList<>();
           try {
-            FileSystem fs = subPath.getFileSystem((Configuration) pairOfSubPathAndConf.getValue().unwrap());
+            FileSystem fs = subPath.getFileSystem(pairOfSubPathAndConf.getValue().unwrap(Configuration.class));
             FileStatus[] fileStatuses = fs.listStatus(subPath);
             listFiles = Arrays.stream(fileStatuses)
                 .map(fileStatus -> fileStatus.getPath().getName()).collect(Collectors.toList());

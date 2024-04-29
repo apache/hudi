@@ -29,6 +29,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -95,7 +96,7 @@ public class CLIFunctionalTestHarness implements SparkProvider {
     return Paths.get(basePath(), tableName).toString();
   }
 
-  public StorageConfiguration<?> storageConf() {
+  public StorageConfiguration<Configuration> storageConf() {
     return HadoopFSUtils.getStorageConfWithCopy(jsc().hadoopConfiguration());
   }
 

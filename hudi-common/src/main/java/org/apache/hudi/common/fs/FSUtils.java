@@ -106,7 +106,7 @@ public class FSUtils {
   public static StorageConfiguration<?> buildInlineConf(StorageConfiguration<?> storageConf) {
     StorageConfiguration<?> inlineConf = storageConf.newInstance();
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-    ((Configuration) inlineConf.unwrap()).setClassLoader(InLineFileSystem.class.getClassLoader());
+    (inlineConf.unwrap(Configuration.class)).setClassLoader(InLineFileSystem.class.getClassLoader());
     return inlineConf;
   }
 
@@ -867,7 +867,7 @@ public class FSUtils {
   public static boolean deleteSubPath(String subPathStr, StorageConfiguration<?> conf, boolean recursive) {
     try {
       Path subPath = new Path(subPathStr);
-      FileSystem fileSystem = subPath.getFileSystem((Configuration) conf.unwrap());
+      FileSystem fileSystem = subPath.getFileSystem(conf.unwrap(Configuration.class));
       return fileSystem.delete(subPath, recursive);
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);

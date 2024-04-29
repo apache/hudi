@@ -23,6 +23,7 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 
@@ -38,6 +39,8 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import static org.apache.hudi.storage.StorageConfiguration.castConfiguration;
 
 /**
  * Provides I/O APIs on files and directories on storage.
@@ -426,5 +429,15 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public List<StoragePathInfo> globEntries(StoragePath pathPattern) throws IOException {
     return globEntries(pathPattern, e -> true);
+  }
+
+  /**
+   * @param clazz class of U.
+   * @param <U>   type to return.
+   * @return the underlying configuration cast to type {@link U}.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public final <U> U unwrapConf(Class<U> clazz) {
+    return castConfiguration(unwrapConf(), clazz);
   }
 }

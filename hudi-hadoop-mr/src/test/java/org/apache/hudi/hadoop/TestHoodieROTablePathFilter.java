@@ -43,7 +43,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     initMetaClient();
-    pathFilter = new HoodieROTablePathFilter((Configuration) metaClient.getStorageConf().unwrap());
+    pathFilter = new HoodieROTablePathFilter(metaClient.getStorageConf().unwrap(Configuration.class));
     testTable = HoodieTestTable.of(metaClient);
   }
 

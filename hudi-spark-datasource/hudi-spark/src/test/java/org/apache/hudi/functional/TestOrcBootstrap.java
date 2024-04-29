@@ -161,7 +161,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
             srcPath, context).stream().findAny().map(p -> p.getValue().stream().findAny())
         .orElse(null).get().getPath()).toString();
     Reader orcReader =
-        OrcFile.createReader(new Path(filePath), OrcFile.readerOptions((Configuration) metaClient.getStorageConf().unwrap()));
+        OrcFile.createReader(new Path(filePath), OrcFile.readerOptions(metaClient.getStorageConf().unwrap(Configuration.class)));
 
     TypeDescription orcSchema = orcReader.getSchema();
 

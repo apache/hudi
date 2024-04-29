@@ -40,7 +40,7 @@ import java.io.IOException;
  */
 public class HoodieCLI {
 
-  public static StorageConfiguration<?> conf;
+  public static StorageConfiguration<Configuration> conf;
   public static ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
   public static HoodieTimeGeneratorConfig timeGeneratorConfig;
   public static HoodieStorage storage;
@@ -92,7 +92,7 @@ public class HoodieCLI {
     if (storage == null || force) {
       storage = (tableMetadata != null)
           ? tableMetadata.getStorage()
-          : HoodieStorageUtils.getStorage(FileSystem.get((Configuration) conf.unwrap()));
+          : HoodieStorageUtils.getStorage(FileSystem.get(conf.unwrap()));
     }
   }
 

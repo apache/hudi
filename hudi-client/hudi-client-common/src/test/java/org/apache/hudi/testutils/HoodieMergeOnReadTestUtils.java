@@ -96,9 +96,9 @@ public class HoodieMergeOnReadTestUtils {
     return null;
   }
 
-  public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<?> conf, List<String> inputPaths,
+  public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<Configuration> conf, List<String> inputPaths,
                                                                String basePath) {
-    return getRecordsUsingInputFormat(conf, inputPaths, basePath, new JobConf((Configuration) conf.unwrap()), true);
+    return getRecordsUsingInputFormat(conf, inputPaths, basePath, new JobConf(conf.unwrap()), true);
   }
 
   public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<?> conf, List<String> inputPaths,

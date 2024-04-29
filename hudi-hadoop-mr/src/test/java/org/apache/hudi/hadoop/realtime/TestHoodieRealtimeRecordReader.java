@@ -112,14 +112,14 @@ public class TestHoodieRealtimeRecordReader {
   private JobConf baseJobConf;
   private HoodieStorage storage;
   private FileSystem fs;
-  private StorageConfiguration<?> storageConf;
+  private StorageConfiguration<Configuration> storageConf;
 
   @BeforeEach
   public void setUp() {
     storageConf = HoodieTestUtils.getDefaultStorageConf();
     storageConf.set("fs.defaultFS", "file:///");
     storageConf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
-    baseJobConf = new JobConf((Configuration) storageConf.unwrap());
+    baseJobConf = new JobConf(storageConf.unwrap());
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     fs = HadoopFSUtils.getFs(basePath.toUri().toString(), baseJobConf);
     storage = HoodieStorageUtils.getStorage(fs);

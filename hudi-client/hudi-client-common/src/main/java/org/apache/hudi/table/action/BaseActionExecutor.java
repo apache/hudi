@@ -49,7 +49,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
 
   public BaseActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     this.context = context;
-    this.hadoopConf = (Configuration) context.getStorageConf().unwrap();
+    this.hadoopConf = context.getStorageConf().unwrap(Configuration.class);
     this.config = config;
     this.table = table;
     this.instantTime = instantTime;

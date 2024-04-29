@@ -118,7 +118,7 @@ public class DirectWriteMarkers extends WriteMarkers {
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
       dataFiles.addAll(context.flatMap(subDirectories, directory -> {
         Path path = new Path(directory);
-        FileSystem fileSystem = HadoopFSUtils.getFs(path, (Configuration) storageConf.unwrap());
+        FileSystem fileSystem = HadoopFSUtils.getFs(path, storageConf.unwrap(Configuration.class));
         RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
         List<String> result = new ArrayList<>();
         while (itr.hasNext()) {

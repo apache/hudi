@@ -80,7 +80,7 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
       throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
     }
 
-    Configuration hadoopConf = (Configuration) conf.unwrap();
+    Configuration hadoopConf = conf.unwrap(Configuration.class);
     try (Reader reader = OrcFile.createReader(new Path(path.toUri()), OrcFile.readerOptions(hadoopConf))) {
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readerSchema);
       RecordReader recordReader = reader.rows(new Options(hadoopConf).schema(orcSchema));

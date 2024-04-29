@@ -261,6 +261,6 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
   @Override
   public Configuration getConf() {
-    return (Configuration) conf.unwrap();
+    return conf.unwrap(Configuration.class);
   }
 }

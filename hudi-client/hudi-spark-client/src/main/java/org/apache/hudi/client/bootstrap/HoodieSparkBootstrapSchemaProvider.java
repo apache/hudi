@@ -91,7 +91,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
   private static Schema getBootstrapSourceSchemaOrc(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
     Reader orcReader = null;
     try {
-      orcReader = OrcFile.createReader(filePath, OrcFile.readerOptions((Configuration) context.getStorageConf().unwrap()));
+      orcReader = OrcFile.createReader(filePath, OrcFile.readerOptions(context.getStorageConf().unwrap(Configuration.class)));
     } catch (IOException e) {
       throw new HoodieException("Could not determine schema from the ORC data files.");
     }

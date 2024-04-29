@@ -92,15 +92,15 @@ public class GenericRecordValidationTestUtils {
   }
 
   public static void assertDataInMORTable(HoodieWriteConfig config, String instant1, String instant2,
-                                          StorageConfiguration<?> storageConf, List<String> partitionPaths) {
+                                          StorageConfiguration<Configuration> storageConf, List<String> partitionPaths) {
     List<String> excludeFields = CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
         FILENAME_METADATA_FIELD, OPERATION_METADATA_FIELD);
     assertDataInMORTable(config, instant1, instant2, storageConf, partitionPaths, excludeFields);
   }
 
   public static void assertDataInMORTable(HoodieWriteConfig config, String instant1, String instant2,
-                                          StorageConfiguration<?> storageConf, List<String> partitionPaths, List<String> excludeFields) {
-    JobConf jobConf = new JobConf((Configuration) storageConf.unwrap());
+                                          StorageConfiguration<Configuration> storageConf, List<String> partitionPaths, List<String> excludeFields) {
+    JobConf jobConf = new JobConf(storageConf.unwrap());
     List<String> fullPartitionPaths = partitionPaths.stream()
         .map(partitionPath -> Paths.get(config.getBasePath(), partitionPath).toString())
         .collect(Collectors.toList());
@@ -131,9 +131,9 @@ public class GenericRecordValidationTestUtils {
     });
   }
 
-  public static Map<String, GenericRecord> getRecordsMap(HoodieWriteConfig config, StorageConfiguration<?> storageConf,
+  public static Map<String, GenericRecord> getRecordsMap(HoodieWriteConfig config, StorageConfiguration<Configuration> storageConf,
                                                          HoodieTestDataGenerator dataGen) {
-    JobConf jobConf = new JobConf((Configuration) storageConf.unwrap());
+    JobConf jobConf = new JobConf(storageConf.unwrap());
     List<String> fullPartitionPaths = Arrays.stream(dataGen.getPartitionPaths())
         .map(partitionPath -> Paths.get(config.getBasePath(), partitionPath).toString())
         .collect(Collectors.toList());

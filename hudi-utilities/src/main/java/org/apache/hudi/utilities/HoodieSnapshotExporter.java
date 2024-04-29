@@ -265,8 +265,8 @@ public class HoodieSnapshotExporter {
     context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {
       Path targetFilePath =
           new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitFile.getPath().getName());
-      FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, (Configuration) storageConf.unwrapCopy());
-      FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, (Configuration) storageConf.unwrapCopy());
+      FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, storageConf.unwrapCopy(Configuration.class));
+      FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, storageConf.unwrapCopy(Configuration.class));
 
       if (!executorOutputFs.exists(targetFilePath.getParent())) {
         executorOutputFs.mkdirs(targetFilePath.getParent());

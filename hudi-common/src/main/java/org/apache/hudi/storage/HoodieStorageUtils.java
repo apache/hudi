@@ -42,7 +42,7 @@ public class HoodieStorageUtils {
   }
 
   public static HoodieStorage getStorage(StoragePath path, StorageConfiguration<?> conf) {
-    return getStorage(HadoopFSUtils.getFs(path, (Configuration) conf.unwrap()));
+    return getStorage(HadoopFSUtils.getFs(path, conf.unwrap(Configuration.class)));
   }
 
   public static HoodieStorage getRawStorage(HoodieStorage storage) {

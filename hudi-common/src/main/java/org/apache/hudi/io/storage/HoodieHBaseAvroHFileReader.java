@@ -286,7 +286,7 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     if (content.isPresent()) {
       return HoodieHFileUtils.createHFileReader(storage, path, content.get());
     }
-    return HoodieHFileUtils.createHFileReader(storage, path, config, (Configuration) storageConf.unwrap());
+    return HoodieHFileUtils.createHFileReader(storage, path, config, storageConf.unwrap(Configuration.class));
   }
 
   private boolean isKeyAvailable(String key, HFileScanner keyScanner) throws IOException {

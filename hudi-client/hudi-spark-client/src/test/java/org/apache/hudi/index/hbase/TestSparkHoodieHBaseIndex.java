@@ -110,7 +110,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   private static HBaseTestingUtility utility;
   private static Configuration hbaseConfig;
 
-  private StorageConfiguration<?> storageConf;
+  private StorageConfiguration<Configuration> storageConf;
   private HoodieTestDataGenerator dataGen;
   private HoodieTableMetaClient metaClient;
   private HoodieSparkEngineContext context;
@@ -141,7 +141,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   @BeforeEach
   public void setUp() throws Exception {
     storageConf = HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration());
-    ((Configuration) storageConf.unwrap()).addResource(utility.getConfiguration());
+    (storageConf.unwrap()).addResource(utility.getConfiguration());
     // reInit the context here to keep the hadoopConf the same with that in this class
     context = new HoodieSparkEngineContext(jsc());
     basePath = utility.getDataTestDirOnTestFS(TABLE_NAME).toString();

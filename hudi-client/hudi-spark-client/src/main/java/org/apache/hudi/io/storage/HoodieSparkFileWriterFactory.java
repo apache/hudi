@@ -58,7 +58,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
         config.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
         config.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
         config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
-        (Configuration) conf.unwrap(),
+        conf.unwrap(Configuration.class),
         config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
     parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
@@ -102,6 +102,6 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
                                                                               HoodieConfig config, boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
-    return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport((Configuration) conf.unwrap(), structType, filter, config);
+    return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(conf.unwrap(Configuration.class), structType, filter, config);
   }
 }

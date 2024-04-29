@@ -143,7 +143,7 @@ public abstract class HoodieSparkTable<T>
         Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
         Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
             getMetaClient().getTableConfig().getBootstrapBasePath().get(),
-            upsertHandle.getWriterSchema(), (Configuration) getStorageConf().unwrap());
+            upsertHandle.getWriterSchema(), getStorageConf().unwrap(Configuration.class));
         upsertHandle.setPartitionFields(partitionFields);
         upsertHandle.setPartitionValues(partitionValues);
       }

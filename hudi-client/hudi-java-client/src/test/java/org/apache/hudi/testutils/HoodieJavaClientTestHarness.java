@@ -990,7 +990,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
               }
             }).count();
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
-        Stream<GenericRecord> genericRecordStream = readHFile((Configuration) context.getStorageConf().unwrap(), paths);
+        Stream<GenericRecord> genericRecordStream = readHFile(context.getStorageConf().unwrap(Configuration.class), paths);
         if (lastCommitTimeOpt.isPresent()) {
           return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
                   gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))

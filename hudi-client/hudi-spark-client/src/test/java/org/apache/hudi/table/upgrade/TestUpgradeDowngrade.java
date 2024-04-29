@@ -55,7 +55,6 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
@@ -917,7 +916,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     // Step1: Copy hoodie.properties to hoodie.properties.orig
     FileSystem fs = (FileSystem) metaClient.getStorage().getFileSystem();
-    FileUtil.copy(fs, propertyFile, fs, updatedPropertyFile, false, (Configuration) storageConf.unwrap());
+    FileUtil.copy(fs, propertyFile, fs, updatedPropertyFile, false, storageConf.unwrap());
   }
 
   private void assertTableVersionOnDataAndMetadataTable(

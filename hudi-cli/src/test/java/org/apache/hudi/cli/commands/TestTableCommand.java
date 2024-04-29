@@ -37,7 +37,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -201,7 +200,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
 
   private void testRefreshCommand(String command) throws IOException {
     // clean table matedata
-    FileSystem fs = FileSystem.get((Configuration) storageConf().unwrap());
+    FileSystem fs = FileSystem.get(storageConf().unwrap());
     fs.delete(new Path(tablePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME), true);
 
     // Create table

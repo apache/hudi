@@ -113,7 +113,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   @Test
   public void multiPartitionReadersRealtimeCombineHoodieInputFormat() throws Exception {
     // test for HUDI-1718
-    StorageConfiguration<?> conf = HoodieTestUtils.getDefaultStorageConf();
+    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
@@ -145,8 +145,8 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     mrwork.getMapWork().setPathToAliases(talias);
 
     Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
-    Utilities.setMapRedWork((Configuration) conf.unwrap(), mrwork, mapWorkPath);
-    JobConf jobConf = new JobConf((Configuration) conf.unwrap());
+    Utilities.setMapRedWork(conf.unwrap(), mrwork, mapWorkPath);
+    JobConf jobConf = new JobConf(conf.unwrap());
     // Add three partition path to InputPaths
     Path[] partitionDirArray = new Path[partitionDirs.size()];
     partitionDirs.stream().map(p -> new Path(p.getPath())).collect(Collectors.toList()).toArray(partitionDirArray);

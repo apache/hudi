@@ -116,7 +116,7 @@ public class WriteProfile {
     this.smallFilesMap = new HashMap<>();
     this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
     this.metaClient = StreamerUtil.createMetaClient(
-        config.getBasePath(), (Configuration) context.getStorageConf().unwrap());
+        config.getBasePath(), context.getStorageConf().unwrap(Configuration.class));
     this.metadataCache = new HashMap<>();
     this.fsView = getFileSystemView();
     // profile the record statistics on construction

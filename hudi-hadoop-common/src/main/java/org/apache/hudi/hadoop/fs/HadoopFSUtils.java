@@ -19,7 +19,6 @@
 
 package org.apache.hudi.hadoop.fs;
 
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -80,9 +79,8 @@ public class HadoopFSUtils {
   }
 
   public static <T> FileSystem getFs(Path path, StorageConfiguration<T> storageConf, boolean newCopy) {
-    T conf = newCopy ? storageConf.unwrapCopy() : storageConf.unwrap();
-    ValidationUtils.checkArgument(conf instanceof Configuration);
-    return getFs(path, (Configuration) conf);
+    Configuration conf = newCopy ? storageConf.unwrapCopy(Configuration.class) : storageConf.unwrap(Configuration.class);
+    return getFs(path, conf);
   }
 
   public static FileSystem getFs(String pathStr, Configuration conf) {
@@ -119,7 +117,7 @@ public class HadoopFSUtils {
                                                       long initialRetryIntervalMs,
                                                       String retryExceptions,
                                                       ConsistencyGuard consistencyGuard) {
-    FileSystem fileSystem = getFs(path, (Configuration) conf.unwrapCopy());
+    FileSystem fileSystem = getFs(path, conf.unwrapCopy(Configuration.class));
 
     if (enableRetry) {
       fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,

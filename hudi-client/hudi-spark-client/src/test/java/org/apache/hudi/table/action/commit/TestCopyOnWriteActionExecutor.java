@@ -58,7 +58,6 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileInputFormat;
@@ -278,7 +277,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
           throws Exception {
     // initialize parquet input format
     HoodieParquetInputFormat hoodieInputFormat = new HoodieParquetInputFormat();
-    JobConf jobConf = new JobConf((Configuration) storageConf.unwrap());
+    JobConf jobConf = new JobConf(storageConf.unwrap());
     hoodieInputFormat.setConf(jobConf);
     HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE);
     setupIncremental(jobConf, startCommitTime, numCommitsToPull);

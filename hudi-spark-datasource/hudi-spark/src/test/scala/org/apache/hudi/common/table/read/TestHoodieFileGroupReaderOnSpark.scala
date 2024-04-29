@@ -89,7 +89,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val structTypeSchema = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
 
     val recordReaderIterator = parquetFileFormat.buildReaderWithPartitionValues(
-      spark, structTypeSchema, StructType(Seq.empty), structTypeSchema, Seq.empty, Map.empty, getStorageConf.unwrap().asInstanceOf[Configuration])
+      spark, structTypeSchema, StructType(Seq.empty), structTypeSchema, Seq.empty, Map.empty, getStorageConf.unwrap(classOf[Configuration]))
 
     val m = scala.collection.mutable.Map[Long, PartitionedFile => Iterator[InternalRow]]()
     m.put(2*avroSchema.hashCode(), recordReaderIterator)
