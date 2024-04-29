@@ -53,7 +53,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown(): Unit = {

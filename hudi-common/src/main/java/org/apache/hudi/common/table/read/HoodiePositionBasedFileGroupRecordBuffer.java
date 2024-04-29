@@ -82,12 +82,12 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
 
   @Override
   public BufferType getBufferType() {
-    return readerState.useRecordPosition ? BufferType.POSITION_BASED_MERGE : super.getBufferType();
+    return readerContext.getUseRecordPosition() ? BufferType.POSITION_BASED_MERGE : super.getBufferType();
   }
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
-    if (!readerState.useRecordPosition) {
+    if (!readerContext.getUseRecordPosition()) {
       super.processDataBlock(dataBlock, keySpecOpt);
       return;
     }
@@ -154,7 +154,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   }
 
   private void fallbackToKeyBasedBuffer() {
-    readerState.useRecordPosition = false;
+    readerContext.setUseRecordPosition(false);
     //need to make a copy of the keys to avoid concurrent modification exception
     ArrayList<Serializable> positions = new ArrayList<>(records.keySet());
     for (Serializable position : positions) {
@@ -174,7 +174,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
-    if (!readerState.useRecordPosition) {
+    if (!readerContext.getUseRecordPosition()) {
       super.processDeleteBlock(deleteBlock);
       return;
     }
@@ -202,7 +202,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
 
   @Override
   protected boolean doHasNextMerge(T baseRecord) throws IOException {
-    if (!readerState.useRecordPosition) {
+    if (!readerContext.getUseRecordPosition()) {
       return doHasNextFallbackMerge(baseRecord);
     }
 
