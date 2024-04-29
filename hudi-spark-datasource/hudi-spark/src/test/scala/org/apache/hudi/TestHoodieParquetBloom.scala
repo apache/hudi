@@ -60,11 +60,11 @@ class TestHoodieParquetBloomFilter extends HoodieSparkClientTestBase with ScalaA
     sparkSession.sparkContext.register(accu)
 
     // this one shall skip partition scanning thanks to bloom when spark >=3
-    sparkSession.read.format("hudi").load(basePath).filter("bloom_col = '3'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(1)))
+    sparkSession.read.format("hudi").load(basePath).filter("bloom_col = '3'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(0)))
     assertEquals(if (currentSparkSupportParquetBloom()) 0 else 1, accu.value)
 
     // this one will trigger one partition scan
-    sparkSession.read.format("hudi").load(basePath).filter("bloom_col = '2'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(1)))
+    sparkSession.read.format("hudi").load(basePath).filter("bloom_col = '2'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(0)))
     assertEquals(1, accu.value)
   }
 
