@@ -87,7 +87,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class HFileBootstrapIndex extends BootstrapIndex {
 
-  protected static final long serialVersionUID = 1L;
+  private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(HFileBootstrapIndex.class);
 
@@ -436,7 +436,6 @@ public class HFileBootstrapIndex extends BootstrapIndex {
      * @param fileSystem File System
      */
     private static HFile.Reader createReader(String hFilePath, Configuration conf, FileSystem fileSystem) {
-      LOG.info("Opening HFile for reading :" + hFilePath);
       return HoodieHFileUtils.createHFileReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf), conf);
     }
 
