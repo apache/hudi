@@ -244,7 +244,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        true, false, validCommits, shouldUseRecordPosition, Seq.empty)
+        isMOR = true, isBootstrap, isIncremental = false, validCommits, shouldUseRecordPosition, Seq.empty, fileIndex)
     }
   }
 
@@ -288,7 +288,7 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        true, true, validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
+        isMOR = true, isBootstrap,  isIncremental = true, validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters, fileIndex)
     }
   }
 }
@@ -319,7 +319,7 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        false, false, validCommits, shouldUseRecordPosition, Seq.empty)
+        isMOR = false, isBootstrap, isIncremental =  false, validCommits, shouldUseRecordPosition, Seq.empty, fileIndex)
     }
   }
 }
@@ -347,7 +347,7 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        false, true, validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
+        isMOR = false, isBootstrap, isIncremental = true, validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters, fileIndex)
     }
   }
 }

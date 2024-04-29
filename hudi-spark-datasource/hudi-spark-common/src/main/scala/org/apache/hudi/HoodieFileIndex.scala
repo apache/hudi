@@ -112,6 +112,9 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala.map(e => new Path(e.toUri))
 
+  var hasListedFiles = false
+
+
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
    * cases where Spark directly fetches the list of files via HoodieFileIndex or for read optimized query logic
@@ -152,6 +155,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+    hasListedFiles = true
     var enableBatch = "true"
     val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
       case (partitionOpt, fileSlices) =>
