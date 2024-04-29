@@ -61,12 +61,11 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   mergeType: String,
                                                   mandatoryFields: Seq[String],
                                                   isMOR: Boolean,
-                                                  isBootstrap: Boolean,
                                                   isIncremental: Boolean,
                                                   validCommits: String,
                                                   shouldUseRecordPosition: Boolean,
-                                                  requiredFilters: Seq[Filter],
-                                                  @transient index: HoodieFileIndex) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
+                                                  requiredFilters: Seq[Filter]
+                                                 ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
 
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
@@ -79,18 +78,10 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   private var supportBatchCalled = false
   private var supportBatchResult = false
 
-  private var hasListedFilesResult: Boolean = false
-  private def hasListedFiles: Boolean = {
-    if (!hasListedFilesResult) {
-      hasListedFilesResult = index.hasListedFiles
-    }
-    hasListedFilesResult
-  }
-
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     if (!supportBatchCalled || supportBatchResult) {
       supportBatchCalled = true
-      supportBatchResult = !((isMOR || isBootstrap) && !hasListedFiles) && !isIncremental && !shouldUseRecordPosition && super.supportBatch(sparkSession, schema)
+      supportBatchResult = !isIncremental && !shouldUseRecordPosition && super.supportBatch(sparkSession, schema)
     }
     supportBatchResult
   }

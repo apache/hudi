@@ -46,6 +46,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
+import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -73,6 +74,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalTestHarness {
+
+  @Override
+  public SparkConf conf() {
+    return conf(SparkClientFunctionalTestHarness.getSparkSqlConf());
+  }
   private static final Schema SCHEMA = getAvroSchema("AvroSchema", "AvroSchemaNS");
   private HoodieTableMetaClient metaClient;
 
