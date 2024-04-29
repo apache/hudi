@@ -691,7 +691,7 @@ public class HoodieStreamer implements Serializable {
       if (this.storage.exists(new StoragePath(cfg.targetBasePath))) {
         try {
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-              .setConf(new Configuration((Configuration) this.storage.getConf()))
+              .setConf((Configuration) this.storage.getConf().unwrapCopy())
               .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
           tableType = meta.getTableType();
           // This will guarantee there is no surprise with table type

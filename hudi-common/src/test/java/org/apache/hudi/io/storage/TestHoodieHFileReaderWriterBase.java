@@ -226,7 +226,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
     byte[] content = FileIOUtils.readAsByteArray(
         storage.open(getFilePath()), (int) storage.getPathInfo(getFilePath()).getLength());
     // Reading byte array in HFile format, without actual file path
-    Configuration hadoopConf = (Configuration) storage.getConf();
+    Configuration hadoopConf = (Configuration) storage.unwrapConf();
     try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(hadoopConf, content)) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");

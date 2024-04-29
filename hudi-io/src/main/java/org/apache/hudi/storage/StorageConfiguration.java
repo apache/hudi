@@ -22,9 +22,6 @@ package org.apache.hudi.storage;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 
 /**
@@ -34,33 +31,21 @@ import java.io.Serializable;
  */
 public abstract class StorageConfiguration<T> implements Serializable {
   /**
-   * @return the storage configuration.
+   * @return a new {@link StorageConfiguration} instance with a new copy of
+   * the configuration of type {@link T}.
    */
-  public abstract T get();
+  public abstract StorageConfiguration<T> newInstance();
 
   /**
-   * @return a new copy of the storage configuration.
+   * @return the underlying configuration of type {@link T}.
    */
-  public abstract T newCopy();
+  public abstract T unwrap();
 
   /**
-   * Serializes the storage configuration.
-   * DO NOT change the signature, as required by {@link Serializable}.
-   *
-   * @param out stream to write.
-   * @throws IOException on I/O error.
+   * @return a new copy of the underlying configuration of type {@link T}.
    */
-  public abstract void writeObject(ObjectOutputStream out) throws IOException;
-
-  /**
-   * Deserializes the storage configuration.
-   * DO NOT change the signature, as required by {@link Serializable}.
-   *
-   * @param in stream to read.
-   * @throws IOException on I/O error.
-   */
-  public abstract void readObject(ObjectInputStream in) throws IOException;
-
+  public abstract T unwrapCopy();
+  
   /**
    * Sets the configuration key-value pair.
    *
@@ -128,5 +113,18 @@ public abstract class StorageConfiguration<T> implements Serializable {
     return value.isPresent()
         ? Enum.valueOf(defaultValue.getDeclaringClass(), value.get())
         : defaultValue;
+  }
+
+  /**
+   * Sets a property key with a value in the configuration, if the property key
+   * does not already exist.
+   *
+   * @param key   property key.
+   * @param value property value.
+   */
+  public final void setIfUnset(String key, String value) {
+    if (getString(key).isEmpty()) {
+      set(key, value);
+    }
   }
 }

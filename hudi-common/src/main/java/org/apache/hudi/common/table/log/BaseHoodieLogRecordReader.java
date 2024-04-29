@@ -154,7 +154,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     this.latestInstantTime = readerContext.getLatestCommitTime();
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder()
-        .setConf((Configuration) storage.getConf()).setBasePath(readerContext.getTablePath()).build();
+        .setConf((Configuration) storage.unwrapConf()).setBasePath(readerContext.getTablePath()).build();
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();

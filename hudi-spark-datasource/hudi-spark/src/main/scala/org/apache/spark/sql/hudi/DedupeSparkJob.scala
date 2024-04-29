@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.FileIOUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.storage.{StoragePath, HoodieStorage}
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
@@ -77,7 +77,7 @@ class DedupeSparkJob(basePath: String,
     val dedupeTblName = s"${tmpTableName}_dupeKeys"
 
     val metadata = HoodieTableMetaClient.builder()
-      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setConf(storage.unwrapConf.asInstanceOf[Configuration])
       .setBasePath(basePath).build()
 
     val allFiles = storage.listDirectEntries(new StoragePath(s"$basePath/$duplicatedPartitionPath"))
@@ -188,7 +188,7 @@ class DedupeSparkJob(basePath: String,
 
   def fixDuplicates(dryRun: Boolean = true) = {
     val metadata = HoodieTableMetaClient.builder()
-      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setConf(storage.unwrapConf.asInstanceOf[Configuration])
       .setBasePath(basePath).build()
 
     val allFiles = storage.listDirectEntries(new StoragePath(s"$basePath/$duplicatedPartitionPath"))
@@ -205,7 +205,7 @@ class DedupeSparkJob(basePath: String,
       val dstPath = new Path(s"$repairOutputPath/${filePath.getName}$badSuffix")
       LOG.info(s"Copying from $filePath to $dstPath")
       FileIOUtils.copy(storage, new StoragePath(filePath.toUri), storage,
-        new StoragePath(dstPath.toUri), false, true, storage.getConf.asInstanceOf[Configuration])
+        new StoragePath(dstPath.toUri), false, true)
     }
 
     // 2. Remove duplicates from the bad files
@@ -250,7 +250,7 @@ class DedupeSparkJob(basePath: String,
         // for real
         LOG.info(s"[FOR REAL!!!] Copying from $srcPath to $dstPath")
         FileIOUtils.copy(storage, new StoragePath(srcPath.toUri), storage,
-          new StoragePath(dstPath.toUri), false, true, storage.getConf.asInstanceOf[Configuration])
+          new StoragePath(dstPath.toUri), false, true)
       }
     }
   }

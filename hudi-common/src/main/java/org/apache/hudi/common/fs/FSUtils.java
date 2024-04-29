@@ -835,7 +835,7 @@ public class FSUtils {
       List<String> subPaths) {
     Map<String, T> result = new HashMap<>();
     if (subPaths.size() > 0) {
-      SerializableConfiguration conf = new SerializableConfiguration((Configuration) storage.getConf());
+      SerializableConfiguration conf = new SerializableConfiguration((Configuration) storage.unwrapConf());
       int actualParallelism = Math.min(subPaths.size(), parallelism);
 
       hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),

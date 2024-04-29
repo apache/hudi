@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
@@ -88,7 +87,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   }
 
   @Override
-  SourceFormatAdapter createSource(TypedProperties props) {
+  protected SourceFormatAdapter createSource(TypedProperties props) {
     this.schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
     Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile));
     return new SourceFormatAdapter(protoKafkaSource);
@@ -112,8 +111,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
     assertEquals(900, fetch1.getBatch().get().count());
     // Test Avro To DataFrame<Row> path
-    Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
-        schemaProvider.getSourceSchema().toString(), protoKafkaSource.getSparkSession());
+    Dataset<Row> fetch1AsRows = kafkaSource.fetchNewDataInRowFormat(Option.empty(), 900).getBatch().get();
     assertEquals(900, fetch1AsRows.count());
 
     // 2. Produce new data, extract new data
@@ -196,7 +194,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   }
 
   @Override
-  void sendMessagesToKafka(String topic, int count, int numPartitions) {
+  protected void sendMessagesToKafka(String topic, int count, int numPartitions) {
     List<Sample> messages = createSampleMessages(count);
     try (Producer<String, byte[]> producer = new KafkaProducer<>(getProducerProperties())) {
       for (int i = 0; i < messages.size(); i++) {

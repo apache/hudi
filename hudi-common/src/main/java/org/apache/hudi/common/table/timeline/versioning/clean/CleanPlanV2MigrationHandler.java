@@ -24,8 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.AbstractMigratorBase;
 import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,7 +54,7 @@ public class CleanPlanV2MigrationHandler extends AbstractMigratorBase<HoodieClea
     Map<String, List<HoodieCleanFileInfo>> filePathsPerPartition =
         plan.getFilesToBeDeletedPerPartition().entrySet().stream().map(e -> Pair.of(e.getKey(), e.getValue().stream()
             .map(v -> new HoodieCleanFileInfo(
-                new Path(FSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePath(), e.getKey()), v).toString(), false))
+                new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), e.getKey()), v).toString(), false))
             .collect(Collectors.toList()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     return new HoodieCleanerPlan(plan.getEarliestInstantToRetain(), plan.getLastCompletedCommitTimestamp(),
         plan.getPolicy(), new HashMap<>(), VERSION, filePathsPerPartition, new ArrayList<>(), Collections.emptyMap());

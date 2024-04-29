@@ -287,23 +287,18 @@ stages:
               arguments: >
                 -v $(Build.SourcesDirectory):/hudi
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
-                /bin/bash -c "pwd
-                && rm -rf /hudi/scripts/ci/results
-                && mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
+                /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dtest="Test*DeltaStreamer*" -DfailIfNoTests=false -pl hudi-utilities
-                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dtest="Test*DeltaStreamer*" -DfailIfNoTests=false -pl hudi-utilities
-                && ./scripts/ci/move_surefire_reports.sh /hudi /hudi/scripts/ci/results
-                && echo 'All surefire report files:'
-                && find . -type f -name \"TEST-*.xml\""
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dtest="Test*DeltaStreamer*" -DfailIfNoTests=false -pl hudi-utilities"
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:
               testResultsFormat: 'JUnit'
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              searchFolder: '$(Build.SourcesDirectory)/scripts/ci/results'
+              searchFolder: '$(Build.SourcesDirectory)'
               failTaskOnFailedTests: true
           - script: |
-              grep "testcase" scripts/ci/results/*/target/surefire-reports/*.xml scripts/ci/results/*/*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_6
         displayName: UT FT other modules
@@ -331,22 +326,17 @@ stages:
               arguments: >
                 -v $(Build.SourcesDirectory):/hudi
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
-                /bin/bash -c "pwd
-                && rm -rf /hudi/scripts/ci/results
-                && mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
+                /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="$(JOB6_SPARK_PROCEDURE_WILDCARD_SUITES)" -pl $(JOB34_MODULES)
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dtest="!Test*DeltaStreamer*" -DfailIfNoTests=false -pl $(JOB6_UT_MODULES)
-                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dtest="!Test*DeltaStreamer*" -DfailIfNoTests=false -pl $(JOB6_FT_MODULES)
-                && ./scripts/ci/move_surefire_reports.sh /hudi /hudi/scripts/ci/results
-                && echo 'All surefire report files:'
-                && find . -type f -name \"TEST-*.xml\""
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dtest="!Test*DeltaStreamer*" -DfailIfNoTests=false -pl $(JOB6_FT_MODULES)"
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:
               testResultsFormat: 'JUnit'
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              searchFolder: '$(Build.SourcesDirectory)/scripts/ci/results'
+              searchFolder: '$(Build.SourcesDirectory)'
               failTaskOnFailedTests: true
           - script: |
-              grep "testcase" scripts/ci/results/*/target/surefire-reports/*.xml scripts/ci/results/*/*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases

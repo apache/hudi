@@ -952,7 +952,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
                                                         String... paths) {
     List<HoodieBaseFile> latestFiles = new ArrayList<>();
     try {
-      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient((Configuration) storage.getConf(), basePath);
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient((Configuration) storage.unwrapConf(), basePath);
       for (String path : paths) {
         TableFileSystemView.BaseFileOnlyView fileSystemView =
             new HoodieTableFileSystemView(metaClient,

@@ -122,10 +122,10 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     // Prepare base dataset with some commits
     deltaStreamerTestRunner(prepJob, prepJobConfig, (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
-        TestHelpers.assertAtleastNDeltaCommits(3, tableBasePath, fs);
-        TestHelpers.assertAtleastNCompactionCommits(1, tableBasePath, fs);
+        TestHelpers.assertAtleastNDeltaCommits(3, tableBasePath);
+        TestHelpers.assertAtleastNCompactionCommits(1, tableBasePath);
       } else {
-        TestHelpers.assertAtleastNCompactionCommits(3, tableBasePath, fs);
+        TestHelpers.assertAtleastNCompactionCommits(3, tableBasePath);
       }
       assertRecordCount(totalRecords, tableBasePath, sqlContext);
       assertDistanceCount(totalRecords, tableBasePath, sqlContext);
@@ -189,10 +189,10 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     // Prepare base dataset with some commits
     deltaStreamerTestRunner(prepJob, prepJobConfig, (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
-        TestHelpers.assertAtleastNDeltaCommits(3, tableBasePath, fs);
-        TestHelpers.assertAtleastNCompactionCommits(1, tableBasePath, fs);
+        TestHelpers.assertAtleastNDeltaCommits(3, tableBasePath);
+        TestHelpers.assertAtleastNCompactionCommits(1, tableBasePath);
       } else {
-        TestHelpers.assertAtleastNCompactionCommits(3, tableBasePath, fs);
+        TestHelpers.assertAtleastNCompactionCommits(3, tableBasePath);
       }
       assertRecordCount(totalRecords, tableBasePath, sqlContext);
       assertDistanceCount(totalRecords, tableBasePath, sqlContext);
@@ -263,10 +263,10 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     // Prepare base dataset with some commits
     deltaStreamerTestRunner(prepJob, prepJobConfig, (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
-        TestHelpers.assertAtleastNDeltaCommits(3, tableBasePath, fs);
-        TestHelpers.assertAtleastNCompactionCommits(1, tableBasePath, fs);
+        TestHelpers.assertAtleastNDeltaCommits(3, tableBasePath);
+        TestHelpers.assertAtleastNCompactionCommits(1, tableBasePath);
       } else {
-        TestHelpers.assertAtleastNCompactionCommits(3, tableBasePath, fs);
+        TestHelpers.assertAtleastNCompactionCommits(3, tableBasePath);
       }
       assertRecordCount(totalRecords, tableBasePath, sqlContext);
       assertDistanceCount(totalRecords, tableBasePath, sqlContext);
@@ -394,9 +394,9 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     // Condition for parallel ingestion job
     Function<Boolean, Boolean> conditionForRegularIngestion = (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
-        TestHelpers.assertAtleastNDeltaCommitsAfterCommit(3, lastSuccessfulCommit, tableBasePath, fs);
+        TestHelpers.assertAtleastNDeltaCommitsAfterCommit(3, lastSuccessfulCommit, tableBasePath);
       } else {
-        TestHelpers.assertAtleastNCompactionCommitsAfterCommit(3, lastSuccessfulCommit, tableBasePath, fs);
+        TestHelpers.assertAtleastNCompactionCommitsAfterCommit(3, lastSuccessfulCommit, tableBasePath);
       }
       assertRecordCount(totalRecords, tableBasePath, sqlContext);
       assertDistanceCount(totalRecords, tableBasePath, sqlContext);
