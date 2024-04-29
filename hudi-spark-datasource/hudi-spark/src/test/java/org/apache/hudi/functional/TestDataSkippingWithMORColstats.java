@@ -109,6 +109,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
    */
   @Test
   public void testBaseFileOnly() {
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     Dataset<Row> inserts = makeInsertDf("000", 100);
     Dataset<Row> batch1 = inserts.where(matchCond);
     Dataset<Row> batch2 = inserts.where(nonMatchCond);
@@ -179,6 +180,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
    */
   @Test
   public void testBaseFileAndLogFileUpdateMatchesDeleteBlockCompact() {
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     testBaseFileAndLogFileUpdateMatchesHelper(false, true,true, false);
   }
 
@@ -192,6 +194,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
    */
   @Test
   public void testBaseFileAndLogFileUpdateMatchesAndRollBack() {
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     testBaseFileAndLogFileUpdateMatchesHelper(false, false,false, true);
   }
 
@@ -318,7 +321,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
     options.put(HoodieMetadataConfig.ENABLE.key(), "true");
     options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     options.put(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "trip_type");
-    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
+    // options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     options.put(DataSourceReadOptions.ENABLE_DATA_SKIPPING().key(), "true");
     options.put(DataSourceWriteOptions.TABLE_TYPE().key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
     options.put(HoodieWriteConfig.TBL_NAME.key(), "testTable");

@@ -73,21 +73,23 @@ public abstract class BaseFileUtils {
   /**
    * Aggregate column range statistics across files in a partition.
    *
-   * @param fileRanges List of column range statistics for each file in a partition
+   * @param fileColumnRanges List of column range statistics for each file in a partition
    */
-  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(@Nonnull List<HoodieColumnRangeMetadata<T>> fileRanges) {
-    if (fileRanges.size() == 1) {
+  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(@Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges) {
+    if (fileColumnRanges.size() == 1) {
       // Only one parquet file, we can just return that range.
-      return fileRanges.get(0);
+      return fileColumnRanges.get(0);
     }
     // There are multiple files. Compute min(file_mins) and max(file_maxs)
-    return fileRanges.stream()
+    return fileColumnRanges.stream()
         .sequential()
         .reduce(BaseFileUtils::mergeRanges).get();
   }
 
   private static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> mergeRanges(HoodieColumnRangeMetadata<T> one,
                                                                                     HoodieColumnRangeMetadata<T> another) {
+    ValidationUtils.checkArgument(one.getColumnName().equals(another.getColumnName()),
+        "Column names should be the same for merging column ranges");
     final T minValue = getMinValueForColumnRanges(one, another);
     final T maxValue = getMaxValueForColumnRanges(one, another);
 
