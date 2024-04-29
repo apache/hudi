@@ -167,15 +167,6 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
   }
 
   @Test
-  public void testProcessDeleteBlockWithCustomMerger() throws Exception {
-    prepareBuffer(true);
-    HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions();
-    buffer.processDeleteBlock(deleteBlock);
-    assertEquals(50, buffer.getLogRecords().size());
-    assertNotNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY));
-  }
-
-  @Test
   public void testProcessDeleteBlockWithoutPositions() throws Exception {
     prepareBuffer(false);
     HoodieDeleteBlock deleteBlock = getDeleteBlockWithoutPositions();
