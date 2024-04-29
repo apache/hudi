@@ -122,7 +122,7 @@ parameters:
 
 variables:
   BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.18'
-  PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
+  PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=false -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-T 3 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -DfailIfNoTests=false'
@@ -165,6 +165,10 @@ stages:
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
+          - task: PublishCodeCoverageResults@2
+            displayName: Publish Code Coverage Result
+            inputs:
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
@@ -199,6 +203,10 @@ stages:
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
+          - task: PublishCodeCoverageResults@2
+            displayName: Publish Code Coverage Result
+            inputs:
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
@@ -233,6 +241,10 @@ stages:
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
+          - task: PublishCodeCoverageResults@2
+            displayName: Publish Code Coverage Result
+            inputs:
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
@@ -258,6 +270,10 @@ stages:
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
+          - task: PublishCodeCoverageResults@2
+            displayName: Publish Code Coverage Result
+            inputs:
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/target/site/*/jacoco.xml'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
@@ -292,9 +308,7 @@ stages:
                 && mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dtest="Test*DeltaStreamer*" -DfailIfNoTests=false -pl hudi-utilities
                 && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dtest="Test*DeltaStreamer*" -DfailIfNoTests=false -pl hudi-utilities
-                && ./scripts/ci/move_surefire_reports.sh /hudi /hudi/scripts/ci/results
-                && echo 'All surefire report files:'
-                && find . -type f -name \"TEST-*.xml\""
+                && ./scripts/ci/move_reports.sh /hudi /hudi/scripts/ci/results
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:
@@ -302,6 +316,10 @@ stages:
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               searchFolder: '$(Build.SourcesDirectory)/scripts/ci/results'
               failTaskOnFailedTests: true
+          - task: PublishCodeCoverageResults@2
+            displayName: Publish Code Coverage Result
+            inputs:
+              summaryFileLocation: '$(Build.SourcesDirectory)/scripts/ci/results/**/target/site/*/jacoco.xml'
           - script: |
               grep "testcase" scripts/ci/results/*/target/surefire-reports/*.xml scripts/ci/results/*/*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
@@ -337,9 +355,7 @@ stages:
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="$(JOB6_SPARK_PROCEDURE_WILDCARD_SUITES)" -pl $(JOB34_MODULES)
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dtest="!Test*DeltaStreamer*" -DfailIfNoTests=false -pl $(JOB6_UT_MODULES)
                 && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dtest="!Test*DeltaStreamer*" -DfailIfNoTests=false -pl $(JOB6_FT_MODULES)
-                && ./scripts/ci/move_surefire_reports.sh /hudi /hudi/scripts/ci/results
-                && echo 'All surefire report files:'
-                && find . -type f -name \"TEST-*.xml\""
+                && ./scripts/ci/move_reports.sh /hudi /hudi/scripts/ci/results
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:
@@ -347,6 +363,10 @@ stages:
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               searchFolder: '$(Build.SourcesDirectory)/scripts/ci/results'
               failTaskOnFailedTests: true
+          - task: PublishCodeCoverageResults@2
+            displayName: Publish Code Coverage Result
+            inputs:
+              summaryFileLocation: '$(Build.SourcesDirectory)/scripts/ci/results/**/target/site/*/jacoco.xml'
           - script: |
               grep "testcase" scripts/ci/results/*/target/surefire-reports/*.xml scripts/ci/results/*/*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases

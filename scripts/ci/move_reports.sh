@@ -19,6 +19,9 @@
 # under the License.
 #
 
+# This script is aimed to fix the file access permission issue in Docker container:
+##[error]Error: Failed find: EACCES: permission denied, scandir '/home/vsts/work/1/s/hudi-utilities/null/hive'
+
 # Check if two arguments were provided
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <source_directory> <destination_directory>"
@@ -28,6 +31,8 @@ fi
 # Assign the first and second argument to SOURCE and DEST variables
 SOURCE="$1"
 DEST="$2"
+# List of file patterns
+LIST=( -name "TEST-*.xml" -o -name "jacoco.xml" )
 
 # Ensure the source directory exists
 if [ ! -d "$SOURCE" ]; then
@@ -40,7 +45,7 @@ if [ ! -d "$DEST" ]; then
     mkdir -p "$DEST"
 fi
 
-find "$SOURCE" -type f -name "TEST-*.xml" | while IFS= read -r file; do
+find -L "$SOURCE" -type f \( "${LIST[@]}" \)  | while IFS= read -r file; do
     # Extract the relative directory path
     relative_path="${file#$SOURCE}"
     destination_path="$DEST$relative_path"
@@ -56,3 +61,10 @@ find "$SOURCE" -type f -name "TEST-*.xml" | while IFS= read -r file; do
     # Move the file to the new location, preserving the directory structure
     mv "$file" "$destination_path"
 done
+
+# Print the file copies
+echo 'All surefire report files:'
+find "$DEST" -type f -name "TEST-*.xml"
+
+echo 'All jacoco report files:'
+find "$DEST" -type f -name "jacoco.xml"
