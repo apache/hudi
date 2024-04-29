@@ -81,7 +81,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     super(context, config, table, instantTime);
     this.partitionIndexTypes = partitionIndexTypes;
     this.partitionPaths = partitionPaths;
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
   }
 
   @Override

@@ -54,7 +54,6 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 
 public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
-  protected final HoodieFileGroupReaderState<T> readerState;
   protected final Schema readerSchema;
   protected final Option<String> partitionNameOverrideOpt;
   protected final Option<String[]> partitionPathFieldOpt;
@@ -79,13 +78,12 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled) {
     this.readerContext = readerContext;
-    this.readerState = readerContext.getReaderState();
-    this.readerSchema = readerState.schemaHandler.getRequiredSchema();
+    this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     this.partitionNameOverrideOpt = partitionNameOverrideOpt;
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMerger = recordMerger;
     this.payloadProps = payloadProps;
-    this.internalSchema = readerState.schemaHandler.getInternalSchema();
+    this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
@@ -281,7 +279,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         true, false, false).mergeSchemaGetRenamed();
     Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName());
     assert mergedAvroSchema.equals(readerSchema);
-    return Option.of(Pair.of(readerContext.projectRecordUnsafe(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
+    return Option.of(Pair.of(readerContext.projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
   }
 
   /**

@@ -44,13 +44,13 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
@@ -90,7 +90,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
    **/
   protected void validateDeltaCommit(String latestDeltaCommit, final Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> fgIdToCompactionOperation,
                                      HoodieWriteConfig cfg) {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+    HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
     HoodieTable table = getHoodieTable(metaClient, cfg);
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
     fileSliceList.forEach(fileSlice -> {
@@ -111,7 +111,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
                                                    List<HoodieRecord> records, HoodieWriteConfig cfg, boolean insertFirst, List<String> expPendingCompactionInstants)
       throws Exception {
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+    HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
     List<Pair<String, HoodieCompactionPlan>> pendingCompactions = readClient.getPendingCompactions();
     List<String> gotPendingCompactionInstants =
         pendingCompactions.stream().map(pc -> pc.getKey()).sorted().collect(Collectors.toList());
@@ -133,7 +133,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
         client.commit(firstInstant, statuses);
       }
       assertNoWriteErrors(statusList);
-      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      metaClient = createMetaClient(cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       List<HoodieBaseFile> dataFilesToRead = getCurrentLatestBaseFiles(hoodieTable);
       assertTrue(dataFilesToRead.stream().findAny().isPresent(),
@@ -144,7 +144,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     int numRecords = records.size();
     for (String instantTime : deltaInstants) {
       records = dataGen.generateUpdates(instantTime, numRecords);
-      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      metaClient = createMetaClient(cfg.getBasePath());
       createNextDeltaCommit(instantTime, records, client, metaClient, cfg, false);
       validateDeltaCommit(instantTime, fgIdToCompactionOperation, cfg);
     }
@@ -152,7 +152,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
   }
 
   protected void moveCompactionFromRequestedToInflight(String compactionInstantTime, HoodieWriteConfig cfg) {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+    HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
     HoodieInstant compactionInstant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
     metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
     HoodieInstant instant = metaClient.getActiveTimeline().reload().filterPendingCompactionTimeline().getInstantsAsStream()
@@ -162,7 +162,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
 
   protected void scheduleCompaction(String compactionInstantTime, SparkRDDWriteClient client, HoodieWriteConfig cfg) {
     client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+    HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
     HoodieInstant instant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().get();
     assertEquals(compactionInstantTime, instant.getTimestamp(), "Last compaction instant must be the one set");
   }
@@ -178,7 +178,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
    */
   protected String tryScheduleCompaction(String compactionInstantTime, SparkRDDWriteClient client, HoodieWriteConfig cfg) {
     client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+    HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
     return metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().map(HoodieInstant::getTimestamp).orElse(null);
   }
 
@@ -215,7 +215,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     }
 
     // verify that there is a commit
-    table = getHoodieTable(HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).setLoadActiveTimelineOnLoad(true).build(), cfg);
+    table = getHoodieTable(createMetaClient(cfg.getBasePath()), cfg);
     HoodieTimeline timeline = table.getMetaClient().getCommitTimeline().filterCompletedInstants();
     String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
     assertEquals(latestCompactionCommitTime, compactionInstantTime,
@@ -237,7 +237,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
         "Compacted files should not show up in latest slices");
 
     // verify that there is a commit
-    table = getHoodieTable(HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).setLoadActiveTimelineOnLoad(true).build(), cfg);
+    table = getHoodieTable(createMetaClient(cfg.getBasePath()), cfg);
     HoodieTimeline timeline = table.getMetaClient().getCommitTimeline().filterCompletedInstants();
     // verify compaction commit is visible in timeline
     assertTrue(timeline.filterCompletedInstants().getInstantsAsStream()
@@ -277,9 +277,11 @@ public class CompactionTestBase extends HoodieClientTestBase {
   }
 
   protected List<HoodieBaseFile> getCurrentLatestBaseFiles(HoodieTable table) throws IOException {
-    FileStatus[] allBaseFiles = HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles();
+    List<StoragePathInfo> allBaseFiles =
+        HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles();
     HoodieTableFileSystemView view =
-        getHoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(), allBaseFiles);
+        getHoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(),
+            allBaseFiles);
     return view.getLatestBaseFiles().collect(Collectors.toList());
   }
 

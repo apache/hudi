@@ -183,7 +183,12 @@ public class IncrSourceHelper {
                                                                                                                     long sourceLimit, QueryInfo queryInfo,
                                                                                                                     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
     if (sourceData.isEmpty()) {
-      return Pair.of(cloudObjectIncrCheckpoint, Option.empty());
+      // There is no file matching the prefix.
+      CloudObjectIncrCheckpoint updatedCheckpoint =
+              queryInfo.getEndInstant().equals(cloudObjectIncrCheckpoint.getCommit())
+                      ? cloudObjectIncrCheckpoint
+                      : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
+      return Pair.of(updatedCheckpoint, Option.empty());
     }
     // Let's persist the dataset to avoid triggering the dag repeatedly
     sourceData.persist(StorageLevel.MEMORY_AND_DISK());
@@ -199,11 +204,18 @@ public class IncrSourceHelper {
           functions.concat(functions.col(queryInfo.getOrderColumn()), functions.col(queryInfo.getKeyColumn())));
       // Apply incremental filter
       orderedDf = orderedDf.filter(functions.col("commit_key").gt(concatenatedKey.get())).drop("commit_key");
-      // We could be just at the end of the commit, so return empty
+      // If there are no more files where commit_key is greater than lastCheckpointCommit#lastCheckpointKey
       if (orderedDf.isEmpty()) {
         LOG.info("Empty ordered source, returning endpoint:" + queryInfo.getEndInstant());
         sourceData.unpersist();
-        return Pair.of(new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), lastCheckpointKey.get()), Option.empty());
+        // queryInfo.getEndInstant() represents source table's last completed instant
+        // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c1, return c1#abc.
+        // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c2, return c2.
+        CloudObjectIncrCheckpoint updatedCheckpoint =
+            queryInfo.getEndInstant().equals(cloudObjectIncrCheckpoint.getCommit())
+                ? cloudObjectIncrCheckpoint
+                : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
+        return Pair.of(updatedCheckpoint, Option.empty());
       }
     }
 

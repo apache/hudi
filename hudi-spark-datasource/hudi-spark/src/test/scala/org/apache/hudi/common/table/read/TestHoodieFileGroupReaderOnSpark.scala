@@ -24,10 +24,10 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordMerger, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.{SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{HoodieSparkRecordMerger, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils, Row, SaveMode, SparkSession}
@@ -82,13 +82,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, hadoopConf: Configuration): HoodieReaderContext[InternalRow] = {
     val reader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, hadoopConf)
     val metaClient = HoodieTableMetaClient.builder().setConf(getHadoopConf).setBasePath(tablePath).build
-    val recordKeyField = if (metaClient.getTableConfig.populateMetaFields()) {
-      HoodieRecord.RECORD_KEY_METADATA_FIELD
-    } else {
-      val keyFields = metaClient.getTableConfig.getRecordKeyFields.get()
-      checkState(keyFields.length == 1)
-      keyFields.head
-    }
+    val recordKeyField = new HoodieSparkRecordMerger().getMandatoryFieldsForMerging(metaClient.getTableConfig)(0)
     new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty)
   }
 

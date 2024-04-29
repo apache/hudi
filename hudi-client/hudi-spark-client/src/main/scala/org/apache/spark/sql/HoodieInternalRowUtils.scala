@@ -74,13 +74,6 @@ object HoodieInternalRowUtils {
   }
 
   /**
-   * due to scala2.11 and HoodieCatalystExpressionUtils is both an object and trait,
-   * we can't directly call generateUnsafeProjection from java code
-   */
-  def generateUnsafeProjectionAlias(from: StructType, to: StructType): UnsafeProjection = {
-    generateUnsafeProjection(from, to)
-  }
-  /**
    * Provides cached instance of [[UnsafeRowWriter]] transforming provided [[InternalRow]]s from
    * one [[StructType]] and into another [[StructType]]
    *

@@ -17,16 +17,18 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, HoodieSparkUtils, QuickstartUtils}
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -461,8 +463,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   private def validateInternalSchema(basePath: String, isDropColumn: Boolean, currentMaxColumnId: Int): Unit = {
-    val hadoopConf = spark.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build()
+    val metaClient = createMetaClient(spark, basePath)
     val schema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata.get()
     val lastInstant = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get()
     assert(schema.schemaId() == lastInstant.getTimestamp.toLong)
@@ -474,8 +475,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   private def getMaxColumnId(basePath: String): Int = {
-    val hadoopConf = spark.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build()
+    val metaClient = createMetaClient(spark, basePath)
     new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata.get.getMaxColumnId
   }
 
@@ -709,8 +709,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   test("Test schema auto evolution") {
-    //This test will be flakey for mor until [HUDI-6798] is landed and we can set the merge mode
-    spark.sql("set hoodie.file.group.reader.enabled=false")
     withTempDir { tmp =>
       Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
         // for complex schema.
@@ -809,7 +807,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         }
       }
     }
-    spark.sqlContext.conf.unsetConf("hoodie.file.group.reader.enabled");
   }
 
   test("Test DATE to STRING conversions when vectorized reading is not enabled") {

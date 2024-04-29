@@ -25,7 +25,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.hadoop.fs.CachingPath
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.ExceptionWrappingIterator
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
@@ -237,7 +237,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
 
   def parsePartitionColumnValues(partitionColumns: Array[String],
                                  partitionPath: String,
-                                 basePath: Path,
+                                 basePath: StoragePath,
                                  schema: StructType,
                                  timeZoneId: String,
                                  sparkParsePartitionUtil: SparkParsePartitionUtil,
@@ -246,7 +246,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       // This is a non-partitioned table
       Array.empty
     } else {
-      val partitionFragments = partitionPath.split("/")
+      val partitionFragments = partitionPath.split(StoragePath.SEPARATOR)
       if (partitionFragments.length != partitionColumns.length) {
         if (partitionColumns.length == 1) {
           // If the partition column size is not equal to the partition fragment size
@@ -290,9 +290,9 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
             } else {
               partition
             }
-        }.mkString("/")
+        }.mkString(StoragePath.SEPARATOR)
 
-        val pathWithPartitionName = new CachingPath(basePath, CachingPath.createRelativePathUnsafe(partitionWithName))
+        val pathWithPartitionName = new StoragePath(basePath, partitionWithName)
         val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema, timeZoneId,
           sparkParsePartitionUtil, basePath, shouldValidatePartitionCols)
@@ -301,14 +301,14 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     }
   }
 
-  private def parsePartitionPath(partitionPath: Path, partitionSchema: StructType, timeZoneId: String,
-                                 sparkParsePartitionUtil: SparkParsePartitionUtil, basePath: Path,
+  private def parsePartitionPath(partitionPath: StoragePath, partitionSchema: StructType, timeZoneId: String,
+                                 sparkParsePartitionUtil: SparkParsePartitionUtil, basePath: StoragePath,
                                  shouldValidatePartitionCols: Boolean): Seq[Any] = {
     val partitionDataTypes = partitionSchema.map(f => f.name -> f.dataType).toMap
     sparkParsePartitionUtil.parsePartition(
-      partitionPath,
+      new Path(partitionPath.toUri),
       typeInference = false,
-      Set(basePath),
+      Set(new Path(basePath.toUri)),
       partitionDataTypes,
       getTimeZone(timeZoneId),
       validatePartitionValues = shouldValidatePartitionCols
@@ -329,7 +329,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         partitionVals(index) = fragment.substring(fragment.indexOf("=") + 1)
 
       } else {
-        partitionVals(index) += "/" + fragment
+        partitionVals(index) += StoragePath.SEPARATOR + fragment
       }
     }
     return partitionVals

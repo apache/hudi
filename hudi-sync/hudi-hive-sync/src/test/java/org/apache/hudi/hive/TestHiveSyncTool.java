@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -360,7 +361,7 @@ public class TestHiveSyncTool {
     // it and generate a partition update event for it.
     ddlExecutor.runSQL("ALTER TABLE `" + HiveTestUtil.TABLE_NAME
         + "` PARTITION (`datestr`='2050-01-01') SET LOCATION '"
-        + FSUtils.getPartitionPath(basePath, "2050/1/1").toString() + "'");
+        + FSUtils.constructAbsolutePathInHadoopPath(basePath, "2050/1/1").toString() + "'");
 
     hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.empty(), Option.empty());
@@ -451,8 +452,8 @@ public class TestHiveSyncTool {
     HiveTestUtil.removeCommitFromActiveTimeline("300", COMMIT_ACTION);
     HiveTestUtil.removeCommitFromActiveTimeline("500", COMMIT_ACTION);
     HiveTestUtil.removeCommitFromActiveTimeline("600", COMMIT_ACTION);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(hiveClient.config.getHadoopConf()).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        hiveClient.config.getHadoopConf(), basePath);
     assertEquals(
         Arrays.asList("400", "700", "800"),
         metaClient.getActiveTimeline().getInstants().stream()

@@ -23,11 +23,10 @@ import org.apache.hudi.ColumnStatsIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.model._
-import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.function.SerializableFunction
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -36,7 +35,6 @@ import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -44,8 +42,10 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
-
 import java.nio.ByteBuffer
+
+import org.apache.spark.sql.catalyst.expressions.Expression
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
@@ -55,11 +55,8 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
                               @transient metadataConfig: HoodieMetadataConfig,
                               @transient metaClient: HoodieTableMetaClient,
-                              allowCaching: Boolean = false) {
-
-  @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-  @transient private lazy val metadataTable: HoodieTableMetadata =
-    HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString)
+                              allowCaching: Boolean = false)
+  extends SparkBaseIndexSupport(spark, metadataConfig, metaClient) {
 
   @transient private lazy val cachedColumnStatsIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
@@ -79,26 +76,47 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     }
   }
 
+  override def getIndexName: String = ColumnStatsIndexSupport.INDEX_NAME
+
+  override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
+                                         queryFilters: Seq[Expression],
+                                         queryReferencedColumns: Seq[String],
+                                         prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                         shouldPushDownFilesFilter: Boolean
+                                        ): Option[Set[String]] = {
+    if (isIndexAvailable && queryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
+      // NOTE: Since executing on-cluster via Spark API has its own non-trivial amount of overhead,
+      //       it's most often preferential to fetch Column Stats Index w/in the same process (usually driver),
+      //       w/o resorting to on-cluster execution.
+      //       For that we use a simple-heuristic to determine whether we should read and process CSI in-memory or
+      //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
+      //       threshold (of 100k records)
+      val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
+      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
+      // NOTE: If partition pruning doesn't prune any files, then there's no need to apply file filters
+      //       when loading the Column Statistics Index
+      val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
+
+      loadTransposed(queryReferencedColumns, readInMemory, prunedFileNamesOpt) { transposedColStatsDF =>
+        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
+      }
+    } else {
+      Option.empty
+    }
+  }
+
+  override def invalidateCaches(): Unit = {
+    cachedColumnStatsIndexViews.foreach { case (_, df) => df.unpersist() }
+    cachedColumnStatsIndexViews.clear()
+  }
+
   /**
    * Returns true in cases when Column Stats Index is built and available as standalone partition
    * w/in the Metadata Table
    */
   def isIndexAvailable: Boolean = {
-    checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
+    checkState(metadataConfig.isEnabled, "Metadata Table support has to be enabled")
     metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
-  }
-
-  /**
-   * Determines whether it would be more optimal to read Column Stats Index a) in-memory of the invoking process,
-   * or b) executing it on-cluster via Spark [[Dataset]] and [[RDD]] APIs
-   */
-  def shouldReadInMemory(fileIndex: HoodieFileIndex, queryReferencedColumns: Seq[String]): Boolean = {
-    Option(metadataConfig.getColumnStatsIndexProcessingModeOverride) match {
-      case Some(mode) =>
-        mode == HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY
-      case None =>
-        fileIndex.getFileSlicesCount * queryReferencedColumns.length < inMemoryProjectionThreshold
-    }
   }
 
   /**
@@ -170,11 +188,6 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     } else {
       loadFullColumnStatsIndexInternal()
     }
-  }
-
-  def invalidateCaches(): Unit = {
-    cachedColumnStatsIndexViews.foreach { case (_, df) => df.unpersist() }
-    cachedColumnStatsIndexViews.clear()
   }
 
   /**
@@ -366,6 +379,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 }
 
 object ColumnStatsIndexSupport {
+  val INDEX_NAME = "COLUMN_STATS"
 
   private val expectedAvroSchemaValues = Set("BooleanWrapper", "IntWrapper", "LongWrapper", "FloatWrapper", "DoubleWrapper",
     "BytesWrapper", "StringWrapper", "DateWrapper", "DecimalWrapper", "TimeMicrosWrapper", "TimestampMicrosWrapper")

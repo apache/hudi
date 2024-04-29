@@ -17,7 +17,6 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -28,14 +27,17 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.util
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.index.HoodieIndex.IndexType
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, SparkDatasetMixin}
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -79,7 +81,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown() = {
@@ -88,7 +90,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     cleanupFileSystem()
   }
 
-  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
@@ -114,7 +116,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -282,7 +284,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(writeOpts)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit5Time = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+    val commit5Time = HoodieDataSourceHelpers.latestCommit(storage, basePath)
     val hudiSnapshotDF5 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -298,7 +300,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option("hoodie.compact.inline", "true")
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit6Time = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+    val commit6Time = HoodieDataSourceHelpers.latestCommit(storage, basePath)
     val hudiSnapshotDF6 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -366,7 +368,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -713,7 +715,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+    val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(storage, basePath)
 
     val countIn20160315 = records1.asScala.count(record => record.getPartitionPath == "2016/03/15")
     // query the partition by filter
@@ -844,8 +846,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
-    val baseFilePath = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
+    val baseFilePath = storage.listDirectEntries(new StoragePath(basePath, dataGen.getPartitionPaths.head))
+      .asScala
       .filter(_.getPath.getName.endsWith("parquet"))
       .map(_.getPath.toString)
       .mkString(",")
@@ -864,7 +867,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(expectedCount1, hudiReadPathDF1.count())
 
     // Paths Contains both baseFile and log files
-    val logFilePath = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
+    val logFilePath = storage.listDirectEntries(new StoragePath(basePath, dataGen.getPartitionPaths.head))
+      .asScala
       .filter(_.getPath.getName.contains("log"))
       .map(_.getPath.toString)
       .mkString(",")
@@ -898,7 +902,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // There should no base file in the file list.
     assertTrue(DataSourceTestUtils.isLogFileOnly(basePath))
 
-    val logFilePath = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
+    val logFilePath = storage.listDirectEntries(new StoragePath(basePath, dataGen.getPartitionPaths.head))
+      .asScala
       .filter(_.getPath.getName.contains("log"))
       .map(_.getPath.toString)
       .mkString(",")
@@ -1152,10 +1157,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf)
-      .build()
+    metaClient = createMetaClient(spark, basePath)
     val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
 
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
@@ -1291,7 +1293,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       spark.sparkContext, "", tablePath, tableName,
       mapAsJavaMap(compactionOptions)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
-    val compactionInstant = client.scheduleCompaction(org.apache.hudi.common.util.Option.empty()).get()
+    val compactionInstant = client.scheduleCompaction(Option.empty()).get()
 
     // NOTE: this executes the compaction to write the compacted base files, and leaves the
     // compaction instant still inflight, emulating a compaction action that is in progress
@@ -1368,7 +1370,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(HoodieIndexConfig.INDEX_TYPE_PROP, IndexType.INMEMORY.name())
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
 
     val snapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
@@ -1419,10 +1421,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), mergerStrategyName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf)
-      .build()
+    metaClient = createMetaClient(spark, basePath)
     assertEquals(metaClient.getTableConfig.getRecordMergerStrategy, mergerStrategyName)
   }
 }

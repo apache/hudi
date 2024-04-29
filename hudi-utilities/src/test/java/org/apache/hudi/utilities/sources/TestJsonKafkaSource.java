@@ -87,7 +87,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   @Override
-  TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
+  protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     return createPropsForJsonKafkaSource(testUtils.brokerAddress(), topic, maxEventsToReadFromKafkaSource, resetStrategy);
   }
 
@@ -105,7 +105,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   @Override
-  SourceFormatAdapter createSource(TypedProperties props) {
+  protected SourceFormatAdapter createSource(TypedProperties props) {
     return new SourceFormatAdapter(new JsonKafkaSource(props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile)));
   }
 
@@ -204,7 +204,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   @Override
-  void sendMessagesToKafka(String topic, int count, int numPartitions) {
+  protected void sendMessagesToKafka(String topic, int count, int numPartitions) {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.sendMessages(topic, jsonifyRecordsByPartitions(dataGenerator.generateInsertsAsPerSchema("000", count, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA), numPartitions));
   }
@@ -296,7 +296,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
 
   private BaseErrorTableWriter getAnonymousErrorTableWriter(TypedProperties props) {
     return new BaseErrorTableWriter<ErrorEvent<String>>(new HoodieDeltaStreamer.Config(),
-        spark(), props, new HoodieSparkEngineContext(jsc()), fs()) {
+        spark(), props, new HoodieSparkEngineContext(jsc()), hoodieStorage()) {
       List<JavaRDD<HoodieAvroRecord>> errorEvents = new LinkedList();
 
       @Override
@@ -305,7 +305,8 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
       }
 
       @Override
-      public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+      public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime,
+                                                              Option commitedInstantTime) {
         return Option.of(errorEvents.stream().reduce((rdd1, rdd2) -> rdd1.union(rdd2)).get());
       }
 

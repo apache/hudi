@@ -28,7 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestHarness {
@@ -89,15 +89,14 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
       val metaClient = getHoodieMetaClient(
         _spark.sparkContext.hadoopConfiguration, basePath)
       val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
-      assertTrue(allBaseFiles.nonEmpty)
+      assertFalse(allBaseFiles.isEmpty)
       val readerContext = new SparkFileFormatInternalRowReaderContext(reader, HoodieRecord.RECORD_KEY_METADATA_FIELD, Seq.empty)
-      val readerState = readerContext.getReaderState
-      readerState.useRecordPosition = true
-      readerState.hasLogFiles = true
-      readerState.needsBootstrapMerge = false
-      readerState.hasBootstrapBaseFile = false
+      readerContext.setUseRecordPosition(true)
+      readerContext.setHasLogFiles(true)
+      readerContext.setNeedsBootstrapMerge(false)
+      readerContext.setHasBootstrapBaseFile(false)
       //dataschema param is set to null because it is not used
-      val fileRecordIterator = readerContext.getFileRecordIterator(allBaseFiles.head.getPath, 0, allBaseFiles.head.getLen, null,
+      val fileRecordIterator = readerContext.getFileRecordIterator(allBaseFiles.get(0).getPath, 0, allBaseFiles.get(0).getLength, null,
         sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), hadoopConf)
 
       // Make sure we can read all the positions out from base file.

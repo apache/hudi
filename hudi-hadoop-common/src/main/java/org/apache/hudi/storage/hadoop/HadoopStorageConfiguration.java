@@ -27,6 +27,7 @@ import org.apache.hadoop.conf.Configuration;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 
 /**
  * Implementation of {@link StorageConfiguration} providing Hadoop's {@link Configuration}.
@@ -53,29 +54,22 @@ public class HadoopStorageConfiguration extends StorageConfiguration<Configurati
   }
 
   public HadoopStorageConfiguration(HadoopStorageConfiguration configuration) {
-    this.configuration = configuration.newCopy();
+    this.configuration = configuration.unwrapCopy();
   }
 
   @Override
-  public Configuration get() {
+  public StorageConfiguration<Configuration> newInstance() {
+    return new HadoopStorageConfiguration(this);
+  }
+
+  @Override
+  public Configuration unwrap() {
     return configuration;
   }
 
   @Override
-  public Configuration newCopy() {
+  public Configuration unwrapCopy() {
     return new Configuration(configuration);
-  }
-
-  @Override
-  public void writeObject(ObjectOutputStream out) throws IOException {
-    out.defaultWriteObject();
-    configuration.write(out);
-  }
-
-  @Override
-  public void readObject(ObjectInputStream in) throws IOException {
-    configuration = new Configuration(false);
-    configuration.readFields(in);
   }
 
   @Override
@@ -94,5 +88,33 @@ public class HadoopStorageConfiguration extends StorageConfiguration<Configurati
     configuration.iterator().forEachRemaining(
         e -> stringBuilder.append(String.format("%s => %s \n", e.getKey(), e.getValue())));
     return stringBuilder.toString();
+  }
+
+  /**
+   * Serializes the storage configuration.
+   * DO NOT change the signature, as required by {@link Serializable}.
+   * This method has to be private; otherwise, serde of the object of this class
+   * in Spark does not work.
+   *
+   * @param out stream to write.
+   * @throws IOException on I/O error.
+   */
+  private void writeObject(ObjectOutputStream out) throws IOException {
+    out.defaultWriteObject();
+    configuration.write(out);
+  }
+
+  /**
+   * Deserializes the storage configuration.
+   * DO NOT change the signature, as required by {@link Serializable}.
+   * This method has to be private; otherwise, serde of the object of this class
+   * in Spark does not work.
+   *
+   * @param in stream to read.
+   * @throws IOException on I/O error.
+   */
+  private void readObject(ObjectInputStream in) throws IOException {
+    configuration = new Configuration(false);
+    configuration.readFields(in);
   }
 }

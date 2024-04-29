@@ -24,6 +24,7 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.SeekableDataInputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,7 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Provides I/O APIs on files and directories on storage.
@@ -44,13 +46,30 @@ import java.util.List;
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class HoodieStorage implements Closeable {
   public static final Logger LOG = LoggerFactory.getLogger(HoodieStorage.class);
-  public static final String TMP_PATH_POSTFIX = ".tmp";
 
   /**
    * @return the scheme of the storage.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract String getScheme();
+
+  /**
+   * @return the default block size.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract int getDefaultBlockSize(StoragePath path);
+
+  /**
+   * @return the default buffer size.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract int getDefaultBufferSize();
+
+  /**
+   * @return the default block replication
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract short getDefaultReplication(StoragePath path);
 
   /**
    * Returns a URI which identifies this HoodieStorage.
@@ -73,6 +92,21 @@ public abstract class HoodieStorage implements Closeable {
   public abstract OutputStream create(StoragePath path, boolean overwrite) throws IOException;
 
   /**
+   * Creates an OutputStream at the indicated path.
+   *
+   * @param path          the file to create
+   * @param overwrite     if a file with this name already exists, then if {@code true},
+   *                      the file will be overwritten, and if {@code false} an exception will be thrown.
+   * @param bufferSize    the size of the buffer to be used
+   * @param replication   required block replication for the file
+   * @param sizeThreshold block size
+   * @return the OutputStream to write to.
+   * @throws IOException IO error.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract OutputStream create(StoragePath path, boolean overwrite, Integer bufferSize, Short replication, Long sizeThreshold) throws IOException;
+
+  /**
    * Opens an InputStream at the indicated path.
    *
    * @param path the file to open.
@@ -81,6 +115,17 @@ public abstract class HoodieStorage implements Closeable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract InputStream open(StoragePath path) throws IOException;
+
+  /**
+   * Opens an SeekableDataInputStream at the indicated path with seeks supported.
+   *
+   * @param path       the file to open.
+   * @param bufferSize buffer size to use.
+   * @return the InputStream to read from.
+   * @throws IOException IO error.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract SeekableDataInputStream openSeekable(StoragePath path, int bufferSize) throws IOException;
 
   /**
    * Appends to an existing file (optional operation).
@@ -220,10 +265,16 @@ public abstract class HoodieStorage implements Closeable {
   public abstract Object getFileSystem();
 
   /**
-   * @return the underlying configuration instance if exists.
+   * @return the storage configuration.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract Object getConf();
+  public abstract StorageConfiguration<?> getConf();
+
+  /**
+   * @return the underlying configuration instance.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract Object unwrapConf();
 
   /**
    * Creates a new file with overwrite set to false. This ensures files are created
@@ -231,12 +282,15 @@ public abstract class HoodieStorage implements Closeable {
    * empty, will first write the content to a temp file if {needCreateTempFile} is
    * true, and then rename it back after the content is written.
    *
-   * @param path    file path.
-   * @param content content to be stored.
+   * <p>CAUTION: if this method is invoked in multi-threads for concurrent write of the same file,
+   * an existence check of the file is recommended.
+   *
+   * @param path    File path.
+   * @param content Content to be stored.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public final void createImmutableFileInPath(StoragePath path,
-                                              Option<byte[]> content) throws IOException {
+                                              Option<byte[]> content) throws HoodieIOException {
     OutputStream fsout = null;
     StoragePath tmpPath = null;
 
@@ -249,7 +303,7 @@ public abstract class HoodieStorage implements Closeable {
 
       if (content.isPresent() && needTempFile) {
         StoragePath parent = path.getParent();
-        tmpPath = new StoragePath(parent, path.getName() + TMP_PATH_POSTFIX);
+        tmpPath = new StoragePath(parent, path.getName() + "." + UUID.randomUUID());
         fsout = create(tmpPath, false);
         fsout.write(content.get());
       }
@@ -330,6 +384,18 @@ public abstract class HoodieStorage implements Closeable {
       create(path, false).close();
       return true;
     }
+  }
+
+  /**
+   * Opens an SeekableDataInputStream at the indicated path with seeks supported.
+   *
+   * @param path the file to open.
+   * @return the InputStream to read from.
+   * @throws IOException IO error.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public SeekableDataInputStream openSeekable(StoragePath path) throws IOException {
+    return openSeekable(path, getDefaultBlockSize(path));
   }
 
   /**

@@ -24,11 +24,17 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,11 +47,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public abstract class BaseTestStorageConfiguration<T> {
   private static final Map<String, String> EMPTY_MAP = new HashMap<>();
   private static final String KEY_STRING = "hudi.key.string";
+  private static final String KEY_STRING_OTHER = "hudi.key.string.other";
   private static final String KEY_BOOLEAN = "hudi.key.boolean";
   private static final String KEY_LONG = "hudi.key.long";
   private static final String KEY_ENUM = "hudi.key.enum";
   private static final String KEY_NON_EXISTENT = "hudi.key.non_existent";
   private static final String VALUE_STRING = "string_value";
+  private static final String VALUE_STRING_1 = "string_value_1";
   private static final String VALUE_BOOLEAN = "true";
   private static final String VALUE_LONG = "12309120";
   private static final String VALUE_ENUM = TestEnum.ENUM2.toString();
@@ -62,11 +70,14 @@ public abstract class BaseTestStorageConfiguration<T> {
   protected abstract T getConf(Map<String, String> mapping);
 
   @Test
-  public void testConstructorGetNewCopy() {
+  public void testConstructorNewInstanceUnwrapCopy() {
     T conf = getConf(EMPTY_MAP);
     StorageConfiguration<T> storageConf = getStorageConfiguration(conf);
-    assertSame(storageConf.get(), storageConf.get());
-    assertNotSame(storageConf.get(), storageConf.newCopy());
+    StorageConfiguration<T> newStorageConf = storageConf.newInstance();
+    assertNotSame(storageConf, newStorageConf);
+    assertNotSame(storageConf.unwrap(), newStorageConf.unwrap());
+    assertSame(storageConf.unwrap(), storageConf.unwrap());
+    assertNotSame(storageConf.unwrap(), storageConf.unwrapCopy());
   }
 
   @Test
@@ -79,12 +90,32 @@ public abstract class BaseTestStorageConfiguration<T> {
     storageConf.set(KEY_BOOLEAN, VALUE_BOOLEAN);
     assertEquals(Option.of(VALUE_STRING), storageConf.getString(KEY_STRING));
     assertTrue(storageConf.getBoolean(KEY_BOOLEAN, false));
+
+    storageConf.setIfUnset(KEY_STRING, VALUE_STRING + "_1");
+    storageConf.setIfUnset(KEY_STRING_OTHER, VALUE_STRING_1);
+    assertEquals(Option.of(VALUE_STRING), storageConf.getString(KEY_STRING));
+    assertEquals(Option.of(VALUE_STRING_1), storageConf.getString(KEY_STRING_OTHER));
   }
 
   @Test
   public void testGet() {
     StorageConfiguration<?> storageConf = getStorageConfiguration(getConf(prepareConfigs()));
     validateConfigs(storageConf);
+  }
+
+  @Test
+  public void testSerializability() throws IOException, ClassNotFoundException {
+    StorageConfiguration<?> storageConf = getStorageConfiguration(getConf(prepareConfigs()));
+    try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+         ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+      oos.writeObject(storageConf);
+      try (ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
+           ObjectInputStream ois = new ObjectInputStream(bais)) {
+        StorageConfiguration<?> deserialized = (StorageConfiguration) ois.readObject();
+        assertNotNull(deserialized.unwrap());
+        validateConfigs(deserialized);
+      }
+    }
   }
 
   private Map<String, String> prepareConfigs() {

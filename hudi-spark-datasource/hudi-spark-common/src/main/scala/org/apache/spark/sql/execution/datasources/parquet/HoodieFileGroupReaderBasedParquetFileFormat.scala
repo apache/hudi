@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.FileIOUtils
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType
 import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -62,8 +63,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   mergeType: String,
                                                   mandatoryFields: Seq[String],
                                                   isMOR: Boolean,
-                                                  isBootstrap: Boolean,
                                                   isIncremental: Boolean,
+                                                  validCommits: String,
                                                   shouldUseRecordPosition: Boolean,
                                                   requiredFilters: Seq[Filter]
                                                  ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
@@ -72,22 +73,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
   private val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
 
-  /**
-   * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
-   * while the other side can't
-   */
-  /*
-private var supportBatchCalled = false
-private var supportBatchResult = false
-
-override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-  if (!supportBatchCalled || supportBatchResult) {
-    supportBatchCalled = true
-    supportBatchResult = tableSchema.internalSchema.isEmpty && !isMOR && !isIncremental && !isBootstrap && super.supportBatch(sparkSession, schema)
-  }
-  supportBatchResult
-}
- */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = false
 
   private val supportBatchResult = false
@@ -116,7 +101,7 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
     spark.conf.set("spark.sql.parquet.enableVectorizedReader", supportBatchResult)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedHadoopConf = FSUtils.buildInlineConf(hadoopConf)
-    setSchemaEvolutionConfigs(augmentedHadoopConf, options)
+    setSchemaEvolutionConfigs(augmentedHadoopConf)
     val baseFileReader = super.buildReaderWithPartitionValues(spark, dataSchema, partitionSchema, requiredSchema,
       filters ++ requiredFilters, options, new Configuration(augmentedHadoopConf))
     val cdcFileReader = super.buildReaderWithPartitionValues(
@@ -146,7 +131,7 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
             case Some(fileSlice) if !isCount =>
               if (requiredSchema.isEmpty && !fileSlice.getLogFiles.findAny().isPresent) {
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
-                baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen))
+                baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getStoragePath, 0, hoodieBaseFile.getFileLen))
               } else {
                 val reader = buildAndInitReader(parquetFileReader.value, filters, broadcastedHadoopConf.value.value,
                   fileSlice, broadcastedDataSchema.value, broadcastedRequestedSchema.value, file, options)
@@ -175,11 +160,11 @@ override def supportBatch(sparkSession: SparkSession, schema: StructType): Boole
     }
   }
 
-  protected def setSchemaEvolutionConfigs(conf: Configuration, options: Map[String, String]): Unit = {
+  protected def setSchemaEvolutionConfigs(conf: Configuration): Unit = {
     if (internalSchemaOpt.isPresent) {
-      options.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA).foreach(s => conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, s))
-      options.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH).foreach(s => conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, s))
-      options.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST).foreach(s => conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, s))
+      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchemaOpt.get()))
+      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tableState.tablePath)
+      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
   }
 

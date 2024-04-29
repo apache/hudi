@@ -17,8 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME
 import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
@@ -27,22 +25,26 @@ import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
-import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
+import org.apache.hudi.storage.{StoragePath, HoodieStorageUtils}
 import org.apache.hudi.table.HoodieSparkTable
+
+import org.apache.avro.Schema
+import org.apache.hadoop.fs.GlobPattern
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
 import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
@@ -159,7 +161,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
           fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().flatMap { entry =>
           entry.getValue.map { e =>
-            val fullPath = FSUtils.getPartitionPath(basePath, entry.getKey).toString
+            val fullPath = FSUtils.constructAbsolutePath(basePath, entry.getKey).toString
             (e, fullPath)
           }
         }
@@ -240,7 +242,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
           var doFullTableScan = false
 
           if (fallbackToFullTableScan) {
-            // val fs = basePath.getFileSystem(sqlContext.sparkContext.hadoopConfiguration);
             val timer = HoodieTimer.start
 
             val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths
@@ -248,8 +249,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
             val localBasePathStr = basePath.toString
             val firstNotFoundPath = sqlContext.sparkContext.parallelize(allFilesToCheck.toSeq, allFilesToCheck.size)
               .map(path => {
-                val fs = new Path(localBasePathStr).getFileSystem(serializedConf.get)
-                fs.exists(new Path(path))
+                val storage = HoodieStorageUtils.getStorage(localBasePathStr, serializedConf.get)
+                storage.exists(new StoragePath(path))
               }).collect().find(v => !v)
             val timeTaken = timer.endTimer()
             log.info("Checking if paths exists took " + timeTaken + "ms")

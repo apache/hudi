@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.read.HoodieFileGroupReaderState;
 import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -32,9 +31,9 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +68,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
 
   @SuppressWarnings("unchecked")
   private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext,
-                                      FileSystem fs, List<String> logFilePaths, boolean reverseReader,
+                                      HoodieStorage storage, List<String> logFilePaths, boolean reverseReader,
                                       int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan,
                                       Option<String> partitionName,
@@ -77,7 +76,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
                                       boolean enableOptimizedLogBlocksScan,
                                       HoodieRecordMerger recordMerger,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
-    super(readerContext, fs, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
+    super(readerContext, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
         forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger, recordBuffer);
     this.scannedPrefixes = new HashSet<>();
 
@@ -213,10 +212,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
    */
   public static class Builder<T> extends BaseHoodieLogRecordReader.Builder<T> {
     private HoodieReaderContext<T> readerContext;
-    private HoodieFileGroupReaderState readerState;
-    private FileSystem fs;
+    private HoodieStorage storage;
     private List<String> logFilePaths;
-    private String latestInstantTime;
     private boolean reverseReader;
     private int bufferSize;
     // specific configurations
@@ -241,8 +238,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     }
 
     @Override
-    public Builder<T> withFileSystem(FileSystem fs) {
-      this.fs = fs;
+    public Builder<T> withStorage(HoodieStorage storage) {
+      this.storage = storage;
       return this;
     }
 
@@ -316,13 +313,13 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       ValidationUtils.checkArgument(recordMerger != null);
       ValidationUtils.checkArgument(recordBuffer != null);
       ValidationUtils.checkArgument(readerContext != null);
-      this.readerState = readerContext.getReaderState();
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
-        this.partitionName = getRelativePartitionPath(new Path(readerState.tablePath), new Path(this.logFilePaths.get(0)).getParent());
+        this.partitionName = getRelativePartitionPath(
+            new StoragePath(readerContext.getTablePath()), new StoragePath(this.logFilePaths.get(0)).getParent());
       }
 
       return new HoodieMergedLogRecordReader<>(
-          readerContext, fs, logFilePaths,
+          readerContext, storage, logFilePaths,
           reverseReader, bufferSize, instantRange,
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName),

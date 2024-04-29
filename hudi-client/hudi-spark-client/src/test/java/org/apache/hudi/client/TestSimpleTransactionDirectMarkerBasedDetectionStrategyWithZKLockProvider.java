@@ -72,7 +72,7 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
     } else {
       initTestDataGenerator(new String[] {""});
     }
-    initFileSystem();
+    initHoodieStorage();
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
 
     Properties properties = getPropertiesForKeyGen();

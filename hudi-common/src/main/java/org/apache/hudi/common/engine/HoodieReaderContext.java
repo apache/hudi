@@ -22,17 +22,18 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.read.HoodieFileGroupReaderState;
+import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -49,10 +50,86 @@ import java.util.function.UnaryOperator;
  *            and {@code RowData} in Flink.
  */
 public abstract class HoodieReaderContext<T> {
-  protected HoodieFileGroupReaderState<T> readerState = new HoodieFileGroupReaderState<>();
 
-  public HoodieFileGroupReaderState<T> getReaderState() {
-    return readerState;
+  private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
+  private String tablePath = null;
+  private String latestCommitTime = null;
+  private HoodieRecordMerger recordMerger = null;
+  private Boolean hasLogFiles = null;
+  private Boolean hasBootstrapBaseFile = null;
+  private Boolean needsBootstrapMerge = null;
+  private Boolean useRecordPosition = null;
+
+  // Getter and Setter for schemaHandler
+  public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
+    return schemaHandler;
+  }
+
+  public void setSchemaHandler(HoodieFileGroupReaderSchemaHandler<T> schemaHandler) {
+    this.schemaHandler = schemaHandler;
+  }
+
+  public String getTablePath() {
+    if (tablePath == null) {
+      throw new IllegalStateException("Table path not set in reader context.");
+    }
+    return tablePath;
+  }
+
+  public void setTablePath(String tablePath) {
+    this.tablePath = tablePath;
+  }
+
+  public String getLatestCommitTime() {
+    return latestCommitTime;
+  }
+
+  public void setLatestCommitTime(String latestCommitTime) {
+    this.latestCommitTime = latestCommitTime;
+  }
+
+  public HoodieRecordMerger getRecordMerger() {
+    return recordMerger;
+  }
+
+  public void setRecordMerger(HoodieRecordMerger recordMerger) {
+    this.recordMerger = recordMerger;
+  }
+
+  // Getter and Setter for hasLogFiles
+  public boolean getHasLogFiles() {
+    return hasLogFiles;
+  }
+
+  public void setHasLogFiles(boolean hasLogFiles) {
+    this.hasLogFiles = hasLogFiles;
+  }
+
+  // Getter and Setter for hasBootstrapBaseFile
+  public boolean getHasBootstrapBaseFile() {
+    return hasBootstrapBaseFile;
+  }
+
+  public void setHasBootstrapBaseFile(boolean hasBootstrapBaseFile) {
+    this.hasBootstrapBaseFile = hasBootstrapBaseFile;
+  }
+
+  // Getter and Setter for needsBootstrapMerge
+  public boolean getNeedsBootstrapMerge() {
+    return needsBootstrapMerge;
+  }
+
+  public void setNeedsBootstrapMerge(boolean needsBootstrapMerge) {
+    this.needsBootstrapMerge = needsBootstrapMerge;
+  }
+
+  // Getter and Setter for useRecordPosition
+  public boolean getUseRecordPosition() {
+    return useRecordPosition;
+  }
+
+  public void setUseRecordPosition(boolean useRecordPosition) {
+    this.useRecordPosition = useRecordPosition;
   }
 
   // These internal key names are only used in memory for record metadata and merging,
@@ -69,15 +146,15 @@ public abstract class HoodieReaderContext<T> {
    *
    * @param path File path to get the file system.
    * @param conf Hadoop {@link Configuration} instance.
-   * @return The {@link FileSystem} instance to use.
+   * @return The {@link HoodieStorage} instance to use.
    */
-  public abstract FileSystem getFs(String path, Configuration conf);
+  public abstract HoodieStorage getStorage(String path, Configuration conf);
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
    * file.
    *
-   * @param filePath       {@link Path} instance of a file.
+   * @param filePath       {@link StoragePath} instance of a file.
    * @param start          Starting byte to start reading.
    * @param length         Bytes to read.
    * @param dataSchema     Schema of records in the file in {@link Schema}.
@@ -86,7 +163,8 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf) throws IOException;
+      StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
+      Configuration conf) throws IOException;
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
@@ -217,12 +295,14 @@ public abstract class HoodieReaderContext<T> {
    *
    * @param from the schema of records to be passed into UnaryOperator
    * @param to the schema of records produced by UnaryOperator
+   * @param renamedColumns map of renamed columns where the key is the new name from the query and
+   *                       the value is the old name that exists in the file
    * @return a function that takes in a record and returns the record with reordered columns
    */
-  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
+  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns);
 
-  public UnaryOperator<T> projectRecordUnsafe(Schema from, Schema to, Map<String, String> renamedColumns) {
-    throw new UnsupportedOperationException("Schema on read is not supported for this reader.");
+  public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
+    return projectRecord(from, to, Collections.emptyMap());
   }
 
   /**

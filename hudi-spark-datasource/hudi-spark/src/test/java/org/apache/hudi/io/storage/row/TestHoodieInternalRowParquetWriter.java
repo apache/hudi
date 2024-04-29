@@ -18,8 +18,6 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -30,8 +28,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.spark.sql.Dataset;
@@ -60,7 +61,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieInternalRowParquetWriter");
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     initTestDataGenerator();
     initMetaClient();
   }
@@ -89,7 +90,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
         CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
         writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
 
-    Path filePath = new Path(basePath + "/internal_row_writer.parquet");
+    StoragePath filePath = new StoragePath(basePath + "/internal_row_writer.parquet");
 
     try (HoodieInternalRowParquetWriter writer = new HoodieInternalRowParquetWriter(filePath, parquetConfig)) {
       for (InternalRow row : rows) {

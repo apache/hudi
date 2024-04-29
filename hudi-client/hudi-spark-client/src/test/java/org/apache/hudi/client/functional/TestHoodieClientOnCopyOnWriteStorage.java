@@ -107,6 +107,8 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -120,7 +122,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
@@ -668,7 +669,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals(200, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+    assertEquals(200,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths).count(),
         "Must contain " + 200 + " records");
 
     // Perform Delete again on upgraded dataset.
@@ -697,7 +699,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     final HoodieWriteConfig cfg = hoodieWriteConfig;
     final String instantTime = "007";
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = HoodieClientTestUtils.createMetaClient(jsc, basePath);
     String basePathStr = basePath;
     HoodieTable table = getHoodieTable(metaClient, cfg);
     String extension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
@@ -942,9 +944,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   @Test
   public void testPendingRestore() throws IOException {
-    HoodieWriteConfig config = getConfigBuilder().withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
-    Path completeRestoreFile = null;
-    Path backupCompletedRestoreFile = null;
+    HoodieWriteConfig config = getConfigBuilder().withMetadataConfig(
+        HoodieMetadataConfig.newBuilder().enable(false).build()).build();
+    StoragePath completeRestoreFile = null;
+    StoragePath backupCompletedRestoreFile = null;
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       final String commitTime1 = "001";
       client.startCommitWithTime(commitTime1);
@@ -958,11 +961,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
       client.restoreToInstant("001", false);
       // remove completed restore instant from timeline to mimic pending restore.
-      HoodieInstant restoreCompleted = metaClient.reloadActiveTimeline().getRestoreTimeline().filterCompletedInstants().getInstants().get(0);
-      completeRestoreFile = new Path(config.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + restoreCompleted.getFileName());
-      backupCompletedRestoreFile = new Path(config.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-          + restoreCompleted.getFileName() + ".backup");
-      metaClient.getFs().rename(completeRestoreFile, backupCompletedRestoreFile);
+      HoodieInstant restoreCompleted =
+          metaClient.reloadActiveTimeline().getRestoreTimeline().filterCompletedInstants()
+              .getInstants().get(0);
+      completeRestoreFile = new StoragePath(
+          config.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME
+              + "/" + restoreCompleted.getFileName());
+      backupCompletedRestoreFile = new StoragePath(
+          config.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME
+              + "/" + restoreCompleted.getFileName() + ".backup");
+      metaClient.getStorage().rename(completeRestoreFile, backupCompletedRestoreFile);
     }
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
@@ -971,7 +979,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       assertThrows(IllegalArgumentException.class, () -> client.startCommitWithTime(commitTime2));
     }
     // add back the restore file.
-    metaClient.getFs().rename(backupCompletedRestoreFile, completeRestoreFile);
+    metaClient.getStorage().rename(backupCompletedRestoreFile, completeRestoreFile);
 
     // retrigger a new commit, should succeed.
 
@@ -1083,8 +1091,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private Dataset<org.apache.spark.sql.Row> getAllRows(String[] fullPartitionPaths) {
-    return HoodieClientTestUtils
-        .read(jsc, basePath, sqlContext, fs, fullPartitionPaths);
+    return HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths);
   }
 
   private String getFullPartitionPath(String relativePartitionPath) {
@@ -1208,7 +1215,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
     assertEquals(100,
-        fileUtils.readRowKeys(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath()))
+        fileUtils.readRowKeys(hadoopConf, new StoragePath(basePath, statuses.get(0).getStat().getPath()))
             .size(), "file should contain 100 records");
 
     // Update + Inserts such that they just expand file1
@@ -1227,7 +1234,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(1, statuses.size(), "Just 1 file needs to be updated.");
     assertEquals(file1, statuses.get(0).getFileId(), "Existing file should be expanded");
     assertEquals(commitTime1, statuses.get(0).getStat().getPrevCommit(), "Existing file should be expanded");
-    Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
+    StoragePath newFile = new StoragePath(basePath, statuses.get(0).getStat().getPath());
     assertEquals(140, fileUtils.readRowKeys(hadoopConf, newFile).size(),
         "file should contain 140 records");
 
@@ -1251,7 +1258,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertNoWriteErrors(statuses);
 
     assertEquals(2, statuses.size(), "2 files needs to be committed.");
-    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metadata = createMetaClient(basePath);
 
     HoodieTable table = getHoodieTable(metadata, config);
     BaseFileOnlyView fileSystemView = table.getBaseFileOnlyView();
@@ -1262,7 +1269,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     for (HoodieBaseFile file : files) {
       if (file.getFileName().contains(file1)) {
         assertEquals(commitTime3, file.getCommitTime(), "Existing file should be expanded");
-        records = fileUtils.readAvroRecords(hadoopConf, new Path(file.getPath()));
+        records = fileUtils.readAvroRecords(hadoopConf, new StoragePath(file.getPath()));
         for (GenericRecord record : records) {
           String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
           String recordCommitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
@@ -1278,7 +1285,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         assertEquals(0, keys2.size(), "All keys added in commit 2 must be updated in commit3 correctly");
       } else {
         assertEquals(commitTime3, file.getCommitTime(), "New file must be written for commit 3");
-        records = fileUtils.readAvroRecords(hadoopConf, new Path(file.getPath()));
+        records = fileUtils.readAvroRecords(hadoopConf, new StoragePath(file.getPath()));
         for (GenericRecord record : records) {
           String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
           assertEquals(commitTime3, record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString(),
@@ -1315,11 +1322,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
     List<WriteStatus> statuses = client.insert(insertRecordsRDD1, commitTime1).collect();
     assertNoWriteErrors(statuses);
-    assertPartitionMetadata(basePath, new String[] {testPartitionPath}, fs);
+    assertPartitionMetadata(basePath, new String[] {testPartitionPath}, storage);
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
     assertEquals(100,
-        fileUtils.readRowKeys(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath()))
+        fileUtils.readRowKeys(hadoopConf, new StoragePath(basePath, statuses.get(0).getStat().getPath()))
             .size(), "file should contain 100 records");
 
     // Second, set of Inserts should just expand file1
@@ -1334,7 +1341,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(file1, statuses.get(0).getFileId(), "Existing file should be expanded");
     assertEquals(commitTime1, statuses.get(0).getStat().getPrevCommit(), "Existing file should be expanded");
 
-    Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
+    StoragePath newFile = new StoragePath(basePath, statuses.get(0).getStat().getPath());
     assertEquals(140, fileUtils.readRowKeys(hadoopConf, newFile).size(),
         "file should contain 140 records");
     List<GenericRecord> records = fileUtils.readAvroRecords(hadoopConf, newFile);
@@ -1356,11 +1363,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertNoWriteErrors(statuses);
     assertEquals(2, statuses.size(), "2 files needs to be committed.");
     assertEquals(340,
-        fileUtils.readRowKeys(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath())).size()
-            + fileUtils.readRowKeys(hadoopConf, new Path(basePath, statuses.get(1).getStat().getPath())).size(),
+        fileUtils.readRowKeys(hadoopConf, new StoragePath(basePath, statuses.get(0).getStat().getPath())).size()
+            + fileUtils.readRowKeys(hadoopConf, new StoragePath(basePath, statuses.get(1).getStat().getPath())).size(),
         "file should contain 340 records");
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
     HoodieTable table = getHoodieTable(metaClient, config);
     List<HoodieBaseFile> files = table.getBaseFileOnlyView()
         .getLatestBaseFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
@@ -1369,7 +1376,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     int totalInserts = 0;
     for (HoodieBaseFile file : files) {
       assertEquals(commitTime3, file.getCommitTime(), "All files must be at commit 3");
-      totalInserts += fileUtils.readAvroRecords(hadoopConf, new Path(file.getPath())).size();
+      totalInserts += fileUtils.readAvroRecords(hadoopConf, new StoragePath(file.getPath())).size();
     }
     assertEquals(totalInserts, inserts1.size() + inserts2.size() + inserts3.size(), "Total number of records must add up");
   }
@@ -1402,7 +1409,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
-    assertEquals(100, getFileUtilsInstance(metaClient).readRowKeys(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath())).size(), "file should contain 100 records");
+    assertEquals(100, getFileUtilsInstance(metaClient).readRowKeys(
+        hadoopConf, new StoragePath(basePath, statuses.get(0).getStat().getPath())).size(), "file should contain 100 records");
 
     // Delete 20 among 100 inserted
     testDeletes(client, inserts1, 20, file1, "002", 80, keysSoFar);
@@ -1435,7 +1443,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
     assertEquals(150,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths).count(),
         "Must contain " + 150 + " records");
 
     // delete another batch. previous delete commit should have persisted the schema. If not,
@@ -1475,18 +1483,24 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       assertNoWriteErrors(statusList);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieInstant replaceCommitInstant = metaClient.getActiveTimeline().getCompletedReplaceTimeline().firstInstant().get();
+      HoodieInstant replaceCommitInstant =
+          metaClient.getActiveTimeline().getCompletedReplaceTimeline().firstInstant().get();
       HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-          .fromBytes(metaClient.getActiveTimeline().getInstantDetails(replaceCommitInstant).get(), HoodieReplaceCommitMetadata.class);
+          .fromBytes(metaClient.getActiveTimeline().getInstantDetails(replaceCommitInstant).get(),
+              HoodieReplaceCommitMetadata.class);
 
       List<String> filesFromReplaceCommit = new ArrayList<>();
       replaceCommitMetadata.getPartitionToWriteStats()
           .forEach((k, v) -> v.forEach(entry -> filesFromReplaceCommit.add(entry.getPath())));
 
       // find all parquet files created as part of clustering. Verify it matches w/ what is found in replace commit metadata.
-      FileStatus[] fileStatuses = fs.listStatus(new Path(basePath + "/" + partitionPath));
-      List<String> clusteredFiles = Arrays.stream(fileStatuses).filter(entry -> entry.getPath().getName().contains(replaceCommitInstant.getTimestamp()))
-          .map(fileStatus -> partitionPath + "/" + fileStatus.getPath().getName()).collect(Collectors.toList());
+      List<StoragePathInfo> pathInfoList =
+          storage.listDirectEntries(new StoragePath(basePath + "/" + partitionPath));
+      List<String> clusteredFiles = pathInfoList.stream()
+          .filter(entry ->
+              entry.getPath().getName().contains(replaceCommitInstant.getTimestamp()))
+          .map(pathInfo -> partitionPath + "/" + pathInfo.getPath().getName())
+          .collect(Collectors.toList());
       assertEquals(clusteredFiles, filesFromReplaceCommit);
     }
   }
@@ -1511,7 +1525,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     List<WriteStatus> statusList = statuses.collect();
     assertNoWriteErrors(statusList);
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
     assertEquals(2, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());
 
     // trigger another commit. this should rollback latest partial commit.
@@ -1551,7 +1565,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertNoWriteErrors(statusList);
     client.commit(commitTime1, statuses);
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
     List<Pair<HoodieInstant, HoodieClusteringPlan>> pendingClusteringPlans =
         ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
     if (scheduleInlineClustering) {
@@ -1598,7 +1612,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // start clustering, but don't commit
     List<HoodieRecord> allRecords = testInsertAndClustering(clusteringConfig, populateMetaFields, false);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
     List<Pair<HoodieInstant, HoodieClusteringPlan>> pendingClusteringPlans =
         ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
     assertEquals(1, pendingClusteringPlans.size());
@@ -1660,7 +1674,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // start clustering, but don't commit keep it inflight
     List<HoodieRecord> allRecords = testInsertAndClustering(clusteringConfig, true, false);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
     List<Pair<HoodieInstant, HoodieClusteringPlan>> pendingClusteringPlans =
         ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
     assertEquals(1, pendingClusteringPlans.size());
@@ -2021,13 +2035,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Set<String> deletePartitionReplaceFileIds1 =
         deletePartitionWithCommit(client, commitTime4, Arrays.asList(DEFAULT_FIRST_PARTITION_PATH));
     assertEquals(batch1Buckets, deletePartitionReplaceFileIds1);
-    List<HoodieBaseFile> baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, fs,
+    List<HoodieBaseFile> baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, storage,
         String.format("%s/%s/*", basePath, DEFAULT_FIRST_PARTITION_PATH));
     assertEquals(0, baseFiles.size());
-    baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, fs,
+    baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, storage,
         String.format("%s/%s/*", basePath, DEFAULT_SECOND_PARTITION_PATH));
     assertTrue(baseFiles.size() > 0);
-    baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, fs,
+    baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, storage,
         String.format("%s/%s/*", basePath, DEFAULT_THIRD_PARTITION_PATH));
     assertTrue(baseFiles.size() > 0);
 
@@ -2040,7 +2054,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     expectedFileId.addAll(batch3Buckets);
     assertEquals(expectedFileId, deletePartitionReplaceFileIds2);
 
-    baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, fs,
+    baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, storage,
         String.format("%s/%s/*", basePath, DEFAULT_FIRST_PARTITION_PATH),
         String.format("%s/%s/*", basePath, DEFAULT_SECOND_PARTITION_PATH),
         String.format("%s/%s/*", basePath, DEFAULT_THIRD_PARTITION_PATH));
@@ -2076,7 +2090,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @NotNull
   private Set<String> verifyRecordKeys(List<HoodieRecord> expectedRecords, List<WriteStatus> allStatus, List<GenericRecord> records) {
     for (WriteStatus status : allStatus) {
-      Path filePath = new Path(basePath, status.getStat().getPath());
+      StoragePath filePath = new StoragePath(basePath, status.getStat().getPath());
       records.addAll(getFileUtilsInstance(metaClient).readAvroRecords(jsc.hadoopConfiguration(), filePath));
     }
     Set<String> expectedKeys = recordsToRecordKeySet(expectedRecords);
@@ -2137,7 +2151,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
     assertEquals(expectedTotalRecords,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths).count(),
         "Must contain " + expectedTotalRecords + " records");
     return Pair.of(keys, inserts);
   }
@@ -2161,10 +2175,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
     assertEquals(expectedRecords,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths).count(),
         "Must contain " + expectedRecords + " records");
 
-    Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
+    StoragePath newFile = new StoragePath(basePath, statuses.get(0).getStat().getPath());
     assertEquals(expectedRecords,
         getFileUtilsInstance(metaClient).readRowKeys(hadoopConf, newFile).size(),
         "file should contain 110 records");
@@ -2211,7 +2225,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+      HoodieTableMetaClient metaClient = createMetaClient(basePath);
       HoodieSparkTable table = HoodieSparkTable.create(cfgBuilder.build(), context, metaClient);
 
       String instantTime = "000";
@@ -2231,15 +2245,18 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       HoodieInstant commitInstant = new HoodieInstant(false, actionType, instantTime);
       HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-          .fromBytes(commitTimeline.getInstantDetails(commitInstant).get(), HoodieCommitMetadata.class);
+          .fromBytes(commitTimeline.getInstantDetails(commitInstant).get(),
+              HoodieCommitMetadata.class);
       String basePath = table.getMetaClient().getBasePath();
-      Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(new Path(basePath)).values();
+      Collection<String> commitPathNames =
+          commitMetadata.getFileIdAndFullPaths(new StoragePath(basePath)).values();
 
       // Read from commit file
       HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(
-          metaClient.reloadActiveTimeline().getInstantDetails(new HoodieInstant(COMPLETED, COMMIT_ACTION, instantTime)).get(),
+          metaClient.reloadActiveTimeline()
+              .getInstantDetails(new HoodieInstant(COMPLETED, COMMIT_ACTION, instantTime)).get(),
           HoodieCommitMetadata.class);
-      HashMap<String, String> paths = metadata.getFileIdAndFullPaths(new Path(basePath));
+      HashMap<String, String> paths = metadata.getFileIdAndFullPaths(new StoragePath(basePath));
       // Compare values in both to make sure they are equal.
       for (String pathName : paths.values()) {
         assertTrue(commitPathNames.contains(pathName));
@@ -2315,34 +2332,37 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testConsistencyCheckDuringFinalize(boolean enableOptimisticConsistencyGuard) throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
     String instantTime = "000";
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
         .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    Pair<Path, JavaRDD<WriteStatus>> result = testConsistencyCheck(metaClient, instantTime, enableOptimisticConsistencyGuard);
+    Pair<StoragePath, JavaRDD<WriteStatus>> result = testConsistencyCheck(
+        metaClient, instantTime, enableOptimisticConsistencyGuard);
 
     // Delete orphan marker and commit should succeed
-    metaClient.getFs().delete(result.getKey(), false);
+    metaClient.getStorage().deleteFile(result.getKey());
     if (!enableOptimisticConsistencyGuard) {
       assertTrue(client.commit(instantTime, result.getRight()), "Commit should succeed");
       assertTrue(testTable.commitExists(instantTime),
           "After explicit commit, commit file should be created");
       // Marker directory must be removed
-      assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+      assertFalse(metaClient.getStorage()
+          .exists(new StoragePath(metaClient.getMarkerFolderPath(instantTime))));
     } else {
       // with optimistic, first client.commit should have succeeded.
       assertTrue(testTable.commitExists(instantTime),
           "After explicit commit, commit file should be created");
       // Marker directory must be removed
-      assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+      assertFalse(metaClient.getStorage()
+          .exists(new StoragePath(metaClient.getMarkerFolderPath(instantTime))));
     }
   }
 
   private void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean rollbackUsingMarkers, boolean enableOptimisticConsistencyGuard,
                                                                      boolean populateMetaFields) throws Exception {
     String instantTime = "00000000000010";
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
 
     Properties properties = new Properties();
     if (!populateMetaFields) {
@@ -2367,13 +2387,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       assertFalse(testTable.commitExists(instantTime),
           "After explicit rollback, commit file should not be present");
       // Marker directory must be removed after rollback
-      assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+      assertFalse(metaClient.getStorage().exists(
+          new StoragePath(metaClient.getMarkerFolderPath(instantTime))));
     } else {
       // if optimistic CG is enabled, commit should have succeeded.
       assertTrue(testTable.commitExists(instantTime),
           "With optimistic CG, first commit should succeed. commit file should be present");
       // Marker directory must be removed after rollback
-      assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+      assertFalse(metaClient.getStorage().exists(
+          new StoragePath(metaClient.getMarkerFolderPath(instantTime))));
       client.rollback(instantTime);
       assertFalse(testTable.commitExists(instantTime),
           "After explicit rollback, commit file should not be present");
@@ -2424,7 +2446,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     writeBatch(client, "400", "300", Option.of(Arrays.asList("400")), "400",
         100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
         0, true);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
 
     assertTrue(metaClient.getActiveTimeline().getTimelineOfActions(
         CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 0);
@@ -2564,7 +2586,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         "400", "300", Option.of(Arrays.asList("400")), "300", 100, dataGen::generateInserts,
         SparkRDDWriteClient::bulkInsert, false, 100, 100, 0, true));
     commit3.get();
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
 
     assertTrue(metaClient.getActiveTimeline().getTimelineOfActions(
         CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 0);
@@ -2593,7 +2615,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     client.close();
   }
 
-  private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime, boolean enableOptimisticConsistencyGuard)
+  private Pair<StoragePath, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime, boolean enableOptimisticConsistencyGuard)
       throws Exception {
     HoodieWriteConfig cfg = !enableOptimisticConsistencyGuard ? (getConfigBuilder().withAutoCommit(false)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
@@ -2616,17 +2638,19 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String markerFolderPath = metaClient.getMarkerFolderPath(instantTime);
     if (cfg.getMarkersType() == MarkerType.TIMELINE_SERVER_BASED) {
       String markerName = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
-              markerFolderPath, fs, context, 1).values().stream()
+              markerFolderPath, storage, context, 1).values().stream()
           .flatMap(Collection::stream).findFirst().get();
       partitionPath = new Path(markerFolderPath, markerName).getParent().toString();
     } else {
-      partitionPath = Arrays
-          .stream(fs.globStatus(new Path(String.format("%s/*/*/*/*", markerFolderPath)),
-              path -> path.toString().contains(HoodieTableMetaClient.MARKER_EXTN)))
-          .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
+      partitionPath = storage.globEntries(
+              new StoragePath(String.format("%s/*/*/*/*", markerFolderPath)), path ->
+                  path.toString().contains(HoodieTableMetaClient.MARKER_EXTN))
+          .stream()
+          .limit(1).map(status -> status.getPath().getParent().toString())
+          .collect(Collectors.toList()).get(0);
     }
 
-    Option<Path> markerFilePath = WriteMarkersFactory.get(
+    Option<StoragePath> markerFilePath = WriteMarkersFactory.get(
             cfg.getMarkersType(), getHoodieTable(metaClient, cfg), instantTime)
         .create(partitionPath,
             FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString(), BASE_FILE_EXTENSION),
@@ -2665,7 +2689,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
     assertEquals(numRecords,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths).count(),
         "Must contain " + numRecords + " records");
 
     String nextInstantTime = "0001";
@@ -2678,7 +2702,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertTrue(testTable.commitExists(firstInstantTime),
         "After explicit commit, commit file should be created");
     int totalRecords = 2 * numRecords;
-    assertEquals(totalRecords, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+    assertEquals(totalRecords,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths).count(),
         "Must contain " + totalRecords + " records");
   }
 

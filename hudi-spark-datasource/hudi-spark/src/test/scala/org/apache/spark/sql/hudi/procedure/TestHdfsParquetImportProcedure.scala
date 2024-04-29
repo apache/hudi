@@ -22,11 +22,11 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{StoragePath, HoodieStorage, HoodieStorageUtils}
 import org.apache.hudi.testutils.HoodieClientTestUtils
 
 import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.avro.AvroParquetWriter
 import org.apache.parquet.hadoop.ParquetWriter
 import org.apache.spark.api.java.JavaSparkContext
@@ -43,7 +43,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call hdfs_parquet_import Procedure with insert operation") {
     withTempDir { tmp =>
-      val fs: FileSystem = HadoopFSUtils.getFs(tmp.getCanonicalPath, spark.sparkContext.hadoopConfiguration)
+      val storage: HoodieStorage = HoodieStorageUtils.getStorage(tmp.getCanonicalPath, spark.sparkContext.hadoopConfiguration)
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + StoragePath.SEPARATOR + tableName
       val sourcePath = new Path(tmp.getCanonicalPath, "source")
@@ -51,7 +51,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
       val schemaFile = new Path(tmp.getCanonicalPath, "file.schema").toString
 
       // create schema file
-      val schemaFileOS = fs.create(new Path(schemaFile))
+      val schemaFileOS = storage.create(new StoragePath(schemaFile))
       try schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA))
       finally if (schemaFileOS != null) schemaFileOS.close()
 
@@ -70,13 +70,14 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
         Seq(0)
       }
 
-      verifyResultData(insertData, fs, tablePath)
+      verifyResultData(insertData, storage, tablePath)
     }
   }
 
   test("Test Call hdfs_parquet_import Procedure with upsert operation") {
     withTempDir { tmp =>
-      val fs: FileSystem = HadoopFSUtils.getFs(tmp.getCanonicalPath, spark.sparkContext.hadoopConfiguration)
+      val storage: HoodieStorage = HoodieStorageUtils.getStorage(
+        tmp.getCanonicalPath, spark.sparkContext.hadoopConfiguration)
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + StoragePath.SEPARATOR + tableName
       val sourcePath = new Path(tmp.getCanonicalPath, "source")
@@ -84,7 +85,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
       val schemaFile = new Path(tmp.getCanonicalPath, "file.schema").toString
 
       // create schema file
-      val schemaFileOS = fs.create(new Path(schemaFile))
+      val schemaFileOS = storage.create(new StoragePath(schemaFile))
       try schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA))
       finally if (schemaFileOS != null) schemaFileOS.close()
 
@@ -103,7 +104,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
         Seq(0)
       }
 
-      verifyResultData(insertData, fs, tablePath)
+      verifyResultData(insertData, storage, tablePath)
     }
   }
 
@@ -161,10 +162,10 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
     records
   }
 
-  private def verifyResultData(expectData: util.List[GenericRecord], fs: FileSystem, tablePath: String): Unit = {
+  private def verifyResultData(expectData: util.List[GenericRecord], storage: HoodieStorage, tablePath: String): Unit = {
     import scala.collection.JavaConversions._
     val jsc = new JavaSparkContext(spark.sparkContext)
-    val ds = HoodieClientTestUtils.read(jsc, tablePath, spark.sqlContext, fs, tablePath + "/*/*/*/*")
+    val ds = HoodieClientTestUtils.read(jsc, tablePath, spark.sqlContext, storage, tablePath + "/*/*/*/*")
     val readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList()
     val result = readData.toList.map((row: Row) =>
       new HoodieTripModel(row.getLong(0), row.getString(1),

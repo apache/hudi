@@ -18,11 +18,9 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
+
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
@@ -50,8 +48,8 @@ class CommitsCompareProcedure() extends BaseProcedure with ProcedureBuilder {
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val source = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val target = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(path).build
+    val source = createMetaClient(jsc, basePath)
+    val target = createMetaClient(jsc, path)
     val sourceTimeline = source.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val targetTimeline = target.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val targetLatestCommit =

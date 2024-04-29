@@ -39,8 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.File;
 import java.io.IOException;
@@ -122,7 +121,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
         String dirPath = metaClient.getBasePath() + "/" + p.getPartitionPath();
         p.getSuccessDeleteFiles().forEach(p2 -> {
           try {
-            metaClient.getFs().create(new Path(dirPath, p2), true).close();
+            metaClient.getStorage().create(new StoragePath(dirPath, p2), true).close();
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
           }
@@ -132,10 +131,9 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
 
       if (config.isMetadataTableEnabled() && simulateMetadataFailure) {
         // Simulate the failure of corresponding instant in the metadata table
-        HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-            .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))
-            .setConf(metaClient.getHadoopConf())
-            .build();
+        HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(
+            metaClient.getHadoopConf(),
+            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()));
         HoodieInstant deltaCommit = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, cleanInstantTs);
         metadataMetaClient.reloadActiveTimeline().revertToInflight(deltaCommit);
       }

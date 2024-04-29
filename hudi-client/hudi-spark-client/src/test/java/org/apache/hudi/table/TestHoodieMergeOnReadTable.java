@@ -49,6 +49,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.deltacommit.BaseSparkDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkDeleteDeltaCommitActionExecutor;
@@ -59,7 +60,6 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -164,7 +164,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       BaseFileOnlyView roView = getHoodieTableFileSystemView(metaClient,
           metaClient.getCommitsTimeline().filterCompletedInstants(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
@@ -261,7 +261,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
             .map(record -> record.getPartitionPath())
             .collect(Collectors.groupingBy(partitionPath -> partitionPath))
             .keySet();
-        assertEquals(allPartitions.size(), testTable.listAllBaseFiles().length);
+        assertEquals(allPartitions.size(), testTable.listAllBaseFiles().size());
 
         // Verify that all data file has one log file
         HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
@@ -291,17 +291,21 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
           List<FileSlice> groupedLogFiles =
               table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
           for (FileSlice slice : groupedLogFiles) {
-            assertEquals(0, slice.getLogFiles().count(), "After compaction there should be no log files visible on a full view");
+            assertEquals(0, slice.getLogFiles().count(),
+                "After compaction there should be no log files visible on a full view");
           }
-          assertTrue(result.getCommitMetadata().get().getWritePartitionPaths().stream().anyMatch(part -> part.contentEquals(partitionPath)));
+          assertTrue(result.getCommitMetadata().get().getWritePartitionPaths().stream()
+              .anyMatch(part -> part.contentEquals(partitionPath)));
         }
 
         // Check the entire dataset has all records still
         String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
         for (int i = 0; i < fullPartitionPaths.length; i++) {
-          fullPartitionPaths[i] = String.format("%s/%s/*", basePath(), dataGen.getPartitionPaths()[i]);
+          fullPartitionPaths[i] =
+              String.format("%s/%s/*", basePath(), dataGen.getPartitionPaths()[i]);
         }
-        Dataset<Row> actual = HoodieClientTestUtils.read(jsc(), basePath(), sqlContext(), fs(), fullPartitionPaths);
+        Dataset<Row> actual = HoodieClientTestUtils.read(
+            jsc(), basePath(), sqlContext(), hoodieStorage(), fullPartitionPaths);
         List<Row> rows = actual.collectAsList();
         assertEquals(updatedRecords.size(), rows.size());
         for (Row row : rows) {
@@ -370,7 +374,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
             .map(record -> record.getPartitionPath())
             .collect(Collectors.groupingBy(partitionPath -> partitionPath))
             .keySet();
-        assertEquals(allPartitions.size(), testTable.listAllBaseFiles().length);
+        assertEquals(allPartitions.size(), testTable.listAllBaseFiles().size());
 
         // Verify that all data file has one log file
         HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
@@ -648,7 +652,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       BaseFileOnlyView roView =
           getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();

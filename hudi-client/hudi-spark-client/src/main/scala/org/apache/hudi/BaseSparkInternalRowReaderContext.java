@@ -29,21 +29,18 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
 
-import java.util.Collections;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import scala.Function1;
@@ -58,8 +55,8 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
  */
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
   @Override
-  public FileSystem getFs(String path, Configuration conf) {
-    return HadoopFSUtils.getFs(path, conf);
+  public HoodieStorage getStorage(String path, Configuration conf) {
+    return HoodieStorageUtils.getStorage(path, conf);
   }
 
   @Override
@@ -142,18 +139,11 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to) {
-    UnsafeProjection projection = HoodieInternalRowUtils.generateUnsafeProjectionAlias(getCachedSchema(from), getCachedSchema(to));
-    return projection::apply;
-  }
-
-  @Override
-  public UnaryOperator<InternalRow> projectRecordUnsafe(Schema from, Schema to, Map<String, String> renamedColumns) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(from);
-    StructType newStructType = HoodieInternalRowUtils.getCachedSchema(to);
+  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renamedColumns);
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns);
     return row -> (InternalRow) unsafeRowWriter.apply(row);
+
   }
 
   protected UnaryOperator<InternalRow> getIdentityProjection() {

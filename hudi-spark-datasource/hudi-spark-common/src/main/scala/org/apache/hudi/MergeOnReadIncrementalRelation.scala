@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, GlobPattern}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
@@ -26,10 +25,13 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, concatTimeline, getCommitMetadata, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.getWritePartitionPaths
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getWritePartitionPaths
+import org.apache.hudi.storage.StoragePathInfo
+
+import org.apache.hadoop.fs.GlobPattern
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -107,7 +109,8 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       } else {
         val latestCommit = includedCommits.last.getTimestamp
 
-        val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
+        val fsView = new HoodieTableFileSystemView(
+          metaClient, timeline, affectedFilesInCommits)
 
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
@@ -142,9 +145,9 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
 
     slices.groupBy(fs => {
       if (fs.getBaseFile.isPresent) {
-        getPartitionColumnValuesAsInternalRow(fs.getBaseFile.get.getFileStatus)
+        getPartitionColumnValuesAsInternalRow(fs.getBaseFile.get.getPathInfo)
       } else {
-        getPartitionColumnValuesAsInternalRow(fs.getLogFiles.findAny.get.getFileStatus)
+        getPartitionColumnValuesAsInternalRow(fs.getLogFiles.findAny.get.getPathInfo)
       }
     })
   }
@@ -199,7 +202,8 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key,
       DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.defaultValue).toBoolean
 
-    fallbackToFullTableScan && (startInstantArchived || endInstantArchived || affectedFilesInCommits.exists(fileStatus => !metaClient.getFs.exists(fileStatus.getPath)))
+    fallbackToFullTableScan && (startInstantArchived || endInstantArchived
+      || affectedFilesInCommits.asScala.exists(fileStatus => !metaClient.getStorage.exists(fileStatus.getPath)))
   }
 
   protected lazy val includedCommits: immutable.Seq[HoodieInstant] = {
@@ -218,7 +222,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
   protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
 
-  protected lazy val affectedFilesInCommits: Array[FileStatus] = {
+  protected lazy val affectedFilesInCommits: java.util.List[StoragePathInfo] = {
     listAffectedFilesForCommits(conf, metaClient.getBasePathV2, commitsMetadata)
   }
 

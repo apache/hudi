@@ -110,7 +110,7 @@ public class HoodieMetadataMetrics implements Serializable {
 
       for (FileSlice slice : latestSlices) {
         if (slice.getBaseFile().isPresent()) {
-          totalBaseFileSizeInBytes += slice.getBaseFile().get().getFileStatus().getLen();
+          totalBaseFileSizeInBytes += slice.getBaseFile().get().getPathInfo().getLength();
           ++baseFileCount;
         }
         Iterator<HoodieLogFile> it = slice.getLogFiles().iterator();
@@ -153,7 +153,7 @@ public class HoodieMetadataMetrics implements Serializable {
   }
 
   protected void incrementMetric(String action, long value) {
-    LOG.info(String.format("Updating metadata metrics (%s=%d) in %s", action, value, metricsRegistry));
+    LOG.debug(String.format("Updating metadata metrics (%s=%d) in %s", action, value, metricsRegistry));
     Option<HoodieGauge<Long>> gaugeOpt = metrics.registerGauge(action);
     gaugeOpt.ifPresent(gauge -> gauge.setValue(gauge.getValue() + value));
   }

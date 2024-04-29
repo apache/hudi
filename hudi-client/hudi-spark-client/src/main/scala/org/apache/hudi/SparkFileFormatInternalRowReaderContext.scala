@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.CloseableInternalRowIterator
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
@@ -63,7 +64,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
   lazy val recordKeyFilters: Seq[Filter] = filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
 
-  override def getFileRecordIterator(filePath: Path,
+  override def getFileRecordIterator(filePath: StoragePath,
                                      start: Long,
                                      length: Long,
                                      dataSchema: Schema,
@@ -94,9 +95,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   }
 
   private def getSchemaAndFiltersForRead(structType: StructType): (StructType, Seq[Filter]) = {
-    (readerState.hasLogFiles.booleanValue(),
-      readerState.needsBootstrapMerge.booleanValue(),
-      readerState.useRecordPosition.booleanValue()) match {
+    (getHasLogFiles, getNeedsBootstrapMerge, getUseRecordPosition) match {
       case (false, false, _) =>
         (structType, filters)
       case (false, true, true) =>
@@ -135,7 +134,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                  skeletonRequiredSchema: Schema,
                                  dataFileIterator: ClosableIterator[Any],
                                  dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
-    if (readerState.useRecordPosition) {
+    if (getUseRecordPosition) {
       assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       val javaSet = new java.util.HashSet[String]()
@@ -144,7 +143,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         AvroSchemaUtils.removeFieldsFromSchema(skeletonRequiredSchema, javaSet))
       //If we have log files, we will want to do position based merging with those as well,
       //so leave the row index column at the end
-      val dataProjection = if (readerState.hasLogFiles) {
+      val dataProjection = if (getHasLogFiles) {
         getIdentityProjection
       } else {
         projectRecord(dataRequiredSchema,

@@ -37,6 +37,9 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
 
 import com.beust.jcommander.IValueValidator;
@@ -211,10 +214,10 @@ public class HoodieSnapshotExporter {
           .map(f -> Pair.of(partition, f.getPath()))
           .collect(Collectors.toList());
       // also need to copy over partition metadata
-      FileSystem fs = HadoopFSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
-      Path partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(fs,
-          FSUtils.getPartitionPath(cfg.sourceBasePath, partition)).get();
-      if (fs.exists(partitionMetaFile)) {
+      HoodieStorage storage = HoodieStorageUtils.getStorage(cfg.sourceBasePath, serConf.newCopy());
+      StoragePath partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(storage,
+          FSUtils.constructAbsolutePath(cfg.sourceBasePath, partition)).get();
+      if (storage.exists(partitionMetaFile)) {
         filePaths.add(Pair.of(partition, partitionMetaFile.toString()));
       }
       return filePaths.stream();
@@ -223,7 +226,7 @@ public class HoodieSnapshotExporter {
     context.foreach(partitionAndFileList, partitionAndFile -> {
       String partition = partitionAndFile.getLeft();
       Path sourceFilePath = new Path(partitionAndFile.getRight());
-      Path toPartitionPath = FSUtils.getPartitionPath(cfg.targetOutputPath, partition);
+      Path toPartitionPath = FSUtils.constructAbsolutePathInHadoopPath(cfg.targetOutputPath, partition);
       FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
       FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
 

@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.OrcReaderIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -47,11 +48,11 @@ import java.util.Set;
  */
 public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
 
-  private final Path path;
+  private final StoragePath path;
   private final Configuration conf;
   private final BaseFileUtils orcUtils;
 
-  public HoodieAvroOrcReader(Configuration configuration, Path path) {
+  public HoodieAvroOrcReader(Configuration configuration, StoragePath path) {
     this.conf = configuration;
     this.path = path;
     this.orcUtils = BaseFileUtils.getInstance(HoodieFileFormat.ORC);
@@ -78,7 +79,7 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
       throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
     }
 
-    try (Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf))) {
+    try (Reader reader = OrcFile.createReader(new Path(path.toUri()), OrcFile.readerOptions(conf))) {
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readerSchema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
       return new OrcReaderIterator<>(recordReader, readerSchema, orcSchema);

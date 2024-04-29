@@ -17,16 +17,15 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.util.ConfigUtils
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.{StoragePath, HoodieStorageUtils}
 
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
+import org.apache.spark.sql.catalyst.catalog._
 
 /**
  * Physical plan node for dropping a table.
@@ -87,10 +86,10 @@ case class DropHoodieTableCommand(
     // Recursively delete table directories
     if (purge) {
       logInfo("Clean up " + basePath)
-      val targetPath = new Path(basePath)
+      val targetPath = new StoragePath(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
-      val fs = HadoopFSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
+      val storage = HoodieStorageUtils.getStorage(basePath, sparkSession.sparkContext.hadoopConfiguration)
+      FSUtils.deleteDir(engineContext, storage, targetPath, sparkSession.sparkContext.defaultParallelism)
     }
   }
 

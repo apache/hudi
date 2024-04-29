@@ -18,6 +18,7 @@
 
 package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -31,6 +32,9 @@ import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
+import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
 import software.amazon.awssdk.services.glue.GlueAsyncClientBuilder;
@@ -70,10 +74,6 @@ import software.amazon.awssdk.services.glue.model.Table;
 import software.amazon.awssdk.services.glue.model.TableInput;
 import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
 
-import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Instant;
@@ -95,12 +95,12 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
 import static org.apache.hudi.common.util.MapUtils.containsAll;
 import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.ALL_PARTITIONS_READ_PARALLELISM;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.CHANGED_PARTITIONS_READ_PARALLELISM;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_METADATA_FILE_LISTING;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.META_SYNC_PARTITION_INDEX_FIELDS;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.META_SYNC_PARTITION_INDEX_FIELDS_ENABLE;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.PARTITION_CHANGE_PARALLELISM;
-import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_METADATA_FILE_LISTING;
-import static org.apache.hudi.config.GlueCatalogSyncClientConfig.ALL_PARTITIONS_READ_PARALLELISM;
 import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_ENDPOINT;
 import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_REGION;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
@@ -110,7 +110,6 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.parquetSchemaToMapSchema;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
-import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 
 /**
  * This class implements all the AWS APIs to enable syncing of a Hudi Table with the
@@ -304,7 +303,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       StorageDescriptor sd = table.storageDescriptor();
       List<PartitionInput> partitionInputList = partitionsToAdd.stream().map(partition -> {
-        String fullPartitionPath = FSUtils.getPartitionPath(s3aToS3(getBasePath()), partition).toString();
+        String fullPartitionPath = FSUtils.constructAbsolutePathInHadoopPath(s3aToS3(getBasePath()), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(fullPartitionPath));
         return PartitionInput.builder().values(partitionValues).storageDescriptor(partitionSD).build();
@@ -348,7 +347,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       StorageDescriptor sd = table.storageDescriptor();
       List<BatchUpdatePartitionRequestEntry> updatePartitionEntries = changedPartitions.stream().map(partition -> {
-        String fullPartitionPath = FSUtils.getPartitionPath(s3aToS3(getBasePath()), partition).toString();
+        String fullPartitionPath = FSUtils.constructAbsolutePathInHadoopPath(s3aToS3(getBasePath()), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(fullPartitionPath));
         PartitionInput partitionInput = PartitionInput.builder().values(partitionValues).storageDescriptor(partitionSD).build();

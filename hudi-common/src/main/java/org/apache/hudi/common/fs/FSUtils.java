@@ -43,16 +43,15 @@ import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StorageSchemes;
+import org.apache.hudi.storage.StoragePathFilter;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +62,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -77,8 +77,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.hadoop.fs.CachingPath.getPathWithoutSchemeAndAuthority;
-
 /**
  * Utility functions related to accessing the file storage.
  */
@@ -87,6 +85,7 @@ public class FSUtils {
   private static final Logger LOG = LoggerFactory.getLogger(FSUtils.class);
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
+  public static final String PATH_SEPARATOR = "/";
   public static final Pattern LOG_FILE_PATTERN =
       Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
@@ -94,7 +93,7 @@ public class FSUtils {
 
   private static final String LOG_FILE_EXTENSION = ".log";
 
-  private static final PathFilter ALLOW_ALL_FILTER = file -> true;
+  private static final StoragePathFilter ALLOW_ALL_FILTER = file -> true;
 
   public static Configuration buildInlineConf(Configuration conf) {
     Configuration inlineConf = new Configuration(conf);
@@ -105,18 +104,19 @@ public class FSUtils {
 
   /**
    * Check if table already exists in the given path.
+   *
    * @param path base path of the table.
-   * @param fs instance of {@link FileSystem}.
+   * @param storage   instance of {@link HoodieStorage}.
    * @return {@code true} if table exists. {@code false} otherwise.
    */
-  public static boolean isTableExists(String path, FileSystem fs) throws IOException {
-    return fs.exists(new Path(path + "/" + HoodieTableMetaClient.METAFOLDER_NAME));
+  public static boolean isTableExists(String path, HoodieStorage storage) throws IOException {
+    return storage.exists(new StoragePath(path + "/" + HoodieTableMetaClient.METAFOLDER_NAME));
   }
 
   /**
    * Makes path qualified w/ {@link FileSystem}'s URI
    *
-   * @param fs instance of {@link FileSystem} path belongs to
+   * @param fs   instance of {@link FileSystem} path belongs to
    * @param path path to be qualified
    * @return qualified path, prefixed w/ the URI of the target FS object provided
    */
@@ -125,14 +125,14 @@ public class FSUtils {
   }
 
   /**
-   * Makes location qualified with {@link HoodieStorage}'s URI.
+   * Makes path qualified with {@link HoodieStorage}'s URI.
    *
-   * @param storage  instance of {@link HoodieStorage}.
-   * @param location to be qualified.
-   * @return qualified location, prefixed with the URI of the target HoodieStorage object provided.
+   * @param storage instance of {@link HoodieStorage}.
+   * @param path    to be qualified.
+   * @return qualified path, prefixed with the URI of the target HoodieStorage object provided.
    */
-  public static StoragePath makeQualified(HoodieStorage storage, StoragePath location) {
-    return location.makeQualified(storage.getUri());
+  public static StoragePath makeQualified(HoodieStorage storage, StoragePath path) {
+    return path.makeQualified(storage.getUri());
   }
 
   /**
@@ -174,6 +174,10 @@ public class FSUtils {
     return fs.getFileStatus(path).getLen();
   }
 
+  public static long getFileSize(HoodieStorage storage, StoragePath path) throws IOException {
+    return storage.getPathInfo(path).getLength();
+  }
+
   public static String getFileId(String fullFileName) {
     return fullFileName.split("_", 2)[0];
   }
@@ -182,15 +186,16 @@ public class FSUtils {
    * Gets all partition paths assuming date partitioning (year, month, day) three levels down.
    * TODO: (Lin) Delete this function after we remove the assume.date.partitioning config completely.
    */
-  public static List<String> getAllPartitionFoldersThreeLevelsDown(FileSystem fs, String basePath) throws IOException {
+  public static List<String> getAllPartitionFoldersThreeLevelsDown(HoodieStorage storage, String basePath) throws IOException {
     List<String> datePartitions = new ArrayList<>();
     // Avoid listing and including any folders under the metafolder
-    PathFilter filter = getExcludeMetaPathFilter();
-    FileStatus[] folders = fs.globStatus(new Path(basePath + "/*/*/*"), filter);
-    for (FileStatus status : folders) {
-      Path path = status.getPath();
-      datePartitions.add(String.format("%s/%s/%s", path.getParent().getParent().getName(), path.getParent().getName(),
-          path.getName()));
+    StoragePathFilter filter = getExcludeMetaPathFilter();
+    List<StoragePathInfo> folders = storage.globEntries(new StoragePath(basePath + "/*/*/*"), filter);
+    for (StoragePathInfo pathInfo : folders) {
+      StoragePath path = pathInfo.getPath();
+      datePartitions.add(
+          String.format("%s/%s/%s", path.getParent().getParent().getName(), path.getParent().getName(),
+              path.getName()));
     }
     return datePartitions;
   }
@@ -199,6 +204,24 @@ public class FSUtils {
    * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
   public static String getRelativePartitionPath(Path basePath, Path fullPartitionPath) {
+    basePath = CachingPath.getPathWithoutSchemeAndAuthority(basePath);
+    fullPartitionPath = CachingPath.getPathWithoutSchemeAndAuthority(fullPartitionPath);
+
+    String fullPartitionPathStr = fullPartitionPath.toString();
+
+    if (!fullPartitionPathStr.startsWith(basePath.toString())) {
+      throw new IllegalArgumentException("Partition path \"" + fullPartitionPathStr
+          + "\" does not belong to base-path \"" + basePath + "\"");
+    }
+
+    int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
+        basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
+    // Partition-Path could be empty for non-partitioned tables
+    return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
+        : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
+  }
+
+  public static String getRelativePartitionPath(StoragePath basePath, StoragePath fullPartitionPath) {
     basePath = getPathWithoutSchemeAndAuthority(basePath);
     fullPartitionPath = getPathWithoutSchemeAndAuthority(fullPartitionPath);
 
@@ -216,33 +239,36 @@ public class FSUtils {
         : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
   }
 
+  public static StoragePath getPathWithoutSchemeAndAuthority(StoragePath path) {
+    return path.getPathWithoutSchemeAndAuthority();
+  }
+
   /**
    * Recursively processes all files in the base-path. If excludeMetaFolder is set, the meta-folder and all its subdirs
    * are skipped
    *
-   * @param fs File System
-   * @param basePathStr Base-Path
-   * @param consumer Callback for processing
+   * @param storage           File System
+   * @param basePathStr       Base-Path
+   * @param consumer          Callback for processing
    * @param excludeMetaFolder Exclude .hoodie folder
    * @throws IOException -
    */
-  public static void processFiles(FileSystem fs, String basePathStr, Function<FileStatus, Boolean> consumer,
+  public static void processFiles(HoodieStorage storage, String basePathStr, Function<StoragePathInfo, Boolean> consumer,
                                   boolean excludeMetaFolder) throws IOException {
-    PathFilter pathFilter = excludeMetaFolder ? getExcludeMetaPathFilter() : ALLOW_ALL_FILTER;
-    FileStatus[] topLevelStatuses = fs.listStatus(new Path(basePathStr));
-    for (FileStatus child : topLevelStatuses) {
+    StoragePathFilter pathFilter = excludeMetaFolder ? getExcludeMetaPathFilter() : ALLOW_ALL_FILTER;
+    List<StoragePathInfo> topLevelInfoList = storage.listDirectEntries(new StoragePath(basePathStr));
+    for (StoragePathInfo child : topLevelInfoList) {
       if (child.isFile()) {
         boolean success = consumer.apply(child);
         if (!success) {
           throw new HoodieException("Failed to process file-status=" + child);
         }
       } else if (pathFilter.accept(child.getPath())) {
-        RemoteIterator<LocatedFileStatus> itr = fs.listFiles(child.getPath(), true);
-        while (itr.hasNext()) {
-          FileStatus status = itr.next();
-          boolean success = consumer.apply(status);
+        List<StoragePathInfo> list = storage.listFiles(child.getPath());
+        for (StoragePathInfo pathInfo : list) {
+          boolean success = consumer.apply(pathInfo);
           if (!success) {
-            throw new HoodieException("Failed to process file-status=" + status);
+            throw new HoodieException("Failed to process StoragePathInfo=" + pathInfo);
           }
         }
       }
@@ -261,20 +287,23 @@ public class FSUtils {
     }
   }
 
-  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
+                                                  HoodieMetadataConfig metadataConfig,
                                                   String basePathStr) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig,
+        basePathStr)) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
     }
   }
 
-  public static Map<String, FileStatus[]> getFilesInPartitions(HoodieEngineContext engineContext,
-                                                               HoodieMetadataConfig metadataConfig,
-                                                               String basePathStr,
-                                                               String[] partitionPaths) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
+  public static Map<String, List<StoragePathInfo>> getFilesInPartitions(HoodieEngineContext engineContext,
+                                                                        HoodieMetadataConfig metadataConfig,
+                                                                        String basePathStr,
+                                                                        String[] partitionPaths) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig,
+        basePathStr)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
@@ -288,7 +317,7 @@ public class FSUtils {
     return dotIndex == -1 ? "" : fileName.substring(dotIndex);
   }
 
-  private static PathFilter getExcludeMetaPathFilter() {
+  private static StoragePathFilter getExcludeMetaPathFilter() {
     // Avoid listing and including any folders under the metafolder
     return (path) -> !path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME);
   }
@@ -318,10 +347,10 @@ public class FSUtils {
   /**
    * Get the file extension from the log file.
    */
-  public static String getFileExtensionFromLog(Path logPath) {
+  public static String getFileExtensionFromLog(StoragePath logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
     if (!matcher.find()) {
-      throw new InvalidHoodiePathException(logPath, "LogFile");
+      throw new InvalidHoodiePathException(logPath.toString(), "LogFile");
     }
     return matcher.group(3);
   }
@@ -331,6 +360,14 @@ public class FSUtils {
    * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+    if (!matcher.find()) {
+      throw new InvalidHoodiePathException(path.toString(), "LogFile");
+    }
+    return matcher.group(1);
+  }
+
+  public static String getFileIdFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
@@ -348,13 +385,20 @@ public class FSUtils {
     return FSUtils.getFileId(filePath.getName());
   }
 
+  public static String getFileIdFromFilePath(StoragePath filePath) {
+    if (FSUtils.isLogFile(filePath)) {
+      return FSUtils.getFileIdFromLogPath(filePath);
+    }
+    return FSUtils.getFileId(filePath.getName());
+  }
+
   /**
    * Get the second part of the file name in the log file. That will be the delta commit time.
    */
-  public static String getDeltaCommitTimeFromLogPath(Path path) {
+  public static String getDeltaCommitTimeFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+      throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     return matcher.group(2);
   }
@@ -362,10 +406,10 @@ public class FSUtils {
   /**
    * Get TaskPartitionId used in log-path.
    */
-  public static Integer getTaskPartitionIdFromLogPath(Path path) {
+  public static Integer getTaskPartitionIdFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+      throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     String val = matcher.group(7);
     return val == null ? null : Integer.parseInt(val);
@@ -374,10 +418,10 @@ public class FSUtils {
   /**
    * Get Write-Token used in log-path.
    */
-  public static String getWriteTokenFromLogPath(Path path) {
+  public static String getWriteTokenFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+      throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     return matcher.group(6);
   }
@@ -385,10 +429,10 @@ public class FSUtils {
   /**
    * Get StageId used in log-path.
    */
-  public static Integer getStageIdFromLogPath(Path path) {
+  public static Integer getStageIdFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+      throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     String val = matcher.group(8);
     return val == null ? null : Integer.parseInt(val);
@@ -397,10 +441,10 @@ public class FSUtils {
   /**
    * Get Task Attempt Id used in log-path.
    */
-  public static Integer getTaskAttemptIdFromLogPath(Path path) {
+  public static Integer getTaskAttemptIdFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+      throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     String val = matcher.group(9);
     return val == null ? null : Integer.parseInt(val);
@@ -409,7 +453,7 @@ public class FSUtils {
   /**
    * Get the last part of the file name in the log file and convert to int.
    */
-  public static int getFileVersionFromLog(Path logPath) {
+  public static int getFileVersionFromLog(StoragePath logPath) {
     return getFileVersionFromLog(logPath.getName());
   }
 
@@ -434,6 +478,17 @@ public class FSUtils {
     return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension);
   }
 
+  public static boolean isBaseFile(StoragePath path) {
+    String extension = getFileExtension(path.getName());
+    return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension);
+  }
+
+  public static boolean isLogFile(StoragePath logPath) {
+    String scheme = logPath.toUri().getScheme();
+    return isLogFile(InLineFileSystem.SCHEME.equals(scheme)
+        ? InLineFSUtils.getOuterFilePathFromInlinePath(logPath).getName() : logPath.getName());
+  }
+
   public static boolean isLogFile(Path logPath) {
     String scheme = logPath.toUri().getScheme();
     return isLogFile(InLineFileSystem.SCHEME.equals(scheme)
@@ -452,6 +507,10 @@ public class FSUtils {
    * Returns true if the given path is a Base file or a Log file.
    */
   public static boolean isDataFile(Path path) {
+    return isBaseFile(path) || isLogFile(path);
+  }
+
+  public static boolean isDataFile(StoragePath path) {
     return isBaseFile(path) || isLogFile(path);
   }
 
@@ -478,22 +537,44 @@ public class FSUtils {
     }
   }
 
+  public static List<StoragePathInfo> getAllDataFilesInPartition(HoodieStorage storage,
+                                                                 StoragePath partitionPath)
+      throws IOException {
+    final Set<String> validFileExtensions = Arrays.stream(HoodieFileFormat.values())
+        .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));
+    final String logFileExtension = HoodieFileFormat.HOODIE_LOG.getFileExtension();
+
+    try {
+      return storage.listDirectEntries(partitionPath, path -> {
+        String extension = FSUtils.getFileExtension(path.getName());
+        return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
+      }).stream().filter(StoragePathInfo::isFile).collect(Collectors.toList());
+    } catch (IOException e) {
+      // return empty FileStatus if partition does not exist already
+      if (!storage.exists(partitionPath)) {
+        return Collections.emptyList();
+      } else {
+        throw e;
+      }
+    }
+  }
+
   /**
    * Get the latest log file for the passed in file-id in the partition path
    */
-  public static Option<HoodieLogFile> getLatestLogFile(FileSystem fs, Path partitionPath, String fileId,
+  public static Option<HoodieLogFile> getLatestLogFile(HoodieStorage storage, StoragePath partitionPath, String fileId,
                                                        String logFileExtension, String deltaCommitTime) throws IOException {
-    return getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, deltaCommitTime));
+    return getLatestLogFile(getAllLogFiles(storage, partitionPath, fileId, logFileExtension, deltaCommitTime));
   }
 
   /**
    * Get all the log files for the passed in file-id in the partition path.
    */
-  public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
-      final String logFileExtension, final String deltaCommitTime) throws IOException {
+  public static Stream<HoodieLogFile> getAllLogFiles(HoodieStorage storage, StoragePath partitionPath, final String fileId,
+                                                     final String logFileExtension, final String deltaCommitTime) throws IOException {
     try {
-      PathFilter pathFilter = path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension);
-      return Arrays.stream(fs.listStatus(partitionPath, pathFilter))
+      StoragePathFilter pathFilter = path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension);
+      return storage.listDirectEntries(partitionPath, pathFilter).stream()
           .map(HoodieLogFile::new)
           .filter(s -> s.getDeltaCommitTime().equals(deltaCommitTime));
     } catch (FileNotFoundException e) {
@@ -504,23 +585,15 @@ public class FSUtils {
   /**
    * Get the latest log version for the fileId in the partition path.
    */
-  public static Option<Pair<Integer, String>> getLatestLogVersion(FileSystem fs, Path partitionPath,
-      final String fileId, final String logFileExtension, final String deltaCommitTime) throws IOException {
+  public static Option<Pair<Integer, String>> getLatestLogVersion(HoodieStorage storage, StoragePath partitionPath,
+                                                                  final String fileId, final String logFileExtension, final String deltaCommitTime) throws IOException {
     Option<HoodieLogFile> latestLogFile =
-        getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, deltaCommitTime));
+        getLatestLogFile(getAllLogFiles(storage, partitionPath, fileId, logFileExtension, deltaCommitTime));
     if (latestLogFile.isPresent()) {
       return Option
           .of(Pair.of(latestLogFile.get().getLogVersion(), latestLogFile.get().getLogWriteToken()));
     }
     return Option.empty();
-  }
-
-  public static int getDefaultBufferSize(final FileSystem fs) {
-    return fs.getConf().getInt("io.file.buffer.size", 4096);
-  }
-
-  public static Short getDefaultReplication(FileSystem fs, Path path) {
-    return fs.getDefaultReplication(path);
   }
 
   /**
@@ -530,11 +603,11 @@ public class FSUtils {
    */
   public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
       throws IOException, InterruptedException {
-    LOG.info("Recover lease on dfs file " + p);
+    LOG.info("Recover lease on dfs file {}", p);
     // initiate the recovery
     boolean recovered = false;
     for (int nbAttempt = 0; nbAttempt < MAX_ATTEMPTS_RECOVER_LEASE; nbAttempt++) {
-      LOG.info("Attempt " + nbAttempt + " to recover lease on dfs file " + p);
+      LOG.info("Attempt {} to recover lease on dfs file {}", nbAttempt, p);
       recovered = dfs.recoverLease(p);
       if (recovered) {
         break;
@@ -546,9 +619,10 @@ public class FSUtils {
     return recovered;
   }
 
-  public static void createPathIfNotExists(FileSystem fs, Path partitionPath) throws IOException {
-    if (!fs.exists(partitionPath)) {
-      fs.mkdirs(partitionPath);
+  public static void createPathIfNotExists(HoodieStorage storage, StoragePath partitionPath)
+      throws IOException {
+    if (!storage.exists(partitionPath)) {
+      storage.createDirectory(partitionPath);
     }
   }
 
@@ -556,22 +630,40 @@ public class FSUtils {
     return sizeInBytes / (1024 * 1024);
   }
 
-  public static Path getPartitionPath(String basePath, String partitionPath) {
-    if (StringUtils.isNullOrEmpty(partitionPath)) {
+  public static Path constructAbsolutePathInHadoopPath(String basePath, String relativePartitionPath) {
+    if (StringUtils.isNullOrEmpty(relativePartitionPath)) {
       return new Path(basePath);
     }
 
     // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
     //       absolute path
-    String properPartitionPath = partitionPath.startsWith("/")
-        ? partitionPath.substring(1)
-        : partitionPath;
-    return getPartitionPath(new CachingPath(basePath), properPartitionPath);
+    String properPartitionPath = relativePartitionPath.startsWith(PATH_SEPARATOR)
+        ? relativePartitionPath.substring(1)
+        : relativePartitionPath;
+    return constructAbsolutePath(new CachingPath(basePath), properPartitionPath);
   }
 
-  public static Path getPartitionPath(Path basePath, String partitionPath) {
+  public static StoragePath constructAbsolutePath(String basePath, String relativePartitionPath) {
+    if (StringUtils.isNullOrEmpty(relativePartitionPath)) {
+      return new StoragePath(basePath);
+    }
+
+    // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
+    //       absolute path
+    String properPartitionPath = relativePartitionPath.startsWith(PATH_SEPARATOR)
+        ? relativePartitionPath.substring(1)
+        : relativePartitionPath;
+    return constructAbsolutePath(new StoragePath(basePath), properPartitionPath);
+  }
+
+  public static Path constructAbsolutePath(Path basePath, String relativePartitionPath) {
     // For non-partitioned table, return only base-path
-    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new CachingPath(basePath, partitionPath);
+    return StringUtils.isNullOrEmpty(relativePartitionPath) ? basePath : new CachingPath(basePath, relativePartitionPath);
+  }
+
+  public static StoragePath constructAbsolutePath(StoragePath basePath, String relativePartitionPath) {
+    // For non-partitioned table, return only base-path
+    return StringUtils.isNullOrEmpty(relativePartitionPath) ? basePath : new StoragePath(basePath, relativePartitionPath);
   }
 
   /**
@@ -599,25 +691,7 @@ public class FSUtils {
     return fs.getUri() + fullPartitionPath.toUri().getRawPath();
   }
 
-  /**
-   * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
-   *
-   * @param fs fileSystem instance.
-   * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
-   */
-  public static boolean isGCSFileSystem(FileSystem fs) {
-    return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
-  }
-
-  /**
-   * Chdfs will throw {@code IOException} instead of {@code EOFException}. It will cause error in isBlockCorrupted().
-   * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
-   */
-  public static boolean isCHDFileSystem(FileSystem fs) {
-    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
-  }
-
-  public static Configuration registerFileSystem(Path file, Configuration conf) {
+  public static Configuration registerFileSystem(StoragePath file, Configuration conf) {
     Configuration returnConf = new Configuration(conf);
     String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
@@ -637,21 +711,25 @@ public class FSUtils {
     FileSystem fileSystem = HadoopFSUtils.getFs(path, hadoopConf.newCopy());
     return new HoodieWrapperFileSystem(fileSystem,
         consistencyGuardConfig.isConsistencyCheckEnabled()
-            ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
+            ? new FailSafeConsistencyGuard(HoodieStorageUtils.getStorage(fileSystem), consistencyGuardConfig)
             : new NoOpConsistencyGuard());
   }
 
   /**
    * Helper to filter out paths under metadata folder when running fs.globStatus.
-   * @param fs  File System
+   *
+   * @param storage  {@link HoodieStorage} instance.
    * @param globPath Glob Path
    * @return the file status list of globPath exclude the meta folder
    * @throws IOException when having trouble listing the path
    */
-  public static List<FileStatus> getGlobStatusExcludingMetaFolder(FileSystem fs, Path globPath) throws IOException {
-    FileStatus[] statuses = fs.globStatus(globPath);
-    return Arrays.stream(statuses)
-        .filter(fileStatus -> !fileStatus.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))
+  public static List<StoragePathInfo> getGlobStatusExcludingMetaFolder(HoodieStorage storage,
+                                                                       StoragePath globPath)
+      throws IOException {
+    List<StoragePathInfo> statuses = storage.globEntries(globPath);
+    return statuses.stream()
+        .filter(fileStatus -> !fileStatus.getPath().toString()
+            .contains(HoodieTableMetaClient.METAFOLDER_NAME))
         .collect(Collectors.toList());
   }
 
@@ -659,20 +737,20 @@ public class FSUtils {
    * Deletes a directory by deleting sub-paths in parallel on the file system.
    *
    * @param hoodieEngineContext {@code HoodieEngineContext} instance
-   * @param fs file system
-   * @param dirPath directory path
-   * @param parallelism parallelism to use for sub-paths
+   * @param storage             {@link HoodieStorage} instance.
+   * @param dirPath             directory path.
+   * @param parallelism         parallelism to use for sub-paths
    * @return {@code true} if the directory is delete; {@code false} otherwise.
    */
   public static boolean deleteDir(
-      HoodieEngineContext hoodieEngineContext, FileSystem fs, Path dirPath, int parallelism) {
+      HoodieEngineContext hoodieEngineContext, HoodieStorage storage, StoragePath dirPath, int parallelism) {
     try {
-      if (fs.exists(dirPath)) {
-        FSUtils.parallelizeSubPathProcess(hoodieEngineContext, fs, dirPath, parallelism, e -> true,
+      if (storage.exists(dirPath)) {
+        FSUtils.parallelizeSubPathProcess(hoodieEngineContext, storage, dirPath, parallelism, e -> true,
             pairOfSubPathAndConf -> deleteSubPath(
                 pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), true)
         );
-        boolean result = fs.delete(dirPath, true);
+        boolean result = storage.deleteDirectory(dirPath);
         LOG.info("Removed directory at " + dirPath);
         return result;
       }
@@ -720,6 +798,44 @@ public class FSUtils {
     Map<String, T> result = new HashMap<>();
     if (subPaths.size() > 0) {
       SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
+      int actualParallelism = Math.min(subPaths.size(), parallelism);
+
+      hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),
+          "Parallel listing paths " + String.join(",", subPaths));
+
+      result = hoodieEngineContext.mapToPair(subPaths,
+          subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
+          actualParallelism);
+    }
+    return result;
+  }
+
+  public static <T> Map<String, T> parallelizeSubPathProcess(
+      HoodieEngineContext hoodieEngineContext, HoodieStorage storage, StoragePath dirPath, int parallelism,
+      Predicate<StoragePathInfo> subPathPredicate, SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction) {
+    Map<String, T> result = new HashMap<>();
+    try {
+      List<StoragePathInfo> pathInfoList = storage.listDirectEntries(dirPath);
+      List<String> subPaths = pathInfoList.stream()
+          .filter(subPathPredicate)
+          .map(fileStatus -> fileStatus.getPath().toString())
+          .collect(Collectors.toList());
+      result = parallelizeFilesProcess(hoodieEngineContext, storage, parallelism, pairFunction, subPaths);
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+    return result;
+  }
+
+  public static <T> Map<String, T> parallelizeFilesProcess(
+      HoodieEngineContext hoodieEngineContext,
+      HoodieStorage storage,
+      int parallelism,
+      SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction,
+      List<String> subPaths) {
+    Map<String, T> result = new HashMap<>();
+    if (subPaths.size() > 0) {
+      SerializableConfiguration conf = new SerializableConfiguration((Configuration) storage.unwrapConf());
       int actualParallelism = Math.min(subPaths.size(), parallelism);
 
       hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),
@@ -797,18 +913,19 @@ public class FSUtils {
     return result;
   }
 
-  public static List<FileStatus> getAllDataFileStatus(FileSystem fs, Path path) throws IOException {
-    List<FileStatus> statuses = new ArrayList<>();
-    for (FileStatus status : fs.listStatus(path)) {
-      if (!status.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
-        if (status.isDirectory()) {
-          statuses.addAll(getAllDataFileStatus(fs, status.getPath()));
+  public static List<StoragePathInfo> getAllDataPathInfo(HoodieStorage storage, StoragePath path)
+      throws IOException {
+    List<StoragePathInfo> pathInfoList = new ArrayList<>();
+    for (StoragePathInfo pathInfo : storage.listDirectEntries(path)) {
+      if (!pathInfo.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
+        if (pathInfo.isDirectory()) {
+          pathInfoList.addAll(getAllDataPathInfo(storage, pathInfo.getPath()));
         } else {
-          statuses.add(status);
+          pathInfoList.add(pathInfo);
         }
       }
     }
-    return statuses;
+    return pathInfoList;
   }
 
   public static Map<String, Boolean> deleteFilesParallelize(
@@ -818,12 +935,12 @@ public class FSUtils {
       int parallelism,
       boolean ignoreFailed) {
     return FSUtils.parallelizeFilesProcess(context,
-        metaClient.getFs(),
+        (FileSystem) metaClient.getStorage().getFileSystem(),
         parallelism,
         pairOfSubPathAndConf -> {
           Path file = new Path(pairOfSubPathAndConf.getKey());
           try {
-            FileSystem fs = metaClient.getFs();
+            FileSystem fs = (FileSystem) metaClient.getStorage().getFileSystem();
             if (fs.exists(file)) {
               return fs.delete(file, false);
             }
