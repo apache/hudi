@@ -112,6 +112,9 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala.map(e => new Path(e.toUri))
 
+  // if true, fg reader can attempt to enable batch reading
+  var canEnableBatch = false
+
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
    * cases where Spark directly fetches the list of files via HoodieFileIndex or for read optimized query logic
@@ -152,6 +155,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+    canEnableBatch = true
     val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
       case (partitionOpt, fileSlices) =>
         if (shouldEmbedFileSlices) {
@@ -170,6 +174,7 @@ case class HoodieFileIndex(spark: SparkSession,
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
+            canEnableBatch = false
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
               new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
           } else {

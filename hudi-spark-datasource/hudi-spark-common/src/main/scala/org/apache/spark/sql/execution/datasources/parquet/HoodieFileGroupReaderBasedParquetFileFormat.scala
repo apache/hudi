@@ -31,12 +31,13 @@ import org.apache.hudi.common.util.FileIOUtils
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, HoodieCDCFileIndex, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.internal.SQLConf.PARQUET_VECTORIZED_READER_ENABLED
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types._
 import org.apache.spark.util.SerializableConfiguration
@@ -64,16 +65,33 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   isIncremental: Boolean,
                                                   validCommits: String,
                                                   shouldUseRecordPosition: Boolean,
-                                                  requiredFilters: Seq[Filter]
+                                                  requiredFilters: Seq[Filter],
+                                                  @transient hoodieFileIndex: HoodieFileIndex
                                                  ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
 
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
   private val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
 
-  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = false
+  private lazy val canSupportBatch = hoodieFileIndex.canEnableBatch
+  private lazy val isCDC = hoodieFileIndex.isInstanceOf[HoodieCDCFileIndex]
 
-  private val supportBatchResult = false
+
+  /**
+   * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
+   * while the other side can't
+   */
+  private var supportBatchCalled = false
+  private var supportBatchResult = false
+
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    if (!supportBatchCalled || supportBatchResult) {
+      supportBatchCalled = true
+      supportBatchResult = !isCDC && !isIncremental && !shouldUseRecordPosition && canSupportBatch && super.supportBatch(sparkSession, schema)
+    }
+    sparkSession.conf.set(PARQUET_VECTORIZED_READER_ENABLED.key, supportBatchResult)
+    supportBatchResult
+  }
 
   private lazy val internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema] = if (tableSchema.internalSchema.isEmpty) {
     org.apache.hudi.common.util.Option.empty()
@@ -96,20 +114,21 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val partitionColumns = partitionSchema.fieldNames
     val dataSchema = StructType(tableSchema.structTypeSchema.fields.filterNot(f => partitionColumns.contains(f.name)))
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
-    spark.conf.set("spark.sql.parquet.enableVectorizedReader", supportBatchResult)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedHadoopConf = FSUtils.buildInlineConf(hadoopConf)
     setSchemaEvolutionConfigs(augmentedHadoopConf)
     val baseFileReader = super.buildReaderWithPartitionValues(spark, dataSchema, partitionSchema, requiredSchema,
       filters ++ requiredFilters, options, new Configuration(augmentedHadoopConf))
-    val cdcFileReader = super.buildReaderWithPartitionValues(
-      spark,
-      tableSchema.structTypeSchema,
-      StructType(Nil),
-      tableSchema.structTypeSchema,
-      Nil,
-      options,
-      new Configuration(hadoopConf))
+    val cdcFileReader = if (isCDC) {
+      super.buildReaderWithPartitionValues(
+        spark,
+        tableSchema.structTypeSchema,
+        StructType(Nil),
+        tableSchema.structTypeSchema,
+        Nil,
+        options,
+        new Configuration(hadoopConf))
+    }
 
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
@@ -172,7 +191,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
           val fileSplits = hoodiePartitionCDCFileGroupSliceMapping.getFileSplits().toArray
           val fileGroupSplit: HoodieCDCFileGroupSplit = HoodieCDCFileGroupSplit(fileSplits)
           buildCDCRecordIterator(
-            fileGroupSplit, cdcFileReader, broadcastedHadoopConf.value.value, fileIndexProps, requiredSchema)
+            fileGroupSplit, cdcFileReader.asInstanceOf[PartitionedFile => Iterator[InternalRow]],
+            broadcastedHadoopConf.value.value, fileIndexProps, requiredSchema)
 
         case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, filters,
           broadcastedHadoopConf.value.value)
