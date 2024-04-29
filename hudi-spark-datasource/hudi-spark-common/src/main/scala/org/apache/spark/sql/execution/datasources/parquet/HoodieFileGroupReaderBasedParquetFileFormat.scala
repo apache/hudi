@@ -107,7 +107,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val partitionColumns = partitionSchema.fieldNames
     val dataSchema = StructType(tableSchema.structTypeSchema.fields.filterNot(f => partitionColumns.contains(f.name)))
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
-    spark.conf.set("spark.sql.parquet.enableVectorizedReader", supportBatchResult)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedHadoopConf = FSUtils.buildInlineConf(hadoopConf)
     setSchemaEvolutionConfigs(augmentedHadoopConf)
