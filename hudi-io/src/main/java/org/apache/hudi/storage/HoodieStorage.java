@@ -23,7 +23,6 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 
@@ -437,7 +436,7 @@ public abstract class HoodieStorage implements Closeable {
    * @return the underlying configuration cast to type {@link U}.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public final <U> U unwrapConf(Class<U> clazz) {
+  public final <U> U unwrapConfAs(Class<U> clazz) {
     return castConfiguration(unwrapConf(), clazz);
   }
 }

@@ -109,7 +109,7 @@ public class SparkDataSourceContinuousIngestTool {
     try {
       SparkDataSourceContinuousIngest sparkDataSourceContinuousIngest =
           new SparkDataSourceContinuousIngest(
-              sparkSession, context.getStorageConf().unwrap(Configuration.class), new Path(cfg.sourcePath), cfg.sparkFormat,
+              sparkSession, context.getStorageConf().unwrapAs(Configuration.class), new Path(cfg.sourcePath), cfg.sparkFormat,
               new Path(cfg.checkpointFilePath), new Path(cfg.basePath), getPropsAsMap(props),
               cfg.minSyncIntervalSeconds);
       sparkDataSourceContinuousIngest.startIngestion();

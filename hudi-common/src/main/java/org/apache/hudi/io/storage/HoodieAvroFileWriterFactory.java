@@ -64,7 +64,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
         config.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
         config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
-        conf.unwrap(Configuration.class), config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
+        conf.unwrapAs(Configuration.class), config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
     return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
   }
@@ -77,7 +77,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getInt(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
         config.getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE),
         config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE), // todo: 1024*1024*1024
-        conf.unwrap(Configuration.class), config.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
+        conf.unwrapAs(Configuration.class), config.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         config.getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
     return new HoodieParquetStreamWriter(outputStream, parquetConfig);
   }
@@ -86,7 +86,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
       String instantTime, StoragePath path, StorageConfiguration<?> conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     BloomFilter filter = createBloomFilter(config);
-    HoodieHFileConfig hfileConfig = new HoodieHFileConfig(conf.unwrap(Configuration.class),
+    HoodieHFileConfig hfileConfig = new HoodieHFileConfig(conf.unwrapAs(Configuration.class),
         Compression.Algorithm.valueOf(
             config.getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME)),
         config.getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE),
@@ -101,7 +101,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
       String instantTime, StoragePath path, StorageConfiguration<?> conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     BloomFilter filter = createBloomFilter(config);
-    HoodieOrcConfig orcConfig = new HoodieOrcConfig(conf.unwrap(Configuration.class),
+    HoodieOrcConfig orcConfig = new HoodieOrcConfig(conf.unwrapAs(Configuration.class),
         CompressionKind.valueOf(config.getString(HoodieStorageConfig.ORC_COMPRESSION_CODEC_NAME)),
         config.getInt(HoodieStorageConfig.ORC_STRIPE_SIZE),
         config.getInt(HoodieStorageConfig.ORC_BLOCK_SIZE),
@@ -115,6 +115,6 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
         new Class<?>[] {MessageType.class, Schema.class, Option.class, Properties.class},
-        new AvroSchemaConverter(conf.unwrap(Configuration.class)).convert(schema), schema, filter, config.getProps());
+        new AvroSchemaConverter(conf.unwrapAs(Configuration.class)).convert(schema), schema, filter, config.getProps());
   }
 }

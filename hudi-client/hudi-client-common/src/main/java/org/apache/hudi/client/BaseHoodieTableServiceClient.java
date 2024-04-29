@@ -198,7 +198,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
-    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrap(Configuration.class));
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
 
     // Check if a commit or compaction instant with a greater timestamp is on the timeline.
     // If an instant is found then abort log compaction, since it is no longer needed.
@@ -288,7 +288,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
-    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrap(Configuration.class));
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
@@ -313,7 +313,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    */
   public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeCompaction(metadata, createTable(config, context.getStorageConf().unwrap(Configuration.class)), compactionInstantTime);
+    completeCompaction(metadata, createTable(config, context.getStorageConf().unwrapAs(Configuration.class)), compactionInstantTime);
   }
 
   /**
@@ -444,7 +444,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @return Collection of Write Status
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete) {
-    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrap(Configuration.class));
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
     if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
@@ -479,7 +479,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   public boolean purgePendingClustering(String clusteringInstant) {
-    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrap(Configuration.class));
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
     if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
@@ -497,7 +497,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @return HoodieWriteMetadata
    */
   public HoodieWriteMetadata<T> managePartitionTTL(String instantTime) {
-    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrap(Configuration.class));
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     return table.managePartitionTTL(context, instantTime);
   }
 

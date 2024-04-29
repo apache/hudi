@@ -387,7 +387,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
           val absLogPath = new StoragePath(basePath, currentCDCFileSplit.getCdcFiles.get(0))
           val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(storage.getPathInfo(absLogPath))))
           val logFileIterator = new LogFileIterator(
-            morSplit, originTableSchema, originTableSchema, tableState, conf.unwrap(classOf[Configuration]))
+            morSplit, originTableSchema, originTableSchema, tableState, conf.unwrapAs(classOf[Configuration]))
           logRecordIter = logFileIterator.logRecordsPairIterator
         case AS_IS =>
           assert(currentCDCFileSplit.getCdcFiles != null && !currentCDCFileSplit.getCdcFiles.isEmpty)
@@ -504,7 +504,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
         originTableSchema,
         originTableSchema,
         tableState,
-        conf.unwrap(classOf[Configuration]))
+        conf.unwrapAs(classOf[Configuration]))
     }
   }
 

@@ -45,7 +45,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     if (isUseNativeHFileReaderEnabled(hoodieConfig)) {
       return new HoodieNativeAvroHFileReader(conf, path, schemaOption);
     }
-    CacheConfig cacheConfig = new CacheConfig(conf.unwrap(Configuration.class));
+    CacheConfig cacheConfig = new CacheConfig(conf.unwrapAs(Configuration.class));
     if (schemaOption.isPresent()) {
       return new HoodieHBaseAvroHFileReader(conf, path, cacheConfig, HoodieStorageUtils.getStorage(path, conf), schemaOption);
     }
@@ -63,7 +63,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     if (isUseNativeHFileReaderEnabled(hoodieConfig)) {
       return new HoodieNativeAvroHFileReader(conf, content, schemaOption);
     }
-    CacheConfig cacheConfig = new CacheConfig(conf.unwrap(Configuration.class));
+    CacheConfig cacheConfig = new CacheConfig(conf.unwrapAs(Configuration.class));
     return new HoodieHBaseAvroHFileReader(conf, path, cacheConfig, storage, content, schemaOption);
   }
 

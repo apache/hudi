@@ -66,7 +66,7 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
   @Override
   protected HoodieAvroFileReader createReader(
       StorageConfiguration<?> conf) throws Exception {
-    CacheConfig cacheConfig = new CacheConfig(conf.unwrap(Configuration.class));
+    CacheConfig cacheConfig = new CacheConfig(conf.unwrapAs(Configuration.class));
     return new HoodieHBaseAvroHFileReader(conf, getFilePath(), cacheConfig,
         HoodieStorageUtils.getStorage(getFilePath(), conf), Option.empty());
   }
@@ -76,7 +76,7 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
                                                             byte[] content) throws IOException {
     FileSystem fs = HadoopFSUtils.getFs(getFilePath().toString(), new Configuration());
     return new HoodieHBaseAvroHFileReader(
-        conf, new StoragePath(DUMMY_BASE_PATH), new CacheConfig(conf.unwrap(Configuration.class)),
+        conf, new StoragePath(DUMMY_BASE_PATH), new CacheConfig(conf.unwrapAs(Configuration.class)),
         HoodieStorageUtils.getStorage(getFilePath(), conf), content, Option.empty());
   }
 

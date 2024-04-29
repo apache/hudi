@@ -68,7 +68,7 @@ public abstract class StorageConfiguration<T> implements Serializable {
    * @param <U>   type to return.
    * @return the underlying configuration cast to type {@link U}.
    */
-  public final <U> U unwrap(Class<U> clazz) {
+  public final <U> U unwrapAs(Class<U> clazz) {
     return castConfiguration(unwrap(), clazz);
   }
 
@@ -77,7 +77,7 @@ public abstract class StorageConfiguration<T> implements Serializable {
    * @param <U>   type to return.
    * @return a new copy of the underlying configuration cast to type {@link U}.
    */
-  public final <U> U unwrapCopy(Class<U> clazz) {
+  public final <U> U unwrapCopyAs(Class<U> clazz) {
     return castConfiguration(unwrapCopy(), clazz);
   }
 

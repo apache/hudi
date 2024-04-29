@@ -92,7 +92,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
-    this.hadoopConf = context.getStorageConf().unwrap((Configuration.class));
+    this.hadoopConf = context.getStorageConf().unwrapAs((Configuration.class));
     this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), HadoopFSUtils.getStorageConf(hadoopConf));
     this.context = context;
     this.basePath = clientConfig.getBasePath();

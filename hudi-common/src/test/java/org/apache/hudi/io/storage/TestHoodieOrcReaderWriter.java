@@ -80,7 +80,7 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
   @Override
   protected void verifyMetadata(StorageConfiguration<?> conf) throws IOException {
     Reader orcReader = OrcFile.createReader(
-        new Path(getFilePath().toUri()), OrcFile.readerOptions(conf.unwrap(Configuration.class)));
+        new Path(getFilePath().toUri()), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)));
     assertEquals(4, orcReader.getMetadataKeys().size());
     assertTrue(orcReader.getMetadataKeys().contains(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER));
     assertTrue(orcReader.getMetadataKeys().contains(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER));
@@ -93,7 +93,7 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
   @Override
   protected void verifySchema(StorageConfiguration<?> conf, String schemaPath) throws IOException {
     Reader orcReader = OrcFile.createReader(
-        new Path(getFilePath().toUri()), OrcFile.readerOptions(conf.unwrap(Configuration.class)));
+        new Path(getFilePath().toUri()), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)));
     if ("/exampleSchema.avsc".equals(schemaPath)) {
       assertEquals("struct<_row_key:string,time:string,number:int>",
           orcReader.getSchema().toString());

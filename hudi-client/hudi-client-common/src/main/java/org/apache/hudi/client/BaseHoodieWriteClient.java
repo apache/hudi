@@ -1092,7 +1092,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void commitLogCompaction(String logCompactionInstantTime, HoodieCommitMetadata metadata,
                                   Option<Map<String, String>> extraMetadata) {
-    HoodieTable table = createTable(config, context.getStorageConf().unwrap(Configuration.class));
+    HoodieTable table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
     completeLogCompaction(metadata, table, logCompactionInstantTime);
   }
@@ -1111,7 +1111,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
-    HoodieTable table = createTable(config, context.getStorageConf().unwrap(Configuration.class));
+    HoodieTable table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
     return tableServiceClient.compact(compactionInstantTime, shouldComplete);
   }
@@ -1132,7 +1132,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
-    HoodieTable table = createTable(config, context.getStorageConf().unwrap(Configuration.class));
+    HoodieTable table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
     return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
   }
@@ -1170,13 +1170,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of Write Status
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete) {
-    HoodieTable table = createTable(config, context.getStorageConf().unwrap(Configuration.class));
+    HoodieTable table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
     return tableServiceClient.cluster(clusteringInstant, shouldComplete);
   }
 
   public boolean purgePendingClustering(String clusteringInstant) {
-    HoodieTable table = createTable(config, context.getStorageConf().unwrap(Configuration.class));
+    HoodieTable table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
     return tableServiceClient.purgePendingClustering(clusteringInstant);
   }

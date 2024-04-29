@@ -201,7 +201,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       for (i <- 100 until 104) {
         val timestamp = String.valueOf(i)
         // Write corrupted requested Clean File
-        createEmptyCleanRequestedFile(tablePath, timestamp, metaClient.getStorageConf.unwrap(classOf[Configuration]))
+        createEmptyCleanRequestedFile(tablePath, timestamp, metaClient.getStorageConf.unwrapAs(classOf[Configuration]))
       }
 
       // reload meta client

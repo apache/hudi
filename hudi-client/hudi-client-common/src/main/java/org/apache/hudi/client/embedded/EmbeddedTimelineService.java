@@ -181,7 +181,7 @@ public class EmbeddedTimelineService {
 
     this.serviceConfig = timelineServiceConfBuilder.build();
 
-    server = timelineServiceCreator.create(context, storageConf.unwrapCopy(Configuration.class), serviceConfig,
+    server = timelineServiceCreator.create(context, storageConf.unwrapCopyAs(Configuration.class), serviceConfig,
         HoodieStorageUtils.getStorage(writeConfig.getBasePath(), storageConf.newInstance()), viewManager);
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);

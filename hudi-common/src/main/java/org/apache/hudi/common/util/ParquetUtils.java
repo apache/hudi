@@ -124,7 +124,7 @@ public class ParquetUtils extends BaseFileUtils {
     if (filter != null && !filter.isEmpty()) {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
-    Configuration conf = configuration.unwrapCopy(Configuration.class);
+    Configuration conf = configuration.unwrapCopyAs(Configuration.class);
     conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
@@ -178,7 +178,7 @@ public class ParquetUtils extends BaseFileUtils {
   @Override
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
-      Configuration conf = configuration.unwrapCopy(Configuration.class);
+      Configuration conf = configuration.unwrapCopyAs(Configuration.class);
       conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
       Schema readSchema = keyGeneratorOpt
           .map(keyGenerator -> {
@@ -246,7 +246,7 @@ public class ParquetUtils extends BaseFileUtils {
   @Override
   public Schema readAvroSchema(StorageConfiguration<?> conf, StoragePath filePath) {
     MessageType parquetSchema = readSchema(conf, filePath);
-    return new AvroSchemaConverter(conf.unwrap(Configuration.class)).convert(parquetSchema);
+    return new AvroSchemaConverter(conf.unwrapAs(Configuration.class)).convert(parquetSchema);
   }
 
   @Override
@@ -261,7 +261,7 @@ public class ParquetUtils extends BaseFileUtils {
   public List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath) {
     List<GenericRecord> records = new ArrayList<>();
     try (ParquetReader reader = AvroParquetReader.builder(new Path(filePath.toUri()))
-        .withConf(configuration.unwrap(Configuration.class)).build()) {
+        .withConf(configuration.unwrapAs(Configuration.class)).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
@@ -278,7 +278,7 @@ public class ParquetUtils extends BaseFileUtils {
 
   @Override
   public List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath, Schema schema) {
-    AvroReadSupport.setAvroReadSchema(configuration.unwrap(Configuration.class), schema);
+    AvroReadSupport.setAvroReadSchema(configuration.unwrapAs(Configuration.class), schema);
     return readAvroRecords(configuration, filePath);
   }
 

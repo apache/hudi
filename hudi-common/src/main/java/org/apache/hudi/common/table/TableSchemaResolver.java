@@ -307,12 +307,12 @@ public class TableSchemaResolver {
   }
 
   private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {
-    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getStorageConf().unwrap(Configuration.class));
+    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class));
     return avroSchemaConverter.convert(parquetSchema);
   }
 
   private MessageType convertAvroSchemaToParquet(Schema schema) {
-    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getStorageConf().unwrap(Configuration.class));
+    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class));
     return avroSchemaConverter.convert(schema);
   }
 
@@ -336,7 +336,7 @@ public class TableSchemaResolver {
 
     ParquetMetadata fileFooter =
         ParquetFileReader.readFooter(
-            metaClient.getRawHoodieStorage().unwrapConf(Configuration.class),
+            metaClient.getRawHoodieStorage().unwrapConfAs(Configuration.class),
             parquetFilePath, ParquetMetadataConverter.NO_FILTER);
     return fileFooter.getFileMetaData().getSchema();
   }

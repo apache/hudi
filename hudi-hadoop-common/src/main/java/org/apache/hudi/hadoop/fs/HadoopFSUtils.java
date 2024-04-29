@@ -79,7 +79,7 @@ public class HadoopFSUtils {
   }
 
   public static <T> FileSystem getFs(Path path, StorageConfiguration<T> storageConf, boolean newCopy) {
-    Configuration conf = newCopy ? storageConf.unwrapCopy(Configuration.class) : storageConf.unwrap(Configuration.class);
+    Configuration conf = newCopy ? storageConf.unwrapCopyAs(Configuration.class) : storageConf.unwrapAs(Configuration.class);
     return getFs(path, conf);
   }
 
@@ -117,7 +117,7 @@ public class HadoopFSUtils {
                                                       long initialRetryIntervalMs,
                                                       String retryExceptions,
                                                       ConsistencyGuard consistencyGuard) {
-    FileSystem fileSystem = getFs(path, conf.unwrapCopy(Configuration.class));
+    FileSystem fileSystem = getFs(path, conf.unwrapCopyAs(Configuration.class));
 
     if (enableRetry) {
       fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
