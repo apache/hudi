@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -304,7 +305,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config);
         LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
         try {
-          Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
+          TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
+          Schema readerSchema;
+          try {
+            readerSchema = schemaUtil.getTableAvroSchema(true);
+          } catch (Exception e) {
+            LOG.warn(e.getMessage());
+            readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
+          }
           HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
               .withStorage(table.getMetaClient().getStorage())
               .withBasePath(table.getMetaClient().getBasePath())
@@ -361,7 +369,15 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           List<Iterator<HoodieRecord<T>>> iteratorsForPartition = new ArrayList<>();
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
             try {
-              Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
+              TableSchemaResolver schemaUtil = new TableSchemaResolver(getHoodieTable().getMetaClient());
+              Schema readerSchema;
+              try {
+                readerSchema = schemaUtil.getTableAvroSchema(true);
+              } catch (Exception e) {
+                LOG.warn(e.getMessage());
+                readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
+              }
+              final Schema finalReaderSchema = readerSchema;
               HoodieFileReader baseFileReader = getBaseOrBootstrapFileReader(hadoopConf, bootstrapBasePath, partitionFields, clusteringOp);
 
               Option<BaseKeyGenerator> keyGeneratorOp = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
@@ -369,8 +385,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
               //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
               //       it since these records will be shuffled later.
               CloseableMappingIterator mappingIterator = new CloseableMappingIterator(
-                  (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
-                  rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema, writeConfig.getProps(), keyGeneratorOp));
+                  (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(finalReaderSchema),
+                  rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(finalReaderSchema, writeConfig.getProps(), keyGeneratorOp));
               iteratorsForPartition.add(mappingIterator);
             } catch (IOException e) {
               throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
