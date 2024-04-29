@@ -79,6 +79,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public SparkConf conf() {
     return conf(SparkClientFunctionalTestHarness.getSparkSqlConf());
   }
+
   private static final Schema SCHEMA = getAvroSchema("AvroSchema", "AvroSchemaNS");
   private HoodieTableMetaClient metaClient;
 
