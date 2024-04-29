@@ -112,7 +112,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala.map(e => new Path(e.toUri))
 
-  var hasListedFiles = false
+  var canEnableBatch = false
 
 
   /**
@@ -155,8 +155,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    hasListedFiles = true
-    var enableBatch = "true"
+    canEnableBatch = true
     val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
       case (partitionOpt, fileSlices) =>
         if (shouldEmbedFileSlices) {
@@ -175,7 +174,7 @@ case class HoodieFileIndex(spark: SparkSession,
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
-            enableBatch = "false"
+            canEnableBatch = false
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
               new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
           } else {
@@ -204,7 +203,6 @@ case class HoodieFileIndex(spark: SparkSession,
 
     hasPushedDownPartitionPredicates = true
     if (shouldEmbedFileSlices) {
-      spark.sqlContext.setConf(PARQUET_VECTORIZED_READER_ENABLED.key, enableBatch)
       prunedPartitionsAndFilteredFileSlices
     } else if (shouldReadAsPartitionedTable()) {
       prunedPartitionsAndFilteredFileSlices
