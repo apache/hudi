@@ -59,7 +59,9 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
@@ -1111,8 +1113,34 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
     HoodieTable table = createTable(config, context.getHadoopConf().get());
+    Option<HoodieInstant> instantToCompactOption = Option.fromJavaOptional(table.getActiveTimeline()
+        .filterCompletedAndCompactionInstants()
+        .getInstants()
+        .stream()
+        .filter(instant -> HoodieActiveTimeline.EQUALS.test(instant.getTimestamp(), compactionInstantTime))
+        .findFirst());
+    try {
+      // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
+      // compact job will abort if they attempt to execute compact before heartbeat expires
+      // Note that as long as all jobs for this table use this API for compact, then this alone should prevent
+      // compact rollbacks from running concurrently to compact commits.
+      txnManager.beginTransaction(instantToCompactOption, txnManager.getLastCompletedTransactionOwner());
+      try {
+        if (!this.heartbeatClient.isHeartbeatExpired(compactionInstantTime)) {
+          throw new HoodieLockException("Cannot compact instant " + compactionInstantTime + " due to heartbeat by existing job");
+        }
+      } catch (IOException e) {
+        throw new HoodieHeartbeatException("Error accessing heartbeat of instant to compact " + compactionInstantTime, e);
+      }
+      this.heartbeatClient.start(compactionInstantTime);
+    } finally {
+      txnManager.endTransaction(txnManager.getCurrentTransactionOwner());
+    }
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
-    return tableServiceClient.compact(compactionInstantTime, shouldComplete);
+    HoodieWriteMetadata compactMetadata = tableServiceClient.compact(compactionInstantTime, shouldComplete);
+    this.heartbeatClient.stop(compactionInstantTime, true);
+    return compactMetadata;
+
   }
 
   /**
@@ -1132,8 +1160,31 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
     HoodieTable table = createTable(config, context.getHadoopConf().get());
+    try {
+      // Transaction serves to ensure only one logcompact job for this instant will start heartbeat, and any other concurrent
+      // logcompact job will abort if they attempt to execute logcompact before heartbeat expires
+      // Note that as long as all jobs for this table use this API for logcompact, then this alone should prevent
+      // logcompact rollbacks from running concurrently to logcompact deltacommits.
+      HoodieTimeline pendingLogCompactionTimeline = table.getActiveTimeline().filterPendingLogCompactionTimeline();
+      Option<HoodieInstant> instantToLogCompactOption = pendingLogCompactionTimeline
+          .filter(instant -> instant.getTimestamp().equals(logCompactionInstantTime))
+          .firstInstant();
+      txnManager.beginTransaction(instantToLogCompactOption, txnManager.getLastCompletedTransactionOwner());
+      try {
+        if (!this.heartbeatClient.isHeartbeatExpired(logCompactionInstantTime)) {
+          throw new HoodieLockException("Cannot logcompact instant " + logCompactionInstantTime + " due to heartbeat by existing job");
+        }
+      } catch (IOException e) {
+        throw new HoodieHeartbeatException("Error accessing heartbeat of instant to logcompact " + logCompactionInstantTime, e);
+      }
+      this.heartbeatClient.start(logCompactionInstantTime);
+    } finally {
+      txnManager.endTransaction(txnManager.getCurrentTransactionOwner());
+    }
     preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
-    return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
+    HoodieWriteMetadata logCompactMetadata = tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
+    this.heartbeatClient.stop(logCompactionInstantTime, true);
+    return logCompactMetadata;
   }
 
   /**
