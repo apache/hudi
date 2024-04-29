@@ -81,7 +81,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     if (!supportBatchCalled || supportBatchResult) {
       supportBatchCalled = true
-      supportBatchResult = !isIncremental && super.supportBatch(sparkSession, schema)
+      supportBatchResult = !isIncremental && !shouldUseRecordPosition && super.supportBatch(sparkSession, schema)
     }
     supportBatchResult
   }
