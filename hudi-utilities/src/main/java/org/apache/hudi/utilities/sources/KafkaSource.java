@@ -88,7 +88,7 @@ public abstract class KafkaSource<T> extends Source<T> {
           kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getMaxSourceBytes(),
           kafkaSourceProfile.getSourcePartitions(), offsetGen.getTopicName(), offsetRanges);
     } else {
-      int minPartitions = (int) getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
+      long minPartitions = getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
       offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
       LOG.info("About to read sourceLimit {} in {} spark partitions from kafka for topic {} with offset ranges {}",
           sourceLimit, minPartitions, offsetGen.getTopicName(),
