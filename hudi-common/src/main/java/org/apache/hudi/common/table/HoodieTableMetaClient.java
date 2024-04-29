@@ -937,6 +937,8 @@ public class HoodieTableMetaClient implements Serializable {
 
     private String indexDefinitionPath;
 
+    private Properties hoodieIndexConf = new Properties();
+
     /**
      * Persist the configs that is written at the first time, and should not be changed.
      * Like KeyGenerator's configs.
@@ -1122,6 +1124,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setHoodieIndexConf(Properties hoodieIndexConf) {
+      this.hoodieIndexConf = hoodieIndexConf;
+      return this;
+    }
+
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
           .setTableName(metaClient.getTableConfig().getTableName())
@@ -1250,6 +1257,8 @@ public class HoodieTableMetaClient implements Serializable {
       HoodieTableConfig tableConfig = new HoodieTableConfig();
 
       tableConfig.setAll(others);
+
+      tableConfig.setAll(hoodieIndexConf);
 
       if (databaseName != null) {
         tableConfig.setValue(HoodieTableConfig.DATABASE_NAME, databaseName);

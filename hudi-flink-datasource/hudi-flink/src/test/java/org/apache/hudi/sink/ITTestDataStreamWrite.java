@@ -18,13 +18,19 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
+import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.exception.MissingSchemaFieldException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
@@ -83,6 +89,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENAB
 import static org.apache.hudi.config.HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP;
 import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
 import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration test for Flink Hoodie stream sink.
@@ -169,6 +176,38 @@ public class ITTestDataStreamWrite extends TestLogger {
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
 
     testWriteToHoodie(conf, "mor_write_with_compact", 1, EXPECTED);
+  }
+
+  @Test
+  public void testVerifyConsistencyOfBucketNum() throws Exception {
+    String path = tempFile.getAbsolutePath();
+    Configuration conf = TestConfigurations.getDefaultConf(path);
+    conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
+    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+
+    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
+    StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(
+            conf, context);
+    coordinator.start();
+    final org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(new Configuration());
+    try (FileSystem fs = HadoopFSUtils.getFs(path, hadoopConf)) {
+      assertTrue(fs.exists(new org.apache.hadoop.fs.Path(path, HoodieTableMetaClient.METAFOLDER_NAME)));
+    }
+    coordinator.close();
+
+    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 5);
+    coordinator = new StreamWriteOperatorCoordinator(
+            conf, context);
+    try {
+      coordinator.start();
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().equalsIgnoreCase("Config [hoodie.bucket.index.num.buckets] = [5] is not equals stored config [4]."));
+    }
+    coordinator.close();
+
+
   }
 
   @Test
