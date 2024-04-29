@@ -169,6 +169,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
             .databaseName(databaseName)
             .tableName(tableName)
             .segment(segment)
+            .excludeColumnSchema(true)
             .nextToken(nextToken)
             .build()).get();
         partitions.addAll(result.partitions().stream()
