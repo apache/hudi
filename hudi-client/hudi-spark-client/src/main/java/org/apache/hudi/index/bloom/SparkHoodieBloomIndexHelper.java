@@ -20,7 +20,6 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
@@ -39,6 +38,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
@@ -103,7 +103,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     if (config.getBloomIndexUseMetadata()
         && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
         .contains(BLOOM_FILTERS.getPartitionPath())) {
-      SerializableConfiguration hadoopConf = new SerializableConfiguration(hoodieTable.getHadoopConf());
+      StorageConfiguration<?> storageConf = hoodieTable.getStorageConf();
 
       HoodieTableFileSystemView baseFileOnlyView =
           getBaseFileOnlyView(hoodieTable, partitionToFileInfo.keySet());
@@ -155,7 +155,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
           .mapPartitionsToPair(new HoodieMetadataBloomFilterProbingFunction(baseFileOnlyViewBroadcast, hoodieTable))
           // Second, we use [[HoodieFileProbingFunction]] to open actual file and check whether it
           // contains the records with candidate keys that were filtered in by the Bloom Filter
-          .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, hadoopConf), true);
+          .mapPartitions(new HoodieFileProbingFunction(baseFileOnlyViewBroadcast, storageConf), true);
 
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<HoodieFileGroupId, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(

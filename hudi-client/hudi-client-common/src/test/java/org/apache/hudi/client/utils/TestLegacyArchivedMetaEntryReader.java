@@ -43,7 +43,6 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
@@ -74,7 +73,8 @@ public class TestLegacyArchivedMetaEntryReader {
   void testReadLegacyArchivedTimeline() throws Exception {
     String tableName = "testTable";
     String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareLegacyArchivedTimeline(metaClient);
     LegacyArchivedMetaEntryReader reader = new LegacyArchivedMetaEntryReader(metaClient);
     ClosableIterator<ActiveAction> iterator = reader.getActiveActionsIterator();

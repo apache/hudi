@@ -79,7 +79,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
   }
 
   private void createNonpartitionedTable() throws IOException {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
     // Create table and connect
     String nonpartitionedTableName = "nonpartitioned_" + tableName();
@@ -120,7 +120,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
   }
 
   private void createPartitionedTable() throws IOException {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
     // Create table and connect
     String partitionedTableName = "partitioned_" + tableName();

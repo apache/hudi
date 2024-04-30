@@ -180,9 +180,9 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
   }
 
   private List<GenericRecord> readRecords(String[] partitions) {
-    return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf,
+    return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf,
         Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()),
-        basePath, new JobConf(hadoopConf), true, false);
+        basePath, new JobConf(storageConf.unwrap()), true, false);
   }
 
 }

@@ -25,11 +25,11 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -61,10 +61,10 @@ public abstract class HoodieReaderContext<T> {
    * Gets the file system based on the file path and configuration.
    *
    * @param path File path to get the file system.
-   * @param conf Hadoop {@link Configuration} instance.
+   * @param conf {@link StorageConfiguration} for I/O.
    * @return The {@link HoodieStorage} instance to use.
    */
-  public abstract HoodieStorage getStorage(String path, Configuration conf);
+  public abstract HoodieStorage getStorage(String path, StorageConfiguration<?> conf);
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
@@ -75,12 +75,12 @@ public abstract class HoodieReaderContext<T> {
    * @param length         Bytes to read.
    * @param dataSchema     Schema of records in the file in {@link Schema}.
    * @param requiredSchema Schema containing required fields to read in {@link Schema} for projection.
-   * @param conf           {@link Configuration} for reading records.
+   * @param conf           {@link StorageConfiguration} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
       StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
-      Configuration conf) throws IOException;
+      StorageConfiguration<?> conf) throws IOException;
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.

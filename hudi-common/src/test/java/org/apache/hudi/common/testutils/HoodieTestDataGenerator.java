@@ -37,8 +37,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
@@ -47,7 +48,6 @@ import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -521,51 +521,51 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return rec;
   }
 
-  public static void createRequestedCommitFile(String basePath, String instantTime, Configuration configuration) throws IOException {
+  public static void createRequestedCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) throws IOException {
     Path pendingRequestedFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeRequestedCommitFileName(instantTime));
     createEmptyFile(basePath, pendingRequestedFile, configuration);
   }
 
-  public static void createPendingCommitFile(String basePath, String instantTime, Configuration configuration) throws IOException {
+  public static void createPendingCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) throws IOException {
     Path pendingCommitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeInflightCommitFileName(instantTime));
     createEmptyFile(basePath, pendingCommitFile, configuration);
   }
 
-  public static void createCommitFile(String basePath, String instantTime, Configuration configuration) {
+  public static void createCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createCommitFile(basePath, instantTime, configuration, commitMetadata);
   }
 
-  private static void createCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+  private static void createCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
     Arrays.asList(HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()), HoodieTimeline.makeInflightCommitFileName(instantTime),
             HoodieTimeline.makeRequestedCommitFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
-  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, Configuration configuration) {
+  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createOnlyCompletedCommitFile(basePath, instantTime, configuration, commitMetadata);
   }
 
-  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
     createMetadataFile(HoodieTimeline.makeCommitFileName(instantTime), basePath, configuration, commitMetadata);
   }
 
-  public static void createDeltaCommitFile(String basePath, String instantTime, Configuration configuration) {
+  public static void createDeltaCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createDeltaCommitFile(basePath, instantTime, configuration, commitMetadata);
   }
 
-  private static void createDeltaCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+  private static void createDeltaCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
     Arrays.asList(HoodieTimeline.makeDeltaFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
             HoodieTimeline.makeInflightDeltaFileName(instantTime),
             HoodieTimeline.makeRequestedDeltaFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
-  private static void createMetadataFile(String f, String basePath, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+  private static void createMetadataFile(String f, String basePath, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
     try {
       createMetadataFile(f, basePath, configuration, serializeCommitMetadata(commitMetadata).get());
     } catch (IOException e) {
@@ -573,7 +573,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
   }
 
-  private static void createMetadataFile(String f, String basePath, Configuration configuration, byte[] content) {
+  private static void createMetadataFile(String f, String basePath, StorageConfiguration<?> configuration, byte[] content) {
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
     OutputStream os = null;
@@ -595,45 +595,45 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
   }
 
-  public static void createReplaceCommitRequestedFile(String basePath, String instantTime, Configuration configuration)
+  public static void createReplaceCommitRequestedFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeRequestedReplaceFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  public static void createReplaceCommitInflightFile(String basePath, String instantTime, Configuration configuration)
+  public static void createReplaceCommitInflightFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeInflightReplaceFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  private static void createPendingReplaceFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+  private static void createPendingReplaceFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
     Arrays.asList(HoodieTimeline.makeInflightReplaceFileName(instantTime),
-        HoodieTimeline.makeRequestedReplaceFileName(instantTime))
+            HoodieTimeline.makeRequestedReplaceFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
-  public static void createPendingReplaceFile(String basePath, String instantTime, Configuration configuration) {
+  public static void createPendingReplaceFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createPendingReplaceFile(basePath, instantTime, configuration, commitMetadata);
   }
 
-  public static void createEmptyCleanRequestedFile(String basePath, String instantTime, Configuration configuration)
+  public static void createEmptyCleanRequestedFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeRequestedCleanerFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  private static void createEmptyFile(String basePath, Path filePath, Configuration configuration) throws IOException {
+  private static void createEmptyFile(String basePath, Path filePath, StorageConfiguration<?> configuration) throws IOException {
     FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
     OutputStream os = fs.create(filePath, true);
     os.close();
   }
 
-  public static void createCompactionRequestedFile(String basePath, String instantTime, Configuration configuration)
+  public static void createCompactionRequestedFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeRequestedCompactionFileName(instantTime));
@@ -641,7 +641,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public static void createCompactionAuxiliaryMetadata(String basePath, HoodieInstant instant,
-                                                       Configuration configuration) throws IOException {
+                                                       StorageConfiguration<?> configuration) throws IOException {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
     FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
@@ -652,7 +652,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
   }
 
-  public static void createSavepointFile(String basePath, String instantTime, Configuration configuration)
+  public static void createSavepointFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeSavePointFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()));

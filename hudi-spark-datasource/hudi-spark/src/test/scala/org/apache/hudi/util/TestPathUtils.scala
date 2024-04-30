@@ -18,7 +18,8 @@
 
 package org.apache.hudi.util
 
-import org.apache.hudi.storage.{StoragePath, HoodieStorageUtils}
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 
 import org.apache.hadoop.conf.Configuration
 import org.junit.jupiter.api.Assertions._
@@ -51,7 +52,7 @@ class TestPathUtils {
     folders.foreach(folder => new File(folder.toUri).mkdir())
     files.foreach(file => new File(file.toUri).createNewFile())
 
-    val storage = HoodieStorageUtils.getStorage(tempDir.getAbsolutePath, new Configuration())
+    val storage = HoodieStorageUtils.getStorage(tempDir.getAbsolutePath, HoodieTestUtils.getDefaultStorageConf)
     var paths = Seq(tempDir.getAbsolutePath + "/*")
     var globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths, storage)
     assertEquals(folders.filterNot(entry => entry.toString.contains(".hoodie"))

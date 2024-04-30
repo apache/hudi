@@ -43,8 +43,8 @@ import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -385,7 +385,7 @@ public class SparkMain {
                                               String repairedOutputPath, String basePath, boolean dryRun, String dedupeType) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath,
         new SQLContext(jsc),
-        HoodieStorageUtils.getStorage(basePath, jsc.hadoopConfiguration()),
+        HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration())),
         DeDupeType.withName(dedupeType));
     job.fixDuplicates(dryRun);
     return 0;
@@ -397,7 +397,9 @@ public class SparkMain {
 
     if (!recordsToRewrite.isEmpty()) {
       recordsToRewrite.cache();
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+          .setBasePath(basePath).build();
       Map<String, String> propsMap = getPropsForRewrite(metaClient);
       rewriteRecordsToNewPartition(basePath, PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH, recordsToRewrite, metaClient, propsMap);
       // after re-writing, we can safely delete older data.
@@ -412,13 +414,15 @@ public class SparkMain {
 
     if (!recordsToRewrite.isEmpty()) {
       recordsToRewrite.cache();
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+          .setBasePath(basePath).build();
       Map<String, String> propsMap = getPropsForRewrite(metaClient);
       rewriteRecordsToNewPartition(basePath, newPartition, recordsToRewrite, metaClient, propsMap);
       // after re-writing, we can safely delete older partition.
       deleteOlderPartition(basePath, oldPartition, recordsToRewrite, propsMap);
       // also, we can physically delete the old partition.
-      FileSystem fs = HadoopFSUtils.getFs(new Path(basePath), metaClient.getHadoopConf());
+      FileSystem fs = HadoopFSUtils.getFs(new Path(basePath), metaClient.getStorageConf());
       try {
         fs.delete(new Path(basePath, oldPartition), true);
       } catch (IOException e) {
@@ -567,7 +571,9 @@ public class SparkMain {
     HoodieWriteConfig config = getWriteConfig(basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()),
         false);
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(config.getBasePath())
+        HoodieTableMetaClient.builder()
+            .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+            .setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();

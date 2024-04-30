@@ -22,10 +22,10 @@ import org.apache.hudi.common.table.timeline.dto.InstantStateDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +75,7 @@ public class InstantStateHandler extends Handler {
    */
   private final AtomicLong requestCount;
 
-  public InstantStateHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
+  public InstantStateHandler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
                              HoodieStorage storage,
                              FileSystemViewManager viewManager) throws IOException {
     super(conf, timelineServiceConfig, storage, viewManager);

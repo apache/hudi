@@ -72,7 +72,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
   @Test
   public void testReadRecordKeysFromBaseFilesWithEmptyPartitionBaseFilePairs() {
-    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
     List<Pair<String, FileSlice>> partitionFileSlicePairs = Collections.emptyList();
     HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.readRecordKeysFromFileSlices(
         engineContext,
@@ -88,7 +88,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
   @Test
   public void testReadRecordKeysFromBaseFilesWithValidRecords() throws Exception {
-    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
     String instant = "20230918120000000";
     hoodieTestTable = hoodieTestTable.addCommit(instant);
     Set<String> recordKeys = new HashSet<>();
@@ -141,7 +141,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
         instant,
         path,
-        metaClient.getHadoopConf(),
+        metaClient.getStorageConf(),
         metaClient.getTableConfig(),
         HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS,
         engineContext.getTaskContextSupplier(),

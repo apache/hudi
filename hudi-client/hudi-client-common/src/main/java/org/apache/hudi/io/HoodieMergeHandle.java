@@ -197,7 +197,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       createMarkerFile(partitionPath, newFilePath.getName());
 
       // Create the writer for writing the new version file
-      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getHadoopConf(),
+      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getStorageConf(),
           config, writeSchemaWithMetaFields, taskContextSupplier, recordMerger.getRecordType());
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
@@ -470,7 +470,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
     long oldNumWrites = 0;
     try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.recordMerger.getRecordType())
-        .getFileReader(config, hoodieTable.getHadoopConf(), oldFilePath)) {
+        .getFileReader(config, hoodieTable.getStorageConf(), oldFilePath)) {
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);

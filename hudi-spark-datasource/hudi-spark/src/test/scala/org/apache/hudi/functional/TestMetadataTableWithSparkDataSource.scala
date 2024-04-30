@@ -27,6 +27,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -41,7 +42,6 @@ import org.junit.jupiter.params.provider.CsvSource
 
 import java.util
 import java.util.Collections
-
 import scala.collection.JavaConverters._
 
 @Tag("functional")
@@ -150,7 +150,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // read parquet file and verify stats
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
-      .readRangeFromParquetMetadata(jsc().hadoopConfiguration(),
+      .readRangeFromParquetMetadata(HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()),
         fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"))
     val columnRangeMetadata = colRangeMetadataList.get(0)
 
@@ -206,7 +206,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // read parquet file and verify stats
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
-      .readRangeFromParquetMetadata(jsc().hadoopConfiguration(),
+      .readRangeFromParquetMetadata(HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()),
         fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"))
     val columnRangeMetadata = colRangeMetadataList.get(0)
 

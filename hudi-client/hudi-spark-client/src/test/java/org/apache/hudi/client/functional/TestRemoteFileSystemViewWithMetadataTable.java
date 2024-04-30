@@ -72,6 +72,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.view.FileSystemViewStorageConfig.REMOTE_PORT_NUM;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -103,7 +104,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
   @Override
   public void initTimelineService() {
     // Start a timeline server that are running across multiple commits
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(hadoopConf);
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(storageConf);
 
     try {
       HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
@@ -114,7 +115,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
       timelineService = new TimelineService(localEngineContext, new Configuration(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          HoodieStorageUtils.getStorage(new Configuration()),
+          HoodieStorageUtils.getStorage(getDefaultStorageConf()),
           FileSystemViewManager.createViewManager(
               context, config.getViewStorageConfig(),
               config.getCommonConfig(),
@@ -232,7 +233,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
     java.nio.file.Path basePath = tempDir.resolve(dataset);
     Files.createDirectories(basePath);
     String basePathStr = basePath.toAbsolutePath().toString();
-    HoodieTestUtils.init(hadoopConf, basePathStr, HoodieTableType.MERGE_ON_READ, new Properties());
+    HoodieTestUtils.init(storageConf, basePathStr, HoodieTableType.MERGE_ON_READ, new Properties());
     return basePathStr;
   }
 

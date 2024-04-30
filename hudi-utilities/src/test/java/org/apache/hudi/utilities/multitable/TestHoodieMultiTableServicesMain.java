@@ -29,16 +29,17 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
@@ -271,7 +272,8 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     Properties props = new Properties();
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "_row_key");
-    return HoodieTestUtils.init(jsc.hadoopConfiguration(), rootPathStr, getTableType(), props);
+    return HoodieTestUtils.init(
+        HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()), rootPathStr, getTableType(), props);
   }
 
   private Properties makeIndexConfig(HoodieIndex.IndexType indexType) {

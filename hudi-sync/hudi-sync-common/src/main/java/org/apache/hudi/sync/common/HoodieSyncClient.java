@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
@@ -60,7 +61,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     this.config = config;
     this.partitionValueExtractor = ReflectionUtils.loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
     this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(config.getHadoopConf())
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(config.getHadoopConf()))
         .setBasePath(config.getString(META_SYNC_BASE_PATH))
         .setLoadActiveTimelineOnLoad(true)
         .build();
@@ -119,7 +120,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
    * @return All relative partitions paths.
    */
   public List<String> getAllPartitionPathsOnStorage() {
-    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
     return FSUtils.getAllPartitionPaths(engineContext,
         config.getString(META_SYNC_BASE_PATH),
         config.getBoolean(META_SYNC_USE_FILE_LISTING_FROM_METADATA));

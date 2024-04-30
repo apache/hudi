@@ -80,7 +80,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
     String instantTime = "001";
     // init writer
     HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =
-        new HoodieDataSourceInternalBatchWrite(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), hadoopConf, extraMetadata, populateMetaFields, false);
+        new HoodieDataSourceInternalBatchWrite(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf, extraMetadata, populateMetaFields, false);
     DataWriter<InternalRow> writer = dataSourceInternalBatchWrite.createBatchWriterFactory(null).createWriter(0, RANDOM.nextLong());
 
     String[] partitionPaths = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
@@ -171,7 +171,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
       String instantTime = "00" + i;
       // init writer
       HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =
-          new HoodieDataSourceInternalBatchWrite(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), hadoopConf, Collections.EMPTY_MAP, populateMetaFields, false);
+          new HoodieDataSourceInternalBatchWrite(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf, Collections.EMPTY_MAP, populateMetaFields, false);
       List<HoodieWriterCommitMessage> commitMessages = new ArrayList<>();
       Dataset<Row> totalInputRows = null;
       DataWriter<InternalRow> writer = dataSourceInternalBatchWrite.createBatchWriterFactory(null).createWriter(partitionCounter++, RANDOM.nextLong());
@@ -218,7 +218,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
       String instantTime = "00" + i;
       // init writer
       HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =
-          new HoodieDataSourceInternalBatchWrite(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), hadoopConf, Collections.EMPTY_MAP, populateMetaFields, false);
+          new HoodieDataSourceInternalBatchWrite(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf, Collections.EMPTY_MAP, populateMetaFields, false);
       List<HoodieWriterCommitMessage> commitMessages = new ArrayList<>();
       Dataset<Row> totalInputRows = null;
       DataWriter<InternalRow> writer = dataSourceInternalBatchWrite.createBatchWriterFactory(null).createWriter(partitionCounter++, RANDOM.nextLong());
@@ -266,7 +266,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
     String instantTime0 = "00" + 0;
     // init writer
     HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =
-        new HoodieDataSourceInternalBatchWrite(instantTime0, cfg, STRUCT_TYPE, sqlContext.sparkSession(), hadoopConf, Collections.EMPTY_MAP, populateMetaFields, false);
+        new HoodieDataSourceInternalBatchWrite(instantTime0, cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf, Collections.EMPTY_MAP, populateMetaFields, false);
     DataWriter<InternalRow> writer = dataSourceInternalBatchWrite.createBatchWriterFactory(null).createWriter(0, RANDOM.nextLong());
 
     List<String> partitionPaths = Arrays.asList(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS);
@@ -308,7 +308,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
     String instantTime1 = "00" + 1;
     dataSourceInternalBatchWrite =
         new HoodieDataSourceInternalBatchWrite(instantTime1, cfg, STRUCT_TYPE,
-            sqlContext.sparkSession(), hadoopConf, Collections.EMPTY_MAP, populateMetaFields,
+            sqlContext.sparkSession(), storageConf, Collections.EMPTY_MAP, populateMetaFields,
             false);
     writer = dataSourceInternalBatchWrite.createBatchWriterFactory(null)
         .createWriter(1, RANDOM.nextLong());

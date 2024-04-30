@@ -408,7 +408,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, new Path(basePath), instant,
             commitsTimeline)).collect(Collectors.toList());
     List<StoragePathInfo> pathInfoList = WriteProfiles.getFilesFromMetadata(
-        new Path(basePath), metaClient.getHadoopConf(), metadataList, metaClient.getTableType());
+        new Path(basePath), (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap(),
+        metadataList, metaClient.getTableType());
     HoodieTableFileSystemView fileSystemView =
         new HoodieTableFileSystemView(metaClient, commitsTimeline, pathInfoList);
     Map<String, String> fileIdToBaseInstant = fileSystemView.getAllFileSlices("par1")

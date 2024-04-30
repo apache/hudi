@@ -119,7 +119,7 @@ public class HoodieClientTestUtils {
 
     return SparkRDDReadClient.addHoodieSupport(sparkConf);
   }
-
+  
   public static void overrideSparkHadoopConfiguration(SparkContext sparkContext) {
     try {
       // Clean the default Hadoop configurations since in our Hudi tests they are not used.
@@ -288,7 +288,7 @@ public class HoodieClientTestUtils {
       TimelineService timelineService = new TimelineService(context, new Configuration(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          HoodieStorageUtils.getStorage(new Configuration()),
+          HoodieStorageUtils.getStorage(HoodieTestUtils.getDefaultStorageConf()),
           FileSystemViewManager.createViewManager(context, config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();
       LOG.info("Timeline service server port: " + timelineServicePort);

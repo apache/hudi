@@ -51,7 +51,7 @@ public abstract class HoodieJavaTable<T>
 
   public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
+        HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setTimeGeneratorConfig(config.getTimeGeneratorConfig()).build();
@@ -88,7 +88,7 @@ public abstract class HoodieJavaTable<T>
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
       final HoodieTableMetadataWriter metadataWriter = JavaHoodieBackedTableMetadataWriter.create(
-          context.getHadoopConf().get(), config, failedWritesCleaningPolicy, context,
+          context.getStorageConf(), config, failedWritesCleaningPolicy, context,
           Option.of(triggeringInstantTimestamp));
       // even with metadata enabled, some index could have been disabled
       // delete metadata partitions corresponding to such indexes
