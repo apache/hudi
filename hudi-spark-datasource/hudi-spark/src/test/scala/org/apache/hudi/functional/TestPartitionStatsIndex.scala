@@ -45,6 +45,9 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   val sqlTempTable = "hudi_tbl"
 
+  /**
+   * Test case to do a write (no updates) and validate the partition stats index initialization.
+   */
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testIndexInitialization(tableType: HoodieTableType): Unit = {
@@ -55,6 +58,9 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       saveMode = SaveMode.Overwrite)
   }
 
+  /**
+   * Test case to do a write with updates and validate the partition stats index.
+   */
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testIndexWithUpsert(tableType: HoodieTableType): Unit = {
@@ -68,6 +74,9 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       saveMode = SaveMode.Append)
   }
 
+  /**
+   * Test case to do a write with updates for non-partitioned table and validate the partition stats index.
+   */
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testIndexWithUpsertNonPartitioned(tableType: HoodieTableType): Unit = {
@@ -82,28 +91,39 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       saveMode = SaveMode.Append)
   }
 
+  /**
+   * Test case to do a write with updates and rollback the last instant and validate the partition stats index.
+   */
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testIndexUpsertAndRollback(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    // Insert Operation
     doWriteAndValidateDataAndPartitionStats(
       hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
+    // Upsert Operation
     doWriteAndValidateDataAndPartitionStats(
       hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+    // Another Upsert
     doWriteAndValidateDataAndPartitionStats(
       hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+    // Rollback
     rollbackLastInstant(hudiOpts)
+    // Validate
     validateDataAndPartitionStats()
   }
 
+  /**
+   * Test case to do a write with updates and then validate file pruning using partition stats.
+   */
   @Test
-  def testPartitionStatsIndexWithSQL(): Unit = {
+  def testPartitionStatsIndexFilePruning(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts + (
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
@@ -123,6 +143,9 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     verifyQueryPredicate(hudiOpts)
   }
 
+  /**
+   * Test case to do a write with updates using partitionBy and validation partition filters pushed down to physical plan.
+   */
   @Test
   def testPartitionStatsWithPartitionBy(): Unit = {
     val hudiOpts = commonOpts.-(PARTITIONPATH_FIELD.key)

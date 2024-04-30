@@ -1898,13 +1898,13 @@ public class HoodieTableMetadataUtil {
     int parallelism = Math.max(Math.min(partitionInfoList.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
     return engineContext.parallelize(partitionInfoList, parallelism).flatMap(partitionInfo -> {
       final String partitionPath = partitionInfo.getRelativePath();
-      // Step 1: Collect Column Metadata for Each File (Your existing code does this)
+      // Step 1: Collect Column Metadata for Each File
       List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getFileNameToSizeMap().keySet().stream()
           .map(fileName -> getFileStatsRangeMetadata(partitionPath, partitionPath + "/" + fileName, dataTableMetaClient, columnsToIndex, false))
           .collect(toList());
       // Step 2: Flatten and Group by Column Name
       Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap = fileColumnMetadata.stream()
-          .flatMap(List::stream) // Flatten the list
+          .flatMap(List::stream)
           .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
       // Step 3: Aggregate Column Ranges
       Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
@@ -1962,13 +1962,13 @@ public class HoodieTableMetadataUtil {
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       return engineContext.parallelize(partitionedWriteStats, parallelism).flatMap(partitionedWriteStat -> {
         final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
-        // Step 1: Collect Column Metadata for Each File (Your existing code does this)
+        // Step 1: Collect Column Metadata for Each File
         List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionedWriteStat.stream()
             .map(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, columnsToIndex))
             .collect(toList());
         // Step 2: Flatten and Group by Column Name
         Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap = fileColumnMetadata.stream()
-            .flatMap(List::stream) // Flatten the list
+            .flatMap(List::stream)
             .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
         // Step 3: Aggregate Column Ranges
         Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()

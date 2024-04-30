@@ -76,14 +76,10 @@ public abstract class BaseFileUtils {
    * @param fileColumnRanges List of column range statistics for each file in a partition
    */
   public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(@Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges) {
-    if (fileColumnRanges.size() == 1) {
-      // Only one parquet file, we can just return that range.
-      return fileColumnRanges.get(0);
-    }
+    ValidationUtils.checkArgument(!fileColumnRanges.isEmpty(), "fileColumnRanges should not be empty.");
     // There are multiple files. Compute min(file_mins) and max(file_maxs)
     return fileColumnRanges.stream()
-        .sequential()
-        .reduce(BaseFileUtils::mergeRanges).get();
+        .reduce(BaseFileUtils::mergeRanges).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
   }
 
   private static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> mergeRanges(HoodieColumnRangeMetadata<T> one,

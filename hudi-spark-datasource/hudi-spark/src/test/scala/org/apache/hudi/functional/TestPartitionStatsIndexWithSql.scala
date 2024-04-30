@@ -31,7 +31,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
 
   val sqlTempTable = "hudi_tbl"
 
-  test("Test Create Table As Select") {
+  test("Test partition stats index following insert, merge into, update and delete") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"

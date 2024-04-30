@@ -334,7 +334,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
       .defaultValue(true)
       .sinceVersion("1.0.0")
-      .withDocumentation("Enable aggregating stats for each column at the storage partition level. ");
+      .withDocumentation("Enable aggregating stats for each column at the storage partition level.");
 
   public static final ConfigProperty<Integer> METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.file.group.count")
