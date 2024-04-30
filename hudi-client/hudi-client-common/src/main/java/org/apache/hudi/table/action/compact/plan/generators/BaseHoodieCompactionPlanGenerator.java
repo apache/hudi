@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactHelpers;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,11 +64,13 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
   protected final HoodieTable<T, I, K, O> hoodieTable;
   protected final HoodieWriteConfig writeConfig;
   protected final transient HoodieEngineContext engineContext;
+  protected final CompactionStrategy compactionStrategy;
 
   public BaseHoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     this.hoodieTable = table;
     this.writeConfig = writeConfig;
     this.engineContext = engineContext;
+    this.compactionStrategy = CompactionStrategy.create(writeConfig.getCompactionStrategy(), engineContext, table);
   }
 
   @Nullable
@@ -127,7 +130,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           // into meta files.
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
-              writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
+              compactionStrategy.captureMetrics(writeConfig, s));
         }), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 

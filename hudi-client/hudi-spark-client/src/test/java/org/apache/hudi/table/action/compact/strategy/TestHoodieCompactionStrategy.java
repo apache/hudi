@@ -291,6 +291,7 @@ public class TestHoodieCompactionStrategy {
                                                                      Map<Long, List<Long>> sizesMap, Map<Long, String> keyToPartitionMap) {
     List<HoodieCompactionOperation> operations = new ArrayList<>(sizesMap.size());
 
+    CompactionStrategy compactionStrategy = CompactionStrategy.create(config.getCompactionStrategy(), null, null);
     sizesMap.forEach((k, v) -> {
       HoodieBaseFile df = TestHoodieBaseFile.newDataFile(k);
       String partitionPath = keyToPartitionMap.get(k);
@@ -301,7 +302,7 @@ public class TestHoodieCompactionStrategy {
       operations.add(new HoodieCompactionOperation(df.getCommitTime(),
           logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList()), df.getPath(), df.getFileId(),
           partitionPath,
-          config.getCompactionStrategy().captureMetrics(config, slice),
+          compactionStrategy.captureMetrics(config, slice),
           df.getBootstrapBaseFile().map(BaseFile::getPath).orElse(null))
       );
     });
