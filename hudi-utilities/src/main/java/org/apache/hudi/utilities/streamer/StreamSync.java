@@ -130,7 +130,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
-import scala.collection.JavaConversions;
+import scala.collection.JavaConverters;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
@@ -1246,7 +1246,7 @@ public class StreamSync implements Serializable, Closeable {
         LOG.debug("Registering Schema: " + schemas);
       }
       // Use the underlying spark context in case the java context is changed during runtime
-      hoodieSparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
+      hoodieSparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaConverters.asScalaBuffer(schemas).toList());
     }
   }
 
