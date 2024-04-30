@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -71,13 +72,25 @@ public abstract class BaseTestStorageConfiguration<T> {
 
   @Test
   public void testConstructorNewInstanceUnwrapCopy() {
-    T conf = getConf(EMPTY_MAP);
+    T conf = getConf(prepareConfigs());
     StorageConfiguration<T> storageConf = getStorageConfiguration(conf);
     StorageConfiguration<T> newStorageConf = storageConf.newInstance();
+    Class unwrapperConfClass = storageConf.unwrap().getClass();
     assertNotSame(storageConf, newStorageConf);
+    validateConfigs(newStorageConf);
     assertNotSame(storageConf.unwrap(), newStorageConf.unwrap());
     assertSame(storageConf.unwrap(), storageConf.unwrap());
+    assertSame(storageConf.unwrap(), storageConf.unwrapAs(unwrapperConfClass));
     assertNotSame(storageConf.unwrap(), storageConf.unwrapCopy());
+    validateConfigs(getStorageConfiguration(storageConf.unwrapCopy()));
+    assertNotSame(storageConf.unwrap(), storageConf.unwrapCopyAs(unwrapperConfClass));
+    validateConfigs(getStorageConfiguration((T) storageConf.unwrapCopyAs(unwrapperConfClass)));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> storageConf.unwrapAs(Integer.class));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> storageConf.unwrapCopyAs(Integer.class));
   }
 
   @Test
