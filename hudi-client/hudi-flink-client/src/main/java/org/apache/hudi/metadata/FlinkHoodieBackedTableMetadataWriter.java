@@ -151,7 +151,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     preWrite(instantTime);
 
     List<WriteStatus> statuses = isInitializing
-        ? writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, Option.empty())
+        ? writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, bulkInsertPartitioner)
         : writeClient.upsertPreppedRecords(preppedRecordList, instantTime);
     // flink does not support auto-commit yet, also the auto commit logic is not complete as BaseHoodieWriteClient now.
     writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
