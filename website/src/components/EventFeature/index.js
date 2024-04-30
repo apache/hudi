@@ -6,21 +6,25 @@ import Microphone from "./Icons/microphone.svg";
 
 const Events = () => {
     return (
-        <section className="featurebanner">
+        <section>
              <div className={styles.banner}>
-                <div className="container">
-                    <div className={styles.bannercontent}>
-                        <h3> Upcoming Event: Build and Secure AWS Hudi Lakes with AWS Glue & AWS Lake Formations</h3>
-                        <p><span className={styles.sideMicrophone}><Microphone/></span> 
-                         LinkedIn Live Event | <span className={styles.sideCalendar}><Calendar/></span> 
-                       January 25</p> 
-                    </div>
-                    </div>
-                    <LinkButton class={styles.registerbutton} type="secondary" to="https://www.linkedin.com/company/apache-hudi/events/?viewAsMember=true">
-                             Join Now
-                        </LinkButton>
-                    </div>
-                    </section>
+                 <div className="container">
+                     <div className={styles.flexContainer}>
+                        <div className={styles.bannercontent}>
+                            <h3> Upcoming Event: Bengaluru Apache Hudi Meetup hosted @ Navi Technologies</h3>
+                            <p className={styles.flexParagraph}><span className={styles.sideMicrophone}><Microphone/></span>
+                             In Person Event | <span className={styles.sideCalendar}><Calendar/></span>
+                           May 11</p>
+                        </div>
+                         <div className={styles.joinButton}>
+                             <LinkButton class={styles.registerbutton} type="secondary" to="https://www.linkedin.com/posts/apache-hudi_dataengineering-softwareengineering-activity-7190732754311913475-t19y/">
+                                             Join Now
+                             </LinkButton>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+        </section>
     );
 }
 export default Events;

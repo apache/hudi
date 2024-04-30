@@ -157,6 +157,18 @@ Example: When you change any file in `versioned_docs/version-0.7.0/`, it will on
 ## Configs
 Configs can be automatically updated by following these steps documented at ../hudi-utils/README.md
 
+## Events Banner
+
+### How to disable Events banner in the main page - https://hudi.apache.org/?
+Remove ``<Events />`` row from the file `website/src/pages/index.js`. This should be found below `<HomepageHeader />`. Note commenting out has no effect. This entry has to
+be removed to turn off the banner.
+
+### How to add a new Events banner ?
+The code for displaying an event banner is already in place. Steps to add: 
+1. Edit file `website/src/components/EventFeature/index.js` . Edit Event description, date and note if it is an 
+`In Person Event` or a `Linkedin Live Event`.
+2. Add `<Event />` entry after `<HomepageHeader />` (if not already present) in the file `website/src/pages/index.js`
+
 ## Talks
 
 When adding a talk, please follow these guidelines.

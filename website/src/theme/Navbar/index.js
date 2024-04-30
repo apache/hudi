@@ -68,7 +68,7 @@ function useWindowSize() {
 
 function useMobileSidebar() {
   const { width } = useWindowSize(); // Mobile sidebar not visible on hydration: can avoid SSR rendering
-  const breakPoint = 1320;
+  const breakPoint = 1350;
   const shouldRender = width <= breakPoint; // || windowSize === 'ssr';
 
   const [shown, setShown] = useState(false); // Close mobile sidebar on navigation pop
@@ -248,7 +248,7 @@ function Navbar() {
         [styles.navbarHideable]: hideOnScroll,
         [styles.navbarHidden]: hideOnScroll && !isNavbarVisible,
       })}>
-      <div className="navbar__inner">
+      <div className={clsx("navbar__inner", [styles.navbarInnerStyle])}>
         <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8f594acf-9b77-44fb-9475-3e82ead1910c" width={0} height={0} alt=""/>
         <img referrerpolicy="no-referrer-when-downgrade" src="https://analytics.apache.org/matomo.php?idsite=47&amp;rec=1" width={0} height={0} alt="" />
         <div className="navbar__items">
@@ -269,7 +269,7 @@ function Navbar() {
             titleClassName="navbar__title"
           />
           {leftItems.map((item, i) => (
-            <NavbarItem {...item} key={i} />
+            <NavbarItem {...item} className={styles.navbarFontSize} key={i} />
           ))}
         </div>
         <div className="navbar__items navbar__items--right">

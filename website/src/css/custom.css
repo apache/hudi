@@ -382,7 +382,7 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
   }
 }
 
-@media(max-width:1320px){
+@media(max-width:1350px){
   .navbar__item {
     display: none !important;
   }
@@ -393,3 +393,9 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
 
 
 
+div[class^="announcementBar"][role="banner"] {
+  color: white;
+  background-color: #29557A;
+  padding: 5px 0;
+  height: auto;
+}
