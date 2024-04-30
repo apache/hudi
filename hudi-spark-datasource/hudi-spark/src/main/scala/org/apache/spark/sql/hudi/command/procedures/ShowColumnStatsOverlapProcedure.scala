@@ -38,9 +38,8 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.{Function, Supplier}
-import scala.collection.JavaConversions.asScalaBuffer
-import scala.collection.{JavaConversions, mutable}
-import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter, seqAsJavaListConverter}
+import scala.collection.mutable
+import scala.collection.JavaConverters._
 
 /**
  * Calculate the degree of overlap between column stats.
@@ -122,10 +121,10 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val groupedPoints = pointList.groupBy(p => (p.partitionPath, p.columnName))
 
     val rows = new util.ArrayList[Row]
-    addStatisticsToRows(groupedPoints, fileSlicesSizeByPartition, rows)
+    addStatisticsToRows(groupedPoints, fileSlicesSizeByPartition.toMap, rows)
 
     // The returned results are sorted by column name and average value
-    rows.toList.sortBy(row => (row.getString(1), row.getDouble(2)))
+    rows.asScala.toList.sortBy(row => (row.getString(1), row.getDouble(2)))
   }
 
   private def getTargetColumnsSeq(args: ProcedureArgs): Seq[String] = {
@@ -274,7 +273,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     }
 
     val filteredTimeline = new HoodieDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
+      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
 
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
   }

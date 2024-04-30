@@ -47,7 +47,8 @@ import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
 import java.time.Instant
 import java.util.{Collections, Date, UUID}
-import scala.collection.JavaConversions._
+
+import scala.collection.JavaConverters._
 
 /**
  * Test suite for SparkSqlWriter class.
@@ -86,8 +87,8 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
     // add some updates so that preCombine kicks in
     val toUpdateDataset = sqlContext.createDataFrame(DataSourceTestUtils.getUniqueRows(inserts, 40), structType)
     val updates = DataSourceTestUtils.updateRowsWithHigherTs(toUpdateDataset)
-    val records = inserts.union(updates)
-    val recordsSeq = convertRowListToSeq(records)
+    val records = inserts.asScala.union(updates.asScala)
+    val recordsSeq = convertRowListToSeq(records.asJava)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
@@ -326,7 +327,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     val inserts = DataSourceTestUtils.generateRandomRows(1000)
-    val df = spark.createDataFrame(sc.parallelize(inserts), structType)
+    val df = spark.createDataFrame(sc.parallelize(inserts.asScala.toSeq), structType)
     try {
       // write to Hudi
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)

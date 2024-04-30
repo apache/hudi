@@ -41,7 +41,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import java.util
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /**
  * Tests {@link HoodieFileGroupReader} with {@link SparkFileFormatInternalRowReaderContext}
@@ -97,7 +97,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {
-    val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recordList.toList, 2))
+    val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recordList.asScala.toList, 2))
 
     inputDF.write.format("hudi")
       .options(options)
@@ -119,7 +119,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .where(col(HoodieRecord.FILENAME_METADATA_FIELD).contains(fileGroupId))
     assertEquals(expectedDf.count, actualRecordList.size)
     val actualDf = HoodieUnsafeUtils.createDataFrameFromInternalRows(
-      spark, actualRecordList, HoodieInternalRowUtils.getCachedSchema(schema))
+      spark, actualRecordList.asScala.toSeq, HoodieInternalRowUtils.getCachedSchema(schema))
     assertEquals(0, expectedDf.except(actualDf).count())
     assertEquals(0, actualDf.except(expectedDf).count())
   }

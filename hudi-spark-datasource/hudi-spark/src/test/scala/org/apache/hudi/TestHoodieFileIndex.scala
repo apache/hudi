@@ -57,7 +57,7 @@ import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, Va
 
 import java.util.Properties
 import java.util.function.Consumer
-import scala.collection.JavaConversions._
+
 import scala.collection.JavaConverters._
 import scala.util.Random
 
@@ -100,7 +100,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     props.setProperty(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, String.valueOf(partitionEncode))
     initMetaClient(props)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 100)
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala.toSeq, 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -116,7 +116,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   @MethodSource(Array("keyGeneratorParameters"))
   def testPartitionSchemaForBuiltInKeyGenerator(keyGenerator: String): Unit = {
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 100)
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala.toSeq, 2))
     val writer: DataFrameWriter[Row] = inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -143,7 +143,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     "org.apache.hudi.keygen.CustomAvroKeyGenerator"))
   def testPartitionSchemaForCustomKeyGenerator(keyGenerator: String): Unit = {
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 100)
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala.toSeq, 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -177,7 +177,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .withEngineType(EngineType.JAVA)
       .withPath(basePath)
       .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-      .withProps(props)
+      .withProps(props.asInstanceOf[java.util.Map[_, _]])
       .build()
     val context = new HoodieJavaEngineContext(HoodieTestUtils.getDefaultStorageConf)
     val writeClient = new HoodieJavaWriteClient(context, writeConfig)
@@ -204,7 +204,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val partitions = Array("2021/03/08", "2021/03/09", "2021/03/10", "2021/03/11", "2021/03/12")
     val newDataGen = new HoodieTestDataGenerator(partitions)
     val records1 = newDataGen.generateInsertsContainsAllPartitions("000", 100)
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala.toSeq, 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -607,15 +607,15 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       metaClient.getBasePathV2.toString)
     assertEquals(
       Seq("1/2023/01/01", "1/2023/01/02"),
-      metadata.getPartitionPathWithPathPrefixes(Seq("1")).sorted)
+      metadata.getPartitionPathWithPathPrefixes(Seq("1").asJava).asScala.sorted)
     assertEquals(
       Seq("1/2023/01/01", "1/2023/01/02", "10/2023/01/01", "10/2023/01/02",
         "100/2023/01/01", "100/2023/01/02", "2/2023/01/01", "2/2023/01/02",
         "20/2023/01/01", "20/2023/01/02", "200/2023/01/01", "200/2023/01/02"),
-      metadata.getPartitionPathWithPathPrefixes(Seq("")).sorted)
+      metadata.getPartitionPathWithPathPrefixes(Seq("").asJava).asScala.sorted)
     assertEquals(
       Seq("1/2023/01/01"),
-      metadata.getPartitionPathWithPathPrefixes(Seq("1/2023/01/01")).sorted)
+      metadata.getPartitionPathWithPathPrefixes(Seq("1/2023/01/01").asJava).asScala.sorted)
 
     val fileIndex = HoodieFileIndex(spark, metaClient, None, readerOpts)
     val readDF = spark.read.format("hudi").options(readerOpts).load()

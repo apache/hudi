@@ -18,15 +18,16 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.ExceptionWrappingIterator
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -71,7 +72,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
   override def getSparkVersion: String = SPARK_VERSION
 
   def getMetaSchema: StructType = {
-    StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
+    StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq.map(col => {
       StructField(col, StringType, nullable = true)
     }))
   }

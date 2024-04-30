@@ -46,7 +46,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-import scala.collection.JavaConversions;
 import scala.collection.JavaConverters;
 
 /**
@@ -135,7 +134,7 @@ public class BulkInsertDataInternalWriterHelper {
         // Drop the partition columns from the row
         // Using the deprecated JavaConversions to be compatible with scala versions < 2.12. Once hudi support for scala versions < 2.12 is
         // stopped, can move this to JavaConverters.seqAsJavaList(...)
-        List<String> partitionCols = JavaConversions.<String>seqAsJavaList(HoodieDatasetBulkInsertHelper.getPartitionPathCols(this.writeConfig));
+        List<String> partitionCols = JavaConverters.<String>seqAsJavaList(HoodieDatasetBulkInsertHelper.getPartitionPathCols(this.writeConfig));
         Set<Integer> partitionIdx = new HashSet<Integer>();
         for (String col : partitionCols) {
           partitionIdx.add(this.structType.fieldIndex(col));
@@ -143,7 +142,7 @@ public class BulkInsertDataInternalWriterHelper {
 
         // Relies on InternalRow::toSeq(...) preserving the column ordering based on the supplied schema
         // Using the deprecated JavaConversions to be compatible with scala versions < 2.12.
-        List<Object> cols = JavaConversions.<Object>seqAsJavaList(row.toSeq(structType));
+        List<Object> cols = JavaConverters.<Object>seqAsJavaList(row.toSeq(structType));
         int idx = 0;
         List<Object> newCols = new ArrayList<Object>();
         for (Object o : cols) {

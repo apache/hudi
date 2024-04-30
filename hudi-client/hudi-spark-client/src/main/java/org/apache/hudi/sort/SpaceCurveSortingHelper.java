@@ -61,8 +61,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import scala.collection.JavaConversions;
-import scala.collection.mutable.WrappedArray;
+import scala.collection.JavaConverters;
+import scala.reflect.ClassTag;
 
 public class SpaceCurveSortingHelper {
 
@@ -202,7 +202,8 @@ public class SpaceCurveSortingHelper {
   private static Row appendToRow(Row row, Object value) {
     // NOTE: This is an ugly hack to avoid array re-allocation --
     //       Spark's {@code Row#toSeq} returns array of Objects
-    Object[] currentValues = (Object[]) ((WrappedArray<Object>) row.toSeq()).array();
+    //Object[] currentValues = (Object[]) ((WrappedArray<Object>) row.toSeq()).array();
+    Object[] currentValues = (Object[]) row.toSeq().toArray(ClassTag.Any());
     return RowFactory.create(CollectionUtils.append(currentValues, value));
   }
 
@@ -275,6 +276,6 @@ public class SpaceCurveSortingHelper {
       List<String> orderByCols,
       int targetPartitionCount
   ) {
-    return RangeSampleSort$.MODULE$.sortDataFrameBySample(df, layoutOptStrategy, JavaConversions.asScalaBuffer(orderByCols), targetPartitionCount);
+    return RangeSampleSort$.MODULE$.sortDataFrameBySample(df, layoutOptStrategy, JavaConverters.<String>asScalaBuffer(orderByCols).toSeq(), targetPartitionCount);
   }
 }

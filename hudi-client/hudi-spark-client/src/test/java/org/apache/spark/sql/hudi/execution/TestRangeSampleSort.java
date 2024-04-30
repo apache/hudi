@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-import scala.collection.JavaConversions;
+import scala.collection.JavaConverters;
 
 class TestRangeSampleSort extends HoodieClientTestBase {
 
@@ -40,7 +40,7 @@ class TestRangeSampleSort extends HoodieClientTestBase {
       final int limit = i;
       Assertions.assertDoesNotThrow(() ->
           RangeSampleSort$.MODULE$.sortDataFrameBySampleSupportAllTypes(df.limit(limit),
-              JavaConversions.asScalaBuffer(Arrays.asList("id", "content")), 1), "range sort shall not fail when 0 or 1 record incoming");
+              JavaConverters.asScalaBuffer(Arrays.asList("id", "content")).toSeq(), 1), "range sort shall not fail when 0 or 1 record incoming");
     }
   }
 
@@ -52,7 +52,7 @@ class TestRangeSampleSort extends HoodieClientTestBase {
       final int limit = i;
       Assertions.assertDoesNotThrow(() ->
           RangeSampleSort$.MODULE$.sortDataFrameBySample(df.limit(limit), layoutOptStrategy,
-              JavaConversions.asScalaBuffer(Arrays.asList("id", "content")), 1), "range sort shall not fail when 0 or 1 record incoming");
+              JavaConverters.asScalaBuffer(Arrays.asList("id", "content")).toSeq(), 1), "range sort shall not fail when 0 or 1 record incoming");
     }
   }
 }

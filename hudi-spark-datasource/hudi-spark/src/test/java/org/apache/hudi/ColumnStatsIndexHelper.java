@@ -62,7 +62,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import scala.collection.JavaConversions;
+import scala.collection.JavaConverters;
 import scala.collection.JavaConverters$;
 
 // TODO merge w/ ColumnStatsIndexSupport
@@ -236,13 +236,13 @@ public class ColumnStatsIndexHelper {
                 indexRow.add(colMetadata.getNullCount());
               });
 
-              return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(indexRow));
+              return Row$.MODULE$.apply(JavaConverters.asScalaBuffer(indexRow).toSeq());
             })
             .filter(Objects::nonNull);
 
     StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
           JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSeq(),
-          JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSet(),
+        JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().<String>toSet(),
           StructType$.MODULE$.apply(orderedColumnSchemas)
     )._1;
 
