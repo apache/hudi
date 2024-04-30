@@ -20,10 +20,13 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.client.utils.FileSliceMetricUtils;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.client.utils.FileSliceMetricUtils;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
 import java.util.Collections;
@@ -101,5 +104,20 @@ public abstract class CompactionStrategy implements Serializable {
    */
   public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
     return allPartitionPaths;
+  }
+
+  /**
+   * Creates a new instance of the provided class.
+   * @param strategyClass class name of the strategy
+   * @param hoodieEngineContext an engine context which may be used by the compaction strategy
+   * @param hoodieTable a hoodie table which may be used by the compaction strategy
+   * @return a new instance of the provided class
+   */
+  public static CompactionStrategy create(String strategyClass, HoodieEngineContext hoodieEngineContext, HoodieTable hoodieTable) {
+    if (ReflectionUtils.hasConstructor(strategyClass, new Class<?>[] { HoodieEngineContext.class, HoodieTable.class })) {
+      return ReflectionUtils.loadClass(strategyClass, new Class<?>[] { HoodieEngineContext.class, HoodieTable.class }, hoodieEngineContext, hoodieTable);
+    } else {
+      return ReflectionUtils.loadClass(strategyClass);
+    }
   }
 }

@@ -1650,8 +1650,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.INLINE_COMPACT_TIME_DELTA_SECONDS);
   }
 
-  public CompactionStrategy getCompactionStrategy() {
-    return ReflectionUtils.loadClass(getString(HoodieCompactionConfig.COMPACTION_STRATEGY));
+  public String getCompactionStrategy() {
+    return getString(HoodieCompactionConfig.COMPACTION_STRATEGY);
   }
 
   public Long getTargetIOPerCompactionInMB() {
