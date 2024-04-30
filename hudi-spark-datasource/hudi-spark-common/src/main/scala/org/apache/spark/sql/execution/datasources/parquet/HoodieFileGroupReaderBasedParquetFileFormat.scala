@@ -88,7 +88,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     if (!supportBatchCalled || supportBatchResult) {
       supportBatchCalled = true
-      supportBatchResult = !isCDC && !isIncremental && !shouldUseRecordPosition && canSupportBatch && super.supportBatch(sparkSession, schema)
+      supportBatchResult = !isCDC && !isIncremental && canSupportBatch && super.supportBatch(sparkSession, schema)
     }
     sparkSession.conf.set(PARQUET_VECTORIZED_READER_ENABLED.key, supportBatchResult)
     supportBatchResult

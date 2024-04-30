@@ -214,6 +214,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         override def next(): Any = {
           (skeletonFileIterator.next(), dataFileIterator.next()) match {
             case (s: ColumnarBatch, d: ColumnarBatch) =>
+              //This will not be used until [HUDI-7693] is implemented
               val numCols = s.numCols() + d.numCols()
               val vecs: Array[ColumnVector] = new Array[ColumnVector](numCols)
               for (i <- 0 until numCols) {
