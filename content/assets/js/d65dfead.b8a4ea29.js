@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[68758],{87182:t=>{t.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/monotonic-timestamp","name":"monotonic timestamp","count":2,"permalink":"/blog/tags/monotonic-timestamp"}')}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[65247],{35024:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/amazon-kinesis","name":"amazon kinesis","count":1,"permalink":"/cn/blog/tags/amazon-kinesis"}')}}]);

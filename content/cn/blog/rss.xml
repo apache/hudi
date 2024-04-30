@@ -4,9 +4,41 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 03 Apr 2024 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 24 Apr 2024 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Understanding Apache Hudi's Consistency Model Part 1]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-1</link>
+            <guid>/2024/04/24/understanding-apache-hudi-consistency-model-part-1</guid>
+            <pubDate>Wed, 24 Apr 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://jack-vanlightly.com/analyses/2024/4/24/understanding-apache-hudi-consistency-model-part-1">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Understanding Apache Hudi's Consistency Model Part 2]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-2</link>
+            <guid>/2024/04/24/understanding-apache-hudi-consistency-model-part-2</guid>
+            <pubDate>Wed, 24 Apr 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://jack-vanlightly.com/analyses/2024/4/24/understanding-apache-hudi-consistency-model-part-2">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Understanding Apache Hudi's Consistency Model Part 3]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-3</link>
+            <guid>/2024/04/24/understanding-apache-hudi-consistency-model-part-3</guid>
+            <pubDate>Wed, 24 Apr 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://jack-vanlightly.com/analyses/2024/4/25/understanding-apache-hudi-consistency-model-part-3">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Build Real Time Streaming Pipeline with Kinesis, Apache Flink and Apache Hudi with Hands-on]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/04/21/build-real-time-streaming-pipeline-with-kinesis-apache-flink-and-apache-hudi</link>
+            <guid>/2024/04/21/build-real-time-streaming-pipeline-with-kinesis-apache-flink-and-apache-hudi</guid>
+            <pubDate>Sun, 21 Apr 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://blog.devgenius.io/build-real-time-streaming-pipeline-with-kinesis-apache-flink-and-apache-hudi-35d8501855b4">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Hands-On Guide: Reading Data from Hudi Tables Incrementally, Joining with Delta Tables using HudiStreamer and SQL-Based Transformer]]></title>
             <link>https://hudi.apache.org/cn/blog/2024/04/03/hands-on-guide-reading-data-from-hudi-tables-joining-delta</link>
@@ -38,6 +70,14 @@
             <pubDate>Fri, 22 Mar 2024 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://blogs.halodoc.io/data-lake-cost-optimisation-strategies/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Open Table Formats (part-1): Apache Hudi (Hadoop Upserts Deletes and Incrementals)]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/03/16/Open-Table-Formats-part-1-Apache-Hudi-Hadoop-Upserts-Deletes-and-Incrementals</link>
+            <guid>/2024/03/16/Open-Table-Formats-part-1-Apache-Hudi-Hadoop-Upserts-Deletes-and-Incrementals</guid>
+            <pubDate>Sat, 16 Mar 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://defogdata.substack.com/p/table-format-series-apache-hudi-hadoop?r=37wv2a&amp;utm_campaign=post&amp;utm_medium=web&amp;triedRedirect=true">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Modern Datalakes with Hudi, MinIO, and HMS]]></title>
@@ -72,6 +112,22 @@
             <content:encoded><![CDATA[<div url="https://medium.com/itnext/building-data-lakes-on-aws-with-kafka-connect-debezium-apicurio-registry-and-apache-hudi-b4da0268dce">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
+            <title><![CDATA[Empowering data-driven excellence: How the Bluestone Data Platform embraced data mesh for success]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/02/27/empowering-data-driven-excellence-how-the-bluestone-data-platform-embraced-data-mesh-for-success</link>
+            <guid>/2024/02/27/empowering-data-driven-excellence-how-the-bluestone-data-platform-embraced-data-mesh-for-success</guid>
+            <pubDate>Tue, 27 Feb 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/empowering-data-driven-excellence-how-the-bluestone-data-platform-embraced-data-mesh-for-success/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Enabling near real-time data analytics on the data lake]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/02/23/Enabling-near-real-time-data-analytics-on-the-data-lake</link>
+            <guid>/2024/02/23/Enabling-near-real-time-data-analytics-on-the-data-lake</guid>
+            <pubDate>Fri, 23 Feb 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://engineering.grab.com/enabling-near-realtime-data-analytics">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
             <title><![CDATA[How a POC became a production-ready Hudi data lakehouse through close team collaboration]]></title>
             <link>https://hudi.apache.org/cn/blog/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration</link>
             <guid>/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration</guid>
@@ -86,6 +142,14 @@
             <pubDate>Tue, 06 Feb 2024 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/building-open-source-data-lake-house-hudi-postgres-hive-soumil-shah-wwyye/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Combine Transactional Integrity and Data Lake Operations with YugabyteDB and Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/02/06/Combine-Transactional-Integrity-and-Data-Lake-Operations-with-YugabyteDB-and-Apache-Hudi</link>
+            <guid>/2024/02/06/Combine-Transactional-Integrity-and-Data-Lake-Operations-with-YugabyteDB-and-Apache-Hudi</guid>
+            <pubDate>Tue, 06 Feb 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.yugabyte.com/blog/apache-hudi-data-lakehouse-integration/">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Apache Hudi: Managing Partition on a petabyte-scale table]]></title>

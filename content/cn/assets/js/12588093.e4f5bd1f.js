@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[62713],{46333:t=>{t.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/multi-writer","name":"multi writer","count":4,"permalink":"/cn/blog/tags/multi-writer"}')}}]);

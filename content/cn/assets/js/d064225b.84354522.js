@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[88040],{73059:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/tla-specification","name":"tla+ specification","count":2,"permalink":"/cn/blog/tags/tla-specification"}')}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[56232],{26846:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/real-time-datalake","name":"real-time datalake","count":4,"permalink":"/blog/tags/real-time-datalake"}')}}]);

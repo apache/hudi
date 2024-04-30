@@ -2,11 +2,55 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2024-04-03T00:00:00.000Z</updated>
+    <updated>2024-04-24T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Understanding Apache Hudi's Consistency Model Part 1]]></title>
+        <id>/2024/04/24/understanding-apache-hudi-consistency-model-part-1</id>
+        <link href="https://hudi.apache.org/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-1"/>
+        <updated>2024-04-24T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://jack-vanlightly.com/analyses/2024/4/24/understanding-apache-hudi-consistency-model-part-1">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Jack Vanlightly</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Understanding Apache Hudi's Consistency Model Part 2]]></title>
+        <id>/2024/04/24/understanding-apache-hudi-consistency-model-part-2</id>
+        <link href="https://hudi.apache.org/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-2"/>
+        <updated>2024-04-24T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://jack-vanlightly.com/analyses/2024/4/24/understanding-apache-hudi-consistency-model-part-2">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Jack Vanlightly</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Understanding Apache Hudi's Consistency Model Part 3]]></title>
+        <id>/2024/04/24/understanding-apache-hudi-consistency-model-part-3</id>
+        <link href="https://hudi.apache.org/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-3"/>
+        <updated>2024-04-24T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://jack-vanlightly.com/analyses/2024/4/25/understanding-apache-hudi-consistency-model-part-3">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Jack Vanlightly</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Build Real Time Streaming Pipeline with Kinesis, Apache Flink and Apache Hudi with Hands-on]]></title>
+        <id>/2024/04/21/build-real-time-streaming-pipeline-with-kinesis-apache-flink-and-apache-hudi</id>
+        <link href="https://hudi.apache.org/blog/2024/04/21/build-real-time-streaming-pipeline-with-kinesis-apache-flink-and-apache-hudi"/>
+        <updated>2024-04-21T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blog.devgenius.io/build-real-time-streaming-pipeline-with-kinesis-apache-flink-and-apache-hudi-35d8501855b4">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Md Shahid Afridi P</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Hands-On Guide: Reading Data from Hudi Tables Incrementally, Joining with Delta Tables using HudiStreamer and SQL-Based Transformer]]></title>
         <id>/2024/04/03/hands-on-guide-reading-data-from-hudi-tables-joining-delta</id>
@@ -49,6 +93,17 @@
         <content type="html"><![CDATA[<div url="https://blogs.halodoc.io/data-lake-cost-optimisation-strategies/">Redirecting... please wait!! </div>]]></content>
         <author>
             <name>Suresh Hasundi</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Open Table Formats (part-1): Apache Hudi (Hadoop Upserts Deletes and Incrementals)]]></title>
+        <id>/2024/03/16/Open-Table-Formats-part-1-Apache-Hudi-Hadoop-Upserts-Deletes-and-Incrementals</id>
+        <link href="https://hudi.apache.org/blog/2024/03/16/Open-Table-Formats-part-1-Apache-Hudi-Hadoop-Upserts-Deletes-and-Incrementals"/>
+        <updated>2024-03-16T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://defogdata.substack.com/p/table-format-series-apache-hudi-hadoop?r=37wv2a&amp;utm_campaign=post&amp;utm_medium=web&amp;triedRedirect=true">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Vivek L Alex</name>
         </author>
     </entry>
     <entry>
@@ -96,6 +151,28 @@
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Empowering data-driven excellence: How the Bluestone Data Platform embraced data mesh for success]]></title>
+        <id>/2024/02/27/empowering-data-driven-excellence-how-the-bluestone-data-platform-embraced-data-mesh-for-success</id>
+        <link href="https://hudi.apache.org/blog/2024/02/27/empowering-data-driven-excellence-how-the-bluestone-data-platform-embraced-data-mesh-for-success"/>
+        <updated>2024-02-27T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/empowering-data-driven-excellence-how-the-bluestone-data-platform-embraced-data-mesh-for-success/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Toney Thomas, Ben Vengerovsky and Rada Stanic</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Enabling near real-time data analytics on the data lake]]></title>
+        <id>/2024/02/23/Enabling-near-real-time-data-analytics-on-the-data-lake</id>
+        <link href="https://hudi.apache.org/blog/2024/02/23/Enabling-near-real-time-data-analytics-on-the-data-lake"/>
+        <updated>2024-02-23T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://engineering.grab.com/enabling-near-realtime-data-analytics">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Shi Kai Ng and Shuguang Xiang</name>
+        </author>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[How a POC became a production-ready Hudi data lakehouse through close team collaboration]]></title>
         <id>/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration</id>
         <link href="https://hudi.apache.org/blog/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration"/>
@@ -115,6 +192,17 @@
         <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/building-open-source-data-lake-house-hudi-postgres-hive-soumil-shah-wwyye/">Redirecting... please wait!! </div>]]></content>
         <author>
             <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Combine Transactional Integrity and Data Lake Operations with YugabyteDB and Apache Hudi]]></title>
+        <id>/2024/02/06/Combine-Transactional-Integrity-and-Data-Lake-Operations-with-YugabyteDB-and-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2024/02/06/Combine-Transactional-Integrity-and-Data-Lake-Operations-with-YugabyteDB-and-Apache-Hudi"/>
+        <updated>2024-02-06T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.yugabyte.com/blog/apache-hudi-data-lakehouse-integration/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Balachandar Seetharaman</name>
         </author>
     </entry>
     <entry>

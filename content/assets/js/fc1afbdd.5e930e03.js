@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[21932],{4819:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/amazon-s-3","name":"amazon s3","count":1,"permalink":"/blog/tags/amazon-s-3"}')}}]);

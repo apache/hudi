@@ -5,6 +5,50 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2024/04/24/understanding-apache-hudi-consistency-model-part-1",
+            "content_html": "<div url=\"https://jack-vanlightly.com/analyses/2024/4/24/understanding-apache-hudi-consistency-model-part-1\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-1",
+            "title": "Understanding Apache Hudi's Consistency Model Part 1",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-04-24T00:00:00.000Z",
+            "author": {
+                "name": "Jack Vanlightly"
+            }
+        },
+        {
+            "id": "/2024/04/24/understanding-apache-hudi-consistency-model-part-2",
+            "content_html": "<div url=\"https://jack-vanlightly.com/analyses/2024/4/24/understanding-apache-hudi-consistency-model-part-2\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-2",
+            "title": "Understanding Apache Hudi's Consistency Model Part 2",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-04-24T00:00:00.000Z",
+            "author": {
+                "name": "Jack Vanlightly"
+            }
+        },
+        {
+            "id": "/2024/04/24/understanding-apache-hudi-consistency-model-part-3",
+            "content_html": "<div url=\"https://jack-vanlightly.com/analyses/2024/4/25/understanding-apache-hudi-consistency-model-part-3\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-3",
+            "title": "Understanding Apache Hudi's Consistency Model Part 3",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-04-24T00:00:00.000Z",
+            "author": {
+                "name": "Jack Vanlightly"
+            }
+        },
+        {
+            "id": "/2024/04/21/build-real-time-streaming-pipeline-with-kinesis-apache-flink-and-apache-hudi",
+            "content_html": "<div url=\"https://blog.devgenius.io/build-real-time-streaming-pipeline-with-kinesis-apache-flink-and-apache-hudi-35d8501855b4\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/04/21/build-real-time-streaming-pipeline-with-kinesis-apache-flink-and-apache-hudi",
+            "title": "Build Real Time Streaming Pipeline with Kinesis, Apache Flink and Apache Hudi with Hands-on",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-04-21T00:00:00.000Z",
+            "author": {
+                "name": "Md Shahid Afridi P"
+            }
+        },
+        {
             "id": "/2024/04/03/hands-on-guide-reading-data-from-hudi-tables-joining-delta",
             "content_html": "<div url=\"https://www.linkedin.com/pulse/hands-on-guide-reading-data-from-hudi-tables-joining-delta-shah-vqivf/?trk=public_post_main-feed-card_feed-article-content\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/cn/blog/2024/04/03/hands-on-guide-reading-data-from-hudi-tables-joining-delta",
@@ -46,6 +90,17 @@
             "date_modified": "2024-03-22T00:00:00.000Z",
             "author": {
                 "name": "Suresh Hasundi"
+            }
+        },
+        {
+            "id": "/2024/03/16/Open-Table-Formats-part-1-Apache-Hudi-Hadoop-Upserts-Deletes-and-Incrementals",
+            "content_html": "<div url=\"https://defogdata.substack.com/p/table-format-series-apache-hudi-hadoop?r=37wv2a&amp;utm_campaign=post&amp;utm_medium=web&amp;triedRedirect=true\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/03/16/Open-Table-Formats-part-1-Apache-Hudi-Hadoop-Upserts-Deletes-and-Incrementals",
+            "title": "Open Table Formats (part-1): Apache Hudi (Hadoop Upserts Deletes and Incrementals)",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-03-16T00:00:00.000Z",
+            "author": {
+                "name": "Vivek L Alex"
             }
         },
         {
@@ -93,6 +148,28 @@
             }
         },
         {
+            "id": "/2024/02/27/empowering-data-driven-excellence-how-the-bluestone-data-platform-embraced-data-mesh-for-success",
+            "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/empowering-data-driven-excellence-how-the-bluestone-data-platform-embraced-data-mesh-for-success/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/02/27/empowering-data-driven-excellence-how-the-bluestone-data-platform-embraced-data-mesh-for-success",
+            "title": "Empowering data-driven excellence: How the Bluestone Data Platform embraced data mesh for success",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-02-27T00:00:00.000Z",
+            "author": {
+                "name": "Toney Thomas, Ben Vengerovsky and Rada Stanic"
+            }
+        },
+        {
+            "id": "/2024/02/23/Enabling-near-real-time-data-analytics-on-the-data-lake",
+            "content_html": "<div url=\"https://engineering.grab.com/enabling-near-realtime-data-analytics\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/02/23/Enabling-near-real-time-data-analytics-on-the-data-lake",
+            "title": "Enabling near real-time data analytics on the data lake",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-02-23T00:00:00.000Z",
+            "author": {
+                "name": "Shi Kai Ng and Shuguang Xiang"
+            }
+        },
+        {
             "id": "/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration",
             "content_html": "<div url=\"https://medium.com/leboncoin-tech-blog/how-a-poc-became-a-production-ready-hudi-data-lakehouse-through-close-team-collaboration-c7f33eb746a8\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/cn/blog/2024/02/12/How-a-POC-became-a-production-ready-Hudi-data-lakehouse-through-close-team-collaboration",
@@ -112,6 +189,17 @@
             "date_modified": "2024-02-06T00:00:00.000Z",
             "author": {
                 "name": "Soumil Shah"
+            }
+        },
+        {
+            "id": "/2024/02/06/Combine-Transactional-Integrity-and-Data-Lake-Operations-with-YugabyteDB-and-Apache-Hudi",
+            "content_html": "<div url=\"https://www.yugabyte.com/blog/apache-hudi-data-lakehouse-integration/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/02/06/Combine-Transactional-Integrity-and-Data-Lake-Operations-with-YugabyteDB-and-Apache-Hudi",
+            "title": "Combine Transactional Integrity and Data Lake Operations with YugabyteDB and Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-02-06T00:00:00.000Z",
+            "author": {
+                "name": "Balachandar Seetharaman"
             }
         },
         {
