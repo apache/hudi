@@ -30,7 +30,7 @@ export default function Home() {
     >
       <NewReleaseMessage />
       <HomepageHeader />
-      {/* <Events /> */}
+      <Events />
       <main>
         <DataLake />
         <HomepageFeatures />

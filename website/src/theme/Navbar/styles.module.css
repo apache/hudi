@@ -36,3 +36,35 @@ Hide toggle in small viewports
 .navbarLogo {
   max-width: 148px;
 }
+
+@media(max-width:1820px){
+  .navbarFontSize{
+    font-size:90% !important;
+  }
+}
+@media(max-width:1602px){
+  .navbarFontSize{
+    font-size:80% !important;
+  }
+}
+@media(max-width:1440px){
+  .navbarFontSize{
+    font-size:70% !important;
+  }
+}
+@media(min-width: 1300px) {
+  div[class^="navbar__item"] {
+    font-size: 100% !important;
+  }
+}
+@media(max-width: 1350px) {
+  .navbarWrapper {
+    padding: 0 !important;
+  }
+  .navbarInnerStyle {
+    margin: 0 auto;
+    max-width: var(--ifm-container-width) !important;
+    padding: 0 var(--ifm-spacing-horizontal) !important;
+    width: 100%;
+  }
+}

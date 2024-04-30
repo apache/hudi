@@ -4,29 +4,44 @@
   justify-content: space-between;
   background: linear-gradient(to right, #2F93EF 0%, #1E5FBD 100%);
   color: white;
-  padding-right: 230px;
-  padding-left: 210px;
   padding-bottom: 0px;
-  padding-top: 10px;
+  padding-top: 20px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 .sideMicrophone {
   margin-right: 10px;
+  height: 20px;
 }
 .sideCalendar {
   margin-right: 10px;
-  margin-left: 10px; 
+  margin-left: 5px;
+  height: 20px;
 }
+
+.joinButton {
+  margin-bottom: 20px;
+}
+
 .registerbutton {
   background-color: #ffffff;
   color: #074D86; 
   border: none; 
-  padding: 10px 30px; 
+  padding: 10px 30px;
   border-radius: 10px; 
   cursor: pointer; 
   text-transform: uppercase; 
   font-weight: bold; 
   display: inline-block; 
   text-align: center;
-  min-width: 280px
+  min-width: 140px
+}
+.flexContainer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.flexParagraph {
+  display: flex;
+  align-items: center;
 }

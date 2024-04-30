@@ -78,6 +78,9 @@ Apache Hudi is integrated in the digital platform to meet the real-time update n
 ### Logical Clocks 
 [Hopsworks 1.x series](https://www.logicalclocks.com/blog/introducing-the-hopsworks-1-x-series) supports Apache Hudi feature groups, to enable upserts and time travel.
 
+### Navi
+[Navi](https://navi.com/), one of India’s fastest-growing financial service providers, offers Personal & Home Loans, UPI, Insurance, Mutual Funds, and Gold. Powered by Apache Hudi, our Data Platform tech stack has been enhanced to enable near-real-time data ingestion, driving AI/ML initiatives and critical business decisions to create exceptional customer experiences.
+
 ### NerdWallet
 [NerdWallet uses AWS and Apache Hudi to build a serverless, real-time analytics platform](https://aws.amazon.com/blogs/big-data/how-nerdwallet-uses-aws-and-apache-hudi-to-build-a-serverless-real-time-analytics-platform/)
 
