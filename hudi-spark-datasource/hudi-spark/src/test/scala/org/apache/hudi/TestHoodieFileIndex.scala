@@ -159,7 +159,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   @Test
   def testPartitionSchemaWithoutKeyGenerator(): Unit = {
     val metaClient = HoodieTestUtils.init(
-      hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableMetaClient.withPropertyBuilder()
+      storageConf, basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableMetaClient.withPropertyBuilder()
         .fromMetaClient(this.metaClient)
         .setRecordKeyFields("_row_key")
         .setPartitionFields("partition_path")
@@ -179,7 +179,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
       .withProps(props)
       .build()
-    val context = new HoodieJavaEngineContext(new Configuration())
+    val context = new HoodieJavaEngineContext(HoodieTestUtils.getDefaultStorageConf)
     val writeClient = new HoodieJavaWriteClient(context, writeConfig)
     val instantTime = makeNewCommitTime()
 

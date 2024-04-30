@@ -29,7 +29,6 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -661,7 +660,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
   private static HoodieTableMetaClient getMetaClient(HoodieStreamer.Config dsConfig) {
     return HoodieTableMetaClient.builder()
-        .setConf(new Configuration(fs.getConf()))
+        .setConf(storage.getConf().newInstance())
         .setBasePath(dsConfig.targetBasePath)
         .setPayloadClassName(dsConfig.payloadClassName)
         .build();

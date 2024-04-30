@@ -26,8 +26,9 @@ import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
@@ -619,11 +620,11 @@ public class ConfigUtils {
     deleted.forEach((k, v) -> current.remove(k.toString()));
   }
 
-  public static HoodieConfig getReaderConfigs(Configuration conf) {
+  public static HoodieConfig getReaderConfigs(StorageConfiguration<?> storageConf) {
     HoodieConfig config = new HoodieConfig();
     config.setAll(DEFAULT_HUDI_CONFIG_FOR_READER.getProps());
     config.setValue(USE_NATIVE_HFILE_READER,
-        Boolean.toString(ConfigUtils.getBooleanWithAltKeys(conf, USE_NATIVE_HFILE_READER)));
+        Boolean.toString(storageConf.getBoolean(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue())));
     return config;
   }
 }

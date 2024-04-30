@@ -24,10 +24,10 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.testutils.FunctionalTestHarness;
 import org.apache.hudi.utilities.HoodieSnapshotCopier;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,9 +60,9 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
     basePath = rootPath + "/" + HoodieTestUtils.RAW_TRIPS_TEST_NAME;
     outputPath = rootPath + "/output";
 
-    final Configuration hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    fs = HadoopFSUtils.getFs(basePath, hadoopConf);
-    HoodieTestUtils.init(hadoopConf, basePath);
+    final StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    fs = HadoopFSUtils.getFs(basePath, storageConf);
+    HoodieTestUtils.init(storageConf, basePath);
   }
 
   @Test

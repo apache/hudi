@@ -50,7 +50,7 @@ class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuil
     val basePath = getBasePath(table)
     val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metadata = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf), config, basePath)
+    val metadata = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getStorageConf), config, basePath)
     val stats = metadata.stats
 
     val rows = new util.ArrayList[Row]

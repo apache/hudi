@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
 
 import org.apache.avro.Schema
@@ -52,13 +52,14 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.io.Closeable
 import java.util.Properties
 import java.util.stream.Collectors
+
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaBufferConverter
 
 class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
                            metaClient: HoodieTableMetaClient,
-                           conf: Configuration,
+                           conf: StorageConfiguration[_],
                            parquetReader: PartitionedFile => Iterator[InternalRow],
                            originTableSchema: HoodieTableSchema,
                            cdcSchema: StructType,
@@ -385,7 +386,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
           loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)
           val absLogPath = new StoragePath(basePath, currentCDCFileSplit.getCdcFiles.get(0))
           val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(storage.getPathInfo(absLogPath))))
-          val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
+          val logFileIterator = new LogFileIterator(
+            morSplit, originTableSchema, originTableSchema, tableState, conf.unwrapAs(classOf[Configuration]))
           logRecordIter = logFileIterator.logRecordsPairIterator
         case AS_IS =>
           assert(currentCDCFileSplit.getCdcFiles != null && !currentCDCFileSplit.getCdcFiles.isEmpty)
@@ -502,7 +504,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
         originTableSchema,
         originTableSchema,
         tableState,
-        conf)
+        conf.unwrapAs(classOf[Configuration]))
     }
   }
 

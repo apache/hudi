@@ -21,7 +21,6 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -32,8 +31,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -131,7 +130,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
                                                                    String datasetBasePath) {
     return new FileSystemBackedTableMetadata(
-        engineContext, new SerializableConfiguration(engineContext.getHadoopConf()), datasetBasePath);
+        engineContext, engineContext.getStorageConf().newInstance(), datasetBasePath);
   }
 
   static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,

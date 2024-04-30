@@ -53,6 +53,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -109,7 +110,7 @@ public class CompactionTestUtils {
       }
     });
 
-    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
+    metaClient = createMetaClient(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> pendingCompactionMap =
         CompactionUtils.getAllPendingCompactionOperations(metaClient);
 

@@ -46,11 +46,13 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
@@ -141,13 +143,13 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return jsc;
   }
 
-  public Configuration hadoopConf() {
-    return jsc.hadoopConfiguration();
+  public StorageConfiguration<Configuration> storageConf() {
+    return HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration());
   }
 
   public HoodieStorage hoodieStorage() {
     if (storage == null) {
-      storage = HoodieStorageUtils.getStorage(basePath(), hadoopConf());
+      storage = HoodieStorageUtils.getStorage(basePath(), storageConf());
     }
     return storage;
   }
@@ -169,32 +171,32 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(HoodieTableType tableType, Properties props) throws IOException {
-    return getHoodieMetaClient(hadoopConf(), basePath(), tableType, props);
+    return getHoodieMetaClient(storageConf(), basePath(), tableType, props);
   }
 
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, HoodieTableType tableType, Properties props) throws IOException {
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType, Properties props) throws IOException {
     props = HoodieTableMetaClient.withPropertyBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(tableType)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
         .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
+    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, props);
   }
 
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath) throws IOException {
-    return getHoodieMetaClient(hadoopConf, basePath, getPropertiesForKeyGen(true));
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath) throws IOException {
+    return getHoodieMetaClient(storageConf, basePath, getPropertiesForKeyGen(true));
   }
 
   @Override
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException {
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
     props = HoodieTableMetaClient.withPropertyBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(COPY_ON_WRITE)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
         .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
+    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, props);
   }
 
   @Override

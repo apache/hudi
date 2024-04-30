@@ -94,7 +94,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     tableName2 = tableName("_2");
     tablePath1 = tablePath(tableName1);
     tablePath2 = tablePath(tableName2);
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
     // Create table and connect
     new TableCommand().createTable(
         tablePath1, tableName1, HoodieTableType.COPY_ON_WRITE.name(),
@@ -112,7 +112,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, hadoopConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 
@@ -140,7 +140,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     for (Map.Entry<HoodieInstant, Integer[]> entry : commitData.entrySet()) {
       String key = entry.getKey().getTimestamp();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, hadoopConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 
@@ -162,7 +162,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   }
 
   private String generateExpectData(int records, Map<String, Integer[]> data) throws IOException {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(hadoopConf());
+    HoodieStorage storage = HoodieStorageUtils.getStorage(storageConf());
     List<String> partitionPaths =
         FSUtils.getAllPartitionFoldersThreeLevelsDown(storage, tablePath1);
 
@@ -296,14 +296,14 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, hadoopConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 
     if (enableMetadataTable) {
       // Simulate a compaction commit in metadata table timeline
       // so the archival in data table can happen
-      createCompactionCommitInMetadataTable(hadoopConf(), tablePath1, "106");
+      createCompactionCommitInMetadataTable(storageConf(), tablePath1, "106");
     }
 
     // archive
@@ -337,13 +337,13 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     if (enableMetadataTable) {
       // Simulate a compaction commit in metadata table timeline
       // so the archival in data table can happen
-      createCompactionCommitInMetadataTable(hadoopConf(), tablePath1, "194");
+      createCompactionCommitInMetadataTable(storageConf(), tablePath1, "194");
     }
 
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, hadoopConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
       // archive
       metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
@@ -522,13 +522,13 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   @EnumSource(HoodieTableType.class)
   public void testCompareCommits(HoodieTableType tableType) throws Exception {
     Map<String, Integer[]> data = generateData();
-    HoodieTestUtils.init(hadoopConf(), tablePath2, tableType);
+    HoodieTestUtils.init(storageConf(), tablePath2, tableType);
 
     data.remove("102");
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath2, key, hadoopConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath2, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 
@@ -551,13 +551,13 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   public void testSyncCommits(HoodieTableType tableType) throws Exception {
     Map<String, Integer[]> data = generateData();
 
-    HoodieTestUtils.init(hadoopConf(), tablePath2, tableType, tableName2);
+    HoodieTestUtils.init(storageConf(), tablePath2, tableType, tableName2);
 
     data.remove("102");
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath2, key, hadoopConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath2, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 

@@ -27,7 +27,6 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -72,12 +71,12 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -144,7 +143,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected HoodieTableMetaClient metadataMetaClient;
   protected HoodieTableMetaClient dataMetaClient;
   protected Option<HoodieMetadataMetrics> metrics;
-  protected SerializableConfiguration hadoopConf;
+  protected StorageConfiguration<?> storageConf;
   protected final transient HoodieEngineContext engineContext;
   protected final List<MetadataPartitionType> enabledPartitionTypes;
   // Is the MDT bootstrapped and ready to be read from
@@ -153,22 +152,22 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   /**
    * Hudi backed table metadata writer.
    *
-   * @param hadoopConf                 Hadoop configuration to use for the metadata writer
+   * @param storageConf                Storage configuration to use for the metadata writer
    * @param writeConfig                Writer config
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
    * @param inflightInstantTimestamp   Timestamp of any instant in progress
    */
-  protected HoodieBackedTableMetadataWriter(Configuration hadoopConf,
+  protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
                                             HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                             HoodieEngineContext engineContext,
                                             Option<String> inflightInstantTimestamp) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
-    this.hadoopConf = new SerializableConfiguration(hadoopConf);
+    this.storageConf = storageConf;
     this.metrics = Option.empty();
-    this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf)
+    this.dataMetaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance())
         .setBasePath(dataWriteConfig.getBasePath())
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
     this.enabledPartitionTypes = getEnabledPartitions(dataWriteConfig.getProps(), dataMetaClient);
@@ -275,7 +274,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // the metadata table will need to be initialized again.
     if (exists) {
       try {
-        metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
+        metadataMetaClient = HoodieTableMetaClient.builder()
+            .setConf(storageConf.newInstance())
             .setBasePath(metadataWriteConfig.getBasePath())
             .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
         if (DEFAULT_METADATA_POPULATE_META_FIELDS != metadataMetaClient.getTableConfig().populateMetaFields()) {
@@ -346,7 +346,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // Load the metadata table metaclient if required
       if (metadataMetaClient == null) {
         metadataMetaClient = HoodieTableMetaClient.builder()
-            .setConf(hadoopConf.get()).setBasePath(metadataWriteConfig.getBasePath())
+            .setConf(storageConf.newInstance()).setBasePath(metadataWriteConfig.getBasePath())
             .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
       }
     }
@@ -492,7 +492,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                                                         HoodieFunctionalIndexDefinition indexDefinition,
                                                                         HoodieTableMetaClient metaClient,
                                                                         int parallelism, Schema readerSchema,
-                                                                        SerializableConfiguration hadoopConf);
+                                                                        StorageConfiguration<?> storageConf);
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeFunctionalIndexPartition(String indexName) throws Exception {
     HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(dataMetaClient, dataMetaClient.getActiveTimeline(), metadata);
@@ -508,7 +508,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     int fileGroupCount = dataWriteConfig.getMetadataConfig().getFunctionalIndexFileGroupCount();
     int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
     Schema readerSchema = getProjectedSchemaForFunctionalIndex(indexDefinition, dataMetaClient);
-    return Pair.of(fileGroupCount, getFunctionalIndexRecords(partitionFileSlicePairs, indexDefinition, dataMetaClient, parallelism, readerSchema, hadoopConf));
+    return Pair.of(fileGroupCount, getFunctionalIndexRecords(partitionFileSlicePairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf));
   }
 
   private Set<String> getFunctionalIndexPartitionsToInit() {
@@ -550,7 +550,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         false,
         dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
         dataWriteConfig.getBasePath(),
-        hadoopConf,
+        storageConf,
         this.getClass().getSimpleName());
     records.persist("MEMORY_AND_DISK_SER");
     final long recordCount = records.count();
@@ -620,11 +620,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
         .setPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
         .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
+        .initTable(storageConf.newInstance(), metadataWriteConfig.getBasePath());
 
     // reconcile the meta client with time generator config.
     return HoodieTableMetaClient.builder()
-        .setBasePath(metadataWriteConfig.getBasePath()).setConf(hadoopConf.get())
+        .setBasePath(metadataWriteConfig.getBasePath()).setConf(storageConf.newInstance())
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig())
         .build();
   }
@@ -641,7 +641,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     List<DirectoryInfo> partitionsToBootstrap = new LinkedList<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
-    SerializableConfiguration conf = new SerializableConfiguration(dataMetaClient.getHadoopConf());
+    StorageConfiguration<?> storageConf = dataMetaClient.getStorageConf();
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
     final String datasetBasePath = dataMetaClient.getBasePathV2().toString();
     StoragePath storageBasePath = new StoragePath(datasetBasePath);
@@ -652,7 +652,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // List all directories in parallel
       engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing " + numDirsToList + " partitions from filesystem");
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToList.subList(0, numDirsToList), path -> {
-        HoodieStorage storage = HoodieStorageUtils.getStorage(path, conf.get());
+        HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
         String relativeDirPath = FSUtils.getRelativePartitionPath(storageBasePath, path);
         return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime);
       }, numDirsToList);
@@ -979,7 +979,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     });
     int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
     Schema readerSchema = getProjectedSchemaForFunctionalIndex(indexDefinition, dataMetaClient);
-    return getFunctionalIndexRecords(partitionFileSlicePairs, indexDefinition, dataMetaClient, parallelism, readerSchema, hadoopConf);
+    return getFunctionalIndexRecords(partitionFileSlicePairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf);
   }
 
   /**
@@ -1499,7 +1499,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         true,
         dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
         dataWriteConfig.getBasePath(),
-        hadoopConf,
+        storageConf,
         this.getClass().getSimpleName());
   }
 

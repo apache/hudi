@@ -19,7 +19,6 @@
 package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -36,6 +35,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.data.HoodieSparkLongAccumulator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkConf;
@@ -73,7 +73,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   public HoodieSparkEngineContext(JavaSparkContext jsc, SQLContext sqlContext) {
-    super(new SerializableConfiguration(jsc.hadoopConfiguration()), new SparkTaskContextSupplier());
+    super(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), new SparkTaskContextSupplier());
     this.javaSparkContext = jsc;
     this.sqlContext = sqlContext;
   }

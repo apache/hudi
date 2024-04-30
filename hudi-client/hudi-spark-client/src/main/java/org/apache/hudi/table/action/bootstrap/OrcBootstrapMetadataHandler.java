@@ -38,6 +38,7 @@ import org.apache.hudi.util.ExecutorFactory;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
@@ -60,7 +61,7 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   @Override
   Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
     Reader orcReader = OrcFile.createReader(
-        new Path(sourceFilePath.toUri()), OrcFile.readerOptions(table.getHadoopConf()));
+        new Path(sourceFilePath.toUri()), OrcFile.readerOptions((Configuration) table.getStorageConf().unwrap()));
     TypeDescription orcSchema = orcReader.getSchema();
     return AvroOrcUtils.createAvroSchema(orcSchema);
   }
@@ -74,10 +75,10 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
       throw new UnsupportedOperationException();
     }
     Reader orcReader = OrcFile.createReader(
-        new Path(sourceFilePath.toUri()), OrcFile.readerOptions(table.getHadoopConf()));
+        new Path(sourceFilePath.toUri()), OrcFile.readerOptions((Configuration) table.getStorageConf().unwrap()));
     TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
     HoodieExecutor<Void> executor = null;
-    RecordReader reader = orcReader.rows(new Reader.Options(table.getHadoopConf()).schema(orcSchema));
+    RecordReader reader = orcReader.rows(new Reader.Options((Configuration) table.getStorageConf().unwrap()).schema(orcSchema));
     try {
       executor = ExecutorFactory.create(config, new OrcReaderIterator<GenericRecord>(reader, avroSchema, orcSchema),
           new BootstrapRecordConsumer(bootstrapHandle), inp -> {

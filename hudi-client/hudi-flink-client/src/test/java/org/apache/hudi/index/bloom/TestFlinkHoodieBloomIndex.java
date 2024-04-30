@@ -247,7 +247,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     List<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
-        new StoragePath(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
+        new StoragePath(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, storageConf);
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));

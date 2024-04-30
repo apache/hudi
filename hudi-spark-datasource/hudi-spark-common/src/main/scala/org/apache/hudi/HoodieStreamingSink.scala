@@ -32,6 +32,8 @@ import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtil
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.execution.streaming.{Sink, StreamExecution}
 import org.apache.spark.sql.streaming.OutputMode
@@ -60,7 +62,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   private var metaClient: Option[HoodieTableMetaClient] = {
     try {
       Some(HoodieTableMetaClient.builder()
-        .setConf(sqlContext.sparkContext.hadoopConfiguration)
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration))
         .setBasePath(tablePath.get)
         .build())
     } catch {
@@ -150,7 +152,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
           hoodieTableConfig = Some(tableConfig)
           if (client != null) {
             metaClient = Some(HoodieTableMetaClient.builder()
-              .setConf(sqlContext.sparkContext.hadoopConfiguration)
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration))
               .setBasePath(client.getConfig.getBasePath)
               .build())
           }
@@ -264,7 +266,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       }))
 
       // First time, scan .hoodie folder and get all pending compactions
-      val metaClient = HoodieTableMetaClient.builder().setConf(sqlContext.sparkContext.hadoopConfiguration)
+      val metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration))
         .setBasePath(client.getConfig.getBasePath).build()
       val pendingInstants: java.util.List[HoodieInstant] =
         CompactionUtils.getPendingCompactionInstantTimes(metaClient)
@@ -292,7 +295,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       }))
 
       // First time, scan .hoodie folder and get all pending clustering instants
-      val metaClient = HoodieTableMetaClient.builder().setConf(sqlContext.sparkContext.hadoopConfiguration)
+      val metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration))
         .setBasePath(client.getConfig.getBasePath).build()
       val pendingInstants: java.util.List[HoodieInstant] = ClusteringUtils.getPendingClusteringInstantTimes(metaClient)
       pendingInstants.foreach((h: HoodieInstant) => asyncClusteringService.enqueuePendingAsyncServiceInstant(h))

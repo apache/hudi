@@ -18,13 +18,13 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.expression.ArrayData;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import java.util.Collections;
@@ -36,15 +36,15 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
 
   protected transient HoodieEngineContext engineContext;
 
-  protected final SerializableConfiguration hadoopConf;
+  protected final StorageConfiguration<?> storageConf;
   protected final StoragePath dataBasePath;
 
   // TODO get this from HoodieConfig
   protected final boolean caseSensitive = false;
 
-  public AbstractHoodieTableMetadata(HoodieEngineContext engineContext, SerializableConfiguration conf, String dataBasePath) {
+  public AbstractHoodieTableMetadata(HoodieEngineContext engineContext, StorageConfiguration<?> conf, String dataBasePath) {
     this.engineContext = engineContext;
-    this.hadoopConf = conf;
+    this.storageConf = conf;
     this.dataBasePath = new StoragePath(dataBasePath);
   }
 

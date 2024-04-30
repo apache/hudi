@@ -21,6 +21,7 @@ package org.apache.hudi.storage;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.Serializable;
 
@@ -61,6 +62,24 @@ public abstract class StorageConfiguration<T> implements Serializable {
    * @return the property value if present, or {@code Option.empty()}.
    */
   public abstract Option<String> getString(String key);
+
+  /**
+   * @param clazz class of U, which is assignable from T.
+   * @param <U>   type to return.
+   * @return the underlying configuration cast to type {@link U}.
+   */
+  public final <U> U unwrapAs(Class<U> clazz) {
+    return castConfiguration(unwrap(), clazz);
+  }
+
+  /**
+   * @param clazz class of U, which is assignable from T.
+   * @param <U>   type to return.
+   * @return a new copy of the underlying configuration cast to type {@link U}.
+   */
+  public final <U> U unwrapCopyAs(Class<U> clazz) {
+    return castConfiguration(unwrapCopy(), clazz);
+  }
 
   /**
    * Gets the String value of a property key if present, or the default value if not.
@@ -126,5 +145,18 @@ public abstract class StorageConfiguration<T> implements Serializable {
     if (getString(key).isEmpty()) {
       set(key, value);
     }
+  }
+
+  /**
+   * @param conf  configuration object.
+   * @param clazz class of U.
+   * @param <U>   type to return.
+   * @return the configuration cast to type {@link U}.
+   */
+  public static <U> U castConfiguration(Object conf, Class<U> clazz) {
+    ValidationUtils.checkArgument(
+        clazz.isAssignableFrom(conf.getClass()),
+        "Cannot cast the underlying configuration to type " + clazz);
+    return (U) conf;
   }
 }

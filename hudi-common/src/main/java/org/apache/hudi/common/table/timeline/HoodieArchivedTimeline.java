@@ -267,7 +267,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
           .parallel().forEach(fileName -> {
             // Read the archived file
             try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-                .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, metaClient.getHadoopConf(), new StoragePath(metaClient.getArchivePath(), fileName))) {
+                .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, metaClient.getStorageConf(), new StoragePath(metaClient.getArchivePath(), fileName))) {
               try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
                 while (iterator.hasNext()) {
                   GenericRecord record = (GenericRecord) iterator.next();

@@ -20,6 +20,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.storage.StorageConfiguration
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
@@ -33,12 +34,12 @@ trait SparkParquetReader extends Serializable {
    * @param requiredSchema  desired output schema of the data
    * @param partitionSchema schema of the partition columns. Partition values will be appended to the end of every row
    * @param filters         filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param sharedConf      the hadoop conf
+   * @param storageConf     the hadoop conf
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   def read(file: PartitionedFile,
            requiredSchema: StructType,
            partitionSchema: StructType,
            filters: Seq[Filter],
-           sharedConf: Configuration): Iterator[InternalRow]
+           storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow]
 }

@@ -163,10 +163,10 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     // Create the table
     HoodieTableMetaClient.withPropertyBuilder()
-      .fromMetaClient(metaClient)
-      .setTableType(HoodieTableType.MERGE_ON_READ)
-      .setTimelineLayoutVersion(VERSION_1)
-      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
+        .fromMetaClient(metaClient)
+        .setTableType(HoodieTableType.MERGE_ON_READ)
+        .setTimelineLayoutVersion(VERSION_1)
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA, shouldAllowDroppedColumns);
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
@@ -252,9 +252,9 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   public void testCopyOnWriteTable(boolean shouldAllowDroppedColumns) throws Exception {
     // Create the table
     HoodieTableMetaClient.withPropertyBuilder()
-      .fromMetaClient(metaClient)
-      .setTimelineLayoutVersion(VERSION_1)
-      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
+        .fromMetaClient(metaClient)
+        .setTimelineLayoutVersion(VERSION_1)
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfigBuilder(TRIP_EXAMPLE_SCHEMA)
         .withRollbackUsingMarkers(false)
