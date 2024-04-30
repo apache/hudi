@@ -345,35 +345,37 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
-    AtomicInteger commitTime = new AtomicInteger(1);
     // Trigger 5 regular writes in data table.
+    List<String> instants = new ArrayList<>();
     for (int i = 1; i <= 5; i++) {
-      doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
+      String instant = metaClient.createNewInstantTime();
+      instants.add(instant);
+      doWriteOperation(testTable, instant, INSERT);
     }
-    // The earliest deltacommit in the metadata table should be "0000001",
+    // The earliest deltacommit in the metadata table should be the 1st instant,
     // and the "00000000000000" init deltacommit should be archived.
     HoodieTableMetaClient metadataMetaClient = createMetaClientForMetadataTable();
     HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals("0000001", metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
+    assertEquals(instants.get(0), metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
 
     // Trigger clustering in the data table, archival should not kick in, even though conditions are met.
-    doCluster(testTable, "000000" + commitTime.getAndIncrement());
+    doCluster(testTable, metaClient.createNewInstantTime());
     metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals("0000001", metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
+    assertEquals(instants.get(0), metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
 
     getHoodieWriteClient(writeConfig);
     // Trigger a regular write operation. data set timeline archival should kick in.
-    doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
     archiveDataTable(writeConfig, createMetaClient());
-    assertEquals("0000004",
+    assertEquals(instants.get(3),
         metaClient.reloadActiveTimeline().getCommitsTimeline().firstInstant().get().getTimestamp());
     metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals("0000001", metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
+    assertEquals(instants.get(0), metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
 
     // Trigger a regular write operation. metadata timeline archival should kick in.
-    doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
     metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals("0000004", metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
+    assertEquals(instants.get(3), metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
   }
 
   @ParameterizedTest
@@ -395,25 +397,28 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
-    AtomicInteger commitTime = new AtomicInteger(1);
     // Trigger 4 regular writes in data table.
-    for (int i = 1; i <= 4; i++) {
-      doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
+    final int numWrites = 4;
+    List<String> instants = new ArrayList<>();
+    for (int i = 1; i <= numWrites; i++) {
+      String instant = metaClient.createNewInstantTime();
+      instants.add(instant);
+      doWriteOperation(testTable, instant, INSERT);
     }
 
-    // The earliest deltacommit in the metadata table should be "0000001",
+    // The earliest deltacommit in the metadata table should be the 1st instant,
     // and the "00000000000000" init deltacommit should be archived.
     HoodieTableMetaClient metadataMetaClient = createMetaClientForMetadataTable();
     HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals("0000001", metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
+    assertEquals(instants.get(0), metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
 
     getHoodieWriteClient(writeConfig);
-    // Trigger data table archive, should archive "0000001", "0000002"
+    // Trigger data table archive, should archive 1st, 2nd.
     archiveDataTable(writeConfig, createMetaClient());
     // Trigger a regular write operation. metadata timeline archival should kick in and catch up with data table.
-    doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
     metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals("0000003", metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
+    assertEquals(instants.get(2), metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
   }
 
   @ParameterizedTest
@@ -468,14 +473,15 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
-    doWriteOperation(testTable, "0000001", INSERT);
-    doCleanAndValidate(testTable, "0000003", Arrays.asList("0000001"));
+    String firstInstant = metaClient.createNewInstantTime();
+    doWriteOperation(testTable, firstInstant, INSERT);
+    doCleanAndValidate(testTable, metaClient.createNewInstantTime(), Collections.singletonList(firstInstant));
 
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     // since clean was the last commit, table services should not get triggered in metadata table.
     assertFalse(tableMetadata.getLatestCompactionTime().isPresent());
 
-    doWriteOperation(testTable, "0000004", UPSERT);
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), UPSERT);
     // this should have triggered compaction in metadata table
     tableMetadata = metadata(writeConfig, context);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
@@ -525,10 +531,11 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
-    doWriteOperation(testTable, "0000001", INSERT);
-    doClean(testTable, "0000003", Arrays.asList("0000001"));
+    String firstInstant = metaClient.createNewInstantTime();
+    doWriteOperation(testTable, firstInstant, INSERT);
+    doClean(testTable, metaClient.createNewInstantTime(), Collections.singletonList(firstInstant));
     // this should have triggered compaction in metadata table
-    doWriteOperation(testTable, "0000004", UPSERT);
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), UPSERT);
 
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
@@ -570,34 +577,36 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     // test multi-writer scenario. let's add 1,2,3,4 where 1,2,4 succeeded, but 3 is still inflight. so latest delta commit in MDT is 4, while 3 is still pending
     // in DT and not seen by MDT yet. compaction should not trigger until 3 goes to completion.
 
-    // create an inflight commit for 3
-    String inflightInstant = metaClient.createNewInstantTime();
-    HoodieCommitMetadata inflightCommitMeta = testTable.doWriteOperation(inflightInstant, UPSERT, emptyList(),
+    // case 1: a pending commit on DT that finished later on.
+    String inflightInstant1 = metaClient.createNewInstantTime();
+    HoodieCommitMetadata inflightCommitMeta = testTable.doWriteOperation(inflightInstant1, UPSERT, emptyList(),
         asList("p1", "p2"), 2, false, true);
     doWriteOperation(testTable, metaClient.createNewInstantTime());
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     // verify that compaction of metadata table does not kick in.
     assertFalse(tableMetadata.getLatestCompactionTime().isPresent());
-    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
-    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
+
+    // write some commits to trigger the MDT compaction
     doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
 
     tableMetadata = metadata(writeConfig, context);
-    // verify that compaction of metadata table should kick in.
-    assertTrue(tableMetadata.getLatestCompactionTime().isPresent(), "Compaction of metadata table does not kick in");
-    assertEquals(HoodieInstantTimeGenerator.instantTimeMinusMillis(inflightInstant, 1L), tableMetadata.getLatestCompactionTime().get());
+    assertTrue(tableMetadata.getLatestCompactionTime().isPresent(), "Compaction of metadata table should kick in");
 
     // move inflight to completed
-    testTable.moveInflightCommitToComplete(inflightInstant, inflightCommitMeta);
+    testTable.moveInflightCommitToComplete(inflightInstant1, inflightCommitMeta);
 
-    // we have to add another commit for compaction to trigger. if not, latest delta commit in MDT is 7, but the new incoming i.e 3 is still inflight in DT while "3"
-    // is getting applied to MDT.
+    // case2: a pending commit succeeds on MDT but fails on DT.
+    String inflightInstant2 = metaClient.createNewInstantTime();
+    doWriteOperation(testTable, inflightInstant2, INSERT);
+    testTable.moveCompleteCommitToInflight(inflightInstant2);
+
+    // write some commits to trigger the MDT compaction
     doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
-    // verify compaction kicked in now
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
+
     tableMetadata = metadata(writeConfig, context);
-    assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
-    // do full metadata validation
-    validateMetadata(testTable, true);
+    assertTrue(tableMetadata.getLatestCompactionTime().isPresent(), "Compaction of metadata table should kick in");
+    assertEquals(HoodieInstantTimeGenerator.instantTimeMinusMillis(inflightInstant2, 1L), tableMetadata.getLatestCompactionTime().get());
   }
 
   /**
@@ -615,13 +624,13 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
-    doWriteOperation(testTable, "0000001", INSERT);
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
     // create an inflight compaction in metadata table.
     // not easy to create an inflight in metadata table directly, hence letting compaction succeed and then deleting the completed instant.
     // this new write is expected to trigger metadata table compaction
-    String commitInstant = "0000002";
+    String commitInstant = metaClient.createNewInstantTime();
     doWriteOperation(testTable, commitInstant, INSERT);
-    doWriteOperation(testTable, "0000003", INSERT);
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
 
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     Option<String> metadataCompactionInstant = tableMetadata.getLatestCompactionTime();
@@ -647,7 +656,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     if (simulateFailedCompaction) {
       // this should retry the compaction in metadata table.
-      doWriteOperation(testTable, "0000004", INSERT);
+      doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
     } else {
       // let the compaction succeed in metadata and validation should succeed.
       FileCreateUtils.renameTempToMetaFile(tempFilePath, metaFilePath);
@@ -656,8 +665,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable);
 
     // add few more write and validate
-    doWriteOperation(testTable, "0000005", INSERT);
-    doWriteOperation(testTable, "0000006", UPSERT);
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), UPSERT);
     validateMetadata(testTable);
 
     if (simulateFailedCompaction) {
@@ -677,13 +686,13 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(testTable);
 
       // this should retry the failed compaction in metadata table.
-      doWriteOperation(testTable, "0000007", INSERT);
+      doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
 
       validateMetadata(testTable);
 
       // add few more write and validate
-      doWriteOperation(testTable, "0000008", INSERT);
-      doWriteOperation(testTable, "0000009", UPSERT);
+      doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
+      doWriteOperation(testTable, metaClient.createNewInstantTime(), UPSERT);
       validateMetadata(testTable);
     }
   }
