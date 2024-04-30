@@ -21,6 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Tag
 
@@ -63,7 +64,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
       // Check the missing properties for spark sql
       val metaClient = HoodieTableMetaClient.builder()
         .setBasePath(tablePath)
-        .setConf(spark.sessionState.newHadoopConf())
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
       val properties = metaClient.getTableConfig.getProps.asScala.toMap
       assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))

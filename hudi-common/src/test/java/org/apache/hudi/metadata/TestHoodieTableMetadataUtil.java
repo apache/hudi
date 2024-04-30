@@ -89,7 +89,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
   @Test
   public void testConvertFilesToPartitionStatsRecords() throws Exception {
-    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
     String instant1 = "20230918120000000";
     hoodieTestTable = hoodieTestTable.addCommit(instant1);
     String instant2 = "20230918121110000";
