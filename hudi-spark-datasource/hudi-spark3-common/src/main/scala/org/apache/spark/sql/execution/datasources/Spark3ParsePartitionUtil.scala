@@ -55,9 +55,9 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
                               userSpecifiedDataTypes: Map[String, DataType],
                               tz: TimeZone,
                               validatePartitionValues: Boolean = false): InternalRow = {
-    val (dateFormatter, timestampFormatter) = cache.asScala.getOrElseUpdate(tz.toZoneId, {
-      val dateFormatter = ReflectUtil.getDateFormatter(tz.toZoneId)
-      val timestampFormatter = TimestampFormatter(timestampPartitionPattern, tz.toZoneId, isParsing = true)
+    val (dateFormatter, timestampFormatter) = cache.computeIfAbsent(tz.toZoneId, zoneId => {
+      val dateFormatter = ReflectUtil.getDateFormatter(zoneId)
+      val timestampFormatter = TimestampFormatter(timestampPartitionPattern, zoneId, isParsing = true)
 
       (dateFormatter, timestampFormatter)
     })

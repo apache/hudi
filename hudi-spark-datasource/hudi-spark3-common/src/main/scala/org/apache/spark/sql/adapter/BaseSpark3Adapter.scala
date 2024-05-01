@@ -64,7 +64,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil
 
   override def getDateFormatter(tz: TimeZone): DateFormatter = {
-    cache.asScala.getOrElseUpdate(tz.toZoneId, ReflectUtil.getDateFormatter(tz.toZoneId))
+    cache.computeIfAbsent(tz.toZoneId, zoneId => ReflectUtil.getDateFormatter(zoneId))
   }
 
   /**
