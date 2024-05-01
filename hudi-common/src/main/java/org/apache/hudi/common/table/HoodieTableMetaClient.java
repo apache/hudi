@@ -390,8 +390,8 @@ public class HoodieTableMetaClient implements Serializable {
           : new NoOpConsistencyGuard();
 
       storage = (HoodieStorage) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HoodieHadoopStorage",
-          new Class<?>[] {StoragePath.class, StorageConfiguration.class, boolean.class, boolean.class,
-              long.class, int.class, long.class, String.class, ConsistencyGuard.class},
+          new Class<?>[] {StoragePath.class, StorageConfiguration.class, boolean.class, long.class, int.class,
+              long.class, String.class, ConsistencyGuard.class},
           metaPath,
           getStorageConf(),
           fileSystemRetryConfig.isFileSystemActionRetryEnable(),
@@ -399,8 +399,7 @@ public class HoodieTableMetaClient implements Serializable {
           fileSystemRetryConfig.getMaxRetryNumbers(),
           fileSystemRetryConfig.getInitialRetryIntervalMs(),
           fileSystemRetryConfig.getRetryExceptions(),
-          consistencyGuard
-          );
+          consistencyGuard);
     }
     return storage;
   }
