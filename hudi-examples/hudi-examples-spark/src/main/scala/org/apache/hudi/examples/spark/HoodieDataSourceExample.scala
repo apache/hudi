@@ -24,7 +24,6 @@ import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.model.HoodieAvroPayload
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.examples.common.{HoodieExampleDataGenerator, HoodieExampleSparkUtils}
-
 import org.apache.spark.sql.SaveMode.{Append, Overwrite}
 import org.apache.spark.sql.SparkSession
 
@@ -77,7 +76,7 @@ object HoodieDataSourceExample {
     val inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20)).asScala.toSeq
     val df = spark.read.json(spark.sparkContext.parallelize(inserts, 1))
     df.write.format("hudi").
-      options(getQuickstartWriteConfigs.asScala).
+      options(getQuickstartWriteConfigs).
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
       option(PARTITIONPATH_FIELD.key, "partitionpath").
@@ -122,7 +121,7 @@ object HoodieDataSourceExample {
     val updates = dataGen.convertToStringList(dataGen.generateUpdates(commitTime, 10)).asScala.toSeq
     val df = spark.read.json(spark.sparkContext.parallelize(updates, 1))
     df.write.format("hudi").
-      options(getQuickstartWriteConfigs.asScala).
+      options(getQuickstartWriteConfigs).
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
       option(PARTITIONPATH_FIELD.key, "partitionpath").
@@ -141,7 +140,7 @@ object HoodieDataSourceExample {
     val df = spark.sql("select uuid, partitionpath, ts from  hudi_ro_table limit 2")
 
     df.write.format("hudi").
-      options(getQuickstartWriteConfigs.asScala).
+      options(getQuickstartWriteConfigs).
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
       option(PARTITIONPATH_FIELD.key, "partitionpath").
@@ -157,7 +156,7 @@ object HoodieDataSourceExample {
   def deleteByPartition(spark: SparkSession, tablePath: String, tableName: String): Unit = {
     val df = spark.emptyDataFrame
     df.write.format("hudi").
-      options(getQuickstartWriteConfigs.asScala).
+      options(getQuickstartWriteConfigs).
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
       option(PARTITIONPATH_FIELD.key, "partitionpath").
