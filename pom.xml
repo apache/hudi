@@ -171,6 +171,7 @@
     <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
     <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
     <avro.version>1.8.2</avro.version>
+    <bijection-avro.version>0.9.7</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <commons.io.version>2.11.0</commons.io.version>
     <scala11.version>2.11.12</scala11.version>
