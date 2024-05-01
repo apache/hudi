@@ -619,7 +619,7 @@
     <dependency>
       <groupId>com.twitter</groupId>
       <artifactId>bijection-avro_${scala.binary.version}</artifactId>
-      <version>0.9.3</version>
+      <version>${bijection-avro.version}</version>
     </dependency>
 
     <dependency>
