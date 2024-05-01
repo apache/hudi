@@ -278,6 +278,19 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract Object unwrapConf();
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract StorageConfiguration<?> buildInlineConf(StorageConfiguration<?> storageConf);
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public final StoragePath getInlineFilePath(StoragePath outerPath, long inLineStartOffset, long inLineLength) {
+    return getInlineFilePath(outerPath, getScheme(), inLineStartOffset, inLineLength);
+  }
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract StoragePath getInlineFilePath(StoragePath outerPath, String origScheme, long inLineStartOffset, long inLineLength);
+
+
+
   /**
    * Creates a new file with overwrite set to false. This ensures files are created
    * only once and never rewritten, also, here we take care if the content is not

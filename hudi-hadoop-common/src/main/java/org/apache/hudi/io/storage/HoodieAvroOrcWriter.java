@@ -18,13 +18,14 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.AvroOrcUtils;
+import org.apache.hudi.hadoop.fs.HoodieHadoopUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.StoragePath;
 
@@ -45,7 +46,6 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
@@ -70,7 +70,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, Schema schema,
                              TaskContextSupplier taskContextSupplier) throws IOException {
 
-    Configuration conf = FSUtils.registerFileSystem(file, config.getHadoopConf());
+    Configuration conf = HoodieHadoopUtils.registerFileSystem(file, config.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.instantTime = instantTime;
@@ -152,7 +152,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
 
     if (orcConfig.useBloomFilter()) {
       final BloomFilter bloomFilter = orcConfig.getBloomFilter();
-      writer.addUserMetadata(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString())));
+      writer.addUserMetadata(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString())));
       if (minRecordKey != null && maxRecordKey != null) {
         writer.addUserMetadata(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER, ByteBuffer.wrap(getUTF8Bytes(minRecordKey)));
         writer.addUserMetadata(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER, ByteBuffer.wrap(getUTF8Bytes(maxRecordKey)));

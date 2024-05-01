@@ -37,7 +37,6 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -62,7 +61,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
-import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
 import static org.apache.hudi.hadoop.testutils.InputFormatTestUtil.writeDataBlockToLogFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,7 +88,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     baseJobConf.set(serdeConstants.LIST_COLUMNS, COLUMNS);
     baseJobConf.set(serdeConstants.LIST_COLUMN_TYPES, COLUMN_TYPES);
-    storage = HoodieStorageUtils.getStorage(getFs(basePath.toUri().toString(), baseJobConf));
+    storage = HoodieStorageUtils.getStorage(basePath.toUri().toString(), baseJobConf);
   }
 
   @AfterEach
@@ -114,7 +112,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
   private void testReaderInternal(boolean partitioned, HoodieLogBlock.HoodieLogBlockType logBlockType) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(HadoopFSUtils.getStorageConf(hadoopConf), basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(HoodieStorageUtils.getStorageConf(hadoopConf), basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, TOTAL_RECORDS, baseInstant,
         HoodieTableType.MERGE_ON_READ)

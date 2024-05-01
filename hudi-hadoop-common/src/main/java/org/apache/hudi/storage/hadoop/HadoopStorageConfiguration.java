@@ -38,7 +38,11 @@ public class HadoopStorageConfiguration extends StorageConfiguration<Configurati
   private transient Configuration configuration;
 
   public HadoopStorageConfiguration() {
-    this(new Configuration());
+    this(true);
+  }
+
+  public HadoopStorageConfiguration(Boolean loadDefaults) {
+    this(new Configuration(loadDefaults));
   }
 
   public HadoopStorageConfiguration(Configuration configuration) {

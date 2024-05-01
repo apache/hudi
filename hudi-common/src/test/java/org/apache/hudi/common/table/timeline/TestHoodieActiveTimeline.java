@@ -26,10 +26,7 @@ import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -711,8 +708,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     if (allowTempCommit) {
       HoodieStorage storage = metaClient.getStorage();
       FileSystem fs = (FileSystem) storage.getFileSystem();
-      HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
-      metaClient.setHoodieStorage(HoodieStorageUtils.getStorage(newFs));
+      //HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
+      //metaClient.setHoodieStorage(HoodieStorageUtils.getStorage(newFs));
       try {
         fun.accept(metaClient);
       } finally {

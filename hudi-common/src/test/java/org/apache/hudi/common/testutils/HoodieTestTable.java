@@ -52,12 +52,14 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.TestLogReaderUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -69,11 +71,14 @@ import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
@@ -809,9 +814,39 @@ public class HoodieTestTable {
   }
 
   public List<StoragePathInfo> listAllBaseFiles(String fileExtension) throws IOException {
-    return FileSystemTestUtils.listRecursive(storage, new StoragePath(basePath)).stream()
+    return listRecursive(storage, new StoragePath(basePath)).stream()
         .filter(fileInfo -> fileInfo.getPath().getName().endsWith(fileExtension))
         .collect(Collectors.toList());
+  }
+
+  public static List<FileStatus> listRecursive(FileSystem fs, Path path) throws IOException {
+    return listFiles(fs, path, true);
+  }
+
+  public static List<FileStatus> listFiles(FileSystem fs, Path path, boolean recursive) throws IOException {
+    RemoteIterator<LocatedFileStatus> itr = fs.listFiles(path, recursive);
+    List<FileStatus> statuses = new ArrayList<>();
+    while (itr.hasNext()) {
+      statuses.add(itr.next());
+    }
+    return statuses;
+  }
+
+  public static List<StoragePathInfo> listRecursive(HoodieStorage storage, StoragePath path)
+      throws IOException {
+    return listFiles(storage, path);
+  }
+
+  public static List<StoragePathInfo> listFiles(HoodieStorage storage, StoragePath path)
+      throws IOException {
+    return storage.listFiles(path);
+  }
+
+  public static String readLastLineFromResourceFile(String resourceName) throws IOException {
+    try (InputStream inputStream = TestLogReaderUtils.class.getResourceAsStream(resourceName)) {
+      List<String> lines = FileIOUtils.readAsUTFStringLines(inputStream);
+      return lines.get(lines.size() - 1);
+    }
   }
 
   public List<StoragePathInfo> listAllLogFiles() throws IOException {
@@ -819,7 +854,7 @@ public class HoodieTestTable {
   }
 
   public List<StoragePathInfo> listAllLogFiles(String fileExtension) throws IOException {
-    return FileSystemTestUtils.listRecursive(storage, new StoragePath(basePath)).stream()
+    return listRecursive(storage, new StoragePath(basePath)).stream()
         .filter(
             fileInfo -> !fileInfo.getPath().toString()
                 .contains(HoodieTableMetaClient.METAFOLDER_NAME))
@@ -834,7 +869,7 @@ public class HoodieTestTable {
   }
 
   public FileStatus[] listAllFilesInPartition(String partitionPath) throws IOException {
-    return FileSystemTestUtils.listRecursive(fs,
+    return listRecursive(fs,
             new Path(Paths.get(basePath, partitionPath).toString())).stream()
         .filter(entry -> {
           boolean toReturn = true;
@@ -857,7 +892,7 @@ public class HoodieTestTable {
   }
 
   public FileStatus[] listAllFilesInTempFolder() throws IOException {
-    return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME).toString())).toArray(new FileStatus[0]);
+    return listRecursive(fs, new Path(Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME).toString())).toArray(new FileStatus[0]);
   }
 
   public void deleteFilesInPartition(String partitionPath, List<String> filesToDelete) throws IOException {

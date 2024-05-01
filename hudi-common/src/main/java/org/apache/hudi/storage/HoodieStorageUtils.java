@@ -19,9 +19,7 @@
 
 package org.apache.hudi.storage;
 
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.common.util.ReflectionUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -34,22 +32,35 @@ public class HoodieStorageUtils {
   }
 
   public static HoodieStorage getStorage(FileSystem fs) {
-    return new HoodieHadoopStorage(fs);
+    return (HoodieStorage) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HoodieHadoopStorage", new Class<?>[] {FileSystem.class}, fs);
+  }
+
+  public static HoodieStorage getStorage(String basePath) {
+    return (HoodieStorage) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HoodieHadoopStorage", new Class<?>[] {String.class}, basePath);
   }
 
   public static HoodieStorage getStorage(String basePath, StorageConfiguration<?> conf) {
-    return getStorage(HadoopFSUtils.getFs(basePath, conf));
+    return (HoodieStorage) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HoodieHadoopStorage", new Class<?>[] {String.class, StorageConfiguration.class}, basePath, conf);
+  }
+
+  public static HoodieStorage getStorage(String basePath, Configuration conf) {
+    return (HoodieStorage) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HoodieHadoopStorage", new Class<?>[] {String.class, Configuration.class}, basePath, conf);
   }
 
   public static HoodieStorage getStorage(StoragePath path, StorageConfiguration<?> conf) {
-    return getStorage(HadoopFSUtils.getFs(path, conf.unwrapAs(Configuration.class)));
+    return (HoodieStorage) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HoodieHadoopStorage", new Class<?>[] {StoragePath.class, StorageConfiguration.class}, path, conf);
   }
 
   public static HoodieStorage getRawStorage(HoodieStorage storage) {
-    FileSystem fs = (FileSystem) storage.getFileSystem();
-    if (fs instanceof HoodieWrapperFileSystem) {
-      return getStorage(((HoodieWrapperFileSystem) fs).getFileSystem());
-    }
-    return storage;
+    return (HoodieStorage) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HoodieHadoopStorage", new Class<?>[] {HoodieStorage.class}, storage);
+  }
+
+  public static StorageConfiguration<?> getNewStorageConf() {
+    return ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HadoopStorageConfiguration.HadoopStorageConfiguration");
+  }
+
+  public static StorageConfiguration<?> getStorageConf(Configuration conf) {
+    return (StorageConfiguration<?>) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HadoopStorageConfiguration.HadoopStorageConfiguration",
+        new Class<?>[] {Configuration.class}, conf);
   }
 }

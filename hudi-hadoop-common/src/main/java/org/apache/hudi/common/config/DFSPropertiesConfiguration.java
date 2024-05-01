@@ -55,7 +55,7 @@ import java.util.Set;
  *
  * Note: Not reusing commons-configuration since it has too many conflicting runtime deps.
  */
-public class DFSPropertiesConfiguration {
+public class DFSPropertiesConfiguration implements PropertiesConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(DFSPropertiesConfiguration.class);
 
@@ -200,6 +200,11 @@ public class DFSPropertiesConfiguration {
     } finally {
       reader.close();
     }
+  }
+
+  @Override
+  public TypedProperties getGlobalProperties() {
+    return getGlobalProps();
   }
 
   public static TypedProperties getGlobalProps() {

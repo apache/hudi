@@ -19,9 +19,8 @@
 package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
-import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
-import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -32,7 +31,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests {@link InLineFileSystem}.
+ * Tests {@link InLineFSUtils}.
  */
 public class InLineFSUtilsTest {
 

@@ -18,26 +18,15 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.common.table.log.TestLogReaderUtils;
-import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
@@ -77,36 +66,6 @@ public class FileSystemTestUtils {
       String message =
           "Unable to delete file " + fileToDelete + ".";
       throw new IOException(message);
-    }
-  }
-
-  public static List<FileStatus> listRecursive(FileSystem fs, Path path) throws IOException {
-    return listFiles(fs, path, true);
-  }
-
-  public static List<FileStatus> listFiles(FileSystem fs, Path path, boolean recursive) throws IOException {
-    RemoteIterator<LocatedFileStatus> itr = fs.listFiles(path, recursive);
-    List<FileStatus> statuses = new ArrayList<>();
-    while (itr.hasNext()) {
-      statuses.add(itr.next());
-    }
-    return statuses;
-  }
-
-  public static List<StoragePathInfo> listRecursive(HoodieStorage storage, StoragePath path)
-      throws IOException {
-    return listFiles(storage, path);
-  }
-
-  public static List<StoragePathInfo> listFiles(HoodieStorage storage, StoragePath path)
-      throws IOException {
-    return storage.listFiles(path);
-  }
-
-  public static String readLastLineFromResourceFile(String resourceName) throws IOException {
-    try (InputStream inputStream = TestLogReaderUtils.class.getResourceAsStream(resourceName)) {
-      List<String> lines = FileIOUtils.readAsUTFStringLines(inputStream);
-      return lines.get(lines.size() - 1);
     }
   }
 }

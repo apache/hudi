@@ -19,6 +19,8 @@
 
 package org.apache.hudi.hadoop.fs;
 
+import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.exception.HoodieException;

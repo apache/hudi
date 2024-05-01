@@ -21,29 +21,15 @@ package org.apache.hudi.hadoop.fs;
 
 import org.apache.hudi.storage.StoragePath;
 
-import java.util.List;
+import org.apache.hadoop.conf.Configuration;
 
-/**
- * Default Consistency guard that does nothing. Used for lake storage which provided read-after-write
- * guarantees.
- */
-public class NoOpConsistencyGuard implements ConsistencyGuard {
+public class HoodieHadoopUtils {
 
-  @Override
-  public void waitTillFileAppears(StoragePath filePath) {
-  }
-
-  @Override
-  public void waitTillFileDisappears(StoragePath filePath) {
-  }
-
-  @Override
-  public void waitTillAllFilesAppear(String dirPath, List<String> files) {
-
-  }
-
-  @Override
-  public void waitTillAllFilesDisappear(String dirPath, List<String> files) {
-
+  public static Configuration registerFileSystem(StoragePath file, Configuration conf) {
+    Configuration returnConf = new Configuration(conf);
+    String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
+    returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
+        HoodieWrapperFileSystem.class.getName());
+    return returnConf;
   }
 }

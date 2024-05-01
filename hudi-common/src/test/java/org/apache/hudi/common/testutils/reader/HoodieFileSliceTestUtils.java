@@ -26,6 +26,7 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -44,8 +45,9 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
+import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -165,21 +167,23 @@ public class HoodieFileSliceTestUtils {
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<IndexedRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      StoragePath logFilePath
+      StoragePath logFilePath,
+      HoodieStorage storage
   ) {
     return createDataBlock(
         dataBlockType,
         records.stream().map(HoodieAvroIndexedRecord::new)
             .collect(Collectors.toList()),
         header,
-        logFilePath);
+        logFilePath, storage);
   }
 
   private static HoodieDataBlock createDataBlock(
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<HoodieRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      StoragePath pathForReader
+      StoragePath pathForReader,
+      HoodieStorage storage
   ) {
     switch (dataBlockType) {
       case CDC_DATA_BLOCK:
@@ -199,7 +203,8 @@ public class HoodieFileSliceTestUtils {
             header,
             Compression.Algorithm.GZ,
             pathForReader,
-            HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
+            HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue(),
+            storage);
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,
@@ -208,7 +213,8 @@ public class HoodieFileSliceTestUtils {
             HoodieRecord.RECORD_KEY_METADATA_FIELD,
             CompressionCodecName.GZIP,
             0.1,
-            true);
+            true,
+            storage);
       default:
         throw new RuntimeException(
             "Unknown data block type " + dataBlockType);
@@ -267,16 +273,16 @@ public class HoodieFileSliceTestUtils {
         0.1,
         true);
 
-    try (HoodieAvroParquetWriter writer = new HoodieAvroParquetWriter(
+    HoodieAvroFileWriter writer = (HoodieAvroFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroParquetWriter",
+        new Class<?>[] {StoragePath.class, HoodieParquetConfig.class, String.class, TaskContextSupplier.class, boolean.class},
         new StoragePath(baseFilePath),
         parquetConfig,
         baseInstantTime,
         new LocalTaskContextSupplier(),
-        true)) {
-      for (IndexedRecord record : records) {
-        writer.writeAvro(
-            (String) record.get(schema.getField(ROW_KEY).pos()), record);
-      }
+        true);
+    for (IndexedRecord record : records) {
+      writer.writeAvro(
+          (String) record.get(schema.getField(ROW_KEY).pos()), record);
     }
     return new HoodieBaseFile(baseFilePath);
   }
@@ -305,7 +311,7 @@ public class HoodieFileSliceTestUtils {
 
       if (blockType != DELETE_BLOCK) {
         HoodieDataBlock dataBlock = getDataBlock(
-            blockType, records, header, new StoragePath(logFilePath));
+            blockType, records, header, new StoragePath(logFilePath), storage);
         writer.appendBlock(dataBlock);
       } else {
         HoodieDeleteBlock deleteBlock = getDeleteBlock(

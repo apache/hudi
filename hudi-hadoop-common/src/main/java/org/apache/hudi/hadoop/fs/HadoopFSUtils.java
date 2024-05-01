@@ -20,13 +20,11 @@
 package org.apache.hudi.hadoop.fs;
 
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BufferedFSInputStream;
@@ -41,8 +39,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
-
-import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Utility functions related to accessing the file storage on Hadoop.
@@ -107,25 +103,6 @@ public class HadoopFSUtils {
       return getFs(addSchemeIfLocalPath(pathStr), conf);
     }
     return getFs(pathStr, conf);
-  }
-
-  public static HoodieStorage getStorageWithWrapperFS(StoragePath path,
-                                                      StorageConfiguration<?> conf,
-                                                      boolean enableRetry,
-                                                      long maxRetryIntervalMs,
-                                                      int maxRetryNumbers,
-                                                      long initialRetryIntervalMs,
-                                                      String retryExceptions,
-                                                      ConsistencyGuard consistencyGuard) {
-    FileSystem fileSystem = getFs(path, conf.unwrapCopyAs(Configuration.class));
-
-    if (enableRetry) {
-      fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
-          maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptions);
-    }
-    checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
-        "File System not expected to be that of HoodieWrapperFileSystem");
-    return new HoodieHadoopStorage(new HoodieWrapperFileSystem(fileSystem, consistencyGuard));
   }
 
   public static Path addSchemeIfLocalPath(String path) {

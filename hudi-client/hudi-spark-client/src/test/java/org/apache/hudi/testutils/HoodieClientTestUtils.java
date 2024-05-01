@@ -313,7 +313,7 @@ public class HoodieClientTestUtils {
    * @return a new {@link HoodieTableMetaClient} instance.
    */
   public static HoodieTableMetaClient createMetaClient(JavaSparkContext jsc, String basePath) {
-    return HoodieTestUtils.createMetaClient(jsc.hadoopConfiguration(), basePath);
+    return HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorageConf(jsc.hadoopConfiguration()), basePath);
   }
 
   /**
@@ -322,7 +322,7 @@ public class HoodieClientTestUtils {
    * @return a new {@link HoodieTableMetaClient} instance.
    */
   public static HoodieTableMetaClient createMetaClient(SparkSession spark, String basePath) {
-    return HoodieTestUtils.createMetaClient(spark.sessionState().newHadoopConf(), basePath);
+    return HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorageConf(spark.sessionState().newHadoopConf()), basePath);
   }
 
   private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {

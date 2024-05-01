@@ -21,12 +21,10 @@ package org.apache.hudi.common.table;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +61,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     initPath();
-    storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(new Configuration()));
+    storage = HoodieStorageUtils.getStorage(basePath);
     metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.NAME.key(), "test-table");

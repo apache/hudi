@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.FileSystemTestUtils.readLastLineFromResourceFile;
+import static org.apache.hudi.common.testutils.HoodieTestTable.readLastLineFromResourceFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop.fs;
 
+import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 

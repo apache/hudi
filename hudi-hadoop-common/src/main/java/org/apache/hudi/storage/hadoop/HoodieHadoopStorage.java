@@ -19,8 +19,12 @@
 
 package org.apache.hudi.storage.hadoop;
 
+import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
+import org.apache.hudi.hadoop.fs.HoodieRetryWrapperFileSystem;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -43,15 +47,65 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePathInfo;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
 
 /**
  * Implementation of {@link HoodieStorage} using Hadoop's {@link FileSystem}
  */
 public class HoodieHadoopStorage extends HoodieStorage {
   private final FileSystem fs;
+
+  public HoodieHadoopStorage(HoodieStorage storage) {
+    FileSystem fs = (FileSystem) storage.getFileSystem();
+    if (fs instanceof HoodieWrapperFileSystem) {
+      this.fs = ((HoodieWrapperFileSystem) fs).getFileSystem();
+    } else {
+      this.fs = fs;
+    }
+  }
+
+  public HoodieHadoopStorage(StoragePath path) {
+    this(path, new HadoopStorageConfiguration());
+  }
+
+  public HoodieHadoopStorage(String basePath) {
+    this(basePath, new HadoopStorageConfiguration());
+  }
+
+  public HoodieHadoopStorage(String basePath, Configuration conf) {
+    this(HadoopFSUtils.getFs(basePath, conf));
+  }
+
+  public HoodieHadoopStorage(StoragePath path, StorageConfiguration<?> conf) {
+    this(HadoopFSUtils.getFs(path, conf.unwrapAs(Configuration.class)));
+  }
+
+  public HoodieHadoopStorage(String basePath, StorageConfiguration<?> conf) {
+    this(HadoopFSUtils.getFs(basePath, conf));
+  }
+
+  public HoodieHadoopStorage(StoragePath path,
+                             StorageConfiguration<?> conf,
+                             boolean enableRetry,
+                             long maxRetryIntervalMs,
+                             int maxRetryNumbers,
+                             long initialRetryIntervalMs,
+                             String retryExceptions,
+                             ConsistencyGuard consistencyGuard) {
+    FileSystem fileSystem = getFs(path, conf.unwrapCopyAs(Configuration.class));
+
+    if (enableRetry) {
+      fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
+          maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptions);
+    }
+    checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
+        "File System not expected to be that of HoodieWrapperFileSystem");
+    this.fs = new HoodieWrapperFileSystem(fileSystem, consistencyGuard);
+  }
 
   public HoodieHadoopStorage(FileSystem fs) {
     this.fs = fs;
@@ -211,6 +265,16 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public Configuration unwrapConf() {
     return fs.getConf();
+  }
+
+  @Override
+  public StorageConfiguration<?> buildInlineConf(StorageConfiguration<?> storageConf) {
+    return HadoopInLineFSUtils.buildInlineConf(storageConf);
+  }
+
+  @Override
+  public StoragePath getInlineFilePath(StoragePath outerPath, String origScheme, long inLineStartOffset, long inLineLength) {
+    return HadoopInLineFSUtils.getInlineFilePath(outerPath, origScheme, inLineStartOffset, inLineLength);
   }
 
   @Override
