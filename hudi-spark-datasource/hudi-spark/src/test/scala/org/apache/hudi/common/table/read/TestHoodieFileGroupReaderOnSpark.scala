@@ -19,16 +19,14 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
-import org.apache.hudi.common.engine.HoodieReaderContext
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration}
-import org.apache.hudi.{AvroConversionUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
+import org.apache.hudi.common.engine.HoodieReaderContext
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.storage.StorageConfiguration
+import org.apache.hudi.{AvroConversionUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat

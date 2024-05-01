@@ -68,7 +68,7 @@ public class HoodieTestUtils {
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
 
   public static StorageConfiguration<Configuration> getDefaultStorageConf() {
-    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HadoopStorageConfiguration.HadoopStorageConfiguration",
+    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HadoopStorageConfiguration",
         new Class<?>[] {Boolean.class}, false);
   }
 
