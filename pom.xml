@@ -182,7 +182,7 @@
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
     <scala13.version>2.13.8</scala13.version>
-    <scala.version>${scala13.version}</scala.version>
+    <scala.version>${scala12.version}</scala.version>
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
     <scala.binary.version>2.12</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
