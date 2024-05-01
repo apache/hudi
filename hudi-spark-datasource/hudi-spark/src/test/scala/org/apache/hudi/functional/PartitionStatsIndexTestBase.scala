@@ -19,7 +19,6 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.PartitionStatsIndexSupport
 import org.apache.hudi.TestHoodieSparkUtils.dropMetaFields
@@ -27,14 +26,15 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{ActionType, HoodieCommitMetadata, WriteOperationType}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
+
 import org.apache.spark.sql.functions.{col, not}
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -42,8 +42,9 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.mutable
 import scala.util.matching.Regex
 
 /**
@@ -181,7 +182,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     } else {
       latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
     }
-    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 2))
+    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()
     latestBatchDf.write.format("org.apache.hudi")
       .options(hudiOpts)
@@ -237,7 +238,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
-    val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
+    val props = TypedProperties.fromMap(hudiOpts.asJava)
     HoodieWriteConfig.newBuilder()
       .withProps(props)
       .withPath(basePath)
