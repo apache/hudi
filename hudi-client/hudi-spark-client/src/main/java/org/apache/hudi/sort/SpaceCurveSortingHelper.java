@@ -200,7 +200,7 @@ public class SpaceCurveSortingHelper {
   private static Row appendToRow(Row row, Object value) {
     // NOTE: This is an ugly hack to avoid array re-allocation --
     //       Spark's {@code Row#toSeq} returns array of Objects
-    Object[] currentValues = ((ArraySeq<Object>) row.toSeq()).array();
+    Object[] currentValues = JavaScalaConverters.convertScalaListToJavaList(row.toSeq()).toArray();
     return RowFactory.create(CollectionUtils.append(currentValues, value));
   }
 
