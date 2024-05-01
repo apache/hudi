@@ -62,6 +62,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import scala.collection.mutable.ArraySeq;
+
 public class SpaceCurveSortingHelper {
 
   private static final Logger LOG = LoggerFactory.getLogger(SpaceCurveSortingHelper.class);
@@ -200,8 +202,7 @@ public class SpaceCurveSortingHelper {
   private static Row appendToRow(Row row, Object value) {
     // NOTE: This is an ugly hack to avoid array re-allocation --
     //       Spark's {@code Row#toSeq} returns array of Objects
-    //Object[] currentValues = (Object[]) ((WrappedArray<Object>) row.toSeq()).array();
-    Object[] currentValues = JavaScalaConverter.convertScalaListToJavaList(row.toSeq()).toArray();
+    Object[] currentValues = ((ArraySeq<Object>) row.toSeq()).array();
     return RowFactory.create(CollectionUtils.append(currentValues, value));
   }
 

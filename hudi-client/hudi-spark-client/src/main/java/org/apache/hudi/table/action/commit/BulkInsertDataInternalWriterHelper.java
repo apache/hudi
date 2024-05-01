@@ -47,8 +47,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-import scala.collection.JavaConverters;
-
 /**
  * Helper class for HoodieBulkInsertDataInternalWriter used by Spark datasource v2.
  */
@@ -152,7 +150,7 @@ public class BulkInsertDataInternalWriterHelper {
           }
           idx += 1;
         }
-        InternalRow newRow = InternalRow.fromSeq(JavaConverters.<Object>asScalaIteratorConverter(newCols.iterator()).asScala().toSeq());
+        InternalRow newRow = InternalRow.fromSeq(JavaScalaConverter.convertJavaListToScalaList(newCols).toSeq());
         handle.write(newRow);
       } else {
         handle.write(row);
