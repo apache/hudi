@@ -26,12 +26,16 @@
 #################################################################################################
 
 JAVA_RUNTIME_VERSION=$1
+SCALA_PROFILE=$2
 DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
 ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
-ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
+if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
+  # For Scala 2.13, Flink is not support, so skipping the Flink bundle validation
+  ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
+fi
 ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
@@ -295,7 +299,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
-if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' ]]; then
+if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ${SCALA_PROFILE} != 'scala-2.13' ]]; then
   echo "::warning::validate.sh validating flink bundle"
   test_flink_bundle
   if [ "$?" -ne 0 ]; then
