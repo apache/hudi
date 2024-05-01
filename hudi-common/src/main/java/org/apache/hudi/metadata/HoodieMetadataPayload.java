@@ -102,13 +102,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataPayload.class);
   /**
    * Type of the record. This can be an enum in the schema but Avro1.8
-   * has a bug - https://issues.apache.org/jira/browse/AVRO-1810
+   * has a bug - <a href="https://issues.apache.org/jira/browse/AVRO-1810">...</a>
    */
-  protected static final int METADATA_TYPE_PARTITION_LIST = 1;
-  protected static final int METADATA_TYPE_FILE_LIST = 2;
-  protected static final int METADATA_TYPE_COLUMN_STATS = 3;
-  protected static final int METADATA_TYPE_BLOOM_FILTER = 4;
+  private static final int METADATA_TYPE_PARTITION_LIST = 1;
+  private static final int METADATA_TYPE_FILE_LIST = 2;
+  private static final int METADATA_TYPE_COLUMN_STATS = 3;
+  private static final int METADATA_TYPE_BLOOM_FILTER = 4;
   private static final int METADATA_TYPE_RECORD_INDEX = 5;
+  private static final int METADATA_TYPE_PARTITION_STATS = 6;
 
   /**
    * HoodieMetadata schema field ids
@@ -226,7 +227,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               (Boolean) bloomFilterRecord.get(BLOOM_FILTER_FIELD_IS_DELETED)
           );
         }
-      } else if (type == METADATA_TYPE_COLUMN_STATS) {
+      } else if (type == METADATA_TYPE_COLUMN_STATS || type == METADATA_TYPE_PARTITION_STATS) {
         GenericRecord columnStatsRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_COLUMN_STATS);
         // NOTE: Only legitimate reason for {@code ColumnStatsMetadata} to not be present is when
         //       it's not been read from the storage (ie it's not been a part of projected schema).
@@ -647,6 +648,36 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
       return new HoodieAvroRecord<>(key, payload);
     });
+  }
+
+  public static Stream<HoodieRecord> createPartitionStatsRecords(String partitionPath,
+                                                                 Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
+                                                                 boolean isDeleted) {
+    return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
+      HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata.getColumnName()),
+          MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
+          HoodieMetadataColumnStats.newBuilder()
+              .setFileName(null)
+              .setColumnName(columnRangeMetadata.getColumnName())
+              .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
+              .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
+              .setNullCount(columnRangeMetadata.getNullCount())
+              .setValueCount(columnRangeMetadata.getValueCount())
+              .setTotalSize(columnRangeMetadata.getTotalSize())
+              .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
+              .setIsDeleted(isDeleted)
+              .build());
+
+      return new HoodieAvroRecord<>(key, payload);
+    });
+  }
+
+  private static String getPartitionStatsIndexKey(String partitionPath, String columnName) {
+    final PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionPath));
+    final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
+    return columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString());
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
