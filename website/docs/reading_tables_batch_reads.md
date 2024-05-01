@@ -18,3 +18,18 @@ val tripsDF = spark.read.
     load(basePath)
 tripsDF.where(tripsDF.fare > 20.0).show()
 ```
+
+## Daft
+
+[Daft](https://www.getdaft.io/) supports reading Hudi tables using `daft.read_hudi()` function.
+
+```Python
+# Read Apache Hudi table into a Daft DataFrame.
+import daft
+
+df = daft.read_hudi("some-table-uri")
+df = df.where(df["foo"] > 5)
+df.show()
+```
+
+Check out the Daft docs for [Hudi integration](https://www.getdaft.io/projects/docs/en/latest/user_guide/integrations/hudi.html).
