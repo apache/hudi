@@ -248,8 +248,8 @@ class HoodieSparkSqlWriterInternal {
     val tableType = HoodieTableType.valueOf(hoodieConfig.getString(TABLE_TYPE))
     val operation = deduceOperation(hoodieConfig, paramsWithoutDefaults, sourceDf)
 
-    val preppedSparkSqlMergeInto = parameters.asJava.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
-    val preppedSparkSqlWrites = parameters.asJava.getOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
+    val preppedSparkSqlMergeInto = parameters.getOrElse(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
+    val preppedSparkSqlWrites = parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
     val preppedWriteOperation = canDoPreppedWrites(hoodieConfig, parameters, operation, sourceDf)
 
     val jsc = new JavaSparkContext(sparkContext)
@@ -397,7 +397,7 @@ class HoodieSparkSqlWriterInternal {
 
             val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
             // Get list of partitions to delete
-            val partitionsToDelete = if (parameters.asJava.containsKey(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
+            val partitionsToDelete = if (parameters.contains(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
               java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).asScala.toList, jsc,
                 hoodieConfig, basePath.toString): _*)
@@ -551,7 +551,7 @@ class HoodieSparkSqlWriterInternal {
     } else {
       // if no record key, and no meta fields, we should treat it as append only workload and make bulk_insert as operation type.
       if (!hoodieConfig.contains(DataSourceWriteOptions.RECORDKEY_FIELD.key())
-        && !paramsWithoutDefaults.asJava.containsKey(OPERATION.key()) && !df.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
+        && !paramsWithoutDefaults.contains(OPERATION.key()) && !df.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
         log.warn(s"Choosing BULK_INSERT as the operation type since auto record key generation is applicable")
         operation = WriteOperationType.BULK_INSERT
       }
@@ -611,11 +611,11 @@ class HoodieSparkSqlWriterInternal {
   def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema], writeSchemaOpt: Option[Schema] = None): Map[String, String] = {
     val schemaEvolutionEnable = if (internalSchemaOpt.isDefined) "true" else "false"
 
-    val schemaValidateEnable = if (schemaEvolutionEnable.toBoolean && parameters.asJava.getOrDefault(DataSourceWriteOptions.RECONCILE_SCHEMA.key(), "false").toBoolean) {
+    val schemaValidateEnable = if (schemaEvolutionEnable.toBoolean && parameters.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(), "false").toBoolean) {
       // force disable schema validate, now we support schema evolution, no need to do validate
       "false"
     } else  {
-      parameters.asJava.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key(), "true")
+      parameters.getOrElse(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key(), "true")
     }
     // correct internalSchema, internalSchema should contain hoodie metadata columns.
     val correctInternalSchema = internalSchemaOpt.map { internalSchema =>
@@ -1084,8 +1084,8 @@ class HoodieSparkSqlWriterInternal {
     // enable inline compaction for batch writes if applicable
     if (!isStreamingWrite
       && mergedParams.getOrElse(DataSourceWriteOptions.TABLE_TYPE.key(), COPY_ON_WRITE.name()) == MERGE_ON_READ.name()
-      && !optParams.asJava.containsKey(HoodieCompactionConfig.INLINE_COMPACT.key())
-      && !optParams.asJava.containsKey(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key)) {
+      && !optParams.contains(HoodieCompactionConfig.INLINE_COMPACT.key())
+      && !optParams.contains(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key)) {
       mergedParams.put(HoodieCompactionConfig.INLINE_COMPACT.key(), "true")
     }
     // disable drop partition columns when upsert MOR table

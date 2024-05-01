@@ -72,13 +72,13 @@ class HoodieStreamingSink(sqlContext: SQLContext,
         Option.empty
     }
   }
-  private val retryCnt = options.asJava.getOrDefault(STREAMING_RETRY_CNT.key,
+  private val retryCnt = options.getOrElse(STREAMING_RETRY_CNT.key,
     STREAMING_RETRY_CNT.defaultValue).toInt
-  private val retryIntervalMs = options.asJava.getOrDefault(STREAMING_RETRY_INTERVAL_MS.key,
+  private val retryIntervalMs = options.getOrElse(STREAMING_RETRY_INTERVAL_MS.key,
     STREAMING_RETRY_INTERVAL_MS.defaultValue).toLong
-  private val ignoreFailedBatch = options.asJava.getOrDefault(STREAMING_IGNORE_FAILED_BATCH.key,
+  private val ignoreFailedBatch = options.getOrElse(STREAMING_IGNORE_FAILED_BATCH.key,
     STREAMING_IGNORE_FAILED_BATCH.defaultValue).toBoolean
-  private val disableCompaction = options.asJava.getOrDefault(STREAMING_DISABLE_COMPACTION.key,
+  private val disableCompaction = options.getOrElse(STREAMING_DISABLE_COMPACTION.key,
     STREAMING_DISABLE_COMPACTION.defaultValue).toBoolean
 
   private var isAsyncCompactorServiceShutdownAbnormally = false
@@ -107,7 +107,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
     val queryId = sqlContext.sparkContext.getLocalProperty(StreamExecution.QUERY_ID_KEY)
     checkArgument(queryId != null, "queryId is null")
-    if (metaClient.isDefined && canSkipBatch(batchId, options.asJava.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL))) {
+    if (metaClient.isDefined && canSkipBatch(batchId, options.getOrElse(OPERATION.key, UPSERT_OPERATION_OPT_VAL))) {
       log.warn(s"Skipping already completed batch $batchId in query $queryId")
       // scalastyle:off return
       return
@@ -122,7 +122,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
     updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
     updatedOptions = updatedOptions.updated(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID, batchId.toString)
-    if (!options.asJava.containsKey(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key())) {
+    if (!options.contains(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key())) {
       // if user does not explicitly override, we are disabling timeline server for streaming sink.
       // refer to HUDI-3636 for more details
       updatedOptions = updatedOptions.updated(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), " false")
@@ -220,7 +220,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   }
 
   private def getStreamIdentifier(options: Map[String, String]) : Option[String] = {
-    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.asJava.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrElse(WRITE_CONCURRENCY_MODE.key(),
       WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.SINGLE_WRITER) {
       // for single writer model, we will fetch default if not set.
       Some(options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue()))

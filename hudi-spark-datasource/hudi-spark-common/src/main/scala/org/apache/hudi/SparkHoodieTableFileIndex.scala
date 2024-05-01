@@ -366,10 +366,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
               partitionColumnPredicates.flatMap {
                 expr => sparkAdapter.translateFilter(expr)
               })
-            listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava, partitionTypes, convertedFilters).asScala.toSeq
+            listPartitionPaths(Seq(relativePartitionPathPrefix).asJava, partitionTypes, convertedFilters).asScala.toSeq
           }.getOrElse {
             log.warn("Met incompatible issue when converting to hudi data type, rollback to list by prefix directly")
-            listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala.toSeq
+            listPartitionPaths(Seq(relativePartitionPathPrefix).asJava).asScala.toSeq
           }
         }
     }

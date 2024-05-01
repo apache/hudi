@@ -295,8 +295,8 @@ case class HoodieFileIndex(spark: SparkSession,
     } else {
       listMatchingPartitionPaths(partitionFilters)
     }
-    getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map(
-      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala.toSeq) })
+    getInputFileSlices(prunedPartitions: _*).asScala.map(
+      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala.toSeq) }).toSeq
   }
 
   /**

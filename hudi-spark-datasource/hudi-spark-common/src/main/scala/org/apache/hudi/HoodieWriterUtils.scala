@@ -292,7 +292,7 @@ object HoodieWriterUtils {
   def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {
     val includingTableConfigs = scala.collection.mutable.Map() ++ options
     sparkDatasourceConfigsToTableConfigsMap.foreach(kv => {
-      if (options.asJava.containsKey(kv._1.key)) {
+      if (options.contains(kv._1.key)) {
         includingTableConfigs(kv._2.key) = options(kv._1.key)
         includingTableConfigs.remove(kv._1.key)
       }
