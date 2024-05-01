@@ -72,9 +72,9 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
   override def getSparkVersion: String = SPARK_VERSION
 
   def getMetaSchema: StructType = {
-    StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq.map(col => {
+    StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
       StructField(col, StringType, nullable = true)
-    }))
+    }).toSeq)
   }
 
   /**

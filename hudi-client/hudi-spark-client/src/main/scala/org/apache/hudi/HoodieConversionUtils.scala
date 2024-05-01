@@ -31,8 +31,6 @@ object HoodieConversionUtils {
    * a mutable one)
    */
   def mapAsScalaImmutableMap[K, V](map: ju.Map[K, V]): Map[K, V] = {
-    // NOTE: We have to use deprecated [[JavaConversions]] to stay compatible w/ Scala 2.11
-    //import scala.collection.JavaConversions.mapAsScalaMap
     map.asScala.toMap
   }
 

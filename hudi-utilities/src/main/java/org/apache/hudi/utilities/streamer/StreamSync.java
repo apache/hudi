@@ -78,7 +78,7 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.util.JavaScalaConverter;
+import org.apache.hudi.util.JavaScalaConverters;
 import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
@@ -1246,7 +1246,7 @@ public class StreamSync implements Serializable, Closeable {
         LOG.debug("Registering Schema: " + schemas);
       }
       // Use the underlying spark context in case the java context is changed during runtime
-      hoodieSparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaScalaConverter.convertJavaListToScalaList(schemas).toList());
+      hoodieSparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaScalaConverters.convertJavaListToScalaList(schemas).toList());
     }
   }
 

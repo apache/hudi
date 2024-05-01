@@ -22,7 +22,7 @@ import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.optimize.HilbertCurveUtils;
-import org.apache.hudi.util.JavaScalaConverter;
+import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
@@ -61,8 +61,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import scala.collection.mutable.ArraySeq;
 
 public class SpaceCurveSortingHelper {
 
@@ -275,6 +273,6 @@ public class SpaceCurveSortingHelper {
       List<String> orderByCols,
       int targetPartitionCount
   ) {
-    return RangeSampleSort$.MODULE$.sortDataFrameBySample(df, layoutOptStrategy, JavaScalaConverter.convertJavaListToScalaList(orderByCols), targetPartitionCount);
+    return RangeSampleSort$.MODULE$.sortDataFrameBySample(df, layoutOptStrategy, JavaScalaConverters.convertJavaListToScalaList(orderByCols), targetPartitionCount);
   }
 }

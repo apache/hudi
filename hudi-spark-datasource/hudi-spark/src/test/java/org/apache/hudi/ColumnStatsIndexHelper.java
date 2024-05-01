@@ -26,7 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.JavaScalaConverter;
+import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
@@ -234,13 +234,13 @@ public class ColumnStatsIndexHelper {
                 indexRow.add(colMetadata.getNullCount());
               });
 
-              return Row$.MODULE$.apply(JavaScalaConverter.convertJavaListToScalaList(indexRow).toSeq());
+              return Row$.MODULE$.apply(JavaScalaConverters.convertJavaListToScalaList(indexRow).toSeq());
             })
             .filter(Objects::nonNull);
 
     StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
-        JavaScalaConverter.convertJavaListToScalaList(columnNames).toSeq(),
-        JavaScalaConverter.convertJavaListToScalaList(columnNames).toSet(),
+        JavaScalaConverters.convertJavaListToScalaList(columnNames).toSeq(),
+        JavaScalaConverters.convertJavaListToScalaList(columnNames).toSet(),
           StructType$.MODULE$.apply(orderedColumnSchemas)
     )._1;
 

@@ -21,15 +21,42 @@ package org.apache.hudi.util
 
 import scala.collection.JavaConverters._
 
-object JavaScalaConverter {
+/**
+ * Utils that do conversion between Java and Scala collections.
+ */
+object JavaScalaConverters {
+  /**
+   * @param scalaList list in Scala [[Seq]].
+   * @tparam A type of item.
+   * @return list in [[java.util.List]].
+   */
   def convertScalaListToJavaList[A](scalaList: Seq[A]): java.util.List[A] = {
     scalaList.asJava
   }
 
+  /**
+   * @param javaList list in [[java.util.List]].
+   * @tparam A type of item.
+   * @return list in Scala immutable [[List]].
+   */
   def convertJavaListToScalaList[A](javaList: java.util.List[A]): List[A] = {
     javaList.asScala.toList
   }
 
+  /**
+   * @param javaList list in [[java.util.List]].
+   * @tparam A type of item.
+   * @return list in Scala [[Seq]].
+   */
+  def convertJavaListToScalaSeq[A](javaList: java.util.List[A]): Seq[A] = {
+    javaList.asScala.toSeq
+  }
+
+  /**
+   * @param javaIterator iterator in [[java.util.Iterator]]
+   * @tparam A type of item.
+   * @return iterator in Scala [[Iterator]].
+   */
   def convertJavaIteratorToScalaIterator[A](javaIterator: java.util.Iterator[A]): Iterator[A] = {
     javaIterator.asScala
   }
