@@ -56,11 +56,11 @@ public class HoodieStorageUtils {
   }
 
   public static StorageConfiguration<?> getNewStorageConf() {
-    return ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HadoopStorageConfiguration.HadoopStorageConfiguration");
+    return ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HadoopStorageConfiguration");
   }
 
   public static StorageConfiguration<?> getStorageConf(Configuration conf) {
-    return (StorageConfiguration<?>) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HadoopStorageConfiguration.HadoopStorageConfiguration",
+    return (StorageConfiguration<?>) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HadoopStorageConfiguration",
         new Class<?>[] {Configuration.class}, conf);
   }
 }
