@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory
 
 import java.util.function.{Consumer, Predicate, ToLongFunction}
 
-import scala.collection.JavaConverters
+import scala.collection.JavaConverters._
 
 /**
  * Relation to implement the Hoodie's file-system view for the table
@@ -110,7 +110,7 @@ class FileSystemRelation(val sqlContext: SQLContext,
 
     // Using deprecated `JavaConversions` to be compatible with scala versions < 2.12.
     // Can replace with JavaConverters.seqAsJavaList(...) once the support for scala versions < 2.12 is stopped
-    sqlContext.createDataFrame(JavaConverters.seqAsJavaList(data), schema).rdd
+    sqlContext.createDataFrame(data.asJava, schema).rdd
   }
 
   private def toJavaConsumer[T](consumer: (T) => Unit): Consumer[T] = {

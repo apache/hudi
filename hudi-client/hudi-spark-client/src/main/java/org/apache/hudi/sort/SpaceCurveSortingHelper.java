@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.optimize.HilbertCurveUtils;
+import org.apache.hudi.util.JavaScalaConverter;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
@@ -60,9 +61,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import scala.collection.JavaConverters;
-import scala.reflect.ClassTag;
 
 public class SpaceCurveSortingHelper {
 
@@ -203,7 +201,7 @@ public class SpaceCurveSortingHelper {
     // NOTE: This is an ugly hack to avoid array re-allocation --
     //       Spark's {@code Row#toSeq} returns array of Objects
     //Object[] currentValues = (Object[]) ((WrappedArray<Object>) row.toSeq()).array();
-    Object[] currentValues = (Object[]) row.toSeq().toArray(ClassTag.Any());
+    Object[] currentValues = JavaScalaConverter.convertScalaListToJavaList(row.toSeq()).toArray();
     return RowFactory.create(CollectionUtils.append(currentValues, value));
   }
 
@@ -276,6 +274,6 @@ public class SpaceCurveSortingHelper {
       List<String> orderByCols,
       int targetPartitionCount
   ) {
-    return RangeSampleSort$.MODULE$.sortDataFrameBySample(df, layoutOptStrategy, JavaConverters.<String>asScalaBuffer(orderByCols).toSeq(), targetPartitionCount);
+    return RangeSampleSort$.MODULE$.sortDataFrameBySample(df, layoutOptStrategy, JavaScalaConverter.convertJavaListToScalaList(orderByCols), targetPartitionCount);
   }
 }

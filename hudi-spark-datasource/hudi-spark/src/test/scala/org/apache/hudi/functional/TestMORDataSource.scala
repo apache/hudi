@@ -1291,7 +1291,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // fg1_c3.parquet is written to storage
     val client = DataSourceUtils.createHoodieClient(
       spark.sparkContext, "", tablePath, tableName,
-      mapAsJavaMap(compactionOptions)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+      compactionOptions.asJava).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
     val compactionInstant = client.scheduleCompaction(Option.empty()).get()
 

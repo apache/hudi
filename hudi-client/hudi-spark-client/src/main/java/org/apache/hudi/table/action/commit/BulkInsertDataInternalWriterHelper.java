@@ -28,6 +28,7 @@ import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.JavaScalaConverter;
 
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
@@ -134,7 +135,7 @@ public class BulkInsertDataInternalWriterHelper {
         // Drop the partition columns from the row
         // Using the deprecated JavaConversions to be compatible with scala versions < 2.12. Once hudi support for scala versions < 2.12 is
         // stopped, can move this to JavaConverters.seqAsJavaList(...)
-        List<String> partitionCols = JavaConverters.<String>seqAsJavaList(HoodieDatasetBulkInsertHelper.getPartitionPathCols(this.writeConfig));
+        List<String> partitionCols = JavaScalaConverter.convertScalaListToJavaList(HoodieDatasetBulkInsertHelper.getPartitionPathCols(this.writeConfig));
         Set<Integer> partitionIdx = new HashSet<Integer>();
         for (String col : partitionCols) {
           partitionIdx.add(this.structType.fieldIndex(col));
@@ -142,7 +143,7 @@ public class BulkInsertDataInternalWriterHelper {
 
         // Relies on InternalRow::toSeq(...) preserving the column ordering based on the supplied schema
         // Using the deprecated JavaConversions to be compatible with scala versions < 2.12.
-        List<Object> cols = JavaConverters.<Object>seqAsJavaList(row.toSeq(structType));
+        List<Object> cols = JavaScalaConverter.convertScalaListToJavaList(row.toSeq(structType));
         int idx = 0;
         List<Object> newCols = new ArrayList<Object>();
         for (Object o : cols) {

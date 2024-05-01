@@ -140,7 +140,7 @@ object HoodieWriterUtils {
   }
 
   def convertMapToHoodieConfig(parameters: Map[String, String]): HoodieConfig = {
-    val properties = TypedProperties.fromMap(mapAsJavaMap(parameters))
+    val properties = TypedProperties.fromMap(parameters.asJava)
     new HoodieConfig(properties)
   }
 
