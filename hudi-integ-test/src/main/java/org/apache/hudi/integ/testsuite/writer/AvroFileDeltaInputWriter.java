@@ -18,7 +18,7 @@
 
 package org.apache.hudi.integ.testsuite.writer;
 
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hadoop.fs.HoodieHadoopUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.StoragePath;
 
@@ -71,7 +71,7 @@ public class AvroFileDeltaInputWriter implements DeltaInputWriter<GenericRecord>
     StoragePath path = new StoragePath(basePath, UUID.randomUUID().toString() + AVRO_EXTENSION);
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(path, configuration);
     this.fs = (HoodieWrapperFileSystem) this.file
-        .getFileSystem(FSUtils.registerFileSystem(path, configuration));
+        .getFileSystem(HoodieHadoopUtils.registerFileSystem(path, configuration));
     this.output = this.fs.create(this.file);
     this.writer = new GenericDatumWriter(schema);
     this.dataFileWriter = new DataFileWriter<>(writer).create(schema, output);
