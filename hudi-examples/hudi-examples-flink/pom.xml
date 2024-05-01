@@ -226,7 +226,7 @@
         <dependency>
             <groupId>com.twitter</groupId>
             <artifactId>bijection-avro_${scala.binary.version}</artifactId>
-            <version>0.9.7</version>
+            <version>${bijection-avro.version}</version>
         </dependency>
         <dependency>
             <groupId>joda-time</groupId>

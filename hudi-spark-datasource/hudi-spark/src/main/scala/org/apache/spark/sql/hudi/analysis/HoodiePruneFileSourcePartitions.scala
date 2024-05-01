@@ -46,12 +46,12 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
       val deterministicFilters = filters.filter(f => f.deterministic && !SubqueryExpression.hasSubquery(f))
       val normalizedFilters = exprUtils.normalizeExprs(deterministicFilters, lr.output)
 
-      val (partitionPruningFilters, _) =
+      val (partitionPruningFilters, dataFilters) =
         getPartitionFiltersAndDataFilters(fileIndex.partitionSchema, normalizedFilters)
 
       // [[HudiFileIndex]] is a caching one, therefore we don't need to reconstruct new relation,
       // instead we simply just refresh the index and update the stats
-      fileIndex.listFiles(partitionPruningFilters, Seq())
+      fileIndex.listFiles(partitionPruningFilters, dataFilters)
 
       if (partitionPruningFilters.nonEmpty) {
         // Change table stats based on the sizeInBytes of pruned files

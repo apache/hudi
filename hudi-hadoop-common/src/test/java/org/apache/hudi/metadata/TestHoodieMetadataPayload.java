@@ -219,4 +219,49 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
 
     assertEquals(columnStatsRecord.getData(), overwrittenCombinedMetadataPayload);
   }
+
+  @Test
+  public void testPartitionStatsPayloadMerging() {
+    HoodieColumnRangeMetadata<Comparable> fileColumnRange1 = HoodieColumnRangeMetadata.<Comparable>create(
+        "path/to/file", "columnName", 1, 5, 0, 10, 100, 200);
+    HoodieRecord<HoodieMetadataPayload> firstPartitionStatsRecord =
+        HoodieMetadataPayload.createPartitionStatsRecords(PARTITION_NAME, Collections.singletonList(fileColumnRange1), false).findFirst().get();
+    HoodieColumnRangeMetadata<Comparable> fileColumnRange2 = HoodieColumnRangeMetadata.<Comparable>create(
+        "path/to/file", "columnName", 3, 8, 1, 15, 120, 250);
+    HoodieRecord<HoodieMetadataPayload> updatedPartitionStatsRecord =
+        HoodieMetadataPayload.createPartitionStatsRecords(PARTITION_NAME, Collections.singletonList(fileColumnRange2), false).findFirst().get();
+    HoodieMetadataPayload combinedPartitionStatsRecordPayload =
+        updatedPartitionStatsRecord.getData().preCombine(firstPartitionStatsRecord.getData());
+    HoodieColumnRangeMetadata<Comparable> expectedColumnRange = HoodieColumnRangeMetadata.<Comparable>create(
+        "path/to/file", "columnName", 1, 8, 1, 25, 220, 450);
+    HoodieMetadataPayload expectedColumnRangeMetadata = (HoodieMetadataPayload) HoodieMetadataPayload.createPartitionStatsRecords(
+        PARTITION_NAME, Collections.singletonList(expectedColumnRange), false).findFirst().get().getData();
+    assertEquals(expectedColumnRangeMetadata, combinedPartitionStatsRecordPayload);
+  }
+
+  @Test
+  public void testPartitionStatsPayloadMergingWithDelete() {
+    HoodieColumnRangeMetadata<Comparable> fileColumnRange1 = HoodieColumnRangeMetadata.<Comparable>create(
+        "path/to/file", "columnName", 1, 5, 0, 10, 100, 200);
+    HoodieRecord<HoodieMetadataPayload> firstPartitionStatsRecord =
+        HoodieMetadataPayload.createPartitionStatsRecords(PARTITION_NAME, Collections.singletonList(fileColumnRange1), false).findFirst().get();
+    HoodieColumnRangeMetadata<Comparable> fileColumnRange2 = HoodieColumnRangeMetadata.<Comparable>create(
+        "path/to/file", "columnName", 3, 8, 1, 15, 120, 250);
+    // create delete payload
+    HoodieRecord<HoodieMetadataPayload> deletedPartitionStatsRecord =
+        HoodieMetadataPayload.createPartitionStatsRecords(PARTITION_NAME, Collections.singletonList(fileColumnRange2), true).findFirst().get();
+    // deleted (or tombstone) record will be therefore deleting previous state of the record
+    HoodieMetadataPayload combinedPartitionStatsRecordPayload =
+        deletedPartitionStatsRecord.getData().preCombine(firstPartitionStatsRecord.getData());
+    HoodieColumnRangeMetadata<Comparable> expectedColumnRange = HoodieColumnRangeMetadata.<Comparable>create(
+        "path/to/file", "columnName", 3, 8, 1, 15, 120, 250);
+    HoodieMetadataPayload expectedColumnRangeMetadata = (HoodieMetadataPayload) HoodieMetadataPayload.createPartitionStatsRecords(
+        PARTITION_NAME, Collections.singletonList(expectedColumnRange), true).findFirst().get().getData();
+    assertEquals(expectedColumnRangeMetadata, combinedPartitionStatsRecordPayload);
+
+    // another update for the same key should overwrite the delete record
+    HoodieMetadataPayload overwrittenCombinedPartitionStatsRecordPayload =
+        firstPartitionStatsRecord.getData().preCombine(deletedPartitionStatsRecord.getData());
+    assertEquals(firstPartitionStatsRecord.getData(), overwrittenCombinedPartitionStatsRecordPayload);
+  }
 }
