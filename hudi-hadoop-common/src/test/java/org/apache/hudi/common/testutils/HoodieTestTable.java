@@ -294,6 +294,14 @@ public class HoodieTestTable {
     return this;
   }
 
+  public void moveCompleteCommitToInflight(String instantTime) throws IOException {
+    if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+      FileCreateUtils.deleteCommit(basePath, instantTime);
+    } else {
+      FileCreateUtils.deleteDeltaCommit(basePath, instantTime);
+    }
+  }
+
   public HoodieTestTable addDeltaCommit(String instantTime) throws Exception {
     createRequestedDeltaCommit(basePath, instantTime);
     createInflightDeltaCommit(basePath, instantTime);

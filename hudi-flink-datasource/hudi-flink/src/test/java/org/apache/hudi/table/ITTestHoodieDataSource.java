@@ -84,6 +84,7 @@ import static org.apache.hudi.utils.TestData.assertRowsEqualsUnordered;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
 import static org.apache.hudi.utils.TestData.map;
 import static org.apache.hudi.utils.TestData.row;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1699,12 +1700,19 @@ public class ITTestHoodieDataSource {
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
 
-    // defines another table with the same path but enables the metadata table
+    // enables the metadata table and validate
     execInsertSql(tableEnv, TestSQL.insertT1WithSQLHint("/*+options('metadata.enabled'='true')*/"));
     // check the existence of metadata table
     assertTrue(StreamerUtil.tableExists(HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath()), new org.apache.hadoop.conf.Configuration()),
         "Metadata table should exist");
     // validate the data set with table metadata
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+
+    // disable the metadata table again and validate
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+    assertFalse(StreamerUtil.tableExists(HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath()), new org.apache.hadoop.conf.Configuration()),
+        "Metadata table should be deleted");
+    // validate the data set without table metadata
     assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
   }
 

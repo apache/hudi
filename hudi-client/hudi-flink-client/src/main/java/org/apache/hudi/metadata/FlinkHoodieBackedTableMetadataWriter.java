@@ -124,7 +124,8 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     if (writeClient.rollbackFailedWrites()) {
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
     }
-    metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant().ifPresent(instant -> compactIfNecessary(writeClient, instant.getTimestamp()));
+
+    compactIfNecessary(writeClient);
 
     if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
       // if this is a new commit being applied to metadata for the first time
