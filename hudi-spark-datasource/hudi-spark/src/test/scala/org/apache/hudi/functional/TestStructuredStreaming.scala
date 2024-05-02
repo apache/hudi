@@ -105,7 +105,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   def getClusteringOpts(tableType: HoodieTableType, isInlineClustering: String,
                         isAsyncClustering: String, clusteringNumCommit: String,
                         fileMaxRecordNum: Int): Map[String, String] = {
-    getOptsWithTableType(tableType) + (
+    getOptsWithTableType(tableType) ++ Map(
       HoodieClusteringConfig.INLINE_CLUSTERING.key -> isInlineClustering,
       HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
       DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
@@ -115,7 +115,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   def getCompactionOpts(tableType: HoodieTableType, isAsyncCompaction: Boolean): Map[String, String] = {
-    getOptsWithTableType(tableType) + (
+    getOptsWithTableType(tableType) ++ Map(
       DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key -> isAsyncCompaction.toString,
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1"
     )
