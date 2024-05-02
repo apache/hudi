@@ -136,11 +136,5 @@
       <version>1.17.2</version>
       <scope>test</scope>
     </dependency>
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-hadoop</artifactId>
-      <version>${parquet.version}</version>
-      <scope>compile</scope>
-    </dependency>
   </dependencies>
 </project>
