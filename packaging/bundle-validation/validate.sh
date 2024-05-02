@@ -85,8 +85,7 @@ test_spark_hadoop_mr_bundles () {
 
     echo "::warning::validate.sh Query and validate the results using Spark SQL"
     # save Spark SQL query results
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar \
-      -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/spark-bundle/sparksql/trips/results"); System.exit(0)')
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/validate.scala
     numRecords=$(cat /tmp/spark-bundle/sparksql/trips/results/*.csv | wc -l)
     if [ "$numRecords" -ne 10 ]; then
         echo "::error::validate.sh Spark SQL validation failed."
