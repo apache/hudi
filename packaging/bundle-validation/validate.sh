@@ -315,11 +315,11 @@ if [[ ${SCALA_PROFILE} != 'scala-2.13' ]]; then
       exit 1
   fi
   echo "::warning::validate.sh done validating kafka connect bundle"
-fi
 
-echo "::warning::validate.sh validating metaserver bundle"
-test_metaserver_bundle
-if [ "$?" -ne 0 ]; then
-    exit 1
+  echo "::warning::validate.sh validating metaserver bundle"
+  test_metaserver_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done validating metaserver bundle"
 fi
-echo "::warning::validate.sh done validating metaserver bundle"
