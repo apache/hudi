@@ -188,10 +188,12 @@ public class HadoopFSUtils {
       return new BoundedFsDataInputStream(fs, convertToHadoopPath(filePath), fsDataInputStream);
     }
 
+    /*
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
       return new TimedFSDataInputStream(convertToHadoopPath(filePath), new FSDataInputStream(
           new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
     }
+     */
 
     // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
     // need to wrap in another BufferedFSInputStream the make bufferSize work?
