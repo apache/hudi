@@ -168,7 +168,7 @@ public class TestDFSPropertiesConfiguration {
             String.format(
                 "file:%s",
                 getClass().getClassLoader()
-                    .getResource("props/test.properties")
+                    .getResource("props/testdfs.properties")
                     .getPath()
             )
         ));
