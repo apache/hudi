@@ -273,16 +273,17 @@ public class HoodieFileSliceTestUtils {
         0.1,
         true);
 
-    HoodieAvroFileWriter writer = (HoodieAvroFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroParquetWriter",
+    try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroParquetWriter",
         new Class<?>[] {StoragePath.class, HoodieParquetConfig.class, String.class, TaskContextSupplier.class, boolean.class},
         new StoragePath(baseFilePath),
         parquetConfig,
         baseInstantTime,
         new LocalTaskContextSupplier(),
-        true);
-    for (IndexedRecord record : records) {
-      writer.writeAvro(
-          (String) record.get(schema.getField(ROW_KEY).pos()), record);
+        true)) {
+      for (IndexedRecord record : records) {
+        writer.writeAvro(
+            (String) record.get(schema.getField(ROW_KEY).pos()), record);
+      }
     }
     return new HoodieBaseFile(baseFilePath);
   }
