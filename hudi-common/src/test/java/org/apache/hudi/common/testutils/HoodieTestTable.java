@@ -621,6 +621,13 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable withPartitionMetaFiles(List<String> partitionPaths) throws IOException {
+    for (String partitionPath : partitionPaths) {
+      FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
+    }
+    return this;
+  }
+
   public HoodieTestTable withMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
     createMarkerFile(basePath, partitionPath, currentInstantTime, fileId, ioType);
     return this;
@@ -1127,6 +1134,7 @@ public class HoodieTestTable {
     }
     for (Map.Entry<String, List<Pair<String, Integer>>> entry : partitionToFilesNameLengthMap.entrySet()) {
       String partition = entry.getKey();
+      this.withPartitionMetaFiles(partition); // needed by the metadata table initialization.
       this.withBaseFilesInPartition(partition, testTableState.getPartitionToBaseFileInfoMap(commitTime).get(partition));
       if (MERGE_ON_READ.equals(metaClient.getTableType()) && UPSERT.equals(operationType)) {
         this.withLogFilesInPartition(partition, testTableState.getPartitionToLogFileInfoMap(commitTime).get(partition));

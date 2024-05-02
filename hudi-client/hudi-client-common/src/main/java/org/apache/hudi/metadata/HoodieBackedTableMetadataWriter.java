@@ -82,7 +82,6 @@ import org.slf4j.LoggerFactory;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -326,9 +325,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    */
   private boolean initializeFromFilesystem(String initializationTime, List<MetadataPartitionType> partitionsToInit,
                                            Option<String> inflightInstantTimestamp) throws IOException {
-    if (anyPendingDataInstant(dataMetaClient, inflightInstantTimestamp)) {
-      return false;
-    }
+    Set<String> pendingDataInstants = getPendingDataInstants(dataMetaClient);
 
     // FILES partition is always required and is initialized first
     boolean filesPartitionAvailable = dataMetaClient.getTableConfig().isMetadataPartitionAvailable(FILES);
@@ -354,11 +351,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT
     List<DirectoryInfo> partitionInfoList;
     if (filesPartitionAvailable) {
-      partitionInfoList = listAllPartitionsFromMDT(initializationTime);
+      partitionInfoList = listAllPartitionsFromMDT(initializationTime, pendingDataInstants);
     } else {
       // if auto initialization is enabled, then we need to list all partitions from the file system
       if (dataWriteConfig.getMetadataConfig().shouldAutoInitialize()) {
-        partitionInfoList = listAllPartitionsFromFilesystem(initializationTime);
+        partitionInfoList = listAllPartitionsFromFilesystem(initializationTime, pendingDataInstants);
       } else {
         // if auto initialization is disabled, we can return an empty list
         partitionInfoList = Collections.emptyList();
@@ -458,16 +455,16 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @return a unique timestamp for MDT
    */
   private String generateUniqueCommitInstantTime(String initializationTime) {
-    // if it's initialized via Async indexer, we don't need to alter the init time
+    // If it's initialized via Async indexer, we don't need to alter the init time.
+    // otherwise yields the timestamp on the fly.
+    // This function would be called multiple times in a single application if multiple indexes are being
+    // initialized one after the other.
     HoodieTimeline dataIndexTimeline = dataMetaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.INDEXING_ACTION));
     if (HoodieTableMetadataUtil.isIndexingCommit(dataIndexTimeline, initializationTime)) {
       return initializationTime;
     }
-    // Add suffix to initializationTime to find an unused instant time for the next index initialization.
-    // This function would be called multiple times in a single application if multiple indexes are being
-    // initialized one after the other.
     for (int offset = 0; ; ++offset) {
-      final String commitInstantTime = HoodieTableMetadataUtil.createIndexInitTimestamp(initializationTime, offset);
+      final String commitInstantTime = HoodieInstantTimeGenerator.instantTimePlusMillis(SOLO_COMMIT_TIMESTAMP, offset);
       if (!metadataMetaClient.getCommitsTimeline().containsInstant(commitInstantTime)) {
         return commitInstantTime;
       }
@@ -602,22 +599,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return Pair.of(fileGroupCount, allPartitionsRecord.union(fileListRecords));
   }
 
-  private boolean anyPendingDataInstant(HoodieTableMetaClient dataMetaClient, Option<String> inflightInstantTimestamp) {
-    // We can only initialize if there are no pending operations on the dataset
-    List<HoodieInstant> pendingDataInstant = dataMetaClient.getActiveTimeline()
+  private Set<String> getPendingDataInstants(HoodieTableMetaClient dataMetaClient) {
+    // Initialize excluding the pending operations on the dataset
+    return dataMetaClient.getActiveTimeline()
         .getInstantsAsStream().filter(i -> !i.isCompleted())
-        .filter(i -> !inflightInstantTimestamp.isPresent() || !i.getTimestamp().equals(inflightInstantTimestamp.get()))
         // regular writers should not be blocked due to pending indexing action
         .filter(i -> !HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
-        .collect(Collectors.toList());
-
-    if (!pendingDataInstant.isEmpty()) {
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
-      LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: {}",
-          Arrays.toString(pendingDataInstant.toArray()));
-      return true;
-    }
-    return false;
+        .map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toSet());
   }
 
   private HoodieTableMetaClient initializeMetaClient() throws IOException {
@@ -643,9 +632,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * Function to find hoodie partitions and list files in them in parallel.
    *
    * @param initializationTime Files which have a timestamp after this are neglected
+   * @param pendingDataInstants Pending instants on data set
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
-  private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime) {
+  private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime, Set<String> pendingDataInstants) {
     List<StoragePath> pathsToList = new LinkedList<>();
     pathsToList.add(new StoragePath(dataWriteConfig.getBasePath()));
 
@@ -664,7 +654,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToList.subList(0, numDirsToList), path -> {
         HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
         String relativeDirPath = FSUtils.getRelativePartitionPath(storageBasePath, path);
-        return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime);
+        return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants);
       }, numDirsToList);
 
       pathsToList = new LinkedList<>(pathsToList.subList(numDirsToList, pathsToList.size()));
@@ -697,15 +687,16 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * Function to find hoodie partitions and list files in them in parallel from MDT.
    *
    * @param initializationTime Files which have a timestamp after this are neglected
+   * @param pendingDataInstants Files coming from pending instants are neglected
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
-  private List<DirectoryInfo> listAllPartitionsFromMDT(String initializationTime) throws IOException {
+  private List<DirectoryInfo> listAllPartitionsFromMDT(String initializationTime, Set<String> pendingDataInstants) throws IOException {
     List<DirectoryInfo> dirinfoList = new LinkedList<>();
     List<String> allPartitionPaths = metadata.getAllPartitionPaths().stream()
         .map(partitionPath -> dataWriteConfig.getBasePath() + StoragePath.SEPARATOR_CHAR + partitionPath).collect(Collectors.toList());
     Map<String, List<StoragePathInfo>> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths);
     for (Map.Entry<String, List<StoragePathInfo>> entry : partitionFileMap.entrySet()) {
-      dirinfoList.add(new DirectoryInfo(entry.getKey(), entry.getValue(), initializationTime));
+      dirinfoList.add(new DirectoryInfo(entry.getKey(), entry.getValue(), initializationTime, pendingDataInstants));
     }
     return dirinfoList;
   }
@@ -1042,7 +1033,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // Restore requires the existing pipelines to be shutdown. So we can safely scan the dataset to find the current
     // list of files in the filesystem.
-    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime);
+    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime, Collections.emptySet());
     Map<String, DirectoryInfo> dirInfoMap = dirInfoList.stream().collect(Collectors.toMap(DirectoryInfo::getRelativePath, Function.identity()));
     dirInfoList.clear();
 
