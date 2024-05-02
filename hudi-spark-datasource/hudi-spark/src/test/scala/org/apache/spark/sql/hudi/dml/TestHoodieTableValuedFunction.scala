@@ -631,7 +631,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_metadata Table-Valued Function For PARTITION_STATS index") {
-    /*
     if (HoodieSparkUtils.gteqSpark3_2) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
@@ -695,7 +694,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
         }
       }
     }
-    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)*/
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
   }
 
   def getPartitionIndexKey(partitionPath: String): String = {
