@@ -226,6 +226,14 @@
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.8.3</snappy.version>
+
+    <sonar.projectKey>onehouseinc_hudi-internal</sonar.projectKey>
+    <sonar.organization>onehouseinc</sonar.organization>
+    <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+    <sonar.scm.provider>git</sonar.scm.provider>
+    <sonar.verbose>true</sonar.verbose>
+    <sonar.java.binaries>**/*</sonar.java.binaries>
+    <sonar.project.monorepo.enabled>true</sonar.project.monorepo.enabled>
   </properties>
 
   <scm>
