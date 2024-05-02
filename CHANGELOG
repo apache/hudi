@@ -145,3 +145,9 @@ e5723499f [AUDIT-759] Revert [ENG-8115][HUDI-7624] Fixing index tagging duration
 e2c193a09 [ENG-8914][HUDI-4732] Add support for confluent schema registry with proto (#663)
 03463bc3e [ENG-8431][HUDI-7655] Minor fix to rli validation with MDT validator (#660)
 0379a4842 [ENG-880][HUDI-6089] Handle default insert behaviour to ingest duplicates (#666)
+
+---[2024-05-01 18:12:06] [release-v1.13.0] Upgrade to version release-v1.13.0---
+f99aaa5d2 [ENG-9186][HUDI-7683] Make HoodieMetadataMetrics log level debug ro reduce noise (#682)
+12ef2fee3 [ENG-8638][HUDI-7689] Allow users to leverage HoodieTable and Engine Context in Compaction Strategy (#684)
+f9813a4f8 [ENG-8991][HUDI-7667] Created util method to get offset range for fetching new data (#673)
+42b27ed75 [AUDIT-764] Upgrade to version release-v1.12.0 (#680)
