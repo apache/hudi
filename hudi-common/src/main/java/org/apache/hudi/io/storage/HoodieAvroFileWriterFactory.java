@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -66,9 +67,14 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         conf.unwrapAs(Configuration.class), config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
-    return (HoodieFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroParquetWriter",
-        new Class<?>[] {StoragePath.class, HoodieParquetConfig.class, String.class, TaskContextSupplier.class, boolean.class},
-        path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
+    try {
+      return (HoodieFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroParquetWriter",
+          new Class<?>[] {StoragePath.class, HoodieParquetConfig.class, String.class, TaskContextSupplier.class, boolean.class},
+          path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
+    } catch (HoodieException e) {
+      throw (IOException) e.getCause().getCause();
+    }
+
   }
 
   protected HoodieFileWriter newParquetFileWriter(
@@ -96,9 +102,13 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME,
         PREFETCH_ON_OPEN, CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION, filter, HFILE_COMPARATOR);
 
-    return (HoodieFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroHFileWriter",
-        new Class<?>[] {String.class, StoragePath.class, HoodieHFileConfig.class, Schema.class, TaskContextSupplier.class, boolean.class},
-        instantTime, path, hfileConfig,  schema, taskContextSupplier, config.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
+    try {
+      return (HoodieFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroHFileWriter",
+          new Class<?>[] {String.class, StoragePath.class, HoodieHFileConfig.class, Schema.class, TaskContextSupplier.class, boolean.class},
+          instantTime, path, hfileConfig,  schema, taskContextSupplier, config.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
+    } catch (HoodieException e) {
+      throw (IOException) e.getCause().getCause();
+    }
   }
 
   protected HoodieFileWriter newOrcFileWriter(
@@ -110,9 +120,13 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getInt(HoodieStorageConfig.ORC_STRIPE_SIZE),
         config.getInt(HoodieStorageConfig.ORC_BLOCK_SIZE),
         config.getLong(HoodieStorageConfig.ORC_FILE_MAX_SIZE), filter);
-    return (HoodieFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroOrcWriter",
-        new Class<?>[] {String.class, StoragePath.class, HoodieOrcConfig.class, Schema.class, TaskContextSupplier.class},
-        instantTime, path, orcConfig,  schema, taskContextSupplier);
+    try {
+      return (HoodieFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroOrcWriter",
+          new Class<?>[] {String.class, StoragePath.class, HoodieOrcConfig.class, Schema.class, TaskContextSupplier.class},
+          instantTime, path, orcConfig, schema, taskContextSupplier);
+    } catch (HoodieException e) {
+      throw (IOException) e.getCause().getCause();
+    }
   }
 
   private HoodieAvroWriteSupport getHoodieAvroWriteSupport(StorageConfiguration<?> conf, Schema schema,
