@@ -22,7 +22,8 @@ package org.apache.hudi.util
 import scala.collection.JavaConverters._
 
 /**
- * Utils that do conversion between Java and Scala collections.
+ * Utils that do conversion between Java and Scala collections, used by classes in Java code only.
+ * For classes in Scala code, import `scala.collection.JavaConverters._` directly.
  */
 object JavaScalaConverters {
   /**
