@@ -99,6 +99,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -305,10 +306,10 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2);
     for (int i = 1; i < 9; i++) {
       if (i < 3) {
-        testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(),
+        testTable.doWriteOperation(metaClient.createNewInstantTime(), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(),
             Arrays.asList("p1", "p2"), 2);
       } else {
-        testTable.doWriteOperation("0000000" + i, WriteOperationType.INSERT_OVERWRITE, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+        testTable.doWriteOperation(metaClient.createNewInstantTime(), WriteOperationType.INSERT_OVERWRITE, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       }
       // trigger archival
       Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
@@ -555,7 +556,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // do ingestion and trigger archive actions here.
     for (int i = 1; i < 10; i++) {
-      testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      testTable.doWriteOperation(metaClient.createNewInstantTime(), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       archiveAndGetCommitsList(writeConfig);
     }
 
@@ -630,6 +631,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     final ExecutorService executors = Executors.newFixedThreadPool(2);
     List<CompletableFuture<Boolean>> completableFutureList = new ArrayList<>();
     CountDownLatch countDownLatch = new CountDownLatch(1);
+    final AtomicReference<String> lastInstant = new AtomicReference<>();
     IntStream.range(0, 2).forEach(index -> {
       completableFutureList.add(CompletableFuture.supplyAsync(() -> {
         HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
@@ -640,7 +642,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
           throw new HoodieException("Should not have thrown InterruptedException ", e);
         }
         metaClient.reloadActiveTimeline();
-        while (!metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp().endsWith("29")
+        while (!metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp().equals(lastInstant.get())
             || metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 5) {
           try {
             HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
@@ -662,8 +664,13 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     });
 
     // do ingestion and trigger archive actions here.
-    for (int i = 1; i < 30; i++) {
-      testTable.doWriteOperation("0000000" + String.format("%02d", i), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    final int numWrites = 30;
+    for (int i = 1; i < numWrites; i++) {
+      String instant = metaClient.createNewInstantTime();
+      if (i == 29) {
+        lastInstant.set(instant);
+      }
+      testTable.doWriteOperation(instant, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       if (i == 6) {
         // start up archival threads only after 4 commits.
         countDownLatch.countDown();
@@ -1100,7 +1107,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       testTable.doClean(cleanInstant, partitionToFileDeleteCount);
     }
 
-    for (int i = 5; i <= 13; i += 3) {
+    // the step size should be the number of new commits yielded in one loop.
+    for (int i = 5; i <= 11; i += 2) {
       String commitInstant1 = metaClient.createNewInstantTime();
       instants.add(Pair.of(commitInstant1, HoodieTimeline.COMMIT_ACTION));
       testTable.doWriteOperation(commitInstant1, WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
@@ -1114,22 +1122,18 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         // on the MDT timeline.
         // ignore
       }
-      // write more commits than rollback so that the MDT archival can be triggered,
-      // then the DT archival can be triggered.
-      String commitInstant2 = metaClient.createNewInstantTime();
-      instants.add(Pair.of(commitInstant2, HoodieTimeline.COMMIT_ACTION));
-      testTable.doWriteOperation(commitInstant2, WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
     }
 
     // trigger archival:
     Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
     List<HoodieInstant> allCommits = commitsList.getKey();
     List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
-    assertThat("The archived commits number is not as expected", allCommits.size() - commitsAfterArchival.size(), is(5));
+    final int archived = 1;
+    assertThat("The archived commits number is not as expected", allCommits.size() - commitsAfterArchival.size(), is(archived));
 
-    List<HoodieInstant> expectedArchiveInstants = instants.subList(0, 5).stream()
+    List<HoodieInstant> expectedArchiveInstants = instants.subList(0, archived).stream()
         .map(p -> new HoodieInstant(State.COMPLETED, p.getValue(), p.getKey())).collect(Collectors.toList());
-    List<HoodieInstant> expectedActiveInstants = instants.subList(5, instants.size()).stream()
+    List<HoodieInstant> expectedActiveInstants = instants.subList(archived, instants.size()).stream()
         .map(p -> new HoodieInstant(State.COMPLETED, p.getValue(), p.getKey())).collect(Collectors.toList());
 
     verifyArchival(expectedArchiveInstants, expectedActiveInstants, commitsAfterArchival);
