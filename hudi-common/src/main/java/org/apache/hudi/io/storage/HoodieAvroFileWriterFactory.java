@@ -110,7 +110,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getInt(HoodieStorageConfig.ORC_STRIPE_SIZE),
         config.getInt(HoodieStorageConfig.ORC_BLOCK_SIZE),
         config.getLong(HoodieStorageConfig.ORC_FILE_MAX_SIZE), filter);
-    return (HoodieFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroOrcWriter.HoodieAvroOrcWriter",
+    return (HoodieFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroOrcWriter",
         new Class<?>[] {String.class, StoragePath.class, HoodieOrcConfig.class, Schema.class, TaskContextSupplier.class},
         instantTime, path, orcConfig,  schema, taskContextSupplier);
   }
