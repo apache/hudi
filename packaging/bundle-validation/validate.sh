@@ -33,13 +33,14 @@ JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
 ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
 if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
-  # For Scala 2.13, Flink is not support, so skipping the Flink bundle validation
+  # For Scala 2.13, Flink is not support, so skipping the Flink and Kafka Connect bundle validation
+  # (Note that Kafka Connect bundle pulls in hudi-flink dependency)
   ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
+  ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
 fi
 ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
-ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
 
 ##
@@ -308,12 +309,14 @@ if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ${SCALA_PROFILE} != 'scala-2.13' 
   echo "::warning::validate.sh done validating flink bundle"
 fi
 
-echo "::warning::validate.sh validating kafka connect bundle"
-test_kafka_connect_bundle $JARS_DIR/kafka-connect.jar
-if [ "$?" -ne 0 ]; then
-    exit 1
+if [[ ${SCALA_PROFILE} != 'scala-2.13' ]]; then
+  echo "::warning::validate.sh validating kafka connect bundle"
+  test_kafka_connect_bundle $JARS_DIR/kafka-connect.jar
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done validating kafka connect bundle"
 fi
-echo "::warning::validate.sh done validating kafka connect bundle"
 
 echo "::warning::validate.sh validating metaserver bundle"
 test_metaserver_bundle
