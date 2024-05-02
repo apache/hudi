@@ -39,6 +39,8 @@ import java.util
 import java.util.Objects
 import java.util.concurrent.TimeUnit
 
+import scala.collection.JavaConverters._
+
 class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call hdfs_parquet_import Procedure with insert operation") {
@@ -112,7 +114,6 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
   @throws[ParseException]
   @throws[IOException]
   def createInsertRecords(srcFolder: Path): util.List[GenericRecord] = {
-    import scala.collection.JavaConverters._
     val srcFile: Path = new Path(srcFolder.toString, "file1.parquet")
     val startTime: Long = HoodieActiveTimeline.parseDateFromInstantTime("20170203000000").getTime / 1000
     val records: util.List[GenericRecord] = new util.ArrayList[GenericRecord]
@@ -138,7 +139,6 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
   @throws[ParseException]
   @throws[IOException]
   def createUpsertRecords(srcFolder: Path): util.List[GenericRecord] = {
-    import scala.collection.JavaConverters._
     val srcFile = new Path(srcFolder.toString, "file1.parquet")
     val startTime = HoodieActiveTimeline.parseDateFromInstantTime("20170203000000").getTime / 1000
     val records = new util.ArrayList[GenericRecord]
@@ -166,7 +166,6 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
   }
 
   private def verifyResultData(expectData: util.List[GenericRecord], storage: HoodieStorage, tablePath: String): Unit = {
-    import scala.collection.JavaConverters._
     val jsc = new JavaSparkContext(spark.sparkContext)
     val ds = HoodieClientTestUtils.read(jsc, tablePath, spark.sqlContext, storage, tablePath + "/*/*/*/*")
     val readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList()
