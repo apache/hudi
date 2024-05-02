@@ -959,7 +959,10 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(insert1Cnt, hoodieROViewDF1.count())
 
     val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(storage, basePath)
-    val records2 = recordsToStrings((inserts2Dup.asScala ++ inserts2New.asScala).asJava).asScala.toList
+    val inserts2 = new java.util.ArrayList[HoodieRecord[_]]
+    inserts2.addAll(inserts2Dup)
+    inserts2.addAll(inserts2New)
+    val records2 = recordsToStrings(inserts2).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
