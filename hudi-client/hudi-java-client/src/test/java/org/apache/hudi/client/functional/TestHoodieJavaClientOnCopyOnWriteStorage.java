@@ -581,10 +581,6 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
           partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
-      WriteStatus writeStatus = new WriteStatus(false, 0.0);
-      writeStatus.setStat(new HoodieWriteStat());
-      writeStatus.getStat().setNumWrites(0);
-      handle.performMergeDataValidationCheck(writeStatus);
       fail("The above line should have thrown an exception");
     } catch (HoodieUpsertException e2) {
       // expected
