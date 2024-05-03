@@ -67,7 +67,6 @@ import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 
 import java.net.URI
 import scala.collection.JavaConverters._
-import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
 trait HoodieFileSplit {}
@@ -424,7 +423,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
           inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
         }
 
-        val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+        val fsView = new HoodieTableFileSystemView(
+          metaClient, timeline, sparkAdapter.getSparkPartitionedFileUtils.toFileStatuses(partitionDirs).toArray)
 
         fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
           val relativePath = getRelativePartitionPath(basePath, partitionPath)
