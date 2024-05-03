@@ -18,20 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.ql.io.IOConstants;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hadoop.mapreduce.Job;
-
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -55,6 +41,20 @@ import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.IOConstants;
+import org.apache.hadoop.hive.serde2.io.TimestampWritable;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hadoop.mapreduce.Job;
 import org.apache.hive.common.util.HiveVersionInfo;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.junit.jupiter.api.BeforeEach;
@@ -817,9 +817,9 @@ public class TestHoodieParquetInputFormat {
         } else {
           Date date = new Date();
           date.setTime(testTimestampLong);
-          assertEquals(
-              new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(date),
-              String.valueOf(writable.get()[0]));
+          Timestamp actualTime = ((TimestampWritable) writable.get()[0]).getTimestamp();
+          SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+          assertEquals(dateFormat.format(date), dateFormat.format(actualTime));
         }
         // test long
         assertEquals(testTimestampLong * 1000, ((LongWritable) writable.get()[1]).get());
