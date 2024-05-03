@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.dml
+
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
   test("Test Query Merge_On_Read Read_Optimized table") {

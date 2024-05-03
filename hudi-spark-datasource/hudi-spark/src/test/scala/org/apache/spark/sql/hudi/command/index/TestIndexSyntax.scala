@@ -22,8 +22,8 @@ package org.apache.spark.sql.hudi.command.index
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, DropIndexCommand, ShowIndexesCommand}
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestIndexSyntax extends HoodieSparkSqlTestBase {
 

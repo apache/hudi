@@ -15,12 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.dml
+
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestCompactionTable extends HoodieSparkSqlTestBase {
 
   test("Test compaction table") {
-    withRecordType()(withTempDir {tmp =>
+    withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       spark.sql(
         s"""

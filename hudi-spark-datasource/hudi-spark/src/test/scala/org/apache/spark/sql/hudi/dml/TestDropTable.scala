@@ -15,13 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.dml
 
-import org.apache.hadoop.fs.{LocalFileSystem, Path}
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.SessionCatalog
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestDropTable extends HoodieSparkSqlTestBase {
 

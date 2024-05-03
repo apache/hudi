@@ -23,7 +23,7 @@ import org.apache.hudi.ColumnStatsIndexHelper.buildColumnStatsTableFor
 import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
 import org.apache.hudi.sort.SpaceCurveSortingHelper
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, StructField}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
 

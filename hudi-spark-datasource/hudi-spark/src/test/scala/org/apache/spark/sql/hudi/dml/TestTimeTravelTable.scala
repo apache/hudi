@@ -15,10 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   test("Test Insert and Update Record with time travel") {

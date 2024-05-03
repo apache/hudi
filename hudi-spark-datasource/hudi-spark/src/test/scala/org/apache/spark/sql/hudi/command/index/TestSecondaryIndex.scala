@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.command.index
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   test("Test Create/Show/Drop Secondary Index") {
