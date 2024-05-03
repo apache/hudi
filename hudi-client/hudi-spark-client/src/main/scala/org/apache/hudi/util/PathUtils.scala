@@ -20,6 +20,8 @@ package org.apache.hudi.util
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 
+import scala.collection.JavaConverters._
+
 /**
  * TODO convert to Java, move to hudi-common
  */
@@ -55,7 +57,7 @@ object PathUtils {
         leafPath.getName.equals(HoodieTableMetaClient.METAFOLDER_NAME)
       })
       nonMetaStatuses.map(_.getPath.makeQualified(fs.getUri, fs.getWorkingDirectory)).toSeq
-    }
+    }.toSeq
     }.getOrElse(Seq.empty[Path])
   }
 

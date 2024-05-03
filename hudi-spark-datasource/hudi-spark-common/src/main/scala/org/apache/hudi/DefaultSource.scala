@@ -41,7 +41,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
 /**
@@ -112,10 +111,10 @@ class DefaultSource extends RelationProvider
     }
     log.info("Obtained hudi table path: " + tablePath)
 
-    val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.asJava)
+    val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.toMap.asJava)
       .setConf(fs.getConf).setBasePath(tablePath).build()
 
-    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
+    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters.toMap)
   }
 
   def getValidCommits(metaClient: HoodieTableMetaClient): String = {
@@ -173,7 +172,7 @@ class DefaultSource extends RelationProvider
   }
 
   def validateMultiWriterConfigs(options: Map[String, String]) : Unit = {
-    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrElse(WRITE_CONCURRENCY_MODE.key(),
       WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL) {
       // ensure some valid value is set for identifier
       checkState(options.contains(STREAMING_CHECKPOINT_IDENTIFIER.key()), "For multi-writer scenarios, please set "

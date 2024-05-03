@@ -34,7 +34,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 @Tag("functional")
 class TestLayoutOptimization extends HoodieSparkClientTestBase {
@@ -94,7 +94,7 @@ class TestLayoutOptimization extends HoodieSparkClientTestBase {
 
     val targetRecordsCount = 10000
     // Bulk Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
+    val records = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).asScala.toList
     val writeDf: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records, 2))
 
     // If there are any failures in the Data Skipping flow, test should fail

@@ -39,8 +39,8 @@ import org.apache.spark.storage.StorageLevel
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
-import scala.collection.JavaConverters.mapAsScalaMapConverter
-import scala.collection.convert.Wrappers.JConcurrentMapWrapper
+
+import scala.collection.JavaConverters._
 
 /**
  * Base implementation of [[SparkAdapter]] for Spark 3.x branch
@@ -50,8 +50,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   // JsonUtils for Support Spark Version >= 3.3
   if (HoodieSparkUtils.gteqSpark3_3) JsonUtils.registerModules()
 
-  private val cache = JConcurrentMapWrapper(
-    new ConcurrentHashMap[ZoneId, DateFormatter](1))
+  private val cache = new ConcurrentHashMap[ZoneId, DateFormatter](1)
 
   def getCatalogUtils: HoodieSpark3CatalogUtils
 
@@ -64,7 +63,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil
 
   override def getDateFormatter(tz: TimeZone): DateFormatter = {
-    cache.getOrElseUpdate(tz.toZoneId, ReflectUtil.getDateFormatter(tz.toZoneId))
+    cache.computeIfAbsent(tz.toZoneId, zoneId => ReflectUtil.getDateFormatter(zoneId))
   }
 
   /**

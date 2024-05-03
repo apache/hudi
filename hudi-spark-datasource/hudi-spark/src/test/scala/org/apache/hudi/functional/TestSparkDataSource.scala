@@ -28,12 +28,13 @@ import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, Hoodie
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class TestSparkDataSource extends SparkClientFunctionalTestHarness {
 
@@ -73,7 +74,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     val dataGen = new HoodieTestDataGenerator(0xDEED)
     val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
     // Insert Operation
-    val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).toList
+    val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDf0 = spark.read.json(spark.sparkContext.parallelize(records0, parallelism)).cache
     inputDf0.write.format("org.apache.hudi")
       .options(options)
@@ -92,7 +93,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     val snapshotRows1 = snapshotDf1.collect.toList
     snapshotDf1.unpersist(true)
 
-    val records1 = recordsToStrings(dataGen.generateUniqueUpdates("001", 5)).toList
+    val records1 = recordsToStrings(dataGen.generateUniqueUpdates("001", 5)).asScala.toList
     val updateDf = spark.read.json(spark.sparkContext.parallelize(records1, parallelism)).cache
     updateDf.write.format("org.apache.hudi")
       .options(options)
@@ -108,7 +109,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     val snapshotRows2 = snapshotDf2.collect.toList
     snapshotDf2.unpersist(true)
 
-    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 6)).toList
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 6)).asScala.toList
     val inputDf2 = spark.read.json(spark.sparkContext.parallelize(records2, parallelism)).cache
     val uniqueKeyCnt2 = inputDf2.select("_row_key").distinct().count()
     inputDf2.write.format("org.apache.hudi")
@@ -141,7 +142,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     assertEquals(1, countsPerCommit.length)
     assertEquals(firstCommit, countsPerCommit(0).get(0))
 
-    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 8)).toList
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 8)).asScala.toList
     val inputDf3 = spark.read.json(spark.sparkContext.parallelize(records3, parallelism)).cache
     inputDf3.write.format("org.apache.hudi")
       .options(options)
@@ -178,7 +179,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       assertEquals(10, snapshotRows4.length)
 
       // trigger compaction and try out Read optimized query.
-      val records4 = recordsToStrings(dataGen.generateUniqueUpdates("004", 4)).toList
+      val records4 = recordsToStrings(dataGen.generateUniqueUpdates("004", 4)).asScala.toList
       val inputDf4 = spark.read.json(spark.sparkContext.parallelize(records4, parallelism)).cache
       inputDf4.write.format("org.apache.hudi")
         .options(options)
@@ -234,7 +235,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     val dataGen = new HoodieTestDataGenerator(0xDEED)
     val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
     // Insert Operation
-    val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).toList
+    val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDf0 = spark.read.json(spark.sparkContext.parallelize(records0, parallelism)).cache
     inputDf0.write.format("org.apache.hudi")
       .options(options)
@@ -250,7 +251,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .load(basePath)
     assertEquals(10, snapshotDf1.count())
 
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).asScala.toList
     val inputDf1 = spark.read.json(spark.sparkContext.parallelize(records1, parallelism)).cache
     inputDf1.write.format("org.apache.hudi")
       .options(options)
@@ -265,7 +266,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     compareEntireInputDfWithHudiDf(inputDf1.union(inputDf0), snapshotDf2, colsToSelect)
     snapshotDf2.unpersist(true)
 
-    val records2 = recordsToStrings(dataGen.generateInserts("002", 6)).toList
+    val records2 = recordsToStrings(dataGen.generateInserts("002", 6)).asScala.toList
     val inputDf2 = spark.read.json(spark.sparkContext.parallelize(records2, parallelism)).cache
     inputDf2.write.format("org.apache.hudi")
       .options(options)
@@ -292,7 +293,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     val hudiWithoutMetaDf = hudiDf.drop(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.FILENAME_METADATA_FIELD)
     hudiWithoutMetaDf.registerTempTable("hudiTbl")
     inputDf.registerTempTable("inputTbl")
-    val beforeDf = spark.createDataFrame(beforeRows, hudiDf.schema)
+    val beforeDf = spark.createDataFrame(beforeRows.asJava, hudiDf.schema)
     beforeDf.registerTempTable("beforeTbl")
     val hudiDfToCompare = spark.sqlContext.sql("select " + colsToCompare + " from hudiTbl")
     val inputDfToCompare = spark.sqlContext.sql("select " + colsToCompare + " from inputTbl")
@@ -303,7 +304,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
   }
 
   def compareEntireInputRowsWithHudiDf(inputRows: List[Row], hudiDf: Dataset[Row], colsToCompare: String): Unit = {
-    val inputDf = spark.createDataFrame(inputRows, hudiDf.schema)
+    val inputDf = spark.createDataFrame(inputRows.asJava, hudiDf.schema)
     compareEntireInputDfWithHudiDf(inputDf, hudiDf, colsToCompare)
   }
 

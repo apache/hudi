@@ -93,11 +93,11 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
 
   override def visitCall(ctx: CallContext): LogicalPlan = withOrigin(ctx) {
     if (ctx.callArgumentList() == null || ctx.callArgumentList().callArgument() == null || ctx.callArgumentList().callArgument().size() == 0) {
-      val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText)
+      val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText).toSeq
       CallCommand(name, Seq())
     } else {
-      val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText)
-      val args: Seq[CallArgument] = ctx.callArgumentList().callArgument().asScala.map(typedVisit[CallArgument])
+      val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText).toSeq
+      val args: Seq[CallArgument] = ctx.callArgumentList().callArgument().asScala.map(typedVisit[CallArgument]).toSeq
       CallCommand(name, args)
     }
   }
@@ -106,7 +106,7 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
    * Return a multi-part identifier as Seq[String].
    */
   override def visitMultipartIdentifier(ctx: MultipartIdentifierContext): Seq[String] = withOrigin(ctx) {
-    ctx.parts.asScala.map(_.getText)
+    ctx.parts.asScala.map(_.getText).toSeq
   }
 
   /**

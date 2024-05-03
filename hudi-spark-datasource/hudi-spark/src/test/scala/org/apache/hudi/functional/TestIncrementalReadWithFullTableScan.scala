@@ -35,7 +35,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-import scala.collection.JavaConversions.asScalaBuffer
+import scala.collection.JavaConverters._
 
 class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
@@ -73,7 +73,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     )
     // Create 10 commits
     for (i <- 1 to 10) {
-      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), perBatchSize)).toList
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), perBatchSize)).asScala.toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
       inputDF.write.format("org.apache.hudi")
         .options(commonOpts)

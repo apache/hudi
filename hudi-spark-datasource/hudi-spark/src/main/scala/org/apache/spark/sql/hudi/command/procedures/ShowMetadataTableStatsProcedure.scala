@@ -26,7 +26,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -54,7 +54,7 @@ class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuil
     val stats = metadata.stats
 
     val rows = new util.ArrayList[Row]
-    for (entry <- stats.entrySet) {
+    for (entry <- stats.entrySet.asScala) {
       rows.add(Row(entry.getKey, entry.getValue))
     }
     rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList

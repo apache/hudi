@@ -82,7 +82,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // Insert records
     val newRecords = dataGen.generateInserts("001", 100)
-    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala)
+    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala.toSeq)
 
     newRecordsDF.write.format(hudi)
       .options(combinedOpts)
@@ -92,7 +92,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // Update records
     val updatedRecords = dataGen.generateUpdates("002", newRecords)
-    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala)
+    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala.toSeq)
 
     updatedRecordsDF.write.format(hudi)
       .options(combinedOpts)

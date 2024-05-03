@@ -21,7 +21,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.SparkHoodieTableFileIndex._
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
@@ -41,10 +41,11 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
 
 import java.util.Collections
 import javax.annotation.concurrent.NotThreadSafe
+
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 import scala.util.{Success, Try}
@@ -184,7 +185,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     // Prune the partition path by the partition filters
     val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
     getInputFileSlices(prunedPartitions: _*).asScala.map {
-      case (partition, fileSlices) => (partition.path, fileSlices.asScala)
+      case (partition, fileSlices) => (partition.path, fileSlices.asScala.toSeq)
     }.toMap
   }
 
@@ -216,14 +217,14 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     }
 
     if (partitionPruningPredicates.isEmpty) {
-      val queryPartitionPaths = getAllQueryPartitionPaths.asScala
+      val queryPartitionPaths = getAllQueryPartitionPaths.asScala.toSeq
       logInfo(s"No partition predicates provided, listing full table (${queryPartitionPaths.size} partitions)")
       queryPartitionPaths
     } else {
       // NOTE: We fallback to already cached partition-paths only in cases when we can subsequently
       //       rely on partition-pruning to eliminate not matching provided predicates (that requires
       //       partition-values to be successfully recovered from the partition-paths)
-      val partitionPaths = if (areAllPartitionPathsCached && haveProperPartitionValues(getAllQueryPartitionPaths.asScala)) {
+      val partitionPaths = if (areAllPartitionPathsCached && haveProperPartitionValues(getAllQueryPartitionPaths.asScala.toSeq)) {
         logDebug("All partition paths have already been cached, using these directly")
         getAllQueryPartitionPaths.asScala
       } else if (!shouldUsePartitionPathPrefixAnalysis(configProperties)) {
@@ -237,7 +238,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       //       we might not be able to properly parse partition-values from the listed partition-paths.
       //       In that case, we simply could not apply partition pruning and will have to regress to scanning
       //       the whole table
-      if (haveProperPartitionValues(partitionPaths) && partitionSchema.nonEmpty) {
+      if (haveProperPartitionValues(partitionPaths.toSeq) && partitionSchema.nonEmpty) {
         val predicate = partitionPruningPredicates.reduce(expressions.And)
         val boundPredicate = InterpretedPredicate(predicate.transform {
           case a: AttributeReference =>
@@ -247,7 +248,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
         val prunedPartitionPaths = partitionPaths.filter {
           partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.values))
-        }
+        }.toSeq
 
         logInfo(s"Using provided predicates to prune number of target table's partitions scanned from" +
           s" ${partitionPaths.size} to ${prunedPartitionPaths.size}")
@@ -257,7 +258,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         logWarning(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
           s" following path(s): ${partitionPaths.find(_.values.length == 0).map(e => e.getPath)}")
 
-        partitionPaths
+        partitionPaths.toSeq
       }
     }
   }
@@ -341,10 +342,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
           partitionColumnPredicates.flatMap {
             expr => sparkAdapter.translateFilter(expr)
           })
-        listPartitionPaths(Collections.singletonList(""), partitionTypes, convertedFilters).asScala
+        listPartitionPaths(Collections.singletonList(""), partitionTypes, convertedFilters).asScala.toSeq
       case (true, None) =>
         logDebug("Unable to compose relative partition path prefix from the predicates; falling back to fetching all partitions")
-        getAllQueryPartitionPaths.asScala
+        getAllQueryPartitionPaths.asScala.toSeq
       case (false, _) =>
         // Based on the static partition-column name-value pairs, we'll try to compose static partition-path
         // prefix to try to reduce the scope of the required file-listing
@@ -362,10 +363,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
               partitionColumnPredicates.flatMap {
                 expr => sparkAdapter.translateFilter(expr)
               })
-            listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava, partitionTypes, convertedFilters).asScala
+            listPartitionPaths(Seq(relativePartitionPathPrefix).asJava, partitionTypes, convertedFilters).asScala.toSeq
           }.getOrElse {
             log.warn("Met incompatible issue when converting to hudi data type, rollback to list by prefix directly")
-            listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
+            listPartitionPaths(Seq(relativePartitionPathPrefix).asJava).asScala.toSeq
           }
         }
     }

@@ -110,10 +110,10 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
   @throws[Exception]
   private def copyArchivedInstants(basePath: String, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
-    import scala.collection.JavaConversions._
+    import scala.collection.JavaConverters._
     var copyCount = 0
     val fileSystem = FSUtils.getFs(basePath, jsc.hadoopConfiguration())
-    for (fs <- statuses) {
+    for (fs <- statuses.asScala) {
       // read the archived file
       val reader = HoodieLogFormat.newReader(fileSystem, new HoodieLogFile(fs.getPath), HoodieArchivedMetaEntry.getClassSchema)
       // read the avro blocks
@@ -172,12 +172,12 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
   @throws[Exception]
   private def copyNonArchivedInstants(metaClient: HoodieTableMetaClient, instants: util.List[HoodieInstant], limit: Int, localFolder: String): Int = {
-    import scala.collection.JavaConversions._
+    import scala.collection.JavaConverters._
     var copyCount = 0
-    if (instants.nonEmpty) {
+    if (!instants.isEmpty) {
       val timeline = metaClient.getActiveTimeline
       val fileSystem = FSUtils.getFs(metaClient.getBasePath, jsc.hadoopConfiguration())
-      for (instant <- instants) {
+      for (instant <- instants.asScala) {
         val localPath = localFolder + Path.SEPARATOR + instant.getFileName
         val data: Array[Byte] = instant.getAction match {
           case HoodieTimeline.CLEAN_ACTION =>

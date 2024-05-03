@@ -21,10 +21,10 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hudi-spark3.5.x_2.12</artifactId>
+  <artifactId>hudi-spark3.5.x_${scala.binary.version}</artifactId>
   <version>0.14.1</version>
 
-  <name>hudi-spark3.5.x_2.12</name>
+  <name>hudi-spark3.5.x_${scala.binary.version}</name>
   <packaging>jar</packaging>
 
   <properties>

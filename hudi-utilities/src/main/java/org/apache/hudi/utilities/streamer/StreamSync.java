@@ -74,6 +74,7 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.util.JavaScalaConverters;
 import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
@@ -126,7 +127,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
-import scala.collection.JavaConversions;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
@@ -1169,7 +1169,7 @@ public class StreamSync implements Serializable, Closeable {
         LOG.debug("Registering Schema: " + schemas);
       }
       // Use the underlying spark context in case the java context is changed during runtime
-      hoodieSparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
+      hoodieSparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaScalaConverters.convertJavaListToScalaList(schemas).toList());
     }
   }
 

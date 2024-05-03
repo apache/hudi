@@ -33,6 +33,7 @@ import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
+
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
@@ -50,12 +51,12 @@ import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
 import java.io.IOException
-import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
 import java.time.{Instant, ZoneId}
+import java.time.format.DateTimeFormatterBuilder
 import java.util.{Collections, Date, TimeZone, UUID}
-import scala.collection.JavaConversions._
-import scala.collection.JavaConverters
+
+import scala.collection.JavaConverters._
 
 /**
  * Test suite for SparkSqlWriter class.
@@ -162,8 +163,7 @@ class TestHoodieSparkSqlWriter {
    * @param inputList list of Row
    * @return list of Seq
    */
-  def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
-    JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
+  def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] = inputList.iterator.asScala.toSeq
 
   /**
    * Utility method for performing bulk insert  tests.
@@ -194,8 +194,8 @@ class TestHoodieSparkSqlWriter {
     // add some updates so that preCombine kicks in
     val toUpdateDataset = sqlContext.createDataFrame(DataSourceTestUtils.getUniqueRows(inserts, 40), structType)
     val updates = DataSourceTestUtils.updateRowsWithHigherTs(toUpdateDataset)
-    val records = inserts.union(updates)
-    val recordsSeq = convertRowListToSeq(records)
+    val records = inserts.asScala.union(updates.asScala)
+    val recordsSeq = convertRowListToSeq(records.asJava)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
@@ -433,7 +433,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     val inserts = DataSourceTestUtils.generateRandomRows(1000)
-    val df = spark.createDataFrame(sc.parallelize(inserts), structType)
+    val df = spark.createDataFrame(sc.parallelize(inserts.asScala.toSeq), structType)
     try {
       // write to Hudi
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
@@ -594,7 +594,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = false, initBasePath = true)
     val client = spy(DataSourceUtils.createHoodieClient(
       new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
-      mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
+      fooTableParams.asJava).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df, Option.empty, Option(client))
     // Verify that asynchronous compaction is not scheduled
@@ -655,7 +655,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         null,
         tempBasePath,
         hoodieFooTableName,
-        mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
+        fooTableParams.asJava).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
       HoodieSparkSqlWriter.bootstrap(sqlContext, SaveMode.Append, fooTableModifier, spark.emptyDataFrame, Option.empty,
         Option.empty, Option(client))

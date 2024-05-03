@@ -30,7 +30,10 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import scala.collection.JavaConversions.asScalaBuffer
+import java.io.IOException
+import java.util
+import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with ProcedureBuilder {
@@ -92,8 +95,8 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
       new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, instantTime)).get, classOf[HoodieRollbackMetadata])
 
     metadata.getPartitionMetadata.asScala.toMap.iterator.foreach(entry => Stream
-      .concat(entry._2.getSuccessDeleteFiles.map(f => (f, true)),
-        entry._2.getFailedDeleteFiles.map(f => (f, false)))
+      .concat(entry._2.getSuccessDeleteFiles.asScala.map(f => (f, true)),
+        entry._2.getFailedDeleteFiles.asScala.map(f => (f, false)))
       .iterator.foreach(fileWithDeleteStatus => {
         rows.add(Row(metadata.getStartRollbackTime, metadata.getCommitsRollback.toString,
           entry._1, fileWithDeleteStatus._1, fileWithDeleteStatus._2))

@@ -162,7 +162,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
             col("after.name"),
             col("after.price")
           ).collect()
-          checkAnswer(change2)(Array("u", 1, "a1", 11, "a1_v2", 11))
+          checkAnswer(change2)(Seq("u", 1, "a1", 11, "a1_v2", 11))
 
           spark.sql(s"update $tableName set name = 'a2_v2', ts = 1200 where id = 2")
           val commitTime3 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
@@ -209,8 +209,8 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
             col("after.price")
           ).collect()
           checkAnswer(change5.sortBy(_.getInt(1)))(
-            Array("u", 1, "a1_v2", 11, "a1_v3", 11),
-            Array("i", 4, null, null, "a4", 14)
+            Seq("u", 1, "a1_v2", 11, "a1_v3", 11),
+            Seq("i", 4, null, null, "a4", 14)
           )
 
           val totalCdcData = cdcDataFrame(basePath, commitTime1.toLong - 1)

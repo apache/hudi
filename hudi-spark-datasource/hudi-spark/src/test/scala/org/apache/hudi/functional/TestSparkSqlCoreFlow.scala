@@ -39,8 +39,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.scalatest.Inspectors.forAll
 
 import java.io.File
-
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 @SparkSQLCoreFlow
 class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
@@ -312,12 +311,12 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
   def generateInserts(dataGen: HoodieTestDataGenerator, instantTime: String, n: Int): sql.DataFrame = {
     val recs = dataGen.generateInsertsNestedExample(instantTime, n)
-    spark.read.json(spark.sparkContext.parallelize(recordsToStrings(recs), 2))
+    spark.read.json(spark.sparkContext.parallelize(recordsToStrings(recs).asScala.toSeq, 2))
   }
 
   def generateUniqueUpdates(dataGen: HoodieTestDataGenerator, instantTime: String, n: Int): sql.DataFrame = {
     val recs = dataGen.generateUniqueUpdatesNestedExample(instantTime, n)
-    spark.read.json(spark.sparkContext.parallelize(recordsToStrings(recs), 2))
+    spark.read.json(spark.sparkContext.parallelize(recordsToStrings(recs).asScala.toSeq, 2))
   }
 
   def compareUpdateDfWithHudiDf(inputDf: Dataset[Row], hudiDf: Dataset[Row], beforeDf: Dataset[Row]): Unit = {

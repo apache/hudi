@@ -113,15 +113,15 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
 
   private def getCommitsWithMetadata(timeline: HoodieDefaultTimeline,
                                      limit: Int): Seq[Row] = {
-    import scala.collection.JavaConversions._
+    import scala.collection.JavaConverters._
 
     val (rows: util.ArrayList[Row], newCommits: util.ArrayList[HoodieInstant]) = getSortCommits(timeline)
 
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet) {
-        for (hoodieWriteStat <- partitionWriteStat.getValue) {
+      for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet.asScala) {
+        for (hoodieWriteStat <- partitionWriteStat.getValue.asScala) {
           rows.add(Row(
             commit.getTimestamp, commit.getStateTransitionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
             hoodieWriteStat.getFileId, hoodieWriteStat.getPrevCommit, hoodieWriteStat.getNumWrites,

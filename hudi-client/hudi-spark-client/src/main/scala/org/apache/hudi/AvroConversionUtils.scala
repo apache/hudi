@@ -18,19 +18,19 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema.Type
-import org.apache.avro.generic.GenericRecord
-import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.internal.schema.HoodieSchemaException
+
+import org.apache.avro.Schema.Type
+import org.apache.avro.generic.GenericRecord
+import org.apache.avro.{JsonProperties, Schema}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 object AvroConversionUtils {
 
@@ -176,7 +176,7 @@ object AvroConversionUtils {
       case Schema.Type.RECORD => {
         val structType = dataType.asInstanceOf[StructType]
         val structFields = structType.fields
-        val modifiedFields = schema.getFields.map(field => {
+        val modifiedFields = schema.getFields.asScala.map(field => {
           val i: Int = structType.fieldIndex(field.name())
           val comment: String = if (structFields(i).metadata.contains("comment")) {
             structFields(i).metadata.getString("comment")
@@ -194,7 +194,7 @@ object AvroConversionUtils {
             } else {
               field.defaultVal()
             })
-        }).toList
+        }).asJava
         Schema.createRecord(schema.getName, schema.getDoc, schema.getNamespace, schema.isError, modifiedFields)
       }
 
@@ -224,13 +224,13 @@ object AvroConversionUtils {
    *
    * */
   private def resolveUnion(schema: Schema, dataType: DataType): (Schema, Boolean) = {
-    val innerFields = schema.getTypes
+    val innerFields = schema.getTypes.asScala
     val containsNullSchema = innerFields.foldLeft(false)((nullFieldEncountered, schema) => nullFieldEncountered | schema.getType == Schema.Type.NULL)
     (if (containsNullSchema) {
-      Schema.createUnion(List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL))
-        .map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType)))
+      Schema.createUnion((List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL))
+        .map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType))).asJava)
     } else {
-      Schema.createUnion(schema.getTypes.map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType)))
+      Schema.createUnion(schema.getTypes.asScala.map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType)).asJava)
     }, containsNullSchema)
   }
 

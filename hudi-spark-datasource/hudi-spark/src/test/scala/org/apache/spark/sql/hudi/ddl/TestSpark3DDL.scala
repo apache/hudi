@@ -35,7 +35,6 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 class TestSpark3DDL extends HoodieSparkSqlTestBase {
@@ -280,8 +279,8 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"alter table $tableName add columns(col1_new int comment 'add new columns col1_new after id' after id)")
           spark.sql(s"alter table $tableName alter column col9 comment 'col9 desc'")
           val schema = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).schema
-          assert(schema.filter(p => p.name.equals("col1_new")).get(0).getComment().get == "add new columns col1_new after id")
-          assert(schema.filter(p => p.name.equals("col9")).get(0).getComment().get == "col9 desc")
+          assert(schema.filter(p => p.name.equals("col1_new")).asJava.get(0).getComment().get == "add new columns col1_new after id")
+          assert(schema.filter(p => p.name.equals("col9")).asJava.get(0).getComment().get == "col9 desc")
           // test change column type float to double
           spark.sql(s"alter table $tableName alter column col2 type double")
           spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
@@ -643,7 +642,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
           val dataGen = new HoodieTestDataGenerator
           val schema = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA
-          val records1 = RawTripTestPayload.recordsToStrings(dataGen.generateInsertsAsPerSchema("001", 1000, schema)).toList
+          val records1 = RawTripTestPayload.recordsToStrings(dataGen.generateInsertsAsPerSchema("001", 1000, schema)).asScala.toList
           val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
           // drop tip_history.element.amount, city_to_state, distance_in_meters, drivers
           val orgStringDf = inputDF1.drop("city_to_state", "distance_in_meters", "drivers")
@@ -671,10 +670,10 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           val oldView = spark.read.format("hudi").options(readOpt).load(tablePath)
           oldView.show(5, false)
 
-          val records2 = RawTripTestPayload.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).toList
+          val records2 = RawTripTestPayload.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).asScala.toList
           val inputD2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
           val updatedStringDf = inputD2.drop("fare").drop("height")
-          val checkRowKey = inputD2.select("_row_key").collectAsList().map(_.getString(0)).get(0)
+          val checkRowKey = inputD2.select("_row_key").collectAsList().asScala.map(_.getString(0)).head
 
           updatedStringDf.write
             .format("org.apache.hudi")
@@ -715,7 +714,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
           val dataGen = new DataGenerator
-          val inserts = convertToStringList(dataGen.generateInserts(10))
+          val inserts = convertToStringList(dataGen.generateInserts(10)).asScala.toSeq
           val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
           df.write.format("hudi").
             options(getQuickstartWriteConfigs).
@@ -729,7 +728,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             mode("overwrite").
             save(tablePath)
 
-          val updates = convertToStringList(dataGen.generateUpdates(10))
+          val updates = convertToStringList(dataGen.generateUpdates(10)).asScala.toSeq
           // type change: fare (double -> String)
           // add new column and drop a column
           val dfUpdate = spark.read.json(spark.sparkContext.parallelize(updates, 2))
@@ -753,7 +752,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
           assertResult(StringType)(snapshotDF.schema.fields.filter(_.name == "fare").head.dataType)
           assertResult("addColumn")(snapshotDF.schema.fields.last.name)
-          val checkRowKey = dfUpdate.select("fare").collectAsList().map(_.getString(0)).get(0)
+          val checkRowKey = dfUpdate.select("fare").collectAsList().asScala.map(_.getString(0)).head
           snapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
           checkAnswer(spark.sql(s"select fare, addColumn from  hudi_trips_snapshot where fare = ${checkRowKey}").collect())(
             Seq(checkRowKey, "new")
@@ -761,7 +760,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
           spark.sql(s"select * from  hudi_trips_snapshot").show(false)
           //  test insert_over_write  + update again
-          val overwrite = convertToStringList(dataGen.generateInserts(10))
+          val overwrite = convertToStringList(dataGen.generateInserts(10)).asScala.toSeq
           val dfOverWrite = spark.
             read.json(spark.sparkContext.parallelize(overwrite, 2)).
             filter("partitionpath = 'americas/united_states/san_francisco'")
@@ -780,7 +779,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             save(tablePath)
           spark.read.format("hudi").load(tablePath).show(false)
 
-          val updatesAgain = convertToStringList(dataGen.generateUpdates(10))
+          val updatesAgain = convertToStringList(dataGen.generateUpdates(10)).asScala.toSeq
           val dfAgain = spark.read.json(spark.sparkContext.parallelize(updatesAgain, 2)).withColumn("fare", expr("cast(fare as string)"))
           dfAgain.write.format("hudi").
             options(getQuickstartWriteConfigs).
@@ -794,7 +793,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             mode("append").
             save(tablePath)
           spark.read.format("hudi").load(tablePath).createOrReplaceTempView("hudi_trips_snapshot1")
-          val checkKey = dfAgain.select("fare").collectAsList().map(_.getString(0)).get(0)
+          val checkKey = dfAgain.select("fare").collectAsList().asScala.map(_.getString(0)).head
           checkAnswer(spark.sql(s"select fare, addColumn from  hudi_trips_snapshot1 where fare = ${checkKey}").collect())(
             Seq(checkKey, null)
           )

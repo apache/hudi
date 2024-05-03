@@ -195,7 +195,7 @@ object HoodieOptionConfig {
   def extractSqlOptions(options: Map[String, String]): Map[String, String] = {
     val sqlOptions = mapHoodieConfigsToSqlOptions(options)
     val targetOptions = sqlOptionKeyToWriteConfigKey.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName) -- Set(SQL_RECORD_MERGER_STRATEGY.sqlKeyName)
-    sqlOptions.filterKeys(targetOptions.contains)
+    sqlOptions.filterKeys(targetOptions.contains).toMap
   }
 
   // validate primaryKey, preCombineField and type options

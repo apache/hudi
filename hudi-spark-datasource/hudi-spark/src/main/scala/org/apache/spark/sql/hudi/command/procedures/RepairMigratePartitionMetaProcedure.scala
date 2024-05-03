@@ -32,7 +32,7 @@ import java.io.IOException
 import java.util
 import java.util.Properties
 import java.util.function.{Consumer, Supplier}
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -65,7 +65,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
     val basePath: Path = new Path(tablePath)
 
     val rows = new util.ArrayList[Row](partitionPaths.size)
-    for (partitionPath <- partitionPaths) {
+    for (partitionPath <- partitionPaths.asScala) {
       val partition: Path = FSUtils.getPartitionPath(tablePath, partitionPath)
       val textFormatFile: Option[Path] = HoodiePartitionMetadata.textFormatMetaPathIfExists(metaClient.getFs, partition)
       val baseFormatFile: Option[Path] = HoodiePartitionMetadata.baseFormatMetaPathIfExists(metaClient.getFs, partition)

@@ -45,7 +45,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, ValueSource}
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 
 @Tag("functional")
@@ -94,7 +94,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val dataGen = new HoodieTestDataGenerator(0xDEED)
     val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
     // Insert Operation
-    val records0 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val records0 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF0 = spark.read.json(spark.sparkContext.parallelize(records0, 2))
     inputDF0.write.format("org.apache.hudi")
       .options(options)
@@ -110,7 +110,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .load(basePath)
     assertEquals(100, snapshotDF1.count())
 
-    val records1 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateUpdates("001", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     val verificationRowKey = inputDF1.limit(1).select("_row_key").first.getString(0)
     var updateDf: DataFrame = null
@@ -140,7 +140,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     assertEquals(updatedVerificationVal, snapshotDF2.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
 
     // Upsert Operation without Hudi metadata columns
-    val records2 = recordsToStrings(dataGen.generateUpdates("002", 100)).toList
+    val records2 = recordsToStrings(dataGen.generateUpdates("002", 100)).asScala.toList
     var inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
     if (isTimestampBasedKeyGen) {
@@ -201,7 +201,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     assertEquals(0, emptyIncDF.count())
 
     // Upsert an empty dataFrame
-    val emptyRecords = recordsToStrings(dataGen.generateUpdates("003", 0)).toList
+    val emptyRecords = recordsToStrings(dataGen.generateUpdates("003", 0)).asScala.toList
     val emptyDF = spark.read.json(spark.sparkContext.parallelize(emptyRecords, 1))
     emptyDF.write.format("org.apache.hudi")
       .options(options)
@@ -246,7 +246,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val dataGenPartition2 = new HoodieTestDataGenerator(Array[String](HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH))
 
     // do one bulk insert to all partitions
-    val records = recordsToStrings(dataGen.generateInserts("%05d".format(1), 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("%05d".format(1), 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     val partition1RecordCount = inputDF.filter(row => row.getAs("partition_path")
       .equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).count()
@@ -317,7 +317,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     val dataGen = new HoodieTestDataGenerator(0xDEED)
     val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
-    val records = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
 
     // First commit, new partition, no existing table schema
     // Validation should succeed
@@ -384,7 +384,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
   }
 
   def writeRecords(commitTime: Int, dataGen: HoodieTestDataGenerator, writeOperation: String, basePath: String): Unit = {
-    val records = recordsToStrings(dataGen.generateInserts("%05d".format(commitTime), 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("%05d".format(commitTime), 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.write.format("hudi")
       .options(commonOpts)

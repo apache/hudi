@@ -19,7 +19,6 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
 import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO_WRITES}
 import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaCompatible, isValidEvolutionOf}
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -33,9 +32,11 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
+
+import org.apache.avro.Schema
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions.{asScalaBuffer, mapAsJavaMap}
+import scala.collection.JavaConverters._
 
 /**
  * Util methods for Schema evolution in Hudi
@@ -76,10 +77,10 @@ object HoodieSchemaUtils {
                          latestTableSchemaOpt: Option[Schema],
                          internalSchemaOpt: Option[InternalSchema],
                          opts: Map[String, String]): Schema = {
-    val setNullForMissingColumns = opts.getOrDefault(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.key(),
+    val setNullForMissingColumns = opts.getOrElse(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.key(),
       DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.defaultValue).toBoolean
     val shouldReconcileSchema = opts(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
-    val shouldValidateSchemasCompatibility = opts.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
+    val shouldValidateSchemasCompatibility = opts.getOrElse(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
 
     latestTableSchemaOpt match {
@@ -98,9 +99,9 @@ object HoodieSchemaUtils {
         // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
         // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
         // Also, we promote types to the latest table schema if possible.
-        val shouldCanonicalizeSchema = opts.getOrDefault(CANONICALIZE_SCHEMA.key,
+        val shouldCanonicalizeSchema = opts.getOrElse(CANONICALIZE_SCHEMA.key,
           CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
-        val mergeIntoWrites = opts.getOrDefault(SQL_MERGE_INTO_WRITES.key(),
+        val mergeIntoWrites = opts.getOrElse(SQL_MERGE_INTO_WRITES.key(),
           SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
 
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
@@ -109,7 +110,7 @@ object HoodieSchemaUtils {
           AvroInternalSchemaConverter.fixNullOrdering(sourceSchema)
         }
 
-        val allowAutoEvolutionColumnDrop = opts.getOrDefault(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key,
+        val allowAutoEvolutionColumnDrop = opts.getOrElse(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key,
           HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.defaultValue).toBoolean
 
         if (shouldReconcileSchema) {
@@ -118,7 +119,7 @@ object HoodieSchemaUtils {
               // Apply schema evolution, by auto-merging write schema and read schema
               val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema)
               val evolvedSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
-              val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields().filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
+              val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields().asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
               if (shouldRemoveMetaDataFromInternalSchema) HoodieAvroUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
             case None =>
               // In case schema reconciliation is enabled we will employ (legacy) reconciliation
@@ -206,7 +207,7 @@ object HoodieSchemaUtils {
    * TODO support casing reconciliation
    */
   private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
-    reconcileSchemaRequirements(sourceSchema, latestTableSchema, opts)
+    reconcileSchemaRequirements(sourceSchema, latestTableSchema, opts.asJava)
   }
 
 

@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.unescapePathName
 import org.apache.spark.sql.catalyst.expressions.{Cast, Literal}
@@ -35,15 +36,15 @@ import java.time.ZoneId
 import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.{Locale, TimeZone}
-import scala.collection.convert.Wrappers.JConcurrentMapWrapper
+
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
 import scala.util.control.NonFatal
 
 object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
 
-  private val cache = JConcurrentMapWrapper(
-    new ConcurrentHashMap[ZoneId, (DateFormatter, TimestampFormatter)](1))
+  private val cache = new ConcurrentHashMap[ZoneId, (DateFormatter, TimestampFormatter)](1)
 
   /**
    * The definition of PartitionValues has been changed by SPARK-34314 in Spark3.2.
@@ -56,9 +57,9 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
                               userSpecifiedDataTypes: Map[String, DataType],
                               tz: TimeZone,
                               validatePartitionValues: Boolean = false): InternalRow = {
-    val (dateFormatter, timestampFormatter) = cache.getOrElseUpdate(tz.toZoneId, {
-      val dateFormatter = ReflectUtil.getDateFormatter(tz.toZoneId)
-      val timestampFormatter = TimestampFormatter(timestampPartitionPattern, tz.toZoneId, isParsing = true)
+    val (dateFormatter, timestampFormatter) = cache.computeIfAbsent(tz.toZoneId, zoneId => {
+      val dateFormatter = ReflectUtil.getDateFormatter(zoneId)
+      val timestampFormatter = TimestampFormatter(timestampPartitionPattern, zoneId, isParsing = true)
 
       (dateFormatter, timestampFormatter)
     })
@@ -149,7 +150,7 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
       (None, Some(path))
     } else {
       val (columnNames, values) = columns.reverse.unzip
-      (Some(PartitionValues(columnNames, values)), Some(currentPath))
+      (Some(PartitionValues(columnNames.toSeq, values.toSeq)), Some(currentPath))
     }
   }
 

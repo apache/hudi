@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
@@ -29,7 +28,10 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
@@ -37,12 +39,12 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
 import java.util.stream.Collectors
 import javax.annotation.concurrent.NotThreadSafe
+
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
@@ -104,7 +106,7 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   @transient private lazy val recordLevelIndex = new RecordLevelIndexSupport(spark, metadataConfig, metaClient)
 
-  override def rootPaths: Seq[Path] = getQueryPaths.asScala
+  override def rootPaths: Seq[Path] = getQueryPaths.asScala.toSeq
 
   var shouldEmbedFileSlices: Boolean = false
 
@@ -284,8 +286,8 @@ case class HoodieFileIndex(spark: SparkSession,
     } else {
       listMatchingPartitionPaths(partitionFilters)
     }
-    getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map(
-      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala) })
+    getInputFileSlices(prunedPartitions: _*).asScala.map(
+      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala.toSeq) }).toSeq
   }
 
   /**

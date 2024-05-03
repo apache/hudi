@@ -367,6 +367,6 @@ object HoodieCatalog {
       case t => throw new HoodieException(s"Partitioning by transformation `$t` is not supported")
     }
 
-    (identityCols, bucketSpec)
+    (identityCols.toSeq, bucketSpec)
   }
 }

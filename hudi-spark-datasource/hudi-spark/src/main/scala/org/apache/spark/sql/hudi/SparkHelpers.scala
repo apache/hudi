@@ -33,14 +33,15 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.spark.sql.{DataFrame, SQLContext}
 
 import java.util.Properties
-import scala.collection.JavaConversions._
+
+import scala.collection.JavaConverters._
 import scala.collection.mutable._
 
 object SparkHelpers {
   @throws[Exception]
   def skipKeysAndWriteNewFile(instantTime: String, fs: FileSystem, sourceFile: Path, destinationFile: Path, keysToSkip: Set[String]) {
-    val sourceRecords = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).readAvroRecords(fs.getConf, sourceFile)
-    val schema: Schema = sourceRecords.get(0).getSchema
+    val sourceRecords = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).readAvroRecords(fs.getConf, sourceFile).asScala
+    val schema: Schema = sourceRecords.head.getSchema
     val filter: BloomFilter = BloomFilterFactory.createBloomFilter(
       BLOOM_FILTER_NUM_ENTRIES_VALUE.defaultValue.toInt, BLOOM_FILTER_FPP_VALUE.defaultValue.toDouble,
       BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.defaultValue.toInt, BLOOM_FILTER_TYPE.defaultValue);

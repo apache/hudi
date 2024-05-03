@@ -91,7 +91,7 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
         Map.empty[String, PartitionStatistics]
       }
       logInfo(s"Finished to gather the fast stats for all $total partitions.")
-      addPartitions(spark, table, partitionSpecsAndLocs, partitionStats)
+      addPartitions(spark, table, partitionSpecsAndLocs, partitionStats.toMap)
       total
     } else 0
     // Updates the table to indicate that its partition metadata is stored in the Hive metastore.

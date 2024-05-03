@@ -689,6 +689,6 @@ object TestDataSourceForBootstrap {
   def sort(df: DataFrame): Dataset[Row] = df.sort("_row_key")
 
   def dropMetaCols(df: DataFrame): DataFrame =
-    df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+    df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*)
 
 }

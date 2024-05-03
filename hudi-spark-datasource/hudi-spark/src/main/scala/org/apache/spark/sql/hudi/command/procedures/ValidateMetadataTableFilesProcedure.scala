@@ -31,8 +31,8 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
-import scala.collection.JavaConverters.asScalaIteratorConverter
+
+import scala.collection.JavaConverters._
 
 class ValidateMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -91,7 +91,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     }
 
     val rows = new util.ArrayList[Row]
-    for (partition <- allPartitions) {
+    for (partition <- allPartitions.asScala) {
       val fileStatusMap = new util.HashMap[String, FileStatus]
       val metadataFileStatusMap = new util.HashMap[String, FileStatus]
       val metadataStatuses = metadataReader.getAllFilesInPartition(new Path(basePath, partition))
@@ -101,7 +101,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
       val allFiles = new util.HashSet[String]
       allFiles.addAll(fileStatusMap.keySet)
       allFiles.addAll(metadataFileStatusMap.keySet)
-      for (file <- allFiles) {
+      for (file <- allFiles.asScala) {
         val fsFileStatus = fileStatusMap.get(file)
         val metaFileStatus = metadataFileStatusMap.get(file)
         val doesFsFileExists = fsFileStatus != null
@@ -117,14 +117,14 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
       if (metadataStatuses.length != fsStatuses.length) {
         logError(" FS and metadata files count not matching for " + partition + ". FS files count " + fsStatuses.length + ", metadata base files count " + metadataStatuses.length)
       }
-      for (entry <- fileStatusMap.entrySet) {
+      for (entry <- fileStatusMap.entrySet.asScala) {
         if (!metadataFileStatusMap.containsKey(entry.getKey)) {
           logError("FS file not found in metadata " + entry.getKey)
         } else if (entry.getValue.getLen != metadataFileStatusMap.get(entry.getKey).getLen) {
           logError(" FS file size mismatch " + entry.getKey + ", size equality " + (entry.getValue.getLen == metadataFileStatusMap.get(entry.getKey).getLen) + ". FS size " + entry.getValue.getLen + ", metadata size " + metadataFileStatusMap.get(entry.getKey).getLen)
         }
       }
-      for (entry <- metadataFileStatusMap.entrySet) {
+      for (entry <- metadataFileStatusMap.entrySet.asScala) {
         if (!fileStatusMap.containsKey(entry.getKey)) {
           logError("Metadata file not found in FS " + entry.getKey)
         } else if (entry.getValue.getLen != fileStatusMap.get(entry.getKey).getLen) {

@@ -151,7 +151,7 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
   protected def bulkListLeafFiles(sparkSession: SparkSession, paths: ArrayBuffer[Path], filter: PathFilter, hadoopConf: Configuration): Seq[(Path, Seq[FileStatus])] = {
     HoodieHadoopFSUtils.parallelListLeafFiles(
       sc = sparkSession.sparkContext,
-      paths = paths,
+      paths = paths.toSeq,
       hadoopConf = hadoopConf,
       filter = new PathFilterWrapper(filter),
       ignoreMissingFiles = sparkSession.sessionState.conf.ignoreMissingFiles,
