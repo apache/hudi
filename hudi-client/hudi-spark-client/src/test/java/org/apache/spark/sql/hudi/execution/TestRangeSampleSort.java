@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.execution;
 
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -28,8 +29,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-
-import scala.collection.JavaConversions;
 
 class TestRangeSampleSort extends HoodieClientTestBase {
 
@@ -40,7 +39,7 @@ class TestRangeSampleSort extends HoodieClientTestBase {
       final int limit = i;
       Assertions.assertDoesNotThrow(() ->
           RangeSampleSort$.MODULE$.sortDataFrameBySampleSupportAllTypes(df.limit(limit),
-              JavaConversions.asScalaBuffer(Arrays.asList("id", "content")), 1), "range sort shall not fail when 0 or 1 record incoming");
+              JavaScalaConverters.convertJavaListToScalaSeq(Arrays.asList("id", "content")), 1), "range sort shall not fail when 0 or 1 record incoming");
     }
   }
 
@@ -52,7 +51,7 @@ class TestRangeSampleSort extends HoodieClientTestBase {
       final int limit = i;
       Assertions.assertDoesNotThrow(() ->
           RangeSampleSort$.MODULE$.sortDataFrameBySample(df.limit(limit), layoutOptStrategy,
-              JavaConversions.asScalaBuffer(Arrays.asList("id", "content")), 1), "range sort shall not fail when 0 or 1 record incoming");
+              JavaScalaConverters.convertJavaListToScalaSeq(Arrays.asList("id", "content")), 1), "range sort shall not fail when 0 or 1 record incoming");
     }
   }
 }

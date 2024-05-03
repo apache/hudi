@@ -47,7 +47,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /**
@@ -106,7 +106,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
     }
   }
-  private val commitsToReturn = commitsTimelineToReturn.getInstantsAsStream.iterator().toList
+  private val commitsToReturn = commitsTimelineToReturn.getInstantsAsStream.iterator().asScala.toList
 
   // use schema from a file produced in the end/latest instant
 
@@ -156,11 +156,11 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
       // create Replaced file group
       val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
-      val replacedFile = replacedTimeline.getInstants.flatMap { instant =>
+      val replacedFile = replacedTimeline.getInstants.asScala.flatMap { instant =>
         val replaceMetadata = HoodieReplaceCommitMetadata.
           fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
-        replaceMetadata.getPartitionToReplaceFileIds.entrySet().flatMap { entry =>
-          entry.getValue.map { e =>
+        replaceMetadata.getPartitionToReplaceFileIds.entrySet().asScala.flatMap { entry =>
+          entry.getValue.asScala.map { e =>
             val fullPath = FSUtils.constructAbsolutePath(basePath, entry.getKey).toString
             (e, fullPath)
           }
@@ -172,11 +172,11 @@ class IncrementalRelation(val sqlContext: SQLContext,
           .get, classOf[HoodieCommitMetadata])
 
         if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getTimestamp) {
-          metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap.filterNot { case (k, v) =>
+          metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>
             replacedFile.contains(k) && v.startsWith(replacedFile(k))
           }
         } else {
-          regularFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap.filterNot { case (k, v) =>
+          regularFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>
             replacedFile.contains(k) && v.startsWith(replacedFile(k))
           }
         }

@@ -47,9 +47,10 @@ import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
 import java.util.Locale
+
 import scala.annotation.tailrec
+import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 trait HoodieFormatTrait {
 

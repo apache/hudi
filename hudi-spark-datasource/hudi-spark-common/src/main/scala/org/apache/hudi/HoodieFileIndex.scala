@@ -28,19 +28,20 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
+
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.unsafe.types.UTF8String
+
 import java.text.SimpleDateFormat
 import java.util.stream.Collectors
-
 import javax.annotation.concurrent.NotThreadSafe
 
 import scala.collection.JavaConverters._
@@ -111,7 +112,7 @@ case class HoodieFileIndex(spark: SparkSession,
     .map(_.trim)
     .contains("org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
 
-  override def rootPaths: Seq[Path] = getQueryPaths.asScala.map(e => new Path(e.toUri))
+  override def rootPaths: Seq[Path] = getQueryPaths.asScala.map(e => new Path(e.toUri)).toSeq
 
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
@@ -294,8 +295,8 @@ case class HoodieFileIndex(spark: SparkSession,
     } else {
       listMatchingPartitionPaths(partitionFilters)
     }
-    getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map(
-      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala) })
+    getInputFileSlices(prunedPartitions: _*).asScala.map(
+      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala.toSeq) }).toSeq
   }
 
   /**

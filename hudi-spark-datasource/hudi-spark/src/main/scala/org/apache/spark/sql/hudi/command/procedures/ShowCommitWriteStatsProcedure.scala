@@ -27,7 +27,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -86,7 +86,7 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
       new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
       new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime))
 
-    val hoodieInstant: Option[HoodieInstant] = instants.find((i: HoodieInstant) => timeline.containsInstant(i))
+    val hoodieInstant: Option[HoodieInstant] = instants.asScala.find((i: HoodieInstant) => timeline.containsInstant(i))
     hoodieInstant
   }
 

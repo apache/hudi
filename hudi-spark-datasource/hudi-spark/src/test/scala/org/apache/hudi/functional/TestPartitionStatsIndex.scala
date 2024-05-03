@@ -27,6 +27,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
+
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.types.StringType
@@ -35,7 +36,7 @@ import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /**
  * Test cases on partition stats index with Spark datasource.
@@ -150,7 +151,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   def testPartitionStatsWithPartitionBy(): Unit = {
     val hudiOpts = commonOpts.-(PARTITIONPATH_FIELD.key)
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
 
     inputDF.write.partitionBy("partition").format("hudi")
