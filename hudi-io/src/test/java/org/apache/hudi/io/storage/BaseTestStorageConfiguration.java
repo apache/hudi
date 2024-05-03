@@ -76,14 +76,20 @@ public abstract class BaseTestStorageConfiguration<T> {
     StorageConfiguration<T> storageConf = getStorageConfiguration(conf);
     StorageConfiguration<T> newStorageConf = storageConf.newInstance();
     Class unwrapperConfClass = storageConf.unwrap().getClass();
-    assertNotSame(storageConf, newStorageConf);
+    assertNotSame(storageConf, newStorageConf,
+        "storageConf.newInstance() should return a different StorageConfiguration instance.");
     validateConfigs(newStorageConf);
-    assertNotSame(storageConf.unwrap(), newStorageConf.unwrap());
-    assertSame(storageConf.unwrap(), storageConf.unwrap());
-    assertSame(storageConf.unwrap(), storageConf.unwrapAs(unwrapperConfClass));
-    assertNotSame(storageConf.unwrap(), storageConf.unwrapCopy());
+    assertNotSame(storageConf.unwrap(), newStorageConf.unwrap(),
+        "storageConf.newInstance() should contain a new copy of the underlying configuration instance.");
+    assertSame(storageConf.unwrap(), storageConf.unwrap(),
+        "storageConf.unwrap() should return the same underlying configuration instance.");
+    assertSame(storageConf.unwrap(), storageConf.unwrapAs(unwrapperConfClass),
+        "storageConf.unwrapAs(unwrapperConfClass) should return the same underlying configuration instance.");
+    assertNotSame(storageConf.unwrap(), storageConf.unwrapCopy(),
+        "storageConf.unwrapCopy() should return a new copy of the underlying configuration instance.");
     validateConfigs(getStorageConfiguration(storageConf.unwrapCopy()));
-    assertNotSame(storageConf.unwrap(), storageConf.unwrapCopyAs(unwrapperConfClass));
+    assertNotSame(storageConf.unwrap(), storageConf.unwrapCopyAs(unwrapperConfClass),
+        "storageConf.unwrapCopyAs(unwrapperConfClass) should return a new copy of the underlying configuration instance.");
     validateConfigs(getStorageConfiguration((T) storageConf.unwrapCopyAs(unwrapperConfClass)));
     assertThrows(
         IllegalArgumentException.class,
