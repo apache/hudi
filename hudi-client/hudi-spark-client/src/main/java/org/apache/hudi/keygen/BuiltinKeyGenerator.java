@@ -246,10 +246,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
       S convertedKeyPart = emptyKeyPartHandler.apply(converter.apply(recordKeyParts[i]));
 
-      if (recordKeyParts.length > 1) {
-        sb.appendJava(recordKeyFields.get(i));
-        sb.appendJava(COMPOSITE_KEY_FIELD_VALUE_INFIX);
-      }
+      sb.appendJava(recordKeyFields.get(i));
+      sb.appendJava(COMPOSITE_KEY_FIELD_VALUE_INFIX);
       sb.append(convertedKeyPart);
       // This check is to validate that overall composite-key has at least one non-null, non-empty
       // segment

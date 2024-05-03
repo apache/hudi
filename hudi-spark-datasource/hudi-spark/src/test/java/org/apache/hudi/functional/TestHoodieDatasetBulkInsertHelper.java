@@ -21,7 +21,6 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -29,7 +28,6 @@ import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
@@ -141,13 +139,8 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     boolean isNonPartitionedKeyGen = keyGenClass.equals(NonpartitionedKeyGenerator.class.getName());
     boolean isComplexKeyGen = keyGenClass.equals(ComplexKeyGenerator.class.getName());
 
-    TypedProperties keyGenProperties = new TypedProperties();
-    keyGenProperties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordKeyField);
-    keyGenProperties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition");
-    ComplexKeyGenerator complexKeyGenerator = new ComplexKeyGenerator(keyGenProperties);
-
     result.toJavaRDD().foreach(entry -> {
-      String recordKey = isComplexKeyGen ? complexKeyGenerator.getRecordKey(entry) : entry.getAs(recordKeyField).toString();
+      String recordKey = isComplexKeyGen ? String.format("%s:%s", recordKeyField, entry.getAs(recordKeyField)) : entry.getAs(recordKeyField).toString();
       assertEquals(recordKey, entry.get(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)));
 
       String partitionPath = isNonPartitionedKeyGen ? HoodieTableMetadata.EMPTY_PARTITION_NAME : entry.getAs("partition").toString();

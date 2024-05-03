@@ -414,7 +414,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     {
       val keyGen = new ComplexKeyGenerator(getKeyConfig("field1,", "field1,", "false"))
 
-      val expectedKey = new HoodieKey("field1", "field1")
+      val expectedKey = new HoodieKey("field1:field1", "field1")
 
       assertEquals(expectedKey, keyGen.getKey(baseRecord))
 
