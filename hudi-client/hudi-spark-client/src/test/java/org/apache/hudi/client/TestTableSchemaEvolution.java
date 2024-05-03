@@ -265,7 +265,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
     int numRecords = 10;
     insertFirstBatch(hoodieWriteConfig, client, "001", initCommitTime,
-                     numRecords, SparkRDDWriteClient::insert, false, true, numRecords);
+        numRecords, SparkRDDWriteClient::insert, false, true, numRecords);
     checkReadRecords("000", numRecords);
 
     // Updates with same schema is allowed
