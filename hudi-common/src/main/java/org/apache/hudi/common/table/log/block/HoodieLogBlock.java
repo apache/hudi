@@ -37,6 +37,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -295,6 +296,10 @@ public abstract class HoodieLogBlock {
       inputStream.seek(this.getBlockContentLocation().get().getContentPositionInLogFile());
       inputStream.readFully(content.get(), 0, content.get().length);
       inputStream.seek(this.getBlockContentLocation().get().getBlockEndPos());
+    } catch (InterruptedIOException e) {
+      // Stop retry inflate if encounters InterruptedIOException
+      Thread.currentThread().interrupt();
+      throw new HoodieIOException("Thread is interrupted while inflating.", e);
     } catch (IOException e) {
       // TODO : fs.open() and return inputstream again, need to pass FS configuration
       // because the inputstream might close/timeout for large number of log blocks to be merged
