@@ -56,11 +56,11 @@ public class HoodieCompositeMergeKey<K extends Serializable> implements HoodieMe
       return false;
     }
     HoodieCompositeMergeKey<?> that = (HoodieCompositeMergeKey<?>) o;
-    return Objects.equals(compositeKey, that.compositeKey) && Objects.equals(partitionPath, that.partitionPath);
+    return Objects.equals(compositeKey, that.compositeKey);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(compositeKey, partitionPath);
+    return Objects.hash(compositeKey);
   }
 }
