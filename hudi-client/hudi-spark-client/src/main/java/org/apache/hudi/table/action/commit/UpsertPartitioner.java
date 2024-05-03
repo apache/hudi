@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -45,6 +46,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -63,6 +65,9 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(UpsertPartitioner.class);
+
+  private static final Comparator<HoodieBaseFile> BASE_FILE_COMPARATOR = Comparator.<HoodieBaseFile, Long>comparing(BaseFile::getFileSize)
+      .thenComparing(HoodieBaseFile::getFileId);
 
   /**
    * List of all small files to be corrected.
@@ -300,7 +305,9 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
       List<HoodieBaseFile> allFiles = table.getBaseFileOnlyView()
-          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
+          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp())
+          .sorted(BASE_FILE_COMPARATOR)
+          .collect(Collectors.toList());
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {

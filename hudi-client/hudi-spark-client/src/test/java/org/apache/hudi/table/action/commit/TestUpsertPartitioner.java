@@ -450,7 +450,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     // Bootstrap base files ("small-file targets")
     FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-1", 1024);
     FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-2", 1024);
-    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-3", 1024);
+    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-3", 800);
 
     FileCreateUtils.createCommit(basePath, "002");
 
@@ -469,9 +469,9 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     assertEquals(3, partitioner.numPartitions());
     assertEquals(
         Arrays.asList(
+            new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath), // smallest file first
             new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath),
-            new BucketInfo(BucketType.UPDATE, "fg-2", partitionPath),
-            new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath)
+            new BucketInfo(BucketType.UPDATE, "fg-2", partitionPath)
         ),
         partitioner.getBucketInfos());
   }
