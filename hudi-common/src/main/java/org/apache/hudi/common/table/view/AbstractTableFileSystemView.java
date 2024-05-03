@@ -377,9 +377,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           LOG.debug("Time taken to list partitions " + partitionSet + " =" + (endLsTs - beginLsTs));
           pathInfoMap.forEach((partitionPair, statuses) -> {
             String relativePartitionStr = partitionPair.getLeft();
-            List<HoodieFileGroup> groups = addFilesToView(statuses);
+            List<HoodieFileGroup> groups = addFilesToView(relativePartitionStr, statuses);
             if (groups.isEmpty()) {
-              storePartitionView(relativePartitionStr, new ArrayList<>());
+              storePartitionView(relativePartitionStr, Collections.emptyList());
             }
             LOG.debug("#files found in partition (" + relativePartitionStr + ") =" + statuses.size());
           });
@@ -467,7 +467,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         // Not loaded yet
         try {
           LOG.info("Building file system view for partition (" + partitionPathStr + ")");
-          List<HoodieFileGroup> groups = addFilesToView(getAllFilesInPartition(partitionPathStr));
+          List<HoodieFileGroup> groups = addFilesToView(partitionPathStr, getAllFilesInPartition(partitionPathStr));
           if (groups.isEmpty()) {
             storePartitionView(partitionPathStr, new ArrayList<>());
           }
