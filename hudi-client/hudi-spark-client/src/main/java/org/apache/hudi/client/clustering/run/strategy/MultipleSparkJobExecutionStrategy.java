@@ -457,7 +457,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
     String readPathString =
         String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
-    String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).toArray(String[]::new));
+    String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).distinct().toArray(String[]::new));
     params.put("hoodie.datasource.read.paths", readPathString);
     // Building HoodieFileIndex needs this param to decide query path
     params.put("glob.paths", globPathString);

@@ -198,7 +198,7 @@ public class SparkMetadataWriterUtils {
                                                HoodieTableMetaClient metaClient, Schema schema) {
     String readPathString =
         String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
-    String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).toArray(String[]::new));
+    String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).distinct().toArray(String[]::new));
     HashMap<String, String> params = new HashMap<>();
     params.put(QUERY_TYPE_CONFIG, QUERY_TYPE_SNAPSHOT);
     params.put(READ_PATHS_CONFIG, readPathString);
