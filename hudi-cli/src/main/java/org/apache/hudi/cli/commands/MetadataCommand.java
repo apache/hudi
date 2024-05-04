@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -223,7 +224,7 @@ public class MetadataCommand {
 
       HoodieTimer timer = HoodieTimer.start();
       List<String> partitions = metadata.getAllPartitionPaths();
-      LOG.debug("Took " + timer.endTimer() + " ms");
+      LOG.debug("Metadata Partition listing took " + timer.endTimer() + " ms");
 
       final List<Comparable[]> rows = new ArrayList<>();
       partitions.stream().sorted(Comparator.reverseOrder()).forEach(p -> {
@@ -275,7 +276,8 @@ public class MetadataCommand {
 
   @ShellMethod(key = "metadata validate-files", value = "Validate all files in all partitions from the metadata")
   public String validateFiles(
-      @ShellOption(value = {"--verbose"}, help = "Print all file details", defaultValue = "false") final boolean verbose) throws IOException {
+          @ShellOption(value = {"--verbose"}, help = "Print all file details", defaultValue = "false") final boolean verbose)
+        throws IOException {
     HoodieCLI.getTableMetaClient();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
     HoodieBackedTableMetadata metadataReader = new HoodieBackedTableMetadata(
@@ -285,13 +287,14 @@ public class MetadataCommand {
       return "[ERROR] Metadata Table not enabled/initialized\n\n";
     }
 
+    FileSystemBackedTableMetadata fsMetaReader = new FileSystemBackedTableMetadata(new HoodieLocalEngineContext(HoodieCLI.conf),
+        HoodieCLI.getTableMetaClient().getTableConfig(), HoodieCLI.conf,
+            HoodieCLI.basePath);
     HoodieMetadataConfig fsConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
-    HoodieBackedTableMetadata fsMetaReader = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(HoodieCLI.conf), fsConfig, HoodieCLI.basePath);
 
     HoodieTimer timer = HoodieTimer.start();
     List<String> metadataPartitions = metadataReader.getAllPartitionPaths();
-    LOG.debug("Listing partitions Took " + timer.endTimer() + " ms");
+    LOG.debug("Metadata Listing partitions Took " + timer.endTimer() + " ms");
     List<String> fsPartitions = fsMetaReader.getAllPartitionPaths();
     Collections.sort(fsPartitions);
     Collections.sort(metadataPartitions);

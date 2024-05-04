@@ -28,9 +28,9 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.util.List;
@@ -95,7 +95,9 @@ public class HoodieDataSourceHelpers {
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public static HoodieTimeline allCompletedCommitsCompactions(FileSystem fs, String basePath) {
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath)
+        HoodieTableMetaClient.builder()
+            .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
+            .setBasePath(basePath)
             .setLoadActiveTimelineOnLoad(true).build();
     if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       return metaClient.getActiveTimeline().getTimelineOfActions(
@@ -110,7 +112,7 @@ public class HoodieDataSourceHelpers {
   public static HoodieTimeline allCompletedCommitsCompactions(HoodieStorage storage,
                                                               String basePath) {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf((Configuration) storage.getConf())
+        .setConf(storage.getConf().newInstance())
         .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       return metaClient.getActiveTimeline().getTimelineOfActions(
@@ -125,7 +127,8 @@ public class HoodieDataSourceHelpers {
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public static Option<HoodieClusteringPlan> getClusteringPlan(FileSystem fs, String basePath,
                                                                String instantTime) {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf())
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
         .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     HoodieInstant hoodieInstant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlan =

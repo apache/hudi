@@ -27,7 +27,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -189,7 +188,7 @@ public class HoodiePartitionMetadata {
         BaseFileUtils reader = BaseFileUtils.getInstance(metafilePath.toString());
         // Data file format
         Map<String, String> metadata = reader.readFooter(
-            (Configuration) storage.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
+            storage.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
         props.clear();
         props.putAll(metadata);
         format = Option.of(reader.getFormat());

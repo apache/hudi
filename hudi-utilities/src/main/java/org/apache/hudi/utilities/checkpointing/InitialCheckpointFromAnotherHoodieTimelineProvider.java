@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 
@@ -45,7 +46,9 @@ public class InitialCheckpointFromAnotherHoodieTimelineProvider extends InitialC
   @Override
   public void init(Configuration config) throws HoodieException {
     super.init(config);
-    this.anotherDsHoodieMetaClient = HoodieTableMetaClient.builder().setConf(config).setBasePath(path.toString()).build();
+    this.anotherDsHoodieMetaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(config))
+        .setBasePath(path.toString()).build();
   }
 
   @Override

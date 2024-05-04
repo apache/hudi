@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -91,7 +92,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     partitionPath = partitionPaths[0];
     partitionValues[0] = partitionPath;
 
-    metaClient = HoodieTableMetaClient.builder().setConf(getHadoopConf()).setBasePath(getBasePath()).build();
+    metaClient = createMetaClient(getStorageConf(), getBasePath());
     avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
     Option<String[]> partitionFields = metaClient.getTableConfig().getPartitionFields();
     Option<String> partitionNameOpt = StringUtils.isNullOrEmpty(partitionPaths[0])

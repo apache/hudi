@@ -341,7 +341,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // build indexer config which has only col stats enabled
     indexMetadataPartitionsAndAssert(COLUMN_STATS, Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {BLOOM_FILTERS}), tableName, "streamer-config/indexer.properties");
 
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
             metadataMetaClient, getFileSystemView(metadataMetaClient), COLUMN_STATS.getPartitionPath());
@@ -390,7 +391,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // build indexer config which has only col stats enabled
     indexMetadataPartitionsAndAssert(COLUMN_STATS, Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {BLOOM_FILTERS}), tableName, "streamer-config/indexer.properties");
 
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
             metadataMetaClient, getFileSystemView(metadataMetaClient), COLUMN_STATS.getPartitionPath());

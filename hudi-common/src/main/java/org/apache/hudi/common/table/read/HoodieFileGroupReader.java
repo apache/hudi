@@ -38,10 +38,10 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -71,7 +71,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieReaderContext<T> readerContext;
   private final Option<HoodieBaseFile> hoodieBaseFileOption;
   private final List<HoodieLogFile> logFiles;
-  private final Configuration hadoopConf;
+  private final StorageConfiguration<?> storageConf;
   private final TypedProperties props;
   // Byte offset to start reading from the base file
   private final long start;
@@ -96,7 +96,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final Option<UnaryOperator<T>> outputConverter;
 
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
-                               Configuration hadoopConf,
+                               StorageConfiguration<?> storageConf,
                                String tablePath,
                                String latestCommitTime,
                                FileSlice fileSlice,
@@ -112,7 +112,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                ExternalSpillableMap.DiskMapType diskMapType,
                                boolean isBitCaskDiskMapCompressionEnabled) {
     this.readerContext = readerContext;
-    this.hadoopConf = hadoopConf;
+    this.storageConf = storageConf;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
     this.logFiles = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
     this.props = props;
@@ -171,7 +171,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     return readerContext.getFileRecordIterator(
         baseFile.getStoragePath(), start,
         length,
-        dataSchema, requiredSchema, hadoopConf);
+        dataSchema, requiredSchema, storageConf);
   }
 
   private Schema generateRequiredSchema() {
@@ -240,7 +240,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                 dataFile.getStoragePath(), 0,
                 dataFile.getFileLen(),
                 createSchemaFromFields(allFields.getRight()),
-                createSchemaFromFields(requiredFields.getRight()), hadoopConf));
+                createSchemaFromFields(requiredFields.getRight()), storageConf));
 
     Option<ClosableIterator<T>> skeletonFileIterator =
         requiredFields.getLeft().isEmpty() ? Option.empty() :
@@ -248,7 +248,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                 baseFile.getStoragePath(), 0,
                 baseFile.getFileLen(),
                 createSchemaFromFields(allFields.getLeft()),
-                createSchemaFromFields(requiredFields.getLeft()), hadoopConf));
+                createSchemaFromFields(requiredFields.getLeft()), storageConf));
     if (!dataFileIterator.isPresent() && !skeletonFileIterator.isPresent()) {
       throw new IllegalStateException("should not be here if only partition cols are required");
     } else if (!dataFileIterator.isPresent()) {
@@ -286,7 +286,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private void scanLogFiles() {
     String path = readerState.tablePath;
-    HoodieStorage storage = readerContext.getStorage(path, hadoopConf);
+    HoodieStorage storage = readerContext.getStorage(path, storageConf);
 
     HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
         .withHoodieReaderContext(readerContext)

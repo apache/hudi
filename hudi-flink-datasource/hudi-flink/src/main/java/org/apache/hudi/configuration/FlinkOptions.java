@@ -189,9 +189,9 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> METADATA_ENABLED = ConfigOptions
       .key("metadata.enabled")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withFallbackKeys(HoodieMetadataConfig.ENABLE.key())
-      .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default disabled");
+      .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default enabled");
 
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("metadata.compaction.delta_commits")

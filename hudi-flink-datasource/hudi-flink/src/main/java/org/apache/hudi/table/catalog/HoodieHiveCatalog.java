@@ -715,11 +715,12 @@ public class HoodieHiveCatalog extends AbstractCatalog {
           //update hoodie
           StorageDescriptor sd = hiveTable.getSd();
           String location = sd.getLocation();
-          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(location).setConf(hiveConf).build();
+          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(location)
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(hiveConf)).build();
           //Init table with new name
           HoodieTableMetaClient.withPropertyBuilder().fromProperties(metaClient.getTableConfig().getProps())
               .setTableName(newTableName)
-              .initTable(hiveConf, location);
+              .initTable(HadoopFSUtils.getStorageConfWithCopy(hiveConf), location);
 
           hiveTable.setTableName(newTableName);
           client.alter_table(

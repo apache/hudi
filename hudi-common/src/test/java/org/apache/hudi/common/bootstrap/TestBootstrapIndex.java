@@ -55,6 +55,7 @@ import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -102,7 +103,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
     properties.putAll(props);
     HoodieTableConfig.create(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()), properties);
 
-    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
+    metaClient = createMetaClient(metaClient.getStorageConf().newInstance(), basePath);
     BootstrapIndex bootstrapIndex = BootstrapIndex.getBootstrapIndex(metaClient);
     assert (bootstrapIndex instanceof NoOpBootstrapIndex);
   }

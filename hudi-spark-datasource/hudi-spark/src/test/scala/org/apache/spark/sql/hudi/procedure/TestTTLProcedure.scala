@@ -28,9 +28,11 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{TRIP_EXAMPLE_SCHEMA, getCommitTimeAtUTC}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.config.HoodieWriteConfig
+
 import org.apache.spark.api.java.JavaSparkContext
 
 import java.util.Properties
+
 import scala.collection.JavaConverters._
 
 class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMixin {
@@ -86,7 +88,7 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
         .asInstanceOf[java.util.List[HoodieRecord[Nothing]]]
     // Use this JavaRDD to call the insert method
     client.startCommitWithTime(instantTime, HoodieTimeline.COMMIT_ACTION)
-    client.insert(spark.sparkContext.parallelize(records.asScala).toJavaRDD(), instantTime)
+    client.insert(spark.sparkContext.parallelize(records.asScala.toSeq).toJavaRDD(), instantTime)
   }
 
   private def getHoodieWriteClient(cfg: HoodieWriteConfig): SparkRDDWriteClient[Nothing] = {

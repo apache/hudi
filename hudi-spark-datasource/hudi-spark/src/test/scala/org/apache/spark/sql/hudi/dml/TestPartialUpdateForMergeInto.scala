@@ -17,13 +17,8 @@
 
 package org.apache.spark.sql.hudi.dml
 
-import org.apache.avro.Schema
-import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.HoodieReaderConfig
-import org.apache.hudi.common.config.HoodieStorageConfig
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.function.SerializableFunctionUnchecked
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
@@ -34,6 +29,9 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+
+import org.apache.avro.Schema
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
@@ -379,11 +377,11 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
                        expectedNumLogFile: Int,
                        changedFields: Seq[Seq[String]],
                        isPartial: Boolean): Unit = {
-    val hadoopConf = HoodieTestUtils.getDefaultHadoopConf
+    val storageConf = HoodieTestUtils.getDefaultStorageConf
     val metaClient: HoodieTableMetaClient =
-      HoodieTableMetaClient.builder.setConf(hadoopConf).setBasePath(basePath).build
+      HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
     val metadataConfig = HoodieMetadataConfig.newBuilder.build
-    val engineContext = new HoodieLocalEngineContext(hadoopConf)
+    val engineContext = new HoodieLocalEngineContext(storageConf)
     val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
       engineContext, FileSystemViewStorageConfig.newBuilder.build,
       HoodieCommonConfig.newBuilder.build,

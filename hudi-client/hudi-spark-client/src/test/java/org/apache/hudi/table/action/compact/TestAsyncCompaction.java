@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -133,10 +134,10 @@ public class TestAsyncCompaction extends CompactionTestBase {
       // Schedule compaction but do not run them
       scheduleCompaction(compactionInstantTime, client, cfg);
 
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
       createNextDeltaCommit(inflightInstantTime, records, client, metaClient, cfg, true);
 
-      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
       HoodieInstant pendingCompactionInstant =
           metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
       assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(),
@@ -149,7 +150,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       client.startCommitWithTime(nextInflightInstantTime);
 
       // Validate
-      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
       inflightInstant = metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
       assertEquals(inflightInstant.getTimestamp(), nextInflightInstantTime, "inflight instant has expected instant time");
       assertEquals(1, metaClient.getActiveTimeline()
@@ -181,7 +182,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
           new ArrayList<>());
 
       // Schedule and mark compaction instant as inflight
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleCompaction(compactionInstantTime, client, cfg);
       moveCompactionFromRequestedToInflight(compactionInstantTime, cfg);
@@ -219,7 +220,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
           Collections.emptyList());
 
       // creates a delta commit but does not complete it.
-      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
       createNextDeltaCommit(pendingInstantTime, dataGen.generateUpdates(pendingInstantTime, records.size()), client, metaClient, cfg, true);
 
       // complete the ingestion
@@ -227,7 +228,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
           Collections.emptyList());
 
       // imitate an async compaction with a smaller instant time than the latest instant.
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleCompaction(compactionInstantTime, client, cfg);
       moveCompactionFromRequestedToInflight(compactionInstantTime, cfg);
@@ -262,7 +263,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
     // Schedule compaction but do not run them
     String compactionInstantTime = client.createNewInstantTime();
     scheduleCompaction(compactionInstantTime, client, cfg);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
     HoodieInstant pendingCompactionInstant =
         metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
     assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(), "Pending Compaction instant has expected instant time");
@@ -291,10 +292,10 @@ public class TestAsyncCompaction extends CompactionTestBase {
     records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
         new ArrayList<>());
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
     createNextDeltaCommit(inflightInstantTime, records, client, metaClient, cfg, true);
 
-    metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+    metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
     HoodieInstant inflightInstant =
         metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
     assertEquals(inflightInstantTime, inflightInstant.getTimestamp(), "inflight instant has expected instant time");
@@ -348,7 +349,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleAndExecuteCompaction(compactionInstantTime, client, hoodieTable, cfg, numRecs, false);
     }
@@ -372,7 +373,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleCompaction(compactionInstantTime, client, cfg);
 
@@ -398,7 +399,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleCompaction(compactionInstantTime, client, cfg);
       metaClient.reloadActiveTimeline();

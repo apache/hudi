@@ -21,6 +21,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.util.{HoodieTimer, StringUtils}
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 
@@ -30,7 +31,8 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import scala.jdk.CollectionConverters.asScalaBufferConverter
+
+import scala.collection.JavaConverters._
 
 class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -57,7 +59,7 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
     val basePath = getBasePath(table)
     val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf), config, basePath)
+    val metaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getStorageConf), config, basePath)
     if (!metaReader.enabled){
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }

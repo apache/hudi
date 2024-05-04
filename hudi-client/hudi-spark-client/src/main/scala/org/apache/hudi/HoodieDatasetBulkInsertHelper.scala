@@ -34,6 +34,7 @@ import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGener
 import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
+
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -42,14 +43,13 @@ import org.apache.spark.sql.HoodieUnsafeUtils.getNumPartitions
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
-import org.apache.spark.sql.execution.SQLConfInjectingRDD
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
-import scala.collection.JavaConverters.{asScalaBufferConverter, seqAsJavaListConverter}
-import scala.reflect.ClassTag
+import scala.collection.JavaConverters.asScalaBufferConverter
+import scala.collection.mutable
 
 object HoodieDatasetBulkInsertHelper
   extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df))) with Logging {
@@ -241,17 +241,16 @@ object HoodieDatasetBulkInsertHelper
     }
   }
 
-  private def getPartitionPathFields(config: HoodieWriteConfig): Seq[String] = {
+  private def getPartitionPathFields(config: HoodieWriteConfig): mutable.Seq[String] = {
     val keyGeneratorClassName = config.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME)
     val keyGenerator = ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps)).asInstanceOf[BuiltinKeyGenerator]
     keyGenerator.getPartitionPathFields.asScala
   }
 
-   def getPartitionPathCols(config: HoodieWriteConfig): Seq[String] = {
+  def getPartitionPathCols(config: HoodieWriteConfig): Seq[String] = {
     val partitionPathFields = getPartitionPathFields(config).toSet
     val nestedPartitionPathFields = partitionPathFields.filter(f => f.contains('.'))
 
-    return (partitionPathFields -- nestedPartitionPathFields).toSeq
+    (partitionPathFields -- nestedPartitionPathFields).toSeq
   }
-
 }

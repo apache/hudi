@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePath;
 
@@ -78,7 +79,8 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
         tablePath, "test_table", HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
-    HoodieTestDataGenerator.createCommitFile(tablePath, "100", jsc.hadoopConfiguration());
+    HoodieTestDataGenerator.createCommitFile(
+        tablePath, "100", HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
 
     Object result = shell.evaluate(() -> "table change-table-type --target-type MOR");
 

@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * KeepByTimeStrategy will return expired partitions by their lastCommitTime.
+ * KeepByTimeStrategy will return expired partitions by their create time.
  */
 public class KeepByCreationTimeStrategy extends KeepByTimeStrategy {
 

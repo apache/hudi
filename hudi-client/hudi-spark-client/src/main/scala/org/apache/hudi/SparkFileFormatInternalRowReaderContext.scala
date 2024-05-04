@@ -24,12 +24,11 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{ClosableIterator, CloseableMappingIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
-import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -61,7 +60,7 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
                                      length: Long,
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
-                                     conf: Configuration): ClosableIterator[InternalRow] = {
+                                     conf: StorageConfiguration[_]): ClosableIterator[InternalRow] = {
     // partition value is empty because the spark parquet reader will append the partition columns to
     // each row if they are given. That is the only usage of the partition values in the reader.
     val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
@@ -70,8 +69,8 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
       val structType: StructType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
       val projection: UnsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
       new CloseableMappingIterator[InternalRow, UnsafeRow](
-        sparkFileReaderFactory.newParquetFileReader(conf, filePath).asInstanceOf[HoodieSparkParquetReader]
-          .getInternalRowIterator(dataSchema, requiredSchema),
+        sparkFileReaderFactory.newParquetFileReader(conf, filePath)
+          .asInstanceOf[HoodieSparkParquetReader].getInternalRowIterator(dataSchema, requiredSchema),
         new java.util.function.Function[InternalRow, UnsafeRow] {
           override def apply(data: InternalRow): UnsafeRow = {
             // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert

@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -31,6 +30,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -196,7 +196,7 @@ public class MarkerUtils {
             context, storage, dirPath, parallelism, prefixFilter.and(markerTypeFilter),
             pairOfSubPathAndConf -> {
               String markersFilePathStr = pairOfSubPathAndConf.getKey();
-              SerializableConfiguration conf = pairOfSubPathAndConf.getValue();
+              StorageConfiguration<?> conf = pairOfSubPathAndConf.getValue();
               return readMarkersFromFile(new StoragePath(markersFilePathStr), conf);
             });
       }
@@ -210,10 +210,10 @@ public class MarkerUtils {
    * Reads the markers stored in the underlying file.
    *
    * @param markersFilePath file path for the markers
-   * @param conf            serializable config
+   * @param conf            storage config
    * @return markers in a {@code Set} of String.
    */
-  public static Set<String> readMarkersFromFile(StoragePath markersFilePath, SerializableConfiguration conf) {
+  public static Set<String> readMarkersFromFile(StoragePath markersFilePath, StorageConfiguration<?> conf) {
     return readMarkersFromFile(markersFilePath, conf, false);
   }
 
@@ -221,18 +221,18 @@ public class MarkerUtils {
    * Reads the markers stored in the underlying file.
    *
    * @param markersFilePath File path for the markers.
-   * @param conf            Serializable config.
+   * @param conf            storage config.
    * @param ignoreException Whether to ignore IOException.
    * @return Markers in a {@code Set} of String.
    */
   public static Set<String> readMarkersFromFile(StoragePath markersFilePath,
-                                                SerializableConfiguration conf,
+                                                StorageConfiguration<?> conf,
                                                 boolean ignoreException) {
     InputStream inputStream = null;
     Set<String> markers = new HashSet<>();
     try {
       LOG.debug("Read marker file: " + markersFilePath);
-      HoodieStorage storage = HoodieStorageUtils.getStorage(markersFilePath, conf.get());
+      HoodieStorage storage = HoodieStorageUtils.getStorage(markersFilePath, conf);
       inputStream = storage.open(markersFilePath);
       markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(inputStream));
     } catch (IOException e) {

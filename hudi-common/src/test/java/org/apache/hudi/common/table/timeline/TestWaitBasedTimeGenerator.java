@@ -22,6 +22,8 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Assertions;
@@ -73,7 +75,7 @@ public class TestWaitBasedTimeGenerator {
   // Clock skew time
   private final long clockSkewTime = 20L;
 
-  private final Configuration hadoopConf = new Configuration();
+  private final StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(new Configuration());
 
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
 
@@ -111,7 +113,7 @@ public class TestWaitBasedTimeGenerator {
     Thread t1 = new Thread(() -> {
       try {
         MockInProcessLockProvider.needToLockLater(!slowerThreadAcquiredLockLater);
-        TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(timeGeneratorConfig, hadoopConf);
+        TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
         t1Timestamp.set(timeGenerator.currentTimeMillis(false));
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -122,7 +124,7 @@ public class TestWaitBasedTimeGenerator {
     Thread t2 = new Thread(() -> {
       try {
         MockInProcessLockProvider.needToLockLater(slowerThreadAcquiredLockLater);
-        TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(timeGeneratorConfig, hadoopConf);
+        TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
         // Pretend t2 is slower 20ms than t1
         t2Timestamp.set(timeGenerator.currentTimeMillis(false) - clockSkewTime);
       } catch (Exception e) {

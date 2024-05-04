@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.common.util;
@@ -22,6 +23,7 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
@@ -187,7 +189,8 @@ public class TestDFSPropertiesConfiguration {
     ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
     DFSPropertiesConfiguration.refreshGlobalProps();
     try {
-      if (!HoodieStorageUtils.getStorage(DFSPropertiesConfiguration.DEFAULT_PATH, new Configuration())
+      if (!HoodieStorageUtils.getStorage(
+              DFSPropertiesConfiguration.DEFAULT_PATH, HadoopFSUtils.getStorageConf(new Configuration()))
           .exists(DFSPropertiesConfiguration.DEFAULT_PATH)) {
         assertEquals(0, DFSPropertiesConfiguration.getGlobalProps().size());
       }

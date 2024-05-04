@@ -25,10 +25,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -135,15 +136,14 @@ public class DatePartitionPathSelector extends DFSPathSelector {
             + currentDate);
     long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
-    SerializableConfiguration serializedConf = new SerializableConfiguration(
-        ((FileSystem) storage.getFileSystem()).getConf());
+    StorageConfiguration<?> storageConf = storage.getConf();
     List<String> prunedPartitionPaths = pruneDatePartitionPaths(
         context, storage, getStringWithAltKeys(props, ROOT_INPUT_PATH),
         currentDate);
 
     List<StoragePathInfo> eligibleFiles = context.flatMap(prunedPartitionPaths,
         path -> {
-          HoodieStorage storage = HoodieStorageUtils.getStorage(path, serializedConf.get());
+          HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
           return listEligibleFiles(storage, new StoragePath(path), lastCheckpointTime).stream();
         }, partitionsListParallelism);
     // sort them by modification time ascending.

@@ -22,7 +22,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.{StoragePath, HoodieStorage, HoodieStorageUtils}
+import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils
 
 import org.apache.avro.generic.GenericRecord
@@ -39,11 +39,14 @@ import java.util
 import java.util.Objects
 import java.util.concurrent.TimeUnit
 
+import scala.collection.JavaConverters._
+
 class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call hdfs_parquet_import Procedure with insert operation") {
     withTempDir { tmp =>
-      val storage: HoodieStorage = HoodieStorageUtils.getStorage(tmp.getCanonicalPath, spark.sparkContext.hadoopConfiguration)
+      val storage: HoodieStorage = HoodieStorageUtils.getStorage(
+        tmp.getCanonicalPath, HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + StoragePath.SEPARATOR + tableName
       val sourcePath = new Path(tmp.getCanonicalPath, "source")
@@ -77,7 +80,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call hdfs_parquet_import Procedure with upsert operation") {
     withTempDir { tmp =>
       val storage: HoodieStorage = HoodieStorageUtils.getStorage(
-        tmp.getCanonicalPath, spark.sparkContext.hadoopConfiguration)
+        tmp.getCanonicalPath, HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + StoragePath.SEPARATOR + tableName
       val sourcePath = new Path(tmp.getCanonicalPath, "source")
@@ -111,7 +114,6 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
   @throws[ParseException]
   @throws[IOException]
   def createInsertRecords(srcFolder: Path): util.List[GenericRecord] = {
-    import scala.collection.JavaConversions._
     val srcFile: Path = new Path(srcFolder.toString, "file1.parquet")
     val startTime: Long = HoodieActiveTimeline.parseDateFromInstantTime("20170203000000").getTime / 1000
     val records: util.List[GenericRecord] = new util.ArrayList[GenericRecord]
@@ -121,9 +123,10 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
     }
     try {
       val writer: ParquetWriter[GenericRecord] = AvroParquetWriter.builder[GenericRecord](srcFile)
-        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf).build
+        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
+        .withConf(HoodieTestUtils.getDefaultStorageConf.unwrap()).build
       try {
-        for (record <- records) {
+        for (record <- records.asScala) {
           writer.write(record)
         }
       } finally {
@@ -136,7 +139,6 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
   @throws[ParseException]
   @throws[IOException]
   def createUpsertRecords(srcFolder: Path): util.List[GenericRecord] = {
-    import scala.collection.JavaConversions._
     val srcFile = new Path(srcFolder.toString, "file1.parquet")
     val startTime = HoodieActiveTimeline.parseDateFromInstantTime("20170203000000").getTime / 1000
     val records = new util.ArrayList[GenericRecord]
@@ -150,9 +152,10 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
       records.add(dataGen.generateGenericRecord(recordNum.toString, "0", "rider-upsert-" + recordNum, "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)))
     }
     try {
-      val writer = AvroParquetWriter.builder[GenericRecord](srcFile).withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf).build
+      val writer = AvroParquetWriter.builder[GenericRecord](srcFile).withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
+        .withConf(HoodieTestUtils.getDefaultStorageConf.unwrap()).build
       try {
-        for (record <- records) {
+        for (record <- records.asScala) {
           writer.write(record)
         }
       } finally {
@@ -163,19 +166,18 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
   }
 
   private def verifyResultData(expectData: util.List[GenericRecord], storage: HoodieStorage, tablePath: String): Unit = {
-    import scala.collection.JavaConversions._
     val jsc = new JavaSparkContext(spark.sparkContext)
     val ds = HoodieClientTestUtils.read(jsc, tablePath, spark.sqlContext, storage, tablePath + "/*/*/*/*")
     val readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList()
-    val result = readData.toList.map((row: Row) =>
+    val result = readData.asScala.map((row: Row) =>
       new HoodieTripModel(row.getLong(0), row.getString(1),
         row.getString(2), row.getString(3), row.getDouble(4), row.getDouble(5), row.getDouble(6), row.getDouble(7))
     )
-    val expected = expectData.toList.map((g: GenericRecord) => new HoodieTripModel(Long.unbox(g.get("timestamp")),
+    val expected = expectData.asScala.map((g: GenericRecord) => new HoodieTripModel(Long.unbox(g.get("timestamp")),
       g.get("_row_key").toString, g.get("rider").toString, g.get("driver").toString, g.get("begin_lat").toString.toDouble,
       g.get("begin_lon").toString.toDouble, g.get("end_lat").toString.toDouble, g.get("end_lon").toString.toDouble))
 
-    assertTrue(expected.size == result.size || (result.containsAll(expected) && expected.containsAll(result)))
+    assertTrue(expected.size == result.size || (result.asJava.containsAll(expected.asJava) && expected.asJava.containsAll(result.asJava)))
   }
 
   class HoodieTripModel(

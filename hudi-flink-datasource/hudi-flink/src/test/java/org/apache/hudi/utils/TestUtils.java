@@ -28,6 +28,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.sink.utils.MockStreamingRuntimeContext;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -116,6 +117,10 @@ public class TestUtils {
   public static StreamReadMonitoringFunction getMonitorFunc(Configuration conf) {
     final String basePath = conf.getString(FlinkOptions.PATH);
     return new StreamReadMonitoringFunction(conf, new Path(basePath), TestConfigurations.ROW_TYPE, 1024 * 1024L, null);
+  }
+
+  public static MockStreamingRuntimeContext getMockRuntimeContext() {
+    return new org.apache.hudi.sink.utils.MockStreamingRuntimeContext(false, 4, 0);
   }
 
   public static int getCompletedInstantCount(String basePath, String action) {

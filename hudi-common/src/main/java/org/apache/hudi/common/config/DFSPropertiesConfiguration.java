@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -147,7 +148,7 @@ public class DFSPropertiesConfiguration {
 
     HoodieStorage storage = HoodieStorageUtils.getStorage(
         filePath,
-        Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
+        HadoopFSUtils.getStorageConf(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new))
     );
 
     try {
@@ -183,7 +184,8 @@ public class DFSPropertiesConfiguration {
         String[] split = splitProperty(line);
         if (line.startsWith("include=") || line.startsWith("include =")) {
           StoragePath providedPath = new StoragePath(split[1]);
-          HoodieStorage providedStorage = HoodieStorageUtils.getStorage(split[1], hadoopConfig);
+          HoodieStorage providedStorage = HoodieStorageUtils.getStorage(
+              split[1], HadoopFSUtils.getStorageConf(hadoopConfig));
           // In the case that only filename is provided, assume it's in the same directory.
           if ((!providedPath.isAbsolute() || StringUtils.isNullOrEmpty(providedStorage.getScheme()))
               && cfgFilePath != null) {

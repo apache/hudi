@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -47,11 +48,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public abstract class BaseTestStorageConfiguration<T> {
   private static final Map<String, String> EMPTY_MAP = new HashMap<>();
   private static final String KEY_STRING = "hudi.key.string";
+  private static final String KEY_STRING_OTHER = "hudi.key.string.other";
   private static final String KEY_BOOLEAN = "hudi.key.boolean";
   private static final String KEY_LONG = "hudi.key.long";
   private static final String KEY_ENUM = "hudi.key.enum";
   private static final String KEY_NON_EXISTENT = "hudi.key.non_existent";
   private static final String VALUE_STRING = "string_value";
+  private static final String VALUE_STRING_1 = "string_value_1";
   private static final String VALUE_BOOLEAN = "true";
   private static final String VALUE_LONG = "12309120";
   private static final String VALUE_ENUM = TestEnum.ENUM2.toString();
@@ -68,11 +71,32 @@ public abstract class BaseTestStorageConfiguration<T> {
   protected abstract T getConf(Map<String, String> mapping);
 
   @Test
-  public void testConstructorGetNewCopy() {
-    T conf = getConf(EMPTY_MAP);
+  public void testConstructorNewInstanceUnwrapCopy() {
+    T conf = getConf(prepareConfigs());
     StorageConfiguration<T> storageConf = getStorageConfiguration(conf);
-    assertSame(storageConf.get(), storageConf.get());
-    assertNotSame(storageConf.get(), storageConf.newCopy());
+    StorageConfiguration<T> newStorageConf = storageConf.newInstance();
+    Class unwrapperConfClass = storageConf.unwrap().getClass();
+    assertNotSame(storageConf, newStorageConf,
+        "storageConf.newInstance() should return a different StorageConfiguration instance.");
+    validateConfigs(newStorageConf);
+    assertNotSame(storageConf.unwrap(), newStorageConf.unwrap(),
+        "storageConf.newInstance() should contain a new copy of the underlying configuration instance.");
+    assertSame(storageConf.unwrap(), storageConf.unwrap(),
+        "storageConf.unwrap() should return the same underlying configuration instance.");
+    assertSame(storageConf.unwrap(), storageConf.unwrapAs(unwrapperConfClass),
+        "storageConf.unwrapAs(unwrapperConfClass) should return the same underlying configuration instance.");
+    assertNotSame(storageConf.unwrap(), storageConf.unwrapCopy(),
+        "storageConf.unwrapCopy() should return a new copy of the underlying configuration instance.");
+    validateConfigs(getStorageConfiguration(storageConf.unwrapCopy()));
+    assertNotSame(storageConf.unwrap(), storageConf.unwrapCopyAs(unwrapperConfClass),
+        "storageConf.unwrapCopyAs(unwrapperConfClass) should return a new copy of the underlying configuration instance.");
+    validateConfigs(getStorageConfiguration((T) storageConf.unwrapCopyAs(unwrapperConfClass)));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> storageConf.unwrapAs(Integer.class));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> storageConf.unwrapCopyAs(Integer.class));
   }
 
   @Test
@@ -85,6 +109,11 @@ public abstract class BaseTestStorageConfiguration<T> {
     storageConf.set(KEY_BOOLEAN, VALUE_BOOLEAN);
     assertEquals(Option.of(VALUE_STRING), storageConf.getString(KEY_STRING));
     assertTrue(storageConf.getBoolean(KEY_BOOLEAN, false));
+
+    storageConf.setIfUnset(KEY_STRING, VALUE_STRING + "_1");
+    storageConf.setIfUnset(KEY_STRING_OTHER, VALUE_STRING_1);
+    assertEquals(Option.of(VALUE_STRING), storageConf.getString(KEY_STRING));
+    assertEquals(Option.of(VALUE_STRING_1), storageConf.getString(KEY_STRING_OTHER));
   }
 
   @Test
@@ -102,7 +131,7 @@ public abstract class BaseTestStorageConfiguration<T> {
       try (ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
            ObjectInputStream ois = new ObjectInputStream(bais)) {
         StorageConfiguration<?> deserialized = (StorageConfiguration) ois.readObject();
-        assertNotNull(deserialized.get());
+        assertNotNull(deserialized.unwrap());
         validateConfigs(deserialized);
       }
     }

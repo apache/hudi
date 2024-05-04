@@ -28,7 +28,6 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
@@ -86,8 +85,7 @@ public class ITTestBucketStreamWrite {
     if (isCow) {
       TestData.checkWrittenData(tempFile, EXPECTED, 4);
     } else {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(tempFile.getAbsolutePath(),
-          new org.apache.hadoop.conf.Configuration());
+      HoodieStorage storage = HoodieTestUtils.getStorage(tempFile.getAbsolutePath());
       TestData.checkWrittenDataMOR(storage, tempFile, EXPECTED, 4);
     }
   }

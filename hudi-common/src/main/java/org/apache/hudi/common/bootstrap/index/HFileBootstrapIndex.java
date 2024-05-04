@@ -86,7 +86,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class HFileBootstrapIndex extends BootstrapIndex {
 
-  protected static final long serialVersionUID = 1L;
+  private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(HFileBootstrapIndex.class);
 
@@ -434,7 +434,6 @@ public class HFileBootstrapIndex extends BootstrapIndex {
      * @param fileSystem File System
      */
     private static HFile.Reader createReader(String hFilePath, Configuration conf, FileSystem fileSystem) {
-      LOG.info("Opening HFile for reading :" + hFilePath);
       return HoodieHFileUtils.createHFileReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf), conf);
     }
 
@@ -462,7 +461,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
           if (null == indexByPartitionReader) {
             LOG.info("Opening partition index :" + indexByPartitionPath);
             this.indexByPartitionReader = createReader(
-                indexByPartitionPath, metaClient.getHadoopConf(), (FileSystem) metaClient.getStorage().getFileSystem());
+                indexByPartitionPath, metaClient.getStorageConf().unwrapAs(Configuration.class), (FileSystem) metaClient.getStorage().getFileSystem());
           }
         }
       }
@@ -475,7 +474,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
           if (null == indexByFileIdReader) {
             LOG.info("Opening fileId index :" + indexByFileIdPath);
             this.indexByFileIdReader = createReader(
-                indexByFileIdPath, metaClient.getHadoopConf(), (FileSystem) metaClient.getStorage().getFileSystem());
+                indexByFileIdPath, metaClient.getStorageConf().unwrapAs(Configuration.class), (FileSystem) metaClient.getStorage().getFileSystem());
           }
         }
       }
@@ -723,12 +722,12 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     public void begin() {
       try {
         HFileContext meta = new HFileContextBuilder().withCellComparator(new HoodieKVComparator()).build();
-        this.indexByPartitionWriter = HFile.getWriterFactory(metaClient.getHadoopConf(),
-                new CacheConfig(metaClient.getHadoopConf()))
+        this.indexByPartitionWriter = HFile.getWriterFactory(metaClient.getStorageConf().unwrapAs(Configuration.class),
+                new CacheConfig(metaClient.getStorageConf().unwrapAs(Configuration.class)))
             .withPath((FileSystem) metaClient.getStorage().getFileSystem(), new Path(indexByPartitionPath.toUri()))
             .withFileContext(meta).create();
-        this.indexByFileIdWriter = HFile.getWriterFactory(metaClient.getHadoopConf(),
-                new CacheConfig(metaClient.getHadoopConf()))
+        this.indexByFileIdWriter = HFile.getWriterFactory(metaClient.getStorageConf().unwrapAs(Configuration.class),
+                new CacheConfig(metaClient.getStorageConf().unwrapAs(Configuration.class)))
             .withPath((FileSystem) metaClient.getStorage().getFileSystem(), new Path(indexByFileIdPath.toUri()))
             .withFileContext(meta).create();
       } catch (IOException ioe) {

@@ -20,11 +20,11 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,14 +62,14 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
   /**
    * The hadoop configuration.
    */
-  private final SerializableConfiguration hadoopConf;
+  private final StorageConfiguration<?> storageConf;
 
   private final RetryHelper<Boolean, HoodieLockException> lockRetryHelper;
 
-  public TimeGeneratorBase(HoodieTimeGeneratorConfig config, SerializableConfiguration hadoopConf) {
+  public TimeGeneratorBase(HoodieTimeGeneratorConfig config, StorageConfiguration<?> storageConf) {
     this.config = config;
     this.lockConfiguration = config.getLockConfiguration();
-    this.hadoopConf = hadoopConf;
+    this.storageConf = storageConf;
 
     // The maximum times to retry in case there are failures.
     int maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
@@ -91,7 +91,7 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
           String lockProviderClass = lockConfiguration.getConfig().getString("hoodie.write.lock.provider");
           LOG.info("LockProvider for TimeGenerator: " + lockProviderClass);
           lockProvider = (LockProvider<?>) ReflectionUtils.loadClass(lockProviderClass,
-              lockConfiguration, hadoopConf.get());
+              lockConfiguration, storageConf.unwrap());
         }
       }
     }

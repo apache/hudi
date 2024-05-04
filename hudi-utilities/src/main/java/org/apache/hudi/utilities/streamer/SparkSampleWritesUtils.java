@@ -97,7 +97,7 @@ public class SparkSampleWritesUtils {
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(String.format("%s_samples_%s", writeConfig.getTableName(), instantTime))
         .setCDCEnabled(false)
-        .initTable(jsc.hadoopConfiguration(), sampleWritesBasePath);
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), sampleWritesBasePath);
     TypedProperties props = writeConfig.getProps();
     props.put(SAMPLE_WRITES_ENABLED.key(), "false");
     final HoodieWriteConfig sampleWriteConfig = HoodieWriteConfig.newBuilder()
@@ -160,6 +160,7 @@ public class SparkSampleWritesUtils {
 
   private static HoodieTableMetaClient getMetaClient(JavaSparkContext jsc, String basePath) {
     FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
-    return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
+    return HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf())).setBasePath(basePath).build();
   }
 }

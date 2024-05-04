@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-import scala.jdk.CollectionConverters.{asScalaIteratorConverter, collectionAsScalaIterableConverter}
+import scala.collection.JavaConverters._
 
 class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
 

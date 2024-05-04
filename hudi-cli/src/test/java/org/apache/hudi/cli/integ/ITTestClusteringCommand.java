@@ -35,8 +35,10 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,7 +73,7 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
     tableName = "test_table_" + ITTestClusteringCommand.class.getName();
     basePath = Paths.get(basePath, tableName).toString();
 
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     // Create table and connect
     new TableCommand().createTable(
         basePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),

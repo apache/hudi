@@ -19,6 +19,9 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.util.hash.PartitionIndexID
+import org.apache.hudi.metadata.HoodieTableMetadataUtil
+
 import org.apache.spark.sql.functions.{col, from_json}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -608,9 +611,9 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           assert(result3DF.count() == 3)
 
           val result4DF = spark.sql(
-            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=3"
+            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=3 or type=6"
           )
-          assert(result4DF.count() == 3)
+          assert(result4DF.count() == 6)
 
           val result5DF = spark.sql(
             s"select type, key, recordIndexMetadata from hudi_metadata('$identifier') where type=5"
@@ -625,5 +628,76 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
       }
     }
     spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
+  }
+
+  test(s"Test hudi_metadata Table-Valued Function For PARTITION_STATS index") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          val identifier = tableName
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  ts long,
+               |  price int
+               |) using hudi
+               |partitioned by (ts)
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts',
+               |  hoodie.datasource.write.recordkey.field = 'id',
+               |  hoodie.metadata.index.partition.stats.enable = 'true',
+               |  hoodie.metadata.index.column.stats.column.list = 'price'
+               |)
+               |location '${tmp.getCanonicalPath}/$tableName'
+               |""".stripMargin
+          )
+
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1', 1000, 10), (2, 'a2', 2000, 20), (3, 'a3', 3000, 30), (4, 'a4', 2000, 10), (5, 'a5', 3000, 20), (6, 'a6', 4000, 30)
+               | """.stripMargin
+          )
+
+          val result2DF = spark.sql(
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=1"
+          )
+          assert(result2DF.count() == 1)
+
+          val result3DF = spark.sql(
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=2"
+          )
+          assert(result3DF.count() == 3)
+
+          val result4DF = spark.sql(
+            s"select * from hudi_metadata('$identifier') where type=3"
+          )
+          assert(result4DF.count() == 3)
+          // TODO(HUDI-7705): use partition column name to generate the prefix after the bug fix
+          val columnNameKeyPrefix = "XV1ds8/f890="
+          checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value from hudi_metadata('$identifier') where type=3")(
+            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=10"), 1000),
+            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=20"), 2000),
+            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=30"), 3000)
+          )
+          checkAnswer(s"select key, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$identifier') where type=3")(
+            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=10"), 2000),
+            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=20"), 3000),
+            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=30"), 4000)
+          )
+        }
+      }
+    }
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
+  }
+
+  def getPartitionIndexKey(partitionPath: String): String = {
+    new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionPath)).asBase64EncodedString
   }
 }

@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
@@ -73,7 +74,7 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   private final StoragePath path;
   private final HoodieStorage storage;
-  private final Configuration hadoopConf;
+  private final StorageConfiguration<?> storageConf;
   private final CacheConfig config;
   private final Option<byte[]> content;
   private final Lazy<Schema> schema;
@@ -89,31 +90,31 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   private final Object sharedLock = new Object();
 
-  public HoodieHBaseAvroHFileReader(Configuration hadoopConf, StoragePath path, CacheConfig cacheConfig)
+  public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, CacheConfig cacheConfig)
       throws IOException {
-    this(path, HoodieStorageUtils.getStorage(path, hadoopConf), hadoopConf, cacheConfig, Option.empty());
+    this(path, HoodieStorageUtils.getStorage(path, storageConf), storageConf, cacheConfig, Option.empty());
   }
 
-  public HoodieHBaseAvroHFileReader(Configuration hadoopConf, StoragePath path, CacheConfig cacheConfig,
+  public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, CacheConfig cacheConfig,
                                     HoodieStorage storage, Option<Schema> schemaOpt) throws IOException {
-    this(path, storage, hadoopConf, cacheConfig, schemaOpt);
+    this(path, storage, storageConf, cacheConfig, schemaOpt);
   }
 
-  public HoodieHBaseAvroHFileReader(Configuration hadoopConf, StoragePath path, CacheConfig cacheConfig,
+  public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, CacheConfig cacheConfig,
                                     HoodieStorage storage, byte[] content, Option<Schema> schemaOpt) throws IOException {
-    this(path, storage, hadoopConf, cacheConfig, schemaOpt, Option.of(content));
+    this(path, storage, storageConf, cacheConfig, schemaOpt, Option.of(content));
   }
 
-  public HoodieHBaseAvroHFileReader(StoragePath path, HoodieStorage storage, Configuration hadoopConf, CacheConfig config,
+  public HoodieHBaseAvroHFileReader(StoragePath path, HoodieStorage storage, StorageConfiguration<?> storageConf, CacheConfig config,
                                     Option<Schema> schemaOpt) throws IOException {
-    this(path, storage, hadoopConf, config, schemaOpt, Option.empty());
+    this(path, storage, storageConf, config, schemaOpt, Option.empty());
   }
 
-  public HoodieHBaseAvroHFileReader(StoragePath path, HoodieStorage storage, Configuration hadoopConf, CacheConfig config,
+  public HoodieHBaseAvroHFileReader(StoragePath path, HoodieStorage storage, StorageConfiguration<?> storageConf, CacheConfig config,
                                     Option<Schema> schemaOpt, Option<byte[]> content) throws IOException {
     this.path = path;
     this.storage = storage;
-    this.hadoopConf = hadoopConf;
+    this.storageConf = storageConf;
     this.config = config;
     this.content = content;
 
@@ -285,7 +286,7 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     if (content.isPresent()) {
       return HoodieHFileUtils.createHFileReader(storage, path, content.get());
     }
-    return HoodieHFileUtils.createHFileReader(storage, path, config, hadoopConf);
+    return HoodieHFileUtils.createHFileReader(storage, path, config, storageConf.unwrapAs(Configuration.class));
   }
 
   private boolean isKeyAvailable(String key, HFileScanner keyScanner) throws IOException {

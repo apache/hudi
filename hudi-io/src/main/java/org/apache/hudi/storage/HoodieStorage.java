@@ -39,6 +39,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static org.apache.hudi.storage.StorageConfiguration.castConfiguration;
+
 /**
  * Provides I/O APIs on files and directories on storage.
  * The APIs are mainly based on {@code org.apache.hadoop.fs.FileSystem} class.
@@ -265,10 +267,16 @@ public abstract class HoodieStorage implements Closeable {
   public abstract Object getFileSystem();
 
   /**
-   * @return the underlying configuration instance if exists.
+   * @return the storage configuration.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract Object getConf();
+  public abstract StorageConfiguration<?> getConf();
+
+  /**
+   * @return the underlying configuration instance.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract Object unwrapConf();
 
   /**
    * Creates a new file with overwrite set to false. This ensures files are created
@@ -420,5 +428,15 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public List<StoragePathInfo> globEntries(StoragePath pathPattern) throws IOException {
     return globEntries(pathPattern, e -> true);
+  }
+
+  /**
+   * @param clazz class of U.
+   * @param <U>   type to return.
+   * @return the underlying configuration cast to type {@link U}.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public final <U> U unwrapConfAs(Class<U> clazz) {
+    return castConfiguration(unwrapConf(), clazz);
   }
 }

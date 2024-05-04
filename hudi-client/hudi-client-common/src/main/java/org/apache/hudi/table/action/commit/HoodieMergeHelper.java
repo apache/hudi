@@ -38,13 +38,13 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,11 +78,11 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieWriteConfig writeConfig = table.getConfig();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
-    Configuration hadoopConf = new Configuration(table.getHadoopConf());
+    StorageConfiguration<?> storageConf = table.getStorageConf().newInstance();
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
     HoodieFileReader baseFileReader = HoodieFileReaderFactory
         .getReaderFactory(recordType)
-        .getFileReader(writeConfig, hadoopConf, mergeHandle.getOldFilePath());
+        .getFileReader(writeConfig, storageConf, mergeHandle.getOldFilePath());
     HoodieFileReader bootstrapFileReader = null;
 
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
@@ -112,7 +112,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         StoragePath bootstrapFilePath =
             new StoragePath(baseFile.getBootstrapBaseFile().get().getPath());
-        Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
+        StorageConfiguration<?> bootstrapFileConfig = table.getStorageConf().newInstance();
         bootstrapFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
             baseFileReader,
             HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(writeConfig, bootstrapFileConfig, bootstrapFilePath),

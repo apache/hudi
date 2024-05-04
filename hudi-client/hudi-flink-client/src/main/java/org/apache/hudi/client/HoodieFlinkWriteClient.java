@@ -57,6 +57,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -254,6 +255,7 @@ public class HoodieFlinkWriteClient<T> extends
     Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
         .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
     return preppedRecordsByFileId.values().stream().parallel().map(records -> {
+      records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
       HoodieWriteMetadata<List<WriteStatus>> result;
       records.get(0).getCurrentLocation().setInstantTime("I");
       try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table, true)) {

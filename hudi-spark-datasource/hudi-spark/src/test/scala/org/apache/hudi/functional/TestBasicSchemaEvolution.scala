@@ -38,7 +38,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
-import scala.collection.JavaConversions.asScalaBuffer
+
 import scala.collection.JavaConverters._
 
 class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAssertionSupport {
@@ -136,10 +136,10 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       val df =
         spark.read.format("org.apache.hudi")
           .load(tablePath)
-          .drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+          .drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*)
           .orderBy(functions.col("_row_key").cast(IntegerType))
 
-      (latestTableSchema, df.collectAsList().toSeq)
+      (latestTableSchema, df.collectAsList.asScala.toSeq)
     }
 
     //

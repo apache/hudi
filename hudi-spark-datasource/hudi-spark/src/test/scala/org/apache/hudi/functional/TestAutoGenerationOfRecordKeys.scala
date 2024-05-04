@@ -19,34 +19,32 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers, ScalaAssertionSupport}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.util
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
+import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
 import org.apache.hudi.functional.CommonOptionUtils._
-import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
+import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
+import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers, ScalaAssertionSupport}
 
 import org.apache.hadoop.fs.FileSystem
-import org.apache.spark.sql.{SaveMode, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.apache.spark.sql.{SaveMode, SparkSession, SparkSessionExtensions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
 
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with ScalaAssertionSupport {
@@ -130,7 +128,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     val writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 5)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 5)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.cache
 
@@ -167,6 +165,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     val recordKeys = readDF.select(HoodieRecord.RECORD_KEY_METADATA_FIELD)
       .distinct()
       .collectAsList()
+      .asScala
       .map(_.getString(0))
 
     // Validate auto-gen'd keys are globally unique
@@ -174,7 +173,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
 
     // validate entire batch is present in snapshot read
     val expectedInputDf = inputDF.union(inputDF2).drop("partition", "rider", "_hoodie_is_deleted")
-    val actualDf = readDF.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*).drop("partition", "rider", "_hoodie_is_deleted")
+    val actualDf = readDF.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*).drop("partition", "rider", "_hoodie_is_deleted")
     assertEquals(expectedInputDf.except(actualDf).count, 0)
   }
 
@@ -190,7 +189,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     var opts = writeOpts -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 1)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 1)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     val e = assertThrows(classOf[HoodieKeyGeneratorException]) {
       inputDF.write.format("hudi")
@@ -216,7 +215,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     var writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 5)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 5)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.cache
 
@@ -251,7 +250,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
 
   @Test
   def testWriteToHudiWithoutAnyConfigs(): Unit = {
-    val records = recordsToStrings(dataGen.generateInserts("000", 5)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 5)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.cache
 
@@ -275,7 +274,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     var writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 20)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 20)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.cache
 
