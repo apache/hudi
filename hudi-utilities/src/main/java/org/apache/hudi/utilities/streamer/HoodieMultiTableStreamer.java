@@ -140,6 +140,7 @@ public class HoodieMultiTableStreamer {
       //copy all the values from config to cfg
       String targetBasePath = resetTarget(config, database, currentTable);
       Helpers.deepCopyConfigs(config, cfg);
+      cfg.propsFilePath = configFilePath;
       String overriddenTargetBasePath = getStringWithAltKeys(tableProperties, HoodieStreamerConfig.TARGET_BASE_PATH, true);
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
       if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), ""))) {
@@ -255,6 +256,7 @@ public class HoodieMultiTableStreamer {
       tableConfig.clusterSchedulingWeight = globalConfig.clusterSchedulingWeight;
       tableConfig.clusterSchedulingMinShare = globalConfig.clusterSchedulingMinShare;
       tableConfig.sparkMaster = globalConfig.sparkMaster;
+      tableConfig.configs.addAll(globalConfig.configs);
     }
   }
 
@@ -429,6 +431,99 @@ public class HoodieMultiTableStreamer {
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      Config config = (Config) o;
+      return sourceLimit == config.sourceLimit
+          && Objects.equals(basePathPrefix, config.basePathPrefix)
+          && Objects.equals(targetTableName, config.targetTableName)
+          && Objects.equals(tableType, config.tableType)
+          && Objects.equals(configFolder, config.configFolder)
+          && Objects.equals(propsFilePath, config.propsFilePath)
+          && Objects.equals(configs, config.configs)
+          && Objects.equals(sourceClassName, config.sourceClassName)
+          && Objects.equals(sourceOrderingField, config.sourceOrderingField)
+          && Objects.equals(payloadClassName, config.payloadClassName)
+          && Objects.equals(schemaProviderClassName, config.schemaProviderClassName)
+          && Objects.equals(transformerClassNames, config.transformerClassNames)
+          && operation == config.operation
+          && Objects.equals(filterDupes, config.filterDupes)
+          && Objects.equals(enableHiveSync, config.enableHiveSync)
+          && Objects.equals(enableMetaSync, config.enableMetaSync)
+          && Objects.equals(syncClientToolClassNames, config.syncClientToolClassNames)
+          && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
+          && Objects.equals(maxPendingClustering, config.maxPendingClustering)
+          && Objects.equals(continuousMode, config.continuousMode)
+          && Objects.equals(minSyncIntervalSeconds, config.minSyncIntervalSeconds)
+          && Objects.equals(sparkMaster, config.sparkMaster)
+          && Objects.equals(commitOnErrors, config.commitOnErrors)
+          && Objects.equals(deltaSyncSchedulingWeight, config.deltaSyncSchedulingWeight)
+          && Objects.equals(compactSchedulingWeight, config.compactSchedulingWeight)
+          && Objects.equals(deltaSyncSchedulingMinShare, config.deltaSyncSchedulingMinShare)
+          && Objects.equals(compactSchedulingMinShare, config.compactSchedulingMinShare)
+          && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
+          && Objects.equals(checkpoint, config.checkpoint)
+          && Objects.equals(clusterSchedulingWeight, config.clusterSchedulingWeight)
+          && Objects.equals(clusterSchedulingMinShare, config.clusterSchedulingMinShare)
+          && Objects.equals(help, config.help);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(basePathPrefix, targetTableName, tableType, configFolder,
+          propsFilePath, configs, sourceClassName, sourceOrderingField, payloadClassName,
+          schemaProviderClassName, transformerClassNames, sourceLimit, operation,
+          filterDupes, enableHiveSync, enableMetaSync, syncClientToolClassNames,
+          maxPendingCompactions, maxPendingClustering, continuousMode,
+          minSyncIntervalSeconds, sparkMaster, commitOnErrors, deltaSyncSchedulingWeight,
+          compactSchedulingWeight, deltaSyncSchedulingMinShare, compactSchedulingMinShare, forceDisableCompaction,
+          checkpoint, clusterSchedulingWeight, clusterSchedulingMinShare, help);
+    }
+
+    @Override
+    public String toString() {
+      return "Config{" +
+          "basePathPrefix='" + basePathPrefix + '\'' +
+          ", targetTableName='" + targetTableName + '\'' +
+          ", tableType='" + tableType + '\'' +
+          ", configFolder='" + configFolder + '\'' +
+          ", propsFilePath='" + propsFilePath + '\'' +
+          ", configs=" + configs +
+          ", sourceClassName='" + sourceClassName + '\'' +
+          ", sourceOrderingField='" + sourceOrderingField + '\'' +
+          ", payloadClassName='" + payloadClassName + '\'' +
+          ", schemaProviderClassName='" + schemaProviderClassName + '\'' +
+          ", transformerClassNames=" + transformerClassNames +
+          ", sourceLimit=" + sourceLimit +
+          ", operation=" + operation +
+          ", filterDupes=" + filterDupes +
+          ", enableHiveSync=" + enableHiveSync +
+          ", enableMetaSync=" + enableMetaSync +
+          ", syncClientToolClassNames='" + syncClientToolClassNames + '\'' +
+          ", maxPendingCompactions=" + maxPendingCompactions +
+          ", maxPendingClustering=" + maxPendingClustering +
+          ", continuousMode=" + continuousMode +
+          ", minSyncIntervalSeconds=" + minSyncIntervalSeconds +
+          ", sparkMaster='" + sparkMaster + '\'' +
+          ", commitOnErrors=" + commitOnErrors +
+          ", deltaSyncSchedulingWeight=" + deltaSyncSchedulingWeight +
+          ", compactSchedulingWeight=" + compactSchedulingWeight +
+          ", deltaSyncSchedulingMinShare=" + deltaSyncSchedulingMinShare +
+          ", compactSchedulingMinShare=" + compactSchedulingMinShare +
+          ", forceDisableCompaction=" + forceDisableCompaction +
+          ", checkpoint='" + checkpoint + '\'' +
+          ", clusterSchedulingWeight=" + clusterSchedulingWeight +
+          ", clusterSchedulingMinShare=" + clusterSchedulingMinShare +
+          ", help=" + help +
+          '}';
+    }
   }
 
   /**
