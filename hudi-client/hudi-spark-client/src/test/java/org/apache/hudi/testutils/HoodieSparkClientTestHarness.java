@@ -321,14 +321,8 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    * Initializes timeline service based on the write config.
    */
   protected void initTimelineService() {
-    try {
-      timelineService = HoodieClientTestUtils.initTimelineService(
-          context, basePath, incrementTimelineServicePortToUse());
-    } catch (Exception ex) {
-      // try on new random port
-      timelineService = HoodieClientTestUtils.initTimelineService(
-          context, basePath, 1024 + new Random().nextInt(50000));
-    }
+    timelineService = HoodieClientTestUtils.initTimelineService(
+        context, basePath, incrementTimelineServicePortToUse());
     timelineServicePort = timelineService.getServerPort();
   }
 

@@ -397,6 +397,8 @@
           <systemPropertyVariables>
             <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
           </systemPropertyVariables>
+          <forkCount>2</forkCount>
+          <reuseForks>true</reuseForks>
         </configuration>
       </plugin>
       <plugin>
@@ -605,7 +607,7 @@
           <version>${maven-surefire-plugin.version}</version>
           <configuration>
             <reuseForks>true</reuseForks>
-            <forkCount>4</forkCount>
+            <forkCount>2</forkCount>
             <rerunFailingTestsCount>3</rerunFailingTestsCount>
             <argLine>@{argLine}</argLine>
             <trimStackTrace>false</trimStackTrace>
@@ -1887,7 +1889,7 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipUTs}</skip>
-              <forkCount>4</forkCount>
+              <forkCount>2</forkCount>
               <reuseForks>true</reuseForks>
               <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
               <excludedGroups>functional</excludedGroups>
@@ -1944,7 +1946,7 @@
             </dependencies>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
-              <forkCount>4</forkCount>
+              <forkCount>2</forkCount>
               <reuseForks>true</reuseForks>
               <includes>
                 <include>**/*FunctionalTestSuite.java</include>

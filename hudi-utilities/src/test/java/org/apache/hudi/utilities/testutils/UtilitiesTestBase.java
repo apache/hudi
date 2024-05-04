@@ -39,7 +39,6 @@ import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.commit.TestSparkWriteHelper;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.sources.TestDataSource;
