@@ -145,8 +145,9 @@ public class AvroSchemaEvolutionUtils {
       return targetSchema;
     }
 
-    InternalSchema sourceInternalSchema = convert(sourceSchema);
     InternalSchema targetInternalSchema = convert(targetSchema);
+    // Use existing fieldIds for consistent field ordering between commits
+    InternalSchema sourceInternalSchema = convert(sourceSchema, targetInternalSchema.getNameToId());
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();

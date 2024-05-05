@@ -37,6 +37,9 @@ import java.util.stream.Collectors;
  * used to support schema evolution.
  */
 public class InternalSchema implements Serializable {
+  public static final String ARRAY_ELEMENT = "element";
+  public static final String MAP_KEY = "key";
+  public static final String MAP_VALUE = "value";
 
   private static final InternalSchema EMPTY_SCHEMA = new InternalSchema(-1L, RecordType.get());
 
@@ -266,6 +269,10 @@ public class InternalSchema implements Serializable {
       return -1;
     }
     return buildNameToId().getOrDefault(name, -1);
+  }
+
+  public Map<String, Integer> getNameToId() {
+    return buildNameToId();
   }
 
   @Override
