@@ -69,8 +69,14 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
         .getTimelineOfActions(CollectionUtils.createSet(REPLACE_COMMIT_ACTION, COMPACTION_ACTION))
         .findInstantsAfter(currentInstant.getTimestamp())
         .filterInflightsAndRequested()
-        .filter(i -> (!i.getAction().equals(COMPACTION_ACTION)) || i.getState().equals(REQUESTED))
-        .getInstantsAsStream();
+        .getInstantsAsStream()
+        .map(i -> { // Compaction.inflight does not contain plan info. Instead, we return compaction.requested instant.
+          if (i.getAction().equals(COMPACTION_ACTION) && i.getState().equals(HoodieInstant.State.INFLIGHT)) {
+            return new HoodieInstant(HoodieInstant.State.REQUESTED, COMPACTION_ACTION, i.getTimestamp());
+          } else {
+            return i;
+          }
+        });
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
   }
 
