@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.table.types.logical.RowType;
@@ -76,7 +77,7 @@ public class HoodieRowDataFileWriterFactory {
         writeConfig.getParquetBlockSize(),
         writeConfig.getParquetPageSize(),
         writeConfig.getParquetMaxFileSize(),
-        writeSupport.getHadoopConf(),
+        new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
         writeConfig.getParquetCompressionRatio(),
         writeConfig.parquetDictionaryEnabled()));
   }
