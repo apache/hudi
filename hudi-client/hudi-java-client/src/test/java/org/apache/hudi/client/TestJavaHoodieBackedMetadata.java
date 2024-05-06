@@ -153,6 +153,8 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
@@ -747,22 +749,17 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.commit(newCommitTime3, writeStatuses);
 
       // collect all commit meta files from metadata table.
-      List<StoragePathInfo> metaFiles = metaClient.getStorage().listDirectEntries(
-          new StoragePath(metaClient.getMetaPath() + "/metadata/.hoodie"));
-      List<StoragePathInfo> commit3Files = metaFiles.stream()
-          .filter(fileInfo ->
-              fileInfo.getPath().getName().contains(newCommitTime3)
-                  && fileInfo.getPath().getName().contains(HoodieTimeline.DELTA_COMMIT_ACTION))
-          .collect(Collectors.toList());
-      List<StoragePathInfo> rollbackFiles = metaFiles.stream()
-          .filter(fileStatus ->
-              fileStatus.getPath().getName().endsWith("." + HoodieTimeline.ROLLBACK_ACTION))
-          .collect(Collectors.toList());
+      HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.init(storageConf, HoodieTableMetadata.getMetadataTableBasePath(basePath), tableType, new Properties());
+      String completionTimeForCommit3 = metadataMetaClient.getActiveTimeline().filter(instant -> instant.getTimestamp().equals(newCommitTime3)).firstInstant()
+          .map(HoodieInstant::getCompletionTime)
+          .orElseThrow(() -> new IllegalStateException(newCommitTime3 + " should exist on the metadata"));
+      String completionTimeForRollback = metadataMetaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(ROLLBACK_ACTION)).firstInstant()
+          .map(HoodieInstant::getCompletionTime)
+          .orElseThrow(() -> new IllegalStateException("A rollback commit should exist on the metadata"));
 
-      // ensure commit2's delta commit in MDT has last mod time > the actual rollback for previous failed commit i.e. commit2.
-      // if rollback wasn't eager, rollback's last mod time will be lower than the commit3'd delta commit last mod time.
-      assertTrue(
-          commit3Files.get(0).getModificationTime() > rollbackFiles.get(0).getModificationTime());
+      // ensure commit2's delta commit in MDT has completion time > the actual rollback for previous failed commit i.e. commit2.
+      // if rollback wasn't eager, rollback's completion time will be lower than the commit3'd delta commit completion time.
+      assertTrue(HoodieTimeline.compareTimestamps(completionTimeForCommit3, GREATER_THAN, completionTimeForRollback));
     }
   }
 

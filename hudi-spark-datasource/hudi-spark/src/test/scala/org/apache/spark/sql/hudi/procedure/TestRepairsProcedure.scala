@@ -38,8 +38,7 @@ import java.net.URL
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import scala.collection.JavaConverters.asScalaIteratorConverter
-import scala.jdk.CollectionConverters.{asScalaSetConverter, iterableAsScalaIterableConverter}
+import scala.collection.JavaConverters._
 
 class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 

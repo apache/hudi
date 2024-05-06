@@ -45,9 +45,10 @@ import org.apache.spark.sql.types.{LongType, Metadata, MetadataBuilder, StringTy
 
 import java.io.Closeable
 import java.util.Locale
+
 import scala.annotation.tailrec
+import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 trait HoodieFormatTrait {
 

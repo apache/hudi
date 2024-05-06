@@ -30,7 +30,7 @@ import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-import scala.collection.JavaConversions.asScalaBuffer
+import scala.collection.JavaConverters._
 
 class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase  {
 
@@ -66,7 +66,7 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testReadingWithStateTransitionTime(tableType: HoodieTableType): Unit = {
-    val records = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.write.format("org.apache.hudi")
       .options(commonOpts)

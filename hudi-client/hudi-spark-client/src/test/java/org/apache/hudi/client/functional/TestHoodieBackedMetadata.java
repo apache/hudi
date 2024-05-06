@@ -167,8 +167,10 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_EXTENSION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_EXTENSION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.INFLIGHT_EXTENSION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REQUESTED_EXTENSION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
@@ -923,6 +925,38 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(HoodieInstantTimeGenerator.instantTimeMinusMillis(inflightInstant2, 1L), tableMetadata.getLatestCompactionTime().get());
   }
 
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testInitializeMetadataTableWithPendingInstant(HoodieTableType tableType) throws Exception {
+    init(tableType, false);
+    initWriteConfigAndMetatableWriter(writeConfig, false);
+    // 1. firstly we disable the metadata table, then create two completed commits and one inflight commit.
+    // 1.1write 2 commits first.
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
+    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
+
+    // 1.2 create another inflight commit
+    String inflightInstant = metaClient.createNewInstantTime();
+    HoodieCommitMetadata inflightCommitMeta = testTable.doWriteOperation(inflightInstant, UPSERT, emptyList(),
+        asList("p1", "p2"), 2, false, true);
+    doWriteOperation(testTable, metaClient.createNewInstantTime());
+
+    // 2. now enable the metadata table and triggers the initialization
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(4)
+            .build()).build();
+
+    // 2.1 initializes the metadata table, it will exclude the files from the inflight instant.
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+
+    // 2.2 move inflight to completed
+    testTable.moveInflightCommitToComplete(inflightInstant, inflightCommitMeta);
+    validateMetadata(testTable, true);
+  }
+
   /**
    * Tests that virtual key configs are honored in base files after compaction in metadata table.
    */
@@ -1059,22 +1093,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.commit(newCommitTime3, writeStatuses);
 
       // collect all commit meta files from metadata table.
-      List<StoragePathInfo> metaFiles = metaClient.getStorage()
-          .listDirectEntries(new StoragePath(metaClient.getMetaPath() + "/metadata/.hoodie"));
-      List<StoragePathInfo> commit3Files = metaFiles.stream()
-          .filter(pathInfo ->
-              pathInfo.getPath().getName().contains(newCommitTime3)
-                  && pathInfo.getPath().getName().contains(HoodieTimeline.DELTA_COMMIT_ACTION))
-          .collect(Collectors.toList());
-      List<StoragePathInfo> rollbackFiles = metaFiles.stream()
-          .filter(pathInfo ->
-              pathInfo.getPath().getName().endsWith("." + HoodieTimeline.ROLLBACK_ACTION))
-          .collect(Collectors.toList());
+      HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.init(storageConf, HoodieTableMetadata.getMetadataTableBasePath(basePath), tableType, new Properties());
+      String completionTimeForCommit3 = metadataMetaClient.getActiveTimeline().filter(instant -> instant.getTimestamp().equals(newCommitTime3)).firstInstant()
+          .map(HoodieInstant::getCompletionTime)
+          .orElseThrow(() -> new IllegalStateException(newCommitTime3 + " should exist on the metadata"));
+      String completionTimeForRollback = metadataMetaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(ROLLBACK_ACTION)).firstInstant()
+          .map(HoodieInstant::getCompletionTime)
+          .orElseThrow(() -> new IllegalStateException("A rollback commit should exist on the metadata"));
 
-      // ensure commit2's delta commit in MDT has last mod time > the actual rollback for previous failed commit i.e. commit2.
-      // if rollback wasn't eager, rollback's last mod time will be lower than the commit3'd delta commit last mod time.
-      assertTrue(
-          commit3Files.get(0).getModificationTime() > rollbackFiles.get(0).getModificationTime());
+      // ensure commit2's delta commit in MDT has completion time > the actual rollback for previous failed commit i.e. commit2.
+      // if rollback wasn't eager, rollback's last completion time will be lower than the commit3'd delta commit completion time.
+      assertTrue(HoodieTimeline.compareTimestamps(completionTimeForCommit3, GREATER_THAN, completionTimeForRollback));
     }
   }
 
@@ -1134,7 +1163,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(1, timeline.getCommitsTimeline().filterCompletedInstants().countInstants());
     assertEquals(3, mdtTimeline.countInstants());
     assertEquals(3, mdtTimeline.getCommitsTimeline().filterCompletedInstants().countInstants());
-    String mdtInitCommit2 = HoodieTableMetadataUtil.createIndexInitTimestamp(SOLO_COMMIT_TIMESTAMP, 1);
+    String mdtInitCommit2 = mdtTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().get(1).getTimestamp();
     Pair<HoodieInstant, HoodieCommitMetadata> lastCommitMetadataWithValidData =
         mdtTimeline.getLastCommitMetadataWithValidData().get();
     String commit = lastCommitMetadataWithValidData.getLeft().getTimestamp();

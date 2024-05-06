@@ -76,7 +76,7 @@ class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMix
   @Test
   def testSmokeDatadogReporter() {
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1.toSeq, 2))
     val writeOpts: Map[String, String] = commonOpts ++ Map(
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,

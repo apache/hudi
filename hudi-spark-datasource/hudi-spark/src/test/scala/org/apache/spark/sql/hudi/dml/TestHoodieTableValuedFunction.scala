@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.metadata.HoodieMetadataPayload.getPartitionStatsIndexKey
 import org.apache.spark.sql.functions.{col, from_json}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -676,15 +677,15 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
             s"select * from hudi_metadata('$identifier') where type=3"
           )
           assert(result4DF.count() == 3)
-          checkAnswer(spark.sql(s"select ColumnStatsMetadata.minValue.member1.value from hudi_metadata('$identifier') where type=3").collect())(
-            Seq(1000),
-            Seq(2000),
-            Seq(3000)
+          checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value from hudi_metadata('$identifier') where type=3")(
+            Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000),
+            Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000),
+            Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000)
           )
-          checkAnswer(spark.sql(s"select ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$identifier') where type=3").collect())(
-            Seq(2000),
-            Seq(3000),
-            Seq(4000)
+          checkAnswer(s"select key, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$identifier') where type=3")(
+            Seq(getPartitionStatsIndexKey("ts=10", "price"), 2000),
+            Seq(getPartitionStatsIndexKey("ts=20", "price"), 3000),
+            Seq(getPartitionStatsIndexKey("ts=30", "price"), 4000)
           )
         }
       }

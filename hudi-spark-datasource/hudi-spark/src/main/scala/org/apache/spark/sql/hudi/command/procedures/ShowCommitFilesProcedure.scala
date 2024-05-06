@@ -28,7 +28,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.List
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -74,11 +74,11 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
 
     val meta = commitMetadataOptional.get
     val rows = new util.ArrayList[Row]
-    for (entry <- meta.getPartitionToWriteStats.entrySet) {
+    for (entry <- meta.getPartitionToWriteStats.entrySet.asScala) {
       val action: String = hoodieInstantOption.get.getAction
       val path: String = entry.getKey
       val stats: List[HoodieWriteStat] = entry.getValue
-      for (stat <- stats) {
+      for (stat <- stats.asScala) {
         rows.add(Row(action, path, stat.getFileId, stat.getPrevCommit, stat.getNumUpdateWrites,
           stat.getNumWrites, stat.getTotalWriteBytes, stat.getTotalWriteErrors, stat.getFileSizeInBytes))
       }
@@ -94,7 +94,7 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
       new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
       new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime))
 
-    val hoodieInstant: Option[HoodieInstant] = instants.find((i: HoodieInstant) => timeline.containsInstant(i))
+    val hoodieInstant: Option[HoodieInstant] = instants.asScala.find((i: HoodieInstant) => timeline.containsInstant(i))
     hoodieInstant
   }
 

@@ -72,7 +72,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
-    FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala
+    FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala.toSeq
   }
 
   def getFilesInPartitions(spark: SparkSession,
@@ -137,7 +137,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     // filter the meta field to avoid duplicate field.
     val dataFields = schema.fields.filterNot(f => metaFields.contains(f.name))
     val fields = metaFields.map(StructField(_, StringType)) ++ dataFields
-    StructType(fields)
+    StructType(fields.toSeq)
   }
 
   private lazy val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet

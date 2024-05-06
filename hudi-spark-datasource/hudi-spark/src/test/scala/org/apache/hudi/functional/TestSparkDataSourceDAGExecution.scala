@@ -40,7 +40,7 @@ import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /**
  * Tests around Dag execution for Spark DataSource.
@@ -99,7 +99,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
     spark.sparkContext.addSparkListener(stageListener)
 
     var structType: StructType = null
-    val records = recordsToStrings(dataGen.generateInserts("%05d".format(1), 10)).toList
+    val records = recordsToStrings(dataGen.generateInserts("%05d".format(1), 10)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     structType = inputDF.schema
     inputDF.write.format("hudi")
@@ -120,7 +120,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
 
     var structType: StructType = null
     for (i <- 1 to 2) {
-      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).asScala.toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
       structType = inputDF.schema
       inputDF.write.format("hudi")
@@ -131,7 +131,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
     }
 
     // trigger clustering.
-    val records = recordsToStrings(dataGen.generateInserts("%05d".format(4), 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("%05d".format(4), 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     structType = inputDF.schema
     inputDF.write.format("hudi")
@@ -155,7 +155,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
 
     var structType: StructType = null
     for (i <- 1 to 2) {
-      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).asScala.toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
       structType = inputDF.schema
       inputDF.write.format("hudi")
@@ -167,7 +167,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
     }
 
     // trigger compaction
-    val records = recordsToStrings(dataGen.generateUniqueUpdates("%05d".format(4), 100)).toList
+    val records = recordsToStrings(dataGen.generateUniqueUpdates("%05d".format(4), 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     structType = inputDF.schema
     inputDF.write.format("hudi")

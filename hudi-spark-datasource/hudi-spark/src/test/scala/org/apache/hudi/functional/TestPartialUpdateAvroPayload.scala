@@ -41,7 +41,7 @@ import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
   var spark: SparkSession = null
@@ -79,7 +79,7 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
     val hoodieTableType = HoodieTableType.valueOf(tableType)
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(1))
-    val recordsRDD = spark.sparkContext.parallelize(records, 2)
+    val recordsRDD = spark.sparkContext.parallelize(records.asScala.toSeq, 2)
     val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING)).withColumn("ts", lit(1L))
     inputDF.write.format("hudi")
       .options(getQuickstartWriteConfigs)

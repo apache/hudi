@@ -123,7 +123,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         partitionInfoList.add(new HoodieTableMetadataUtil.DirectoryInfo(
             p,
             metaClient.getStorage().listDirectEntries(Arrays.asList(storagePath1, storagePath2)),
-            instant2));
+            instant2,
+            Collections.emptySet()));
       } catch (Exception e) {
         throw new RuntimeException(e);
       }

@@ -166,9 +166,6 @@ public class HoodieTableMetadataUtil {
       DoubleWrapper.class, FloatWrapper.class, LongWrapper.class,
       StringWrapper.class, TimeMicrosWrapper.class, TimestampMicrosWrapper.class));
 
-  // This suffix and all after that are used for initialization of the various partitions. The unused suffixes lower than this value
-  // are reserved for future operations on the MDT.
-  private static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10; // corresponds to "010";
   // we have max of 4 partitions (FILES, COL_STATS, BLOOM, RLI)
   private static final List<String> VALID_PARTITION_INITIALIZATION_TIME_SUFFIXES = Arrays.asList("010", "011", "012", "013");
 
@@ -1626,16 +1623,6 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Create the timestamp for an index initialization operation on the metadata table.
-   * <p>
-   * Since many MDT partitions can be initialized one after other the offset parameter controls generating a
-   * unique timestamp.
-   */
-  public static String createIndexInitTimestamp(String timestamp, int offset) {
-    return String.format("%s%03d", timestamp, PARTITION_INITIALIZATION_TIME_SUFFIX + offset);
-  }
-
-  /**
    * Estimates the file group count to use for a MDT partition.
    *
    * @param partitionType         Type of the partition for which the file group count is to be estimated.
@@ -2008,7 +1995,7 @@ public class HoodieTableMetadataUtil {
     // Is this a hoodie partition
     private boolean isHoodiePartition = false;
 
-    public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime) {
+    public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants) {
       this.relativePath = relativePath;
 
       // Pre-allocate with the maximum length possible
@@ -2026,8 +2013,8 @@ public class HoodieTableMetadataUtil {
         } else if (FSUtils.isDataFile(pathInfo.getPath())) {
           // Regular HUDI data file (base file or log file)
           String dataFileCommitTime = FSUtils.getCommitTime(pathInfo.getPath().getName());
-          // Limit the file listings to files which were created before the maxInstant time.
-          if (HoodieTimeline.compareTimestamps(dataFileCommitTime, LESSER_THAN_OR_EQUALS, maxInstantTime)) {
+          // Limit the file listings to files which were created by successful commits before the maxInstant time.
+          if (!pendingDataInstants.contains(dataFileCommitTime) && HoodieTimeline.compareTimestamps(dataFileCommitTime, LESSER_THAN_OR_EQUALS, maxInstantTime)) {
             filenameToSizeMap.put(pathInfo.getPath().getName(), pathInfo.getLength());
           }
         }
