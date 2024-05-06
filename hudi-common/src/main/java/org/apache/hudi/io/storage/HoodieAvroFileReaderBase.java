@@ -33,7 +33,7 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 /**
  * Base class for every {@link HoodieAvroFileReader}
  */
-abstract class HoodieAvroFileReaderBase implements HoodieAvroFileReader {
+public abstract class HoodieAvroFileReaderBase implements HoodieAvroFileReader {
 
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {

@@ -55,7 +55,7 @@ import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.io.storage.HoodieAvroParquetReader;
+import org.apache.hudi.io.storage.HoodieHadoopAvroParquetReader;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
@@ -181,8 +181,8 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
                     (FileSystem) metaClient.getStorage().getFileSystem(),
                     srcPath, context).stream().findAny().map(p -> p.getValue().stream().findAny())
                 .orElse(null).get().getPath()).toString();
-    HoodieAvroParquetReader parquetReader =
-        new HoodieAvroParquetReader(metaClient.getStorageConf(), new StoragePath(filePath));
+    HoodieHadoopAvroParquetReader parquetReader =
+        new HoodieHadoopAvroParquetReader(metaClient.getStorageConf(), new StoragePath(filePath));
     return parquetReader.getSchema();
   }
 

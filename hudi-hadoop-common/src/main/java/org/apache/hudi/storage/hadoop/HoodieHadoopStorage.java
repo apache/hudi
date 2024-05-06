@@ -22,10 +22,12 @@ package org.apache.hudi.storage.hadoop;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
+import org.apache.hudi.hadoop.fs.HadoopSeekableDataOutputStream;
 import org.apache.hudi.hadoop.fs.HoodieRetryWrapperFileSystem;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.SeekableDataOutputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -33,6 +35,7 @@ import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
@@ -155,6 +158,11 @@ public class HoodieHadoopStorage extends HoodieStorage {
   public SeekableDataInputStream openSeekable(StoragePath path, int bufferSize) throws IOException {
     return new HadoopSeekableDataInputStream(
         HadoopFSUtils.getFSDataInputStream(fs, path, bufferSize));
+  }
+
+  @Override
+  public SeekableDataOutputStream makeOutputSeekable(OutputStream stream) throws IOException {
+    return new HadoopSeekableDataOutputStream(new FSDataOutputStream(stream, null));
   }
 
   @Override

@@ -47,13 +47,13 @@ import java.util.Set;
 /**
  * {@link HoodieFileReader} implementation for ORC format.
  */
-public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
+public class HoodieHadoopAvroOrcReader extends HoodieAvroFileReaderBase {
 
   private final StoragePath path;
   private final StorageConfiguration<?> conf;
   private final BaseFileUtils orcUtils;
 
-  public HoodieAvroOrcReader(StorageConfiguration<?> configuration, StoragePath path) {
+  public HoodieHadoopAvroOrcReader(StorageConfiguration<?> configuration, StoragePath path) {
     this.conf = configuration;
     this.path = path;
     this.orcUtils = BaseFileUtils.getInstance(HoodieFileFormat.ORC);

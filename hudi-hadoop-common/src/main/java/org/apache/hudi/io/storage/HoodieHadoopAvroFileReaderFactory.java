@@ -31,10 +31,10 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 
 import java.io.IOException;
 
-public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
+public class HoodieHadoopAvroFileReaderFactory extends HoodieFileReaderFactory {
   @Override
   protected HoodieFileReader newParquetFileReader(StorageConfiguration<?> conf, StoragePath path) {
-    return new HoodieAvroParquetReader(conf, path);
+    return new HoodieHadoopAvroParquetReader(conf, path);
   }
 
   @Override
@@ -69,7 +69,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
 
   @Override
   protected HoodieFileReader newOrcFileReader(StorageConfiguration<?> conf, StoragePath path) {
-    return new HoodieAvroOrcReader(conf, path);
+    return new HoodieHadoopAvroOrcReader(conf, path);
   }
 
   @Override

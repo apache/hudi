@@ -18,8 +18,9 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.storage.StorageConfiguration;
+
 import org.apache.orc.CompressionKind;
 
 public class HoodieOrcConfig {
@@ -29,12 +30,12 @@ public class HoodieOrcConfig {
   private final int stripeSize;
   private final int blockSize;
   private final long maxFileSize;
-  private final Configuration hadoopConf;
+  private final StorageConfiguration conf;
   private final BloomFilter bloomFilter;
 
-  public HoodieOrcConfig(Configuration hadoopConf, CompressionKind compressionKind, int stripeSize,
+  public HoodieOrcConfig(StorageConfiguration conf, CompressionKind compressionKind, int stripeSize,
       int blockSize, long maxFileSize, BloomFilter bloomFilter) {
-    this.hadoopConf = hadoopConf;
+    this.conf = conf;
     this.compressionKind = compressionKind;
     this.stripeSize = stripeSize;
     this.blockSize = blockSize;
@@ -42,8 +43,8 @@ public class HoodieOrcConfig {
     this.bloomFilter = bloomFilter;
   }
 
-  public Configuration getHadoopConf() {
-    return hadoopConf;
+  public StorageConfiguration getStorageConfig() {
+    return conf;
   }
 
   public CompressionKind getCompressionKind() {

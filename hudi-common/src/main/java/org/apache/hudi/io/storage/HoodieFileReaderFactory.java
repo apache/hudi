@@ -46,14 +46,21 @@ public class HoodieFileReaderFactory {
   public static HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (recordType) {
       case AVRO:
-        return new HoodieAvroFileReaderFactory();
+
+        try {
+          Class<?> clazz =
+              ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieHadoopAvroFileReaderFactory");
+          return (HoodieFileReaderFactory) clazz.newInstance();
+        } catch (IllegalArgumentException | IllegalAccessException | InstantiationException e) {
+          throw new HoodieException("Unable to create hoodie avro file reader factory", e);
+        }
       case SPARK:
         try {
           Class<?> clazz =
               ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory");
           return (HoodieFileReaderFactory) clazz.newInstance();
         } catch (IllegalArgumentException | IllegalAccessException | InstantiationException e) {
-          throw new HoodieException("Unable to create hoodie spark file writer factory", e);
+          throw new HoodieException("Unable to create hoodie spark file reader factory", e);
         }
       default:
         throw new UnsupportedOperationException(recordType + " record type not supported yet.");

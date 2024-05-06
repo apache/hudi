@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
@@ -32,7 +31,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_TYP
 @EnumDescription("Bootstrap index type to use for mapping between skeleton and actual data files.")
 public enum BootstrapIndexType {
   @EnumFieldDescription("Maintains mapping in HFile format.")
-  HFILE(HFileBootstrapIndex.class.getName()),
+  HFILE("org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex"),
   @EnumFieldDescription("No-op, an empty implementation.")
   NO_OP(NoOpBootstrapIndex.class.getName());
 

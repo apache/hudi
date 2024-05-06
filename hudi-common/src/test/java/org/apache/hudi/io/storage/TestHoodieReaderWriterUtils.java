@@ -74,7 +74,7 @@ public class TestHoodieReaderWriterUtils {
         }
       }
       writer.appendFileInfo(getUTF8Bytes(CUSTOM_META_KEY), getUTF8Bytes(CUSTOM_META_VALUE));
-      writer.appendMetaBlock(HoodieNativeAvroHFileReader.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
+      writer.appendMetaBlock(HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
         @Override
         public void write(DataOutput out) throws IOException {
           out.write(getUTF8Bytes(DUMMY_BLOOM_FILTER));

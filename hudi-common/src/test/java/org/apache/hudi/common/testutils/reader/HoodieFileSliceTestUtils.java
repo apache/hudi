@@ -50,11 +50,12 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -250,7 +251,7 @@ public class HoodieFileSliceTestUtils {
       Schema schema,
       String baseInstantTime
   ) throws IOException {
-    Configuration hadoopConf = new Configuration();
+    StorageConfiguration conf = HoodieStorageUtils.getNewStorageConf();
 
     // TODO: Optimize these hard-coded parameters for test purpose. (HUDI-7214)
     BloomFilter filter = BloomFilterFactory.createBloomFilter(
@@ -269,7 +270,7 @@ public class HoodieFileSliceTestUtils {
         ParquetWriter.DEFAULT_BLOCK_SIZE,
         ParquetWriter.DEFAULT_PAGE_SIZE,
         1024 * 1024 * 1024,
-        hadoopConf,
+        conf,
         0.1,
         true);
 

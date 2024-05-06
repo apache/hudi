@@ -24,11 +24,12 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -83,7 +84,7 @@ public class TestHoodieBaseParquetWriter {
   public void testCanWrite() throws IOException {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000,
         BloomFilterTypeCode.DYNAMIC_V0.name());
-    Configuration hadoopConf = new Configuration();
+    StorageConfiguration conf = new HadoopStorageConfiguration();
 
     Schema schema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
@@ -92,7 +93,7 @@ public class TestHoodieBaseParquetWriter {
     long maxFileSize = 2 * 1024 * 1024;
     HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =
         new HoodieParquetConfig<>(writeSupport, CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE,
-            ParquetWriter.DEFAULT_PAGE_SIZE, maxFileSize, hadoopConf, 0, true);
+            ParquetWriter.DEFAULT_PAGE_SIZE, maxFileSize, conf, 0, true);
 
     StoragePath filePath = new StoragePath(
         new StoragePath(tempDir.toUri()), "test_fileSize.parquet");

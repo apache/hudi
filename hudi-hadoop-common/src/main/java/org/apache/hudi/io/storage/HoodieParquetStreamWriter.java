@@ -20,11 +20,11 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.io.SeekableDataOutputStream;
 import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -43,7 +43,7 @@ public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoClos
   private final ParquetWriter<IndexedRecord> writer;
   private final HoodieAvroWriteSupport writeSupport;
 
-  public HoodieParquetStreamWriter(FSDataOutputStream outputStream,
+  public HoodieParquetStreamWriter(SeekableDataOutputStream outputStream,
                                    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
     this.writer = new Builder<IndexedRecord>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
@@ -54,7 +54,7 @@ public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoClos
         .withDictionaryPageSize(parquetConfig.getPageSize())
         .withDictionaryEncoding(parquetConfig.dictionaryEnabled())
         .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
-        .withConf(parquetConfig.getHadoopConf())
+        .withConf(parquetConfig.getStorageConf().unwrapAs(Configuration.class))
         .build();
   }
 

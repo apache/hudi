@@ -29,11 +29,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.SeekableDataOutputStream;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FSDataOutputStream;
 
 import java.io.IOException;
 
@@ -46,7 +46,12 @@ public class HoodieFileWriterFactory {
   private static HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (recordType) {
       case AVRO:
-        return new HoodieAvroFileWriterFactory();
+        try {
+          Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieHadoopAvroFileWriterFactory");
+          return (HoodieFileWriterFactory) clazz.newInstance();
+        } catch (IllegalAccessException | IllegalArgumentException | InstantiationException e) {
+          throw new HoodieException("Unable to create hoodie avro file writer factory", e);
+        }
       case SPARK:
         try {
           Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory");
@@ -67,8 +72,8 @@ public class HoodieFileWriterFactory {
     return factory.getFileWriterByFormat(extension, instantTime, path, conf, config, schema, taskContextSupplier);
   }
 
-  public static <T, I, K, O> HoodieFileWriter getFileWriter(HoodieFileFormat format,
-                                                            FSDataOutputStream outputStream, StorageConfiguration<?> conf, HoodieConfig config, Schema schema, HoodieRecordType recordType)
+  public static <T, I, K, O> HoodieFileWriter getFileWriter(HoodieFileFormat format, SeekableDataOutputStream outputStream,
+                                                            StorageConfiguration<?> conf, HoodieConfig config, Schema schema, HoodieRecordType recordType)
       throws IOException {
     HoodieFileWriterFactory factory = getWriterFactory(recordType);
     return factory.getFileWriterByFormat(format, outputStream, conf, config, schema);
@@ -89,8 +94,8 @@ public class HoodieFileWriterFactory {
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(HoodieFileFormat format,
-                                                                FSDataOutputStream outputStream, StorageConfiguration<?> conf, HoodieConfig config, Schema schema) throws IOException {
+  protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(HoodieFileFormat format, SeekableDataOutputStream outputStream,
+                                                                StorageConfiguration<?> conf, HoodieConfig config, Schema schema) throws IOException {
     switch (format) {
       case PARQUET:
         return newParquetFileWriter(outputStream, conf, config, schema);
@@ -106,7 +111,7 @@ public class HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newParquetFileWriter(
-      FSDataOutputStream outputStream, StorageConfiguration<?> conf, HoodieConfig config, Schema schema) throws IOException {
+      SeekableDataOutputStream outputStream, StorageConfiguration<?> conf, HoodieConfig config, Schema schema) throws IOException {
     throw new UnsupportedOperationException();
   }
 

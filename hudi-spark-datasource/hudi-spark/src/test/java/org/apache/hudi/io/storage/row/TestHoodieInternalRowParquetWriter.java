@@ -89,7 +89,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
         CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
-        writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
+        storageConf, cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
 
     StoragePath filePath = new StoragePath(basePath + "/internal_row_writer.parquet");
 
