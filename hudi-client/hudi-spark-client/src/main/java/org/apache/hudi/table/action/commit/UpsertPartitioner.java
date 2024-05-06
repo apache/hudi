@@ -187,12 +187,12 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
         List<SmallFile> smallFiles =
             filterSmallFilesInClustering(partitionPathToPendingClusteringFileGroupsId.getOrDefault(partitionPath, Collections.emptySet()),
-                partitionSmallFilesMap.getOrDefault(partitionPath, new ArrayList<>()));
+                partitionSmallFilesMap.getOrDefault(partitionPath, Collections.emptyList()));
 
         this.smallFiles.addAll(smallFiles);
 
-        LOG.info("For partitionPath : " + partitionPath + " Total Small Files => " + smallFiles.size());
-        LOG.debug("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
+        LOG.info("For partitionPath : {} Total Small Files => {}", partitionPath, smallFiles.size());
+        LOG.debug("For partitionPath : {} Small Files => {}", partitionPath, smallFiles);
 
         long totalUnassignedInserts = pStat.getNumInserts();
         List<Integer> bucketNumbers = new ArrayList<>();
@@ -271,12 +271,16 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   }
 
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
+    if (config.getParquetSmallFileLimit() <= 0) {
+      return Collections.emptyMap();
+    }
+
+    if (table.getMetaClient().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+      return Collections.emptyMap();
+    }
+
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
-
-    if (config.getParquetSmallFileLimit() <= 0) {
-      return partitionSmallFilesMap;
-    }
 
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
