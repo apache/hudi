@@ -354,7 +354,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String emptyBatchParam) throws IOException {
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
-        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false, "partition_path", emptyBatchParam);
+        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false, "partition_path", emptyBatchParam, false);
   }
 
   protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
@@ -364,20 +364,27 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
                                        String propsFileName, String parquetSourceRoot, boolean addCommonProps, String partitionPath) throws IOException {
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, propsFileName, parquetSourceRoot, addCommonProps,
-        partitionPath, "");
+        partitionPath, "", false);
   }
 
   protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
                                          String propsFileName, String parquetSourceRoot, boolean addCommonProps,
                                          String partitionPath, String emptyBatchParam) throws IOException {
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, propsFileName, parquetSourceRoot, addCommonProps,
-        partitionPath, emptyBatchParam, null);
+        partitionPath, emptyBatchParam, false);
+  }
 
+  protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
+                                         String propsFileName, String parquetSourceRoot, boolean addCommonProps,
+                                         String partitionPath, String emptyBatchParam, boolean skipRecordKeyField) throws IOException {
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, propsFileName, parquetSourceRoot, addCommonProps,
+        partitionPath, emptyBatchParam, null, skipRecordKeyField);
   }
 
   protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
                                        String propsFileName, String parquetSourceRoot, boolean addCommonProps,
-                                       String partitionPath, String emptyBatchParam, TypedProperties extraProps) throws IOException {
+                                       String partitionPath, String emptyBatchParam, TypedProperties extraProps,
+                                         boolean skipRecordKeyField) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties(extraProps);
 
@@ -389,7 +396,9 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
     parquetProps.setProperty("include", "base.properties");
     parquetProps.setProperty("hoodie.embed.timeline.server", "false");
-    parquetProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+    if (!skipRecordKeyField) {
+      parquetProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+    }
     parquetProps.setProperty("hoodie.datasource.write.partitionpath.field", partitionPath);
     if (useSchemaProvider) {
       parquetProps.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/" + sourceSchemaFile);
