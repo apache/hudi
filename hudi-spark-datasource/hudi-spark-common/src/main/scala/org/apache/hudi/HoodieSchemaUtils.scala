@@ -93,14 +93,14 @@ object HoodieSchemaUtils {
         // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
         // Also, we promote types to the latest table schema if possible.
         val shouldCanonicalizeSchema = opts.getOrElse(CANONICALIZE_SCHEMA.key, CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
+        val shouldReconcileSchema = opts.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
+          DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-          canonicalizeSchema(sourceSchema, latestTableSchema, opts)
+          canonicalizeSchema(sourceSchema, latestTableSchema, opts, !shouldReconcileSchema)
         } else {
           AvroInternalSchemaConverter.fixNullOrdering(sourceSchema)
         }
 
-        val shouldReconcileSchema = opts.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
-          DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
         if (shouldReconcileSchema) {
           deduceWriterSchemaWithReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, internalSchemaOpt, opts)
         } else {
@@ -212,8 +212,9 @@ object HoodieSchemaUtils {
    *
    * TODO support casing reconciliation
    */
-  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
-    reconcileSchemaRequirements(sourceSchema, latestTableSchema)
+  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String],
+                                 shouldReorderColumns: Boolean): Schema = {
+    reconcileSchemaRequirements(sourceSchema, latestTableSchema, shouldReorderColumns)
   }
 
 

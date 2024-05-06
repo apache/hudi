@@ -24,6 +24,7 @@ import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -136,7 +137,7 @@ public class AvroSchemaEvolutionUtils {
    * @param targetSchema target schema that source schema will be reconciled against
    * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
-  public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema) {
+  public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema, boolean shouldReorderColumns) {
     if (targetSchema.getType() == Schema.Type.NULL || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
@@ -147,7 +148,7 @@ public class AvroSchemaEvolutionUtils {
 
     InternalSchema targetInternalSchema = convert(targetSchema);
     // Use existing fieldIds for consistent field ordering between commits
-    InternalSchema sourceInternalSchema = convert(sourceSchema, targetInternalSchema.getNameToId());
+    InternalSchema sourceInternalSchema = convert(sourceSchema, shouldReorderColumns ? targetInternalSchema.getNameToId() : Collections.emptyMap());
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
