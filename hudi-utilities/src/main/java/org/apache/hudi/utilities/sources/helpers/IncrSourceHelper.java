@@ -251,6 +251,17 @@ public class IncrSourceHelper {
     return null;
   }
 
+  public static Dataset<Row> coalesceOrRepartition(Dataset dataset, int numPartitions) {
+    int existingNumPartitions = dataset.rdd().getNumPartitions();
+    LOG.info(String.format("existing number of partitions=%d, required number of partitions=%d", existingNumPartitions, numPartitions));
+    if (existingNumPartitions < numPartitions) {
+      dataset = dataset.repartition(numPartitions);
+    } else {
+      dataset = dataset.coalesce(numPartitions);
+    }
+    return dataset;
+  }
+
   /**
    * Kafka reset offset strategies.
    */
