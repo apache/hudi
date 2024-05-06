@@ -51,19 +51,8 @@ public class DeleteRecord implements Serializable {
    */
   private final Comparable<?> orderingVal;
 
-  /**
-   * For purposes of merging simple or composite keys.
-   */
-  private HoodieMergeKey mergeKey;
-
   private DeleteRecord(HoodieKey hoodieKey, Comparable orderingVal) {
     this.hoodieKey = hoodieKey;
-    this.orderingVal = orderingVal;
-  }
-
-  private DeleteRecord(HoodieMergeKey mergeKey, Comparable orderingVal) {
-    this.mergeKey = mergeKey;
-    this.hoodieKey = mergeKey.getHoodieKey();
     this.orderingVal = orderingVal;
   }
 
@@ -85,10 +74,6 @@ public class DeleteRecord implements Serializable {
 
   public String getRecordKey() {
     return hoodieKey.getRecordKey();
-  }
-
-  public HoodieMergeKey getMergeKey() {
-    return mergeKey;
   }
 
   public String getPartitionPath() {

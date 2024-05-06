@@ -309,11 +309,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
     String key = deleteRecord.getRecordKey();
-    HoodieMergeKey mergeKey = deleteRecord.getMergeKey();
-    if (mergeKey == null) {
-      // If mergeKey is null, then create a simple merge key using record key
-      mergeKey = new HoodieSimpleMergeKey(deleteRecord.getHoodieKey());
-    }
+    HoodieMergeKey mergeKey = new HoodieSimpleMergeKey(deleteRecord.getHoodieKey());
     HoodieRecord oldRecord = records.get(mergeKey);
     if (oldRecord != null) {
       // Merge and store the merged record. The ordering val is taken to decide whether the same key record
