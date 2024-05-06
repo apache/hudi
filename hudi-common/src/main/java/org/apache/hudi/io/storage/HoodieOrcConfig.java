@@ -43,7 +43,7 @@ public class HoodieOrcConfig {
     this.bloomFilter = bloomFilter;
   }
 
-  public StorageConfiguration getStorageConfig() {
+  public StorageConfiguration getStorageConf() {
     return conf;
   }
 
