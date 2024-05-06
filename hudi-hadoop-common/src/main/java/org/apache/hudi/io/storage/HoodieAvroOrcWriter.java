@@ -70,7 +70,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, Schema schema,
                              TaskContextSupplier taskContextSupplier) throws IOException {
 
-    Configuration conf = HoodieHadoopUtils.registerFileSystem(file, (Configuration) config.getStorageConf().unwrap());
+    Configuration conf = HoodieHadoopUtils.registerFileSystem(file, config.getStorageConf().unwrapAs(Configuration.class));
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.instantTime = instantTime;
