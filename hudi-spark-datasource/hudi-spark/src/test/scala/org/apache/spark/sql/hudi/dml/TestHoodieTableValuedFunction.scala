@@ -19,9 +19,7 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.util.hash.PartitionIndexID
-import org.apache.hudi.metadata.HoodieTableMetadataUtil
-
+import org.apache.hudi.metadata.HoodieMetadataPayload.getPartitionStatsIndexKey
 import org.apache.spark.sql.functions.{col, from_json}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -679,25 +677,19 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
             s"select * from hudi_metadata('$identifier') where type=3"
           )
           assert(result4DF.count() == 3)
-          // TODO(HUDI-7705): use partition column name to generate the prefix after the bug fix
-          val columnNameKeyPrefix = "XV1ds8/f890="
           checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value from hudi_metadata('$identifier') where type=3")(
-            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=10"), 1000),
-            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=20"), 2000),
-            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=30"), 3000)
+            Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000),
+            Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000),
+            Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000)
           )
           checkAnswer(s"select key, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$identifier') where type=3")(
-            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=10"), 2000),
-            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=20"), 3000),
-            Seq(columnNameKeyPrefix + getPartitionIndexKey("ts=30"), 4000)
+            Seq(getPartitionStatsIndexKey("ts=10", "price"), 2000),
+            Seq(getPartitionStatsIndexKey("ts=20", "price"), 3000),
+            Seq(getPartitionStatsIndexKey("ts=30", "price"), 4000)
           )
         }
       }
     }
     spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
-  }
-
-  def getPartitionIndexKey(partitionPath: String): String = {
-    new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionPath)).asBase64EncodedString
   }
 }

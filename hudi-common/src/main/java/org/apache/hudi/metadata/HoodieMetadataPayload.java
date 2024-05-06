@@ -674,7 +674,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     });
   }
 
-  private static String getPartitionStatsIndexKey(String partitionPath, String columnName) {
+  public static String getPartitionStatsIndexKey(String partitionPath, String columnName) {
     final PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionPath));
     final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
     return columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString());
