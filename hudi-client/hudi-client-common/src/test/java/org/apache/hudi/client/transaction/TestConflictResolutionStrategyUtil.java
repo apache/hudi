@@ -218,7 +218,7 @@ public class TestConflictResolutionStrategyUtil {
     operation.setFileId(fileId1);
     operation.setPartitionPath(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
     operation.setDataFilePath("/file-1");
-    operation.setDeltaFilePaths(Arrays.asList("/file-1"));
+    operation.setDeltaFilePaths(Arrays.asList("/file-1-log1"));
     compactionPlan.setOperations(Arrays.asList(operation));
     HoodieTestTable.of(metaClient)
         .addRequestedCompaction(instantTime, compactionPlan);
