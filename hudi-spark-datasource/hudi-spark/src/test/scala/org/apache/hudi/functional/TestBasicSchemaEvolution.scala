@@ -191,6 +191,12 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       Row("5", "Jack", "Sparrow", "13", 1, 1),
       Row("6", "Jill", "Fiorella", "12", 1, 1))
 
+    // Reorder batch based on the expected schema
+    val secondBatchWithProperOrder = Seq(
+      Row("4", "John", "Green", 1, 1, "10"),
+      Row("5", "Jack", "Sparrow", 1, 1, "13"),
+      Row("6", "Jill", "Fiorella", 1, 1, "12"))
+
     appendData(secondInputSchema, secondBatch)
     val (tableSchemaAfterSecondBatch, rowsAfterSecondBatch) = loadTable()
 
@@ -205,7 +211,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       assertEquals(secondSchema, tableSchemaAfterSecondBatch)
 
       val ageColOrd = secondSchema.indexWhere(_.name == "age")
-      val expectedRows = injectColumnAt(firstBatch, ageColOrd, null) ++ secondBatch
+      val expectedRows = injectColumnAt(firstBatch, ageColOrd, null) ++ secondBatchWithProperOrder
 
       assertEquals(expectedRows, rowsAfterSecondBatch)
     }
