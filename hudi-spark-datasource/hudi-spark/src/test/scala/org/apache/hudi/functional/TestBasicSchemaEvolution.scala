@@ -178,19 +178,13 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
         StructField("partition", IntegerType, nullable = true) :: Nil)
 
     // Second schema for the table is expected to reconcile ordering if enabled
-    val secondSchemaWithReconcile = StructType(
+    val secondSchema = StructType(
       StructField("_row_key", StringType, nullable = true) ::
         StructField("first_name", StringType, nullable = false) ::
         StructField("last_name", StringType, nullable = true) ::
         StructField("timestamp", IntegerType, nullable = true) ::
         StructField("partition", IntegerType, nullable = true) ::
         StructField("age", StringType, nullable = true) :: Nil)
-
-    val secondSchema = if (shouldReconcileSchema) {
-      secondSchemaWithReconcile
-    } else {
-      secondInputSchema
-    }
 
     val secondBatch = Seq(
       Row("4", "John", "Green", "10", 1, 1),
