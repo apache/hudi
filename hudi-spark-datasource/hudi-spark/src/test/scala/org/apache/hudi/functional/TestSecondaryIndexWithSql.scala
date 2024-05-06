@@ -19,10 +19,12 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.spark.sql.Row
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Test}
 import org.scalatest.Assertions.assertResult
 
@@ -94,5 +96,40 @@ class TestSecondaryIndexWithSql extends SecondaryIndexTestBase {
 
   private def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
     assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
+  }
+
+  @Test
+  def testSecondaryIndexWithInFilter(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts + (
+        DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  record_key_col string,
+           |  not_record_key_col string,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true'
+           | )
+           | partitioned by(partition_key_col)
+           | location '$basePath'
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values('row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values('row2', 'cde', 'p2')")
+      spark.sql(s"insert into $tableName values('row3', 'def', 'p2')")
+      // create secondary index
+      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+
+      assertEquals(0, spark.read.format("hudi").options(hudiOpts).load(basePath).filter("not_record_key_col in ('abc', 'cde')").count())
+    }
   }
 }
