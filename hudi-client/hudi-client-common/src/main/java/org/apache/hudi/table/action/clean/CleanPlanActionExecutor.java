@@ -138,6 +138,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
         cleanOps.putAll(cleanOpsWithPartitionMeta.entrySet().stream()
+            .filter(e -> !e.getValue().getValue().isEmpty())
             .collect(Collectors.toMap(Map.Entry::getKey, e -> CleanerUtils.convertToHoodieCleanFileInfoList(e.getValue().getValue()))));
 
         partitionsToDelete.addAll(cleanOpsWithPartitionMeta.entrySet().stream().filter(entry -> entry.getValue().getKey()).map(Map.Entry::getKey)
