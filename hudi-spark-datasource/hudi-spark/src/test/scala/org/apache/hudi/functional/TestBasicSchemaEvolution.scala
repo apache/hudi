@@ -191,7 +191,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       Row("5", "Jack", "Sparrow", "13", 1, 1),
       Row("6", "Jill", "Fiorella", "12", 1, 1))
 
-    appendData(secondSchema, secondBatch)
+    appendData(secondInputSchema, secondBatch)
     val (tableSchemaAfterSecondBatch, rowsAfterSecondBatch) = loadTable()
 
     // NOTE: In case schema reconciliation is ENABLED, Hudi would prefer the new batch's schema (since it's adding a
