@@ -205,8 +205,7 @@ public class TestHoodieCompactionStrategy {
     assertEquals(390, (long) returnedSize,
         "Should chose the first and the third compactions which should result in a total IO of 591 MB");
   }
-
-
+  
   @Test
   public void testBoundedPartitionAwareCompactionSimple() {
     Map<Long, List<Long>> sizesMap = new HashMap<>();
