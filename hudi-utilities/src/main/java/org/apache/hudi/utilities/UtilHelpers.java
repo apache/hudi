@@ -332,18 +332,19 @@ public class UtilHelpers {
     String master = sparkConf.get("spark.master", defaultMaster);
     sparkConf.setMaster(master);
     if (master.startsWith("yarn")) {
-      sparkConf.set("spark.eventLog.overwrite", "true");
-      sparkConf.set("spark.eventLog.enabled", "true");
+      sparkConf.setIfMissing("spark.eventLog.overwrite", "true");
+      sparkConf.setIfMissing("spark.eventLog.enabled", "true");
     }
+    sparkConf.setIfMissing("spark.ui.port", "8090");
     sparkConf.setIfMissing("spark.driver.maxResultSize", "2g");
-    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-    sparkConf.set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar");
-    sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
-    sparkConf.set("spark.hadoop.mapred.output.compress", "true");
-    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
-    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
-    sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
-    sparkConf.set("spark.driver.allowMultipleContexts", "true");
+    sparkConf.setIfMissing("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    sparkConf.setIfMissing("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar");
+    sparkConf.setIfMissing("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
+    sparkConf.setIfMissing("spark.hadoop.mapred.output.compress", "true");
+    sparkConf.setIfMissing("spark.hadoop.mapred.output.compression.codec", "true");
+    sparkConf.setIfMissing("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
+    sparkConf.setIfMissing("spark.hadoop.mapred.output.compression.type", "BLOCK");
+    sparkConf.setIfMissing("spark.driver.allowMultipleContexts", "true");
 
     additionalConfigs.forEach(sparkConf::set);
     return sparkConf;
@@ -351,14 +352,15 @@ public class UtilHelpers {
 
   private static SparkConf buildSparkConf(String appName, Map<String, String> additionalConfigs) {
     final SparkConf sparkConf = new SparkConf().setAppName(appName);
+    sparkConf.setIfMissing("spark.ui.port", "8090");
     sparkConf.setIfMissing("spark.driver.maxResultSize", "2g");
-    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-    sparkConf.set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar");
-    sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
-    sparkConf.set("spark.hadoop.mapred.output.compress", "true");
-    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
-    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
-    sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
+    sparkConf.setIfMissing("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    sparkConf.setIfMissing("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar");
+    sparkConf.setIfMissing("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
+    sparkConf.setIfMissing("spark.hadoop.mapred.output.compress", "true");
+    sparkConf.setIfMissing("spark.hadoop.mapred.output.compression.codec", "true");
+    sparkConf.setIfMissing("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
+    sparkConf.setIfMissing("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
     additionalConfigs.forEach(sparkConf::set);
     return sparkConf;
