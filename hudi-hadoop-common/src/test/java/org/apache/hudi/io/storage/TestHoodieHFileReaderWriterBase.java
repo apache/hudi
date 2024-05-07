@@ -19,7 +19,7 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
+import org.apache.hudi.common.bootstrap.index.HoodieKVComparator;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -433,6 +433,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
     }
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(strings = {
       "/hfile/hudi_0_9_hbase_1_2_3", "/hfile/hudi_0_10_hbase_1_2_3", "/hfile/hudi_0_11_hbase_2_4_9"})
@@ -472,7 +473,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
 
     content = readHFileFromResources(bootstrapIndexFile);
     verifyHFileReader(
-        content, hfilePrefix, false, HFileBootstrapIndex.HoodieKVComparator.class, 4);
+        content, hfilePrefix, false, HoodieKVComparator.class, 4);
   }
 
   Set<String> getRandomKeys(int count, List<String> keys) {

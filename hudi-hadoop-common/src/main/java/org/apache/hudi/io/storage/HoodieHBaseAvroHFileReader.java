@@ -34,6 +34,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -95,14 +96,26 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     this(path, HoodieStorageUtils.getStorage(path, storageConf), storageConf, cacheConfig, Option.empty());
   }
 
+  public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, Option<Schema> schemaOpt) throws IOException {
+    this(storageConf, path, new CacheConfig(storageConf.unwrapAs(Configuration.class)), new HoodieHadoopStorage(path, storageConf), schemaOpt);
+  }
+
   public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, CacheConfig cacheConfig,
                                     HoodieStorage storage, Option<Schema> schemaOpt) throws IOException {
     this(path, storage, storageConf, cacheConfig, schemaOpt);
   }
 
+  public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, HoodieStorage storage,
+                                    byte[] content, Option<Schema> schemaOpt) throws IOException {
+    this(path, storage, storageConf, new CacheConfig(storageConf.unwrapAs(Configuration.class)), schemaOpt, Option.of(content));
+  }
   public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, CacheConfig cacheConfig,
                                     HoodieStorage storage, byte[] content, Option<Schema> schemaOpt) throws IOException {
     this(path, storage, storageConf, cacheConfig, schemaOpt, Option.of(content));
+  }
+
+  public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path) throws IOException {
+    this(storageConf, path, new CacheConfig(storageConf.unwrapAs(Configuration.class)));
   }
 
   public HoodieHBaseAvroHFileReader(StoragePath path, HoodieStorage storage, StorageConfiguration<?> storageConf, CacheConfig config,
