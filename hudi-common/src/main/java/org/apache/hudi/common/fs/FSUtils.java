@@ -44,6 +44,7 @@ import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -99,6 +100,13 @@ public class FSUtils {
     Configuration inlineConf = new Configuration(conf);
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
     inlineConf.setClassLoader(InLineFileSystem.class.getClassLoader());
+    return inlineConf;
+  }
+
+  public static StorageConfiguration<?> buildInlineConf(StorageConfiguration<?> storageConf) {
+    StorageConfiguration<?> inlineConf = storageConf.newInstance();
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+    (inlineConf.unwrapAs(Configuration.class)).setClassLoader(InLineFileSystem.class.getClassLoader());
     return inlineConf;
   }
 
@@ -226,17 +234,16 @@ public class FSUtils {
     fullPartitionPath = getPathWithoutSchemeAndAuthority(fullPartitionPath);
 
     String fullPartitionPathStr = fullPartitionPath.toString();
+    String basePathString = basePath.toString();
 
-    if (!fullPartitionPathStr.startsWith(basePath.toString())) {
+    if (!fullPartitionPathStr.startsWith(basePathString)) {
       throw new IllegalArgumentException("Partition path \"" + fullPartitionPathStr
           + "\" does not belong to base-path \"" + basePath + "\"");
     }
 
-    int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
-        basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
     // Partition-Path could be empty for non-partitioned tables
-    return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
-        : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
+    return fullPartitionPathStr.length() == basePathString.length() ? ""
+        : fullPartitionPathStr.substring(basePathString.length() + 1);
   }
 
   public static StoragePath getPathWithoutSchemeAndAuthority(StoragePath path) {
@@ -812,7 +819,7 @@ public class FSUtils {
 
   public static <T> Map<String, T> parallelizeSubPathProcess(
       HoodieEngineContext hoodieEngineContext, HoodieStorage storage, StoragePath dirPath, int parallelism,
-      Predicate<StoragePathInfo> subPathPredicate, SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction) {
+      Predicate<StoragePathInfo> subPathPredicate, SerializableFunction<Pair<String, StorageConfiguration<?>>, T> pairFunction) {
     Map<String, T> result = new HashMap<>();
     try {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(dirPath);
@@ -831,18 +838,18 @@ public class FSUtils {
       HoodieEngineContext hoodieEngineContext,
       HoodieStorage storage,
       int parallelism,
-      SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction,
+      SerializableFunction<Pair<String, StorageConfiguration<?>>, T> pairFunction,
       List<String> subPaths) {
     Map<String, T> result = new HashMap<>();
     if (subPaths.size() > 0) {
-      SerializableConfiguration conf = new SerializableConfiguration((Configuration) storage.unwrapConf());
+      StorageConfiguration<?> storageConf = storage.getConf();
       int actualParallelism = Math.min(subPaths.size(), parallelism);
 
       hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),
           "Parallel listing paths " + String.join(",", subPaths));
 
       result = hoodieEngineContext.mapToPair(subPaths,
-          subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
+          subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, storageConf))),
           actualParallelism);
     }
     return result;
@@ -852,14 +859,14 @@ public class FSUtils {
    * Deletes a sub-path.
    *
    * @param subPathStr sub-path String
-   * @param conf       serializable config
+   * @param conf       storage config
    * @param recursive  is recursive or not
    * @return {@code true} if the sub-path is deleted; {@code false} otherwise.
    */
-  public static boolean deleteSubPath(String subPathStr, SerializableConfiguration conf, boolean recursive) {
+  public static boolean deleteSubPath(String subPathStr, StorageConfiguration<?> conf, boolean recursive) {
     try {
       Path subPath = new Path(subPathStr);
-      FileSystem fileSystem = subPath.getFileSystem(conf.get());
+      FileSystem fileSystem = subPath.getFileSystem(conf.unwrapAs(Configuration.class));
       return fileSystem.delete(subPath, recursive);
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);

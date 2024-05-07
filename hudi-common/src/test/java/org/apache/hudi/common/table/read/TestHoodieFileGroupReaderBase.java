@@ -39,9 +39,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -66,11 +66,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @TempDir
   protected java.nio.file.Path tempDir;
 
-  public abstract Configuration getHadoopConf();
+  public abstract StorageConfiguration<?> getStorageConf();
 
   public abstract String getBasePath();
 
-  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema, Configuration hadoopConf);
+  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf);
 
   public abstract void commitToTable(List<String> recordList, String operation,
                                      Map<String, String> writeConfigs);
@@ -90,17 +90,17 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       // One commit; reading one file group containing a base file only
       commitToTable(recordsToStrings(dataGen.generateInserts("001", 100)), INSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
-          getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0);
+          getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0);
 
       // Two commits; reading one file group containing a base file and a log file
       commitToTable(recordsToStrings(dataGen.generateUpdates("002", 100)), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
-          getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), true, 1);
+          getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 1);
 
       // Three commits; reading one file group containing a base file and two log files
       commitToTable(recordsToStrings(dataGen.generateUpdates("003", 100)), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
-          getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), true, 2);
+          getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 2);
     }
   }
 
@@ -116,12 +116,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       // One commit; reading one file group containing a base file only
       commitToTable(recordsToStrings(dataGen.generateInserts("001", 100)), INSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
-          getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), false, 1);
+          getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 1);
 
       // Two commits; reading one file group containing a base file and a log file
       commitToTable(recordsToStrings(dataGen.generateUpdates("002", 100)), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
-          getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), false, 2);
+          getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 2);
     }
   }
 
@@ -141,14 +141,14 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return configMapping;
   }
 
-  private void validateOutputFromFileGroupReader(Configuration hadoopConf,
+  private void validateOutputFromFileGroupReader(StorageConfiguration<?> storageConf,
                                                  String tablePath,
                                                  String[] partitionPaths,
                                                  boolean containsBaseFile,
                                                  int expectedLogFileNum) throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(hadoopConf, tablePath);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
     Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(storageConf);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
     FileSystemViewManager viewManager = FileSystemViewManager.createViewManager(
         engineContext, FileSystemViewStorageConfig.newBuilder().build(),
@@ -170,8 +170,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     assertEquals(containsBaseFile, fileSlice.getBaseFile().isPresent());
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        getHoodieReaderContext(tablePath, avroSchema, hadoopConf),
-        hadoopConf,
+        getHoodieReaderContext(tablePath, avroSchema, storageConf),
+        storageConf,
         tablePath,
         metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
         fileSlice,

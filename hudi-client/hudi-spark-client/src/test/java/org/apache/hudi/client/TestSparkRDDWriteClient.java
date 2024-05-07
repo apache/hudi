@@ -74,7 +74,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
   public void testWriteClientAndTableServiceClientWithTimelineServer(
       boolean enableEmbeddedTimelineServer, boolean passInTimelineServer) throws IOException {
     HoodieTableMetaClient metaClient =
-        getHoodieMetaClient(hadoopConf(), URI.create(basePath()).getPath(), new Properties());
+        getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
     HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePathV2().toString())
         .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineServer)
@@ -112,7 +112,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
   @MethodSource
   void testWriteClientReleaseResourcesShouldOnlyUnpersistRelevantRdds(
       HoodieTableType tableType, boolean shouldReleaseResource, boolean metadataTableEnable) throws IOException {
-    final HoodieTableMetaClient metaClient = getHoodieMetaClient(hadoopConf(), URI.create(basePath()).getPath(), tableType, new Properties());
+    final HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), tableType, new Properties());
     final HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePathV2().toString())
         .withAutoCommit(false)

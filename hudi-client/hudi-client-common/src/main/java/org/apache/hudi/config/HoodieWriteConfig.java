@@ -2001,6 +2001,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getMetadataConfig().getColumnsEnabledForColumnStatsIndex();
   }
 
+  public boolean isPartitionStatsIndexEnabled() {
+    return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled();
+  }
+
+  public int getPartitionStatsIndexParallelism() {
+    return metadataConfig.getPartitionStatsIndexParallelism();
+  }
+
   public List<String> getColumnsEnabledForBloomFilterIndex() {
     return getMetadataConfig().getColumnsEnabledForBloomFilterIndex();
   }

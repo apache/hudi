@@ -84,7 +84,8 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     HoodieWriteConfig.Builder writeConfigBuilder =
         SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort);
 
-    HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf, parquetWriteLegacyFormatEnabled);
+    HoodieRowParquetWriteSupport writeSupport = getWriteSupport(
+        writeConfigBuilder, storageConf.unwrap(), parquetWriteLegacyFormatEnabled);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
         CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
@@ -109,7 +110,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     String minKey = recordKeys.stream().min(Comparator.naturalOrder()).get();
     String maxKey = recordKeys.stream().max(Comparator.naturalOrder()).get();
 
-    FileMetaData parquetMetadata = ParquetUtils.readMetadata(hadoopConf, filePath).getFileMetaData();
+    FileMetaData parquetMetadata = ParquetUtils.readMetadata(storageConf, filePath).getFileMetaData();
 
     Map<String, String> extraMetadata = parquetMetadata.getKeyValueMetaData();
 
@@ -118,7 +119,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE), BloomFilterTypeCode.DYNAMIC_V0.name());
 
     // Step 3: Make sure Bloom Filter contains all the record keys
-    BloomFilter bloomFilter = new ParquetUtils().readBloomFilterFromMetadata(hadoopConf, filePath);
+    BloomFilter bloomFilter = new ParquetUtils().readBloomFilterFromMetadata(storageConf, filePath);
     recordKeys.forEach(recordKey -> {
       assertTrue(bloomFilter.mightContain(recordKey));
     });

@@ -34,8 +34,8 @@ import org.apache.hudi.metaserver.client.HoodieMetaserverClient;
 import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
 import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 import org.apache.hudi.metaserver.thrift.Table;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
@@ -59,7 +59,7 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   private final Table table;
   private final transient HoodieMetaserverClient metaserverClient;
 
-  public HoodieTableMetaserverClient(Configuration conf, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
+  public HoodieTableMetaserverClient(StorageConfiguration<?> conf, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
                                      String mergerStrategy, HoodieTimeGeneratorConfig timeGeneratorConfig,
                                      FileSystemRetryConfig fileSystemRetryConfig,
                                      Option<String> databaseName, Option<String> tableName, HoodieMetaserverConfig config) {

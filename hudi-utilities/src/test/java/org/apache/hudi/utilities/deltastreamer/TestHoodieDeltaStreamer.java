@@ -155,6 +155,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -408,7 +409,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             propsFilename, false), jsc);
     deltaStreamer.sync();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(new Configuration()).setBasePath(tableBasePath).build();
+        .setConf(HoodieTestUtils.getDefaultStorageConf()).setBasePath(tableBasePath).build();
     assertEquals(
         expectedKeyGeneratorClassName, metaClient.getTableConfig().getKeyGeneratorClassName());
     Dataset<Row> res = sqlContext.read().format("hudi").load(tableBasePath);
@@ -438,8 +439,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.getIngestionService().ingestOnce();
     // Create new metaClient from tablePath
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get())
-        .setBasePath(tablePath).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getHiveStylePartitioningEnable()));
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getUrlEncodePartitioning()));
   }
@@ -605,7 +605,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     counts = countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1900, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
-    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(fs.getConf()).build());
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
+        HoodieTestUtils.createMetaClient(storage, tableBasePath));
     Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     assertNotNull(tableSchema);
 
@@ -804,7 +805,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // schedule a clustering job to build a clustering plan and transition to inflight
     HoodieClusteringJob clusteringJob = initialHoodieClusteringJob(tableBasePath, null, false, "schedule");
     clusteringJob.cluster(0);
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
+    HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
     List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
     HoodieInstant clusteringRequest = hoodieClusteringInstants.get(0);
     meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
@@ -831,7 +832,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     extraProps.setProperty("hoodie.datasource.write.table.type", "MERGE_ON_READ");
     extraProps.setProperty("hoodie.datasource.compaction.async.enable", "false");
     prepareParquetDFSSource(false, false, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
-        PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps);
+        PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, false);
     String tableBasePath = basePath + "test_parquet_table" + testNum;
     HoodieDeltaStreamer.Config deltaCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
         null, PROPS_FILENAME_TEST_PARQUET, false,
@@ -848,7 +849,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertAtleastNCompactionCommits(1, tableBasePath);
 
     // delete compaction commit
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
+    HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
     HoodieInstant commitInstant = timeline.lastInstant().get();
     String commitFileName = tableBasePath + "/.hoodie/" + commitInstant.getFileName();
@@ -859,7 +860,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer = new HoodieDeltaStreamer(deltaCfg, jsc);
     deltaStreamer.sync();
     TestHelpers.assertAtleastNDeltaCommits(3, tableBasePath);
-    meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
+    meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
     timeline = meta.getActiveTimeline().getRollbackTimeline();
     assertEquals(1, timeline.getInstants().size());
   }
@@ -892,7 +893,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertAtLeastNReplaceCommits(2, tableBasePath);
 
     // Step 2 : Get the first replacecommit and extract the corresponding replaced file IDs.
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
+    HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
     HoodieTimeline replacedTimeline = meta.reloadActiveTimeline().getCompletedReplaceTimeline();
     Option<HoodieInstant> firstReplaceHoodieInstant = replacedTimeline.nthFromLastInstant(1);
     assertTrue(firstReplaceHoodieInstant.isPresent());
@@ -1227,7 +1228,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     ds2.sync();
 
     // convert clustering request into inflight, Simulate the last clustering failed scenario
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
+    HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
     List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
     HoodieInstant clusteringRequest = hoodieClusteringInstants.get(0);
     HoodieInstant hoodieInflightInstant = meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
@@ -1355,7 +1356,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         deltaStreamer.sync();
         // since we mimic'ed empty batch, total records should be same as first sync().
         assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
+        HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
 
         // validate table schema fetches valid schema from last but one commit.
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
@@ -1376,7 +1377,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         assertRecordCount(recordsSoFar + (i - 1) * 100, tableBasePath, sqlContext);
         if (i == 2 || i == 4) { // this validation reloads the timeline. So, we are validating only for first and last batch.
           // validate commit metadata for all completed commits to have valid schema in extra metadata.
-          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
+          HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
           metaClient.reloadActiveTimeline().getCommitsTimeline()
               .filterCompletedInstants().getInstants()
               .forEach(entry -> assertValidSchemaAndOperationTypeInCommitMetadata(
@@ -1660,7 +1661,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(1000, counts.get(1).getLong(1));
 
     // Test with empty commits
-    HoodieTableMetaClient mClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(tableBasePath).setLoadActiveTimelineOnLoad(true).build();
+    HoodieTableMetaClient mClient = createMetaClient(jsc, tableBasePath);
     HoodieInstant lastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     HoodieDeltaStreamer.Config cfg2 = TestHelpers.makeDropAllConfig(tableBasePath, WriteOperationType.UPSERT);
     addRecordMerger(HoodieRecordType.AVRO, cfg2.configs);
@@ -1670,7 +1671,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg2.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
     HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg2, jsc);
     ds2.sync();
-    mClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(tableBasePath).setLoadActiveTimelineOnLoad(true).build();
+    mClient = createMetaClient(jsc, tableBasePath);
     HoodieInstant newLastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     assertTrue(HoodieTimeline.compareTimestamps(newLastFinished.getTimestamp(), HoodieTimeline.GREATER_THAN, lastFinished.getTimestamp()
     ));
@@ -1753,7 +1754,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       deltaStreamer1.sync();
       // since we mimic'ed empty batch, total records should be same as first sync().
       assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
+      HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
 
       // validate table schema fetches valid schema from last but one commit.
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
@@ -1770,7 +1771,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
     assertRecordCount(parquetRecordsCount + 100, tableBasePath, sqlContext);
     // validate commit metadata for all completed commits to have valid schema in extra metadata.
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
+    HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
     metaClient.reloadActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().getInstants()
         .forEach(entry -> assertValidSchemaAndOperationTypeInCommitMetadata(
@@ -2032,7 +2033,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     parquetDs.sync();
     assertRecordCount(parquetRecords * 2 + 20, tableBasePath, sqlContext);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(jsc.hadoopConfiguration(), tableBasePath);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()), tableBasePath);
     List<HoodieInstant> instants = metaClient.getCommitsTimeline().getInstants();
 
     ObjectMapper objectMapper = new ObjectMapper();
@@ -2095,7 +2096,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer deltaStreamer1 = new HoodieDeltaStreamer(config, jsc);
     deltaStreamer1.sync();
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
+    HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
     HoodieInstant firstCommit = metaClient.getActiveTimeline().lastInstant().get();
     deltaStreamer1.shutdownGracefully();
 
@@ -2588,7 +2589,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       assertDistanceCount(1000, tableBasePath, sqlContext);
       TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
     } else if (operationType == WriteOperationType.INSERT_OVERWRITE_TABLE) {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(tableBasePath).build();
+      HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
       final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
       assertEquals(0, fsView.getLatestFileSlices("").count());
       TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
@@ -2617,7 +2618,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         jsc, fs, jsc.hadoopConfiguration(), null);
 
     properties.put(HoodieTableConfig.NAME.key(), "sample_tbl");
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE, properties);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()), basePath, HoodieTableType.COPY_ON_WRITE, properties);
 
     Map<String, String> extraMetadata = new HashMap<>();
     extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "abc");
@@ -2653,7 +2655,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertAtLeastNCommits(1, tableBasePath);
 
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-        HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(fs.getConf()).build());
+        HoodieTestUtils.createMetaClient(storage, tableBasePath));
     // get schema from data file written in the latest commit
     Schema tableSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
     assertNotNull(tableSchema);
@@ -2697,7 +2699,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // change cow to mor
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(new Configuration(fs.getConf()))
+        .setConf(storage.getConf().newInstance())
         .setBasePath(cfg.targetBasePath)
         .setLoadActiveTimelineOnLoad(false)
         .build();
@@ -2768,7 +2770,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // change mor to cow
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(new Configuration(fs.getConf()))
+        .setConf(storage.getConf().newInstance())
         .setBasePath(cfg.targetBasePath)
         .setLoadActiveTimelineOnLoad(false)
         .build();
@@ -2815,7 +2817,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     boolean hasTransformer = transformerClassNames != null && !transformerClassNames.isEmpty();
     prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
-        PARQUET_SOURCE_ROOT, false, "partition_path", "");
+        PARQUET_SOURCE_ROOT, false, "partition_path", "", true);
 
     String tableBasePath = basePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer.Config config = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
@@ -2824,6 +2826,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(config, jsc);
     deltaStreamer.sync();
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    // validate that auto record keys are enabled.
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(HoodieTestUtils.getDefaultStorageConf()).build();
+    assertFalse(metaClient.getTableConfig().getRecordKeyFields().isPresent());
 
     prepareParquetDFSFiles(200, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
     deltaStreamer.sync();
@@ -2855,7 +2860,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private Set<String> getAllFileIDsInTable(String tableBasePath, Option<String> partition) {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(tableBasePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
     final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
     Stream<HoodieBaseFile> baseFileStream = partition.isPresent() ? fsView.getLatestBaseFiles(partition.get()) : fsView.getLatestBaseFiles();
     return baseFileStream.map(HoodieBaseFile::getFileId).collect(Collectors.toSet());

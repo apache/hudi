@@ -84,7 +84,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
     tablePath = baseUri + "/sample-table";
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
-    hadoopConf = dfs.getConf();
+    storageConf = HadoopFSUtils.getStorageConf(dfs.getConf());
   }
 
   @AfterEach
@@ -106,7 +106,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
         .setTableType(TABLE_TYPE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(hadoopConf, dfsBasePath);
+        .initTable(storageConf.newInstance(), dfsBasePath);
 
     // Create write client to write some records in
     HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
@@ -118,7 +118,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
         .setPayloadClass(HoodieAvroPayload.class)
         .setRecordKeyFields(localConfig.getProps().getProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()))
         .setPartitionFields(localConfig.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
-        .initTable(hadoopConf, tablePath);
+        .initTable(storageConf.newInstance(), tablePath);
 
 
     try (SparkRDDWriteClient hdfsWriteClient = getHoodieWriteClient(cfg);
@@ -132,7 +132,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       hdfsWriteClient.upsert(writeRecords, readCommitTime);
 
       // Read from hdfs
-      FileSystem fs = HadoopFSUtils.getFs(dfsBasePath, HoodieTestUtils.getDefaultHadoopConf());
+      FileSystem fs = HadoopFSUtils.getFs(dfsBasePath, HoodieTestUtils.getDefaultStorageConf());
       HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(fs.getConf(), dfsBasePath);
       HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       Dataset<Row> readRecords = HoodieClientTestUtils.readCommit(dfsBasePath, sqlContext, timeline, readCommitTime);
@@ -143,7 +143,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
           .setTableType(TABLE_TYPE)
           .setTableName(TABLE_NAME)
           .setPayloadClass(HoodieAvroPayload.class)
-          .initTable(hadoopConf, tablePath);
+          .initTable(storageConf.newInstance(), tablePath);
 
       String writeCommitTime = localWriteClient.startCommit();
       LOG.info("Starting write commit " + writeCommitTime);
@@ -153,7 +153,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       localWriteClient.upsert(localWriteRecords, writeCommitTime);
 
       LOG.info("Reading from path: " + tablePath);
-      fs = HadoopFSUtils.getFs(tablePath, HoodieTestUtils.getDefaultHadoopConf());
+      fs = HadoopFSUtils.getFs(tablePath, HoodieTestUtils.getDefaultStorageConf());
       metaClient = HoodieTestUtils.createMetaClient(fs.getConf(), tablePath);
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       Dataset<Row> localReadRecords =

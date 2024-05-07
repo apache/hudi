@@ -68,7 +68,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
   @BeforeEach
   public void setUp() throws Exception {
     initPath();
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath);
     initSparkContexts("TestUpdateSchemaEvolution");
     initHoodieStorage();
     initTimelineService();
@@ -102,7 +102,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
 
     final Path commitFile = new Path(config.getBasePath() + "/.hoodie/"
         + HoodieTimeline.makeCommitFileName("100" + "_" + InProcessTimeGenerator.createNewInstantTime()));
-    HadoopFSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf()).create(commitFile);
+    HadoopFSUtils.getFs(basePath, HoodieTestUtils.getDefaultStorageConf()).create(commitFile);
     return statuses.get(0);
   }
 
@@ -135,7 +135,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(updateTable.getConfig(), "101", updateTable,
             updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
         List<GenericRecord> oldRecords = BaseFileUtils.getInstance(updateTable.getBaseFileFormat())
-            .readAvroRecords(updateTable.getHadoopConf(),
+            .readAvroRecords(updateTable.getStorageConf(),
                 new StoragePath(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
                 mergeHandle.getWriterSchemaWithMetaFields());
         for (GenericRecord rec : oldRecords) {

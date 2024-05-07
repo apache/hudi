@@ -38,8 +38,8 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.{Function, Supplier}
-import scala.collection.{JavaConversions, mutable}
-import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter}
+import scala.collection.mutable
+import scala.collection.JavaConverters._
 
 class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -148,7 +148,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     }
 
     val filteredTimeline = new HoodieDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
+      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
 
     new HoodieTableFileSystemView(metaClient, filteredTimeline, new java.util.ArrayList[StoragePathInfo])
   }

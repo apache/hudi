@@ -102,7 +102,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
   @BeforeEach
   public void setUp() throws IOException {
     jsc = JavaSparkContext.fromSparkContext(spark().sparkContext());
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     String schemaFilePath = TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_gcs_data.avsc").getPath();
     TypedProperties props = new TypedProperties();
     props.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);

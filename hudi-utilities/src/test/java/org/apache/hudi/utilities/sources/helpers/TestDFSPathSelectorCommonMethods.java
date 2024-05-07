@@ -23,8 +23,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.junit.jupiter.api.AfterEach;
@@ -67,7 +67,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void listEligibleFilesShouldIgnoreCertainPrefixes(Class<?> clazz) throws Exception {
-    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
     createBaseFile(basePath, "p1", "000", "foo1", 1);
     createBaseFile(basePath, "p1", "000", ".foo2", 1);
     createBaseFile(basePath, "p1", "000", "_foo3", 1);
@@ -80,7 +80,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void listEligibleFilesShouldIgnore0LengthFiles(Class<?> clazz) throws Exception {
-    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
     createBaseFile(basePath, "p1", "000", "foo1", 1);
     createBaseFile(basePath, "p1", "000", "foo2", 0);
     createBaseFile(basePath, "p1", "000", "foo3", 0);
@@ -93,7 +93,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void listEligibleFilesShouldIgnoreFilesEarlierThanCheckpointTime(Class<?> clazz) throws Exception {
-    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
     createBaseFile(basePath, "p1", "000", "foo1", 1);
     createBaseFile(basePath, "p1", "000", "foo2", 1);
     createBaseFile(basePath, "p1", "000", "foo3", 1);
@@ -106,7 +106,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void getNextFilePathsAndMaxModificationTimeShouldRespectSourceLimit(Class<?> clazz) throws Exception {
-    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
     createBaseFile(basePath, "p1", "000", "foo1", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo2", 10, 2000);
     createBaseFile(basePath, "p1", "000", "foo3", 10, 3000);
@@ -128,7 +128,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void getNextFilePathsAndMaxModificationTimeShouldIgnoreSourceLimitIfSameModTimeFilesPresent(Class<?> clazz) throws Exception {
-    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
     createBaseFile(basePath, "p1", "000", "foo1", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo2", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo3", 10, 1000);

@@ -19,7 +19,7 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
-import org.apache.hudi.exception.HoodieDeletePartitionException;
+import org.apache.hudi.exception.HoodieDeletePartitionPendingTableServiceException;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
@@ -67,7 +67,7 @@ public class DeletePartitionUtils {
         .forEach(x -> instantsOfOffendingPendingTableServiceAction.add(x.getRight().getTimestamp()));
 
     if (instantsOfOffendingPendingTableServiceAction.size() > 0) {
-      throw new HoodieDeletePartitionException("Failed to drop partitions. "
+      throw new HoodieDeletePartitionPendingTableServiceException("Failed to drop partitions. "
           + "Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: " + partitionsToDrop + ". "
           + "Instant(s) of offending pending table service action: "
           + instantsOfOffendingPendingTableServiceAction.stream().distinct().collect(Collectors.toList()));

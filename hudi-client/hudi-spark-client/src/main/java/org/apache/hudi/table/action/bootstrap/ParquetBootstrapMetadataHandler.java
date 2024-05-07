@@ -40,6 +40,7 @@ import org.apache.hudi.util.ExecutorFactory;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
@@ -67,7 +68,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   @Override
   Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
     ParquetMetadata readFooter = ParquetFileReader.readFooter(
-        table.getHadoopConf(), new Path(sourceFilePath.toUri()),
+        (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
     MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
     return new AvroSchemaConverter().convert(parquetSchema);
@@ -82,7 +83,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
 
     HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(recordType)
-        .getFileReader(table.getConfig(), table.getHadoopConf(), sourceFilePath);
+        .getFileReader(table.getConfig(), table.getStorageConf(), sourceFilePath);
 
     HoodieExecutor<Void> executor = null;
     try {

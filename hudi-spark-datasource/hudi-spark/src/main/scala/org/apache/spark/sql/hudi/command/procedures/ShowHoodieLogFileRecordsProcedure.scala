@@ -109,7 +109,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     allRecords.asScala.foreach(record => {
       rows.add(Row(record.toString))
     })
-    rows.asScala
+    rows.asScala.toSeq
   }
 
   override def build: Procedure = new ShowHoodieLogFileRecordsProcedure

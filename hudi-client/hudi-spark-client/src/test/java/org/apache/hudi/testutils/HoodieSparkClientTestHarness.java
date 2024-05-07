@@ -50,6 +50,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -59,6 +60,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -103,6 +105,7 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -126,7 +129,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   protected JavaSparkContext jsc;
   protected HoodieSparkEngineContext context;
   protected SparkSession sparkSession;
-  protected Configuration hadoopConf;
+  protected StorageConfiguration<Configuration> storageConf;
   protected SQLContext sqlContext;
   protected HoodieStorage storage;
   protected ExecutorService executorService;
@@ -201,7 +204,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     HoodieClientTestUtils.overrideSparkHadoopConfiguration(sparkContext);
     jsc = new JavaSparkContext(sparkContext);
     jsc.setLogLevel("ERROR");
-    hadoopConf = jsc.hadoopConfiguration();
+    storageConf = HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration());
     sparkSession = SparkSession.builder()
         .withExtensions(JFunction.toScala(sparkSessionExtensions -> {
           sparkSessionExtensionsInjector.ifPresent(injector -> injector.accept(sparkSessionExtensions));
@@ -257,14 +260,14 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
 
-    initFileSystemWithConfiguration(hadoopConf);
+    initFileSystemWithConfiguration(storageConf);
   }
 
   /**
    * Initializes file system with a default empty configuration.
    */
   protected void initFileSystemWithDefaultConfiguration() {
-    initFileSystemWithConfiguration(new Configuration());
+    initFileSystemWithConfiguration(getDefaultStorageConf());
   }
 
   /**
@@ -311,7 +314,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     if (tableName != null && !tableName.isEmpty()) {
       properties.put(HoodieTableConfig.NAME.key(), tableName);
     }
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType, properties);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, tableType, properties);
   }
 
   /**
@@ -375,7 +378,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     }
   }
 
-  private void initFileSystemWithConfiguration(Configuration configuration) {
+  private void initFileSystemWithConfiguration(StorageConfiguration<?> configuration) {
     if (basePath == null) {
       throw new IllegalStateException("The base path has not been initialized.");
     }
@@ -404,7 +407,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     return writeClient;
   }
 
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration conf, String basePath) {
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> conf, String basePath) {
     metaClient = HoodieTestUtils.createMetaClient(conf, basePath);
     return metaClient;
   }
@@ -535,7 +538,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       return;
     }
     // Open up the metadata table again, for syncing
-    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context)) {
+    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(storageConf, writeConfig, context)) {
       LOG.info("Successfully synced to metadata table");
     } catch (Exception e) {
       throw new HoodieMetadataException("Error syncing to metadata table.", e);
@@ -544,7 +547,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   public HoodieBackedTableMetadataWriter metadataWriter(HoodieWriteConfig clientConfig) {
     return (HoodieBackedTableMetadataWriter) SparkHoodieBackedTableMetadataWriter
-        .create(hadoopConf, clientConfig, new HoodieSparkEngineContext(jsc));
+        .create(storageConf, clientConfig, new HoodieSparkEngineContext(jsc));
   }
 
   public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig,
@@ -618,7 +621,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     HoodieWriteConfig metadataWriteConfig = metadataWriter.getWriteConfig();
     assertFalse(metadataWriteConfig.isMetadataTableEnabled(), "No metadata table for metadata table");
 
-    HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(hadoopConf, metadataTableBasePath);
+    HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(storageConf, metadataTableBasePath);
 
     // Metadata table is MOR
     assertEquals(metadataMetaClient.getTableType(), HoodieTableType.MERGE_ON_READ, "Metadata Table should be MOR");
@@ -680,7 +683,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   }
 
   protected HoodieTableMetaClient createMetaClient(String basePath) {
-    return HoodieTestUtils.createMetaClient(hadoopConf, basePath);
+    return HoodieTestUtils.createMetaClient(storageConf, basePath);
   }
 
   protected HoodieTableMetaClient createMetaClient(SparkSession spark, String basePath) {

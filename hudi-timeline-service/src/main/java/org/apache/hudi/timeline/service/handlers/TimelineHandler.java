@@ -22,9 +22,8 @@ import org.apache.hudi.common.table.timeline.dto.InstantDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
-
-import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -36,7 +35,7 @@ import java.util.List;
  */
 public class TimelineHandler extends Handler {
 
-  public TimelineHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
+  public TimelineHandler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
                          HoodieStorage storage, FileSystemViewManager viewManager) throws IOException {
     super(conf, timelineServiceConfig, storage, viewManager);
   }

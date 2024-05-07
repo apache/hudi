@@ -127,9 +127,11 @@ public class HoodieTestSuiteJob {
           .setTableName(cfg.targetTableName)
           .setRecordKeyFields(this.props.getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-          .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
+          .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.targetBasePath);
     } else {
-      metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.targetBasePath).build();
+      metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+          .setBasePath(cfg.targetBasePath).build();
     }
 
     if (cfg.cleanInput) {

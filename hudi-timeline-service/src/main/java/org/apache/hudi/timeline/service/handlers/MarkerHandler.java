@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchingRunnable;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
@@ -38,7 +39,6 @@ import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.http.Context;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,7 +102,7 @@ public class MarkerHandler extends Handler {
   private String currentMarkerDir = null;
   private TimelineServerBasedDetectionStrategy earlyConflictDetectionStrategy;
 
-  public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
+  public MarkerHandler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
                        HoodieEngineContext hoodieEngineContext, HoodieStorage storage,
                        FileSystemViewManager viewManager, Registry metricsRegistry) throws IOException {
     super(conf, timelineServiceConfig, storage, viewManager);

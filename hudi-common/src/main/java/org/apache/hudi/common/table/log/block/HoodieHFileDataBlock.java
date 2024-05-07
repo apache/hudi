@@ -38,6 +38,7 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -188,13 +189,14 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
-    Configuration hadoopConf = FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf());
-    HoodieStorage storage = HoodieStorageUtils.getStorage(pathForReader, hadoopConf);
+    StorageConfiguration<?> storageConf =
+        FSUtils.buildInlineConf(getBlockContentLocation().get().getStorageConf());
+    HoodieStorage storage = HoodieStorageUtils.getStorage(pathForReader, storageConf);
     // Read the content
     try (HoodieFileReader reader =
              HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getContentReader(
 
-                 hFileReaderConfig, hadoopConf, pathForReader, HoodieFileFormat.HFILE, storage, content,
+                 hFileReaderConfig, storageConf, pathForReader, HoodieFileFormat.HFILE, storage, content,
                  Option.of(getSchemaFromHeader()))) {
       return unsafeCast(reader.getRecordIterator(readerSchema));
     }
@@ -204,12 +206,13 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
-    Configuration hadoopConf = FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf());
-    HoodieStorage storage = HoodieStorageUtils.getStorage(pathForReader, hadoopConf);
+    StorageConfiguration<?> storageConf =
+        FSUtils.buildInlineConf(getBlockContentLocation().get().getStorageConf());
+    HoodieStorage storage = HoodieStorageUtils.getStorage(pathForReader, storageConf);
     // Read the content
     try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
         HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getContentReader(
-            hFileReaderConfig, hadoopConf, pathForReader, HoodieFileFormat.HFILE, storage, content,
+            hFileReaderConfig, storageConf, pathForReader, HoodieFileFormat.HFILE, storage, content,
             Option.of(getSchemaFromHeader()))) {
       return unsafeCast(reader.getIndexedRecordIterator(readerSchema, readerSchema));
     }
@@ -222,7 +225,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
-    Configuration inlineConf = FSUtils.buildInlineConf(blockContentLoc.getHadoopConf());
+    StorageConfiguration<?> inlineConf = FSUtils.buildInlineConf(blockContentLoc.getStorageConf());
 
     StoragePath inlinePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),

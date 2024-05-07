@@ -136,7 +136,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     initTestDataGenerator();
     initHoodieStorage();
     storage.createDirectory(new StoragePath(basePath));
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ,
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ,
         HoodieFileFormat.PARQUET);
     initTestDataGenerator();
   }

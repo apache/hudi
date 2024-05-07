@@ -28,6 +28,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -81,13 +82,13 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     // Initialize test data dirs
     sourcePath = Paths.get(basePath(), "source").toString();
     targetPath = Paths.get(basePath(), "target").toString();
-    storage = HoodieStorageUtils.getStorage(basePath(), jsc().hadoopConfiguration());
+    storage = HoodieStorageUtils.getStorage(basePath(), HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()));
 
     HoodieTableMetaClient.withPropertyBuilder()
-      .setTableType(HoodieTableType.COPY_ON_WRITE)
-      .setTableName(TABLE_NAME)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .initTable(jsc().hadoopConfiguration(), sourcePath);
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName(TABLE_NAME)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc().hadoopConfiguration()), sourcePath);
 
     // Prepare data as source Hudi dataset
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);

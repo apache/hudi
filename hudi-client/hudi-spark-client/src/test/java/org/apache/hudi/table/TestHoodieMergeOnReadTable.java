@@ -72,6 +72,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -211,8 +212,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       List<String> inputPaths = roView.getLatestBaseFiles()
           .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
           .collect(Collectors.toList());
-      List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
-          basePath(), new JobConf(hadoopConf()), true, false);
+      List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
+          basePath(), new JobConf(storageConf().unwrap()), true, false);
       // Wrote 20 records in 2 batches
       assertEquals(40, recordsRead.size(), "Must contain 40 records");
     }
@@ -253,7 +254,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          writeClient.getEngineContext().getHadoopConf().get(), config, writeClient.getEngineContext())) {
+          writeClient.getEngineContext().getStorageConf(), config, writeClient.getEngineContext())) {
         HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
             .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
 
@@ -366,7 +367,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          writeClient.getEngineContext().getHadoopConf().get(), config, writeClient.getEngineContext())) {
+          writeClient.getEngineContext().getStorageConf(), config, writeClient.getEngineContext())) {
         HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
             .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
 
@@ -434,20 +435,22 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       // Create a commit without metadata stats in metadata to test backwards compatibility
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = table.getMetaClient().getCommitActionType();
-      HoodieInstant instant = new HoodieInstant(State.REQUESTED, commitActionType, "000");
+      List<String> instants = new ArrayList<>();
+      String instant0 = metaClient.createNewInstantTime();
+      HoodieInstant instant = new HoodieInstant(State.REQUESTED, commitActionType, instant0);
       activeTimeline.createNewInstant(instant);
       activeTimeline.transitionRequestedToInflight(instant, Option.empty());
-      instant = new HoodieInstant(State.INFLIGHT, commitActionType, "000");
+      instant = new HoodieInstant(State.INFLIGHT, commitActionType, instant0);
       activeTimeline.saveAsComplete(instant, Option.empty());
 
-      String instantTime = "001";
-      client.startCommitWithTime(instantTime);
+      String instant1 = metaClient.createNewInstantTime();
+      client.startCommitWithTime(instant1);
 
-      List<HoodieRecord> records = dataGen.generateInserts(instantTime, 200);
+      List<HoodieRecord> records = dataGen.generateInserts(instant1, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
-      JavaRDD<WriteStatus> statuses = client.insert(writeRecords, instantTime);
-      assertTrue(client.commit(instantTime, statuses), "Commit should succeed");
+      JavaRDD<WriteStatus> statuses = client.insert(writeRecords, instant1);
+      assertTrue(client.commit(instant1, statuses), "Commit should succeed");
 
       // Read from commit file
       table = HoodieSparkTable.create(cfg, context());
@@ -462,11 +465,11 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       }
       assertEquals(200, inserts);
 
-      instantTime = "002";
-      client.startCommitWithTime(instantTime);
-      records = dataGen.generateUpdates(instantTime, records);
+      String instant2 = metaClient.createNewInstantTime();
+      client.startCommitWithTime(instant2);
+      records = dataGen.generateUpdates(instant2, records);
       writeRecords = jsc().parallelize(records, 1);
-      statuses = client.upsert(writeRecords, instantTime);
+      statuses = client.upsert(writeRecords, instant2);
       //assertTrue(client.commit(instantTime, statuses), "Commit should succeed");
       inserts = 0;
       int upserts = 0;
@@ -480,7 +483,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertEquals(0, inserts);
       assertEquals(200, upserts);
 
-      client.rollback(instantTime);
+      client.rollback(instant2);
 
       // Read from commit file
       table = HoodieSparkTable.create(cfg, context());

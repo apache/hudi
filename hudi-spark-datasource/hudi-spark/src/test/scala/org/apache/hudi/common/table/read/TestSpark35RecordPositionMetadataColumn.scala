@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
@@ -87,7 +88,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
 
       // Prepare the file and Parquet file reader.
       val metaClient = getHoodieMetaClient(
-        _spark.sparkContext.hadoopConfiguration, basePath)
+        HadoopFSUtils.getStorageConfWithCopy(_spark.sparkContext.hadoopConfiguration), basePath)
       val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
       assertFalse(allBaseFiles.isEmpty)
       val readerContext = new SparkFileFormatInternalRowReaderContext(reader, HoodieRecord.RECORD_KEY_METADATA_FIELD, Seq.empty)
@@ -97,7 +98,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
       readerContext.setHasBootstrapBaseFile(false)
       //dataschema param is set to null because it is not used
       val fileRecordIterator = readerContext.getFileRecordIterator(allBaseFiles.get(0).getPath, 0, allBaseFiles.get(0).getLength, null,
-        sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), hadoopConf)
+        sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), HadoopFSUtils.getStorageConf(hadoopConf))
 
       // Make sure we can read all the positions out from base file.
       // Here we don't add filters since enabling filter push-down

@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -71,11 +73,11 @@ public abstract class TestHoodieReaderWriterBase {
       Schema avroSchema, boolean populateMetaFields) throws Exception;
 
   protected abstract HoodieAvroFileReader createReader(
-      Configuration conf) throws Exception;
+      StorageConfiguration<?> conf) throws Exception;
 
-  protected abstract void verifyMetadata(Configuration conf) throws IOException;
+  protected abstract void verifyMetadata(StorageConfiguration<?> conf) throws IOException;
 
-  protected abstract void verifySchema(Configuration conf, String schemaPath) throws IOException;
+  protected abstract void verifySchema(StorageConfiguration<?> conf, String schemaPath) throws IOException;
 
   @BeforeEach
   @AfterEach
@@ -91,7 +93,7 @@ public abstract class TestHoodieReaderWriterBase {
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     writeFileWithSimpleSchema();
 
-    Configuration conf = new Configuration();
+    StorageConfiguration<?> conf = HadoopFSUtils.getStorageConf(new Configuration());
     verifyMetadata(conf);
 
     try (HoodieAvroFileReader hoodieReader = createReader(conf)) {
@@ -115,7 +117,7 @@ public abstract class TestHoodieReaderWriterBase {
     String schemaPath = "/exampleSchema.avsc";
     writeFileWithSimpleSchema();
 
-    Configuration conf = new Configuration();
+    StorageConfiguration<?> conf = HadoopFSUtils.getStorageConf(new Configuration());
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
     verifySimpleRecords(createReader(conf).getRecordIterator());
@@ -142,7 +144,7 @@ public abstract class TestHoodieReaderWriterBase {
     }
     writer.close();
 
-    Configuration conf = new Configuration();
+    StorageConfiguration<?> conf = HadoopFSUtils.getStorageConf(new Configuration());
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
     verifyComplexRecords(createReader(conf).getRecordIterator());
@@ -158,7 +160,7 @@ public abstract class TestHoodieReaderWriterBase {
   })
   public void testWriteReadWithEvolvedSchema(String evolvedSchemaPath) throws Exception {
     writeFileWithSimpleSchema();
-    Configuration conf = new Configuration();
+    StorageConfiguration<?> conf = HadoopFSUtils.getStorageConf(new Configuration());
     try (HoodieAvroFileReader hoodieReader = createReader(conf)) {
       verifyReaderWithSchema(evolvedSchemaPath, hoodieReader);
     }
@@ -167,7 +169,7 @@ public abstract class TestHoodieReaderWriterBase {
   @Test
   public void testReaderFilterRowKeys() throws Exception {
     writeFileWithSchemaWithMeta();
-    Configuration conf = new Configuration();
+    StorageConfiguration<?> conf = HadoopFSUtils.getStorageConf(new Configuration());
     verifyMetadata(conf);
     verifyFilterRowKeys(createReader(conf));
   }

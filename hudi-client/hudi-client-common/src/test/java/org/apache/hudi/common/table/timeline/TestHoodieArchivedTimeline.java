@@ -32,7 +32,6 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -83,7 +83,7 @@ public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
         .withMarkersType("DIRECT")
         .build();
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(new Configuration());
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
     LSMTimelineWriter writer = LSMTimelineWriter.getInstance(writeConfig, new LocalTaskContextSupplier(), metaClient);
     List<ActiveAction> instantBuffer = new ArrayList<>();
     for (int i = 1; i <= 50; i++) {

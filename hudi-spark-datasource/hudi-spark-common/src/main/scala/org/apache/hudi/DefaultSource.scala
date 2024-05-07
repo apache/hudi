@@ -21,8 +21,7 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.HoodieSchemaNotFoundException
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieReaderConfig}
-import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -31,11 +30,10 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.storage.{StoragePath, HoodieStorageUtils}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.PathUtils
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
@@ -45,7 +43,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
 /**
@@ -101,7 +98,8 @@ class DefaultSource extends RelationProvider
     val readPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
     val allPaths = path.map(p => Seq(p)).getOrElse(Seq()) ++ readPaths
 
-    val storage = HoodieStorageUtils.getStorage(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
+    val storage = HoodieStorageUtils.getStorage(
+      allPaths.head, HadoopFSUtils.getStorageConf(sqlContext.sparkContext.hadoopConfiguration))
 
     val globPaths = if (path.exists(_.contains("*")) || readPaths.nonEmpty) {
       PathUtils.checkAndGlobPathIfNecessary(allPaths, storage)
@@ -126,11 +124,11 @@ class DefaultSource extends RelationProvider
     }
     log.info("Obtained hudi table path: " + tablePath)
 
-    val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.asJava)
-      .setConf(storage.unwrapConf.asInstanceOf[Configuration])
+    val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.toMap.asJava)
+      .setConf(storage.getConf.newInstance())
       .setBasePath(tablePath).build()
 
-    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
+    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters.toMap)
   }
 
   /**
@@ -183,7 +181,7 @@ class DefaultSource extends RelationProvider
   }
 
   def validateMultiWriterConfigs(options: Map[String, String]) : Unit = {
-    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrElse(WRITE_CONCURRENCY_MODE.key(),
       WRITE_CONCURRENCY_MODE.defaultValue())).supportsMultiWriter()) {
       // ensure some valid value is set for identifier
       checkState(options.contains(STREAMING_CHECKPOINT_IDENTIFIER.key()), "For multi-writer scenarios, please set "
@@ -202,7 +200,8 @@ class DefaultSource extends RelationProvider
       throw new HoodieException(s"'path'  must be specified.")
     }
     val metaClient = HoodieTableMetaClient.builder().setConf(
-      sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
+      HadoopFSUtils.getStorageConf(sqlContext.sparkSession.sessionState.newHadoopConf()))
+      .setBasePath(path.get).build()
 
     val sqlSchema = DefaultSource.resolveSchema(metaClient, parameters, schema)
     (shortName(), sqlSchema)
@@ -263,7 +262,7 @@ object DefaultSource {
         Option(schema)
       }
 
-      val useNewParquetFileFormat = parameters.getOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
+      val useNewParquetFileFormat = parameters.getOrElse(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
         HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean &&
         !metaClient.isMetadataTable && (globPaths == null || globPaths.isEmpty) &&
         parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue()).equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)

@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /**
  * Tests on HoodieActionTimeLine using the real hudi table.
@@ -70,7 +70,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
   @Test
   def testGetLastCommitMetadataWithValidDataForCOW(): Unit = {
     // First Operation:
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -122,7 +122,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
 
     // Third Operation:
     // Upsert with 50 duplicate records. Produced the second log file for each parquet.
-    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).toList
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).asScala.toList
     val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -144,7 +144,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
   @Test
   def testGetLastCommitMetadataWithValidDataForMOR(): Unit = {
     // First Operation:
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -169,7 +169,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
 
     // Second Operation:
     // Upsert with duplicate records. Produced a log file for each parquet.
-    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).toList
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).asScala.toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -191,7 +191,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     // Third Operation:
     // Upsert with 50 duplicate records. Produced the second log file for each parquet.
     // And trigger compaction.
-    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).toList
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).asScala.toList
     val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(commonOpts).option("hoodie.compact.inline", "true")
@@ -211,7 +211,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
 
     // Fourth Operation:
     // Upsert with 50 duplicate records.
-    val records4 = recordsToStrings(dataGen.generateUniqueUpdates("004", 50)).toList
+    val records4 = recordsToStrings(dataGen.generateUniqueUpdates("004", 50)).asScala.toList
     val inputDF4: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF4.write.format("org.apache.hudi")
       .options(commonOpts)

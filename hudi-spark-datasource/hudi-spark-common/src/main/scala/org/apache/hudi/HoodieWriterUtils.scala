@@ -31,11 +31,11 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
+
 import org.apache.spark.sql.hudi.command.{MergeIntoKeyGenerator, SqlKeyGenerator}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
 /**
@@ -50,7 +50,7 @@ object HoodieWriterUtils {
    */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
-    val props = TypedProperties.fromMap(parameters)
+    val props = TypedProperties.fromMap(parameters.asJava)
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
@@ -126,7 +126,7 @@ object HoodieWriterUtils {
    */
   def getParamsWithAlternatives(parameters: Map[String, String]): Map[String, String] = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
-    val props = TypedProperties.fromMap(parameters)
+    val props = TypedProperties.fromMap(parameters.asJava)
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     // do not set any default as this is called before validation.
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
@@ -136,11 +136,11 @@ object HoodieWriterUtils {
    * Get the partition columns to stored to hoodie.properties.
    */
   def getPartitionColumns(parameters: Map[String, String]): String = {
-    SparkKeyGenUtils.getPartitionColumns(TypedProperties.fromMap(parameters))
+    SparkKeyGenUtils.getPartitionColumns(TypedProperties.fromMap(parameters.asJava))
   }
 
   def convertMapToHoodieConfig(parameters: Map[String, String]): HoodieConfig = {
-    val properties = TypedProperties.fromMap(mapAsJavaMap(parameters))
+    val properties = TypedProperties.fromMap(parameters.asJava)
     new HoodieConfig(properties)
   }
 
@@ -219,7 +219,7 @@ object HoodieWriterUtils {
         val currentPartitionFields = if (datasourcePartitionFields == null) {
           null
         } else {
-          SparkKeyGenUtils.getPartitionColumns(validatedKeyGenClassName, TypedProperties.fromMap(params))
+          SparkKeyGenUtils.getPartitionColumns(validatedKeyGenClassName, TypedProperties.fromMap(params.asJava))
         }
         val tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
         if (null != datasourcePartitionFields && null != tableConfigPartitionFields
@@ -292,7 +292,7 @@ object HoodieWriterUtils {
   def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {
     val includingTableConfigs = scala.collection.mutable.Map() ++ options
     sparkDatasourceConfigsToTableConfigsMap.foreach(kv => {
-      if (options.containsKey(kv._1.key)) {
+      if (options.contains(kv._1.key)) {
         includingTableConfigs(kv._2.key) = options(kv._1.key)
         includingTableConfigs.remove(kv._1.key)
       }

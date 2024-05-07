@@ -70,6 +70,10 @@ public class TestMetadataPartitionType {
         metadataConfigBuilder.enable(true).withEnableRecordIndex(true);
         expectedEnabledPartitions = 2;
         break;
+      case PARTITION_STATS:
+        metadataConfigBuilder.enable(true).withMetadataIndexPartitionStats(true).withColumnStatsIndexForColumns("partitionCol");
+        expectedEnabledPartitions = 2;
+        break;
       default:
         throw new IllegalArgumentException("Unknown partition type: " + partitionType);
     }

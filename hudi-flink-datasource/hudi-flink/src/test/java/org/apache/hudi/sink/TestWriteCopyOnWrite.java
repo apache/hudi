@@ -21,7 +21,6 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -33,18 +32,13 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -57,30 +51,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Test cases for stream write.
  */
 public class TestWriteCopyOnWrite extends TestWriteBase {
-
-  protected Configuration conf;
-
-  @TempDir
-  File tempFile;
-
-  @BeforeEach
-  public void before() {
-    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
-    setUp(conf);
-  }
-
-  @AfterEach
-  public void after() {
-    conf = null;
-  }
-
-  /**
-   * Override to have custom configuration.
-   */
-  protected void setUp(Configuration conf) {
-    // for subclass extension
-  }
 
   @Test
   public void testCheckpoint() throws Exception {
@@ -548,17 +518,18 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
       // now start pipeline2 and commit the txn
       Configuration conf2 = conf.clone();
       conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
-      preparePipeline(conf2)
+      TestHarness pipeline2 = preparePipeline(conf2)
           .consume(TestData.DATA_SET_INSERT_DUPLICATES)
           .assertEmptyDataFiles()
           .checkpoint(1)
           .assertNextEvent()
           .checkpointComplete(1)
-          .checkWrittenData(EXPECTED3, 1)
-          .end();
+          .checkWrittenData(EXPECTED3, 1);
+      // do not end the pipeline2 immediately because the embedded timeline server is reused.
       // step to commit the 2nd txn
       validateConcurrentCommit(pipeline1);
       pipeline1.end();
+      pipeline2.end();
     }
   }
 
@@ -678,21 +649,5 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // with LAZY cleaning strategy because clean action could roll back failed writes.
         .assertNextEvent()
         .end();
-  }
-
-  // -------------------------------------------------------------------------
-  //  Utilities
-  // -------------------------------------------------------------------------
-
-  private TestHarness preparePipeline() throws Exception {
-    return preparePipeline(conf);
-  }
-
-  protected TestHarness preparePipeline(Configuration conf) throws Exception {
-    return TestHarness.instance().preparePipeline(tempFile, conf);
-  }
-
-  protected HoodieTableType getTableType() {
-    return HoodieTableType.COPY_ON_WRITE;
   }
 }

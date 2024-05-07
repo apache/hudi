@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -98,7 +99,8 @@ public class Metrics {
   private List<MetricsReporter> addAdditionalMetricsExporters(HoodieMetricsConfig metricConfig) {
     List<MetricsReporter> reporterList = new ArrayList<>();
     List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
-    try (HoodieStorage storage = HoodieStorageUtils.getStorage(propPathList.get(0), new Configuration())) {
+    try (HoodieStorage storage = HoodieStorageUtils.getStorage(
+        propPathList.get(0), HadoopFSUtils.getStorageConf(new Configuration()))) {
       for (String propPath : propPathList) {
         HoodieMetricsConfig secondarySourceConfig = HoodieMetricsConfig.newBuilder().fromInputStream(
             storage.open(new StoragePath(propPath))).withPath(metricConfig.getBasePath()).build();

@@ -63,6 +63,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.CorruptedLogFileException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -172,8 +173,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     partitionPath = new StoragePath(basePath, "partition_path");
     spillableBasePath = new StoragePath(workDir.toString(), ".spillable_path").toString();
     assertTrue(storage.createDirectory(partitionPath));
-    HoodieTestUtils.init(((FileSystem) storage.getFileSystem()).getConf(), basePath,
-        HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(storage.getConf().newInstance(), basePath, HoodieTableType.MERGE_ON_READ);
   }
 
   @AfterEach
@@ -385,8 +385,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   public void testAppendNotSupported(@TempDir java.nio.file.Path tempDir) throws IOException, URISyntaxException, InterruptedException {
     // Use some fs like LocalFileSystem, that does not support appends
     StoragePath localTempDir = new StoragePath(tempDir.toUri().toString());
-    HoodieStorage localStorage = HoodieStorageUtils.getStorage(localTempDir.toString(),
-        HoodieTestUtils.getDefaultHadoopConf());
+    HoodieStorage localStorage = HoodieStorageUtils.getStorage(
+        localTempDir.toString(), HoodieTestUtils.getDefaultStorageConf());
     assertTrue(localStorage.getFileSystem() instanceof LocalFileSystem);
     StoragePath testPath = new StoragePath(localTempDir, "append_test");
     localStorage.createDirectory(testPath);
@@ -458,7 +458,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     byte[] dataBlockContentBytes = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records, header).getContentBytes();
-    HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc = new HoodieLogBlock.HoodieLogBlockContentLocation(new Configuration(), null, 0, dataBlockContentBytes.length, 0);
+    HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc = new HoodieLogBlock.HoodieLogBlockContentLocation(
+        HadoopFSUtils.getStorageConf(new Configuration()), null, 0, dataBlockContentBytes.length, 0);
     HoodieDataBlock reusableDataBlock = new HoodieAvroDataBlock(null, Option.ofNullable(dataBlockContentBytes), false,
         logBlockContentLoc, Option.ofNullable(getSimpleSchema()), header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
     long writtenSize = 0;

@@ -40,8 +40,8 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 /**
  * File format that supports reading multiple base file formats in a table.

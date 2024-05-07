@@ -27,7 +27,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class RepairAddpartitionmetaProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -59,7 +59,7 @@ class RepairAddpartitionmetaProcedure extends BaseProcedure with ProcedureBuilde
     val basePath: StoragePath = new StoragePath(tablePath)
 
     val rows = new util.ArrayList[Row](partitionPaths.size)
-    for (partition <- partitionPaths) {
+    for (partition <- partitionPaths.asScala) {
       val partitionPath: StoragePath = FSUtils.constructAbsolutePath(basePath, partition)
       var isPresent = "Yes"
       var action = "None"
