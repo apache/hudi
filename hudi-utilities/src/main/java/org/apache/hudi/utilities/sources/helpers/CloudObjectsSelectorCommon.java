@@ -68,6 +68,7 @@ import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_SUBSTRING;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_KEY_PREFIX;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.coalesceOrRepartition;
 import static org.apache.spark.sql.functions.input_file_name;
 import static org.apache.spark.sql.functions.split;
 
@@ -303,17 +304,6 @@ public class CloudObjectsSelectorCommon {
     }
     dataset = coalesceOrRepartition(dataset, numPartitions);
     return Option.of(dataset);
-  }
-
-  private static Dataset<Row> coalesceOrRepartition(Dataset dataset, int numPartitions) {
-    int existingNumPartitions = dataset.rdd().getNumPartitions();
-    LOG.info(String.format("existing number of partitions=%d, required number of partitions=%d", existingNumPartitions, numPartitions));
-    if (existingNumPartitions < numPartitions) {
-      dataset = dataset.repartition(numPartitions);
-    } else {
-      dataset = dataset.coalesce(numPartitions);
-    }
-    return dataset;
   }
 
   private static Option<String> getPropVal(TypedProperties props, ConfigProperty<String> configProperty) {

@@ -40,10 +40,13 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
+import org.apache.hudi.utilities.streamer.SourceProfile;
+import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -51,13 +54,17 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
@@ -66,16 +73,23 @@ import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private HoodieTestDataGenerator dataGen;
   private HoodieTableMetaClient metaClient;
   private HoodieTableType tableType = COPY_ON_WRITE;
+  private final Option<SourceProfileSupplier> sourceProfile = Option.of(mock(SourceProfileSupplier.class));
+  private final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
 
   @BeforeEach
   public void setUp() throws IOException {
@@ -93,9 +107,22 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
   }
 
+  @Test
+  void testCreateSource() {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.path", basePath());
+    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy", READ_UPTO_LATEST_COMMIT.name());
+    // Validate constructor with metrics.
+    HoodieIncrSource incrSource = new HoodieIncrSource(properties, jsc(), spark(), metrics, new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA), sourceProfile));
+    assertEquals(Source.SourceType.ROW, incrSource.getSourceType());
+    // Validate constructor without metrics.
+    incrSource = new HoodieIncrSource(properties, jsc(), spark(), new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA), sourceProfile));
+    assertEquals(Source.SourceType.ROW, incrSource.getSourceType());
+  }
+
   @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testHoodieIncrSource(HoodieTableType tableType) throws IOException {
+  @MethodSource("getArgumentsForHoodieIncrSource")
+  void testHoodieIncrSource(HoodieTableType tableType, boolean useSourceProfile) throws IOException {
     this.tableType = tableType;
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
@@ -105,6 +132,12 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(false).build())
         .build();
+
+    if (useSourceProfile) {
+      when(sourceProfile.get().getSourceProfile()).thenReturn(new TestSourceProfile(Long.MAX_VALUE, 4, 500));
+    } else {
+      when(sourceProfile.get().getSourceProfile()).thenReturn(null);
+    }
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
       Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, "100");
@@ -132,7 +165,21 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
       // insert new batch and ensure the checkpoint moves
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 100, inserts6.getKey());
+
+      if (useSourceProfile) {
+        verify(metrics, times(5)).updateStreamerSourceBytesToBeIngestedInSyncRound(Long.MAX_VALUE);
+        verify(metrics, times(5)).updateStreamerSourceParallelism(4);
+      }
     }
+  }
+
+  private static Stream<Arguments> getArgumentsForHoodieIncrSource() {
+    return Stream.of(
+        Arguments.of(COPY_ON_WRITE, true),
+        Arguments.of(MERGE_ON_READ, true),
+        Arguments.of(COPY_ON_WRITE, false),
+        Arguments.of(MERGE_ON_READ, false)
+    );
   }
 
   @ParameterizedTest
@@ -370,7 +417,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
     TypedProperties typedProperties = new TypedProperties(properties);
-    HoodieIncrSource incrSource = new HoodieIncrSource(typedProperties, jsc(), spark(), new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA), Option.empty()));
+    HoodieIncrSource incrSource = new HoodieIncrSource(typedProperties, jsc(), spark(), metrics, new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA), sourceProfile));
 
     // read everything until latest
     Pair<Option<Dataset<Row>>, String> batchCheckPoint = incrSource.fetchNextBatch(checkpointToPull, 500);
@@ -423,6 +470,34 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     @Override
     public Schema getSourceSchema() {
       return schema;
+    }
+  }
+
+  static class TestSourceProfile implements SourceProfile<Integer> {
+
+    private final long maxSourceBytes;
+    private final int sourcePartitions;
+    private final int numInstantsPerFetch;
+
+    public TestSourceProfile(long maxSourceBytes, int sourcePartitions, int numInstantsPerFetch) {
+      this.maxSourceBytes = maxSourceBytes;
+      this.sourcePartitions = sourcePartitions;
+      this.numInstantsPerFetch = numInstantsPerFetch;
+    }
+
+    @Override
+    public long getMaxSourceBytes() {
+      return maxSourceBytes;
+    }
+
+    @Override
+    public int getSourcePartitions() {
+      return sourcePartitions;
+    }
+
+    @Override
+    public Integer getSourceSpecificContext() {
+      return numInstantsPerFetch;
     }
   }
 }

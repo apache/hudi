@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.streamer.StreamContext;
@@ -55,6 +56,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.coalesceOrRepartition;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.generateQueryInfo;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 
@@ -62,6 +64,7 @@ public class HoodieIncrSource extends RowSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieIncrSource.class);
   private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
+  private final Option<HoodieIngestionMetrics> metricsOption;
 
   public static class Config {
 
@@ -131,23 +134,26 @@ public class HoodieIncrSource extends RowSource {
         HoodieIncrSourceConfig.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE.defaultValue();
   }
 
+  public HoodieIncrSource(
+      TypedProperties props,
+      JavaSparkContext sparkContext,
+      SparkSession sparkSession,
+      HoodieIngestionMetrics metricsOption,
+      StreamContext streamContext) {
+    super(props, sparkContext, sparkSession, streamContext);
+    this.snapshotLoadQuerySplitter = SnapshotLoadQuerySplitter.getInstance(props);
+    this.metricsOption = Option.ofNullable(metricsOption);
+  }
+
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession, StreamContext streamContext) {
     super(props, sparkContext, sparkSession, streamContext);
     this.snapshotLoadQuerySplitter = SnapshotLoadQuerySplitter.getInstance(props);
+    this.metricsOption = Option.empty();
   }
 
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
-
     checkRequiredConfigProperties(props, Collections.singletonList(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH));
-
-    /*
-     * DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.HOODIE_SRC_BASE_PATH,
-     * Config.HOODIE_SRC_PARTITION_FIELDS)); List<String> partitionFields =
-     * props.getStringList(Config.HOODIE_SRC_PARTITION_FIELDS, ",", new ArrayList<>()); PartitionValueExtractor
-     * extractor = DataSourceUtils.createPartitionExtractor(props.getString( Config.HOODIE_SRC_PARTITION_EXTRACTORCLASS,
-     * Config.DEFAULT_HOODIE_SRC_PARTITION_EXTRACTORCLASS));
-     */
     String srcPath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
     int numInstantsPerFetch = getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH);
     boolean readLatestOnMissingCkpt = getBooleanWithAltKeys(
@@ -165,6 +171,13 @@ public class HoodieIncrSource extends RowSource {
     Option<String> beginInstant =
         lastCkptStr.isPresent() ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr : Option.empty();
 
+    // If source profile exists, use the numInstants from source profile.
+    boolean sourceProfileExists = sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null;
+    if (sourceProfileExists) {
+      int numInstantsFromSourceProfile = (int) sourceProfileSupplier.get().getSourceProfile().getSourceSpecificContext();
+      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsPerFetchThroughConfig {}", numInstantsFromSourceProfile, numInstantsPerFetch);
+      numInstantsPerFetch = numInstantsFromSourceProfile;
+    }
     HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     QueryInfo queryInfo = generateQueryInfo(sparkContext, srcPath,
         numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode,
@@ -224,7 +237,12 @@ public class HoodieIncrSource extends RowSource {
     // Remove Hoodie meta columns except partition path from input source
     String[] colsToDrop = shouldDropMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
         HoodieRecord.HOODIE_META_COLUMNS.stream().filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new);
-    final Dataset<Row> src = source.drop(colsToDrop);
+    Dataset<Row> src = source.drop(colsToDrop);
+    if (sourceProfileExists) {
+      src = coalesceOrRepartition(src, sourceProfileSupplier.get().getSourceProfile().getSourcePartitions());
+      metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(sourceProfileSupplier.get().getSourceProfile().getMaxSourceBytes()));
+      metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfileSupplier.get().getSourceProfile().getSourcePartitions()));
+    }
     return Pair.of(Option.of(src), queryInfo.getEndInstant());
   }
 }
