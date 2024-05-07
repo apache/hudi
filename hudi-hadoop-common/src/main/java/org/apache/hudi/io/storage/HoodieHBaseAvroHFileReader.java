@@ -109,6 +109,7 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
                                     byte[] content, Option<Schema> schemaOpt) throws IOException {
     this(path, storage, storageConf, new CacheConfig(storageConf.unwrapAs(Configuration.class)), schemaOpt, Option.of(content));
   }
+  
   public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, CacheConfig cacheConfig,
                                     HoodieStorage storage, byte[] content, Option<Schema> schemaOpt) throws IOException {
     this(path, storage, storageConf, cacheConfig, schemaOpt, Option.of(content));
