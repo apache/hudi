@@ -80,9 +80,9 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     this.bqSchemaResolver = BigQuerySchemaResolver.getInstance();
   }
 
-  @VisibleForTesting // allows us to pass in mocks for the writer and client
-  BigQuerySyncTool(Properties properties, ManifestFileWriter manifestFileWriter, HoodieBigQuerySyncClient bigQuerySyncClient, HoodieTableMetaClient metaClient,
-                   BigQuerySchemaResolver bigQuerySchemaResolver) {
+  @VisibleForTesting // allows us to pass in mocks for the writer and client, or extend functionality of a component
+  public BigQuerySyncTool(Properties properties, ManifestFileWriter manifestFileWriter, HoodieBigQuerySyncClient bigQuerySyncClient, HoodieTableMetaClient metaClient,
+                          BigQuerySchemaResolver bigQuerySchemaResolver) {
     super(properties);
     this.config = new BigQuerySyncConfig(props);
     this.tableName = config.getString(BIGQUERY_SYNC_TABLE_NAME);
