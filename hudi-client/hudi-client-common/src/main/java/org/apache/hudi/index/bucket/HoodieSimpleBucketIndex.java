@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -39,12 +40,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,8 +60,6 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSimpleBucketIndex.class);
 
-  private List<StoragePathInfo> fileStatusesForPartition;
-
   public HoodieSimpleBucketIndex(HoodieWriteConfig config) {
     super(config);
   }
@@ -71,8 +70,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     // bucketId -> fileIds
     Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = new HashMap<>();
     HoodieActiveTimeline hoodieActiveTimeline = hoodieTable.getMetaClient().reloadActiveTimeline();
-    List<String> pendingInstantsStr = new ArrayList<>();
-    hoodieActiveTimeline.filterInflights().getInstants().forEach(instant -> pendingInstantsStr.add(instant.toString()));
+    Set<String> pendingInstants = hoodieActiveTimeline.filterInflights().getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
     HoodieIndexUtils
         .getLatestFileSlicesForPartition(partition, hoodieTable)
@@ -85,70 +83,63 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
             bucketIdToFileIdMapping.put(bucketId, new HoodieRecordLocation(commitTime, fileId));
           } else {
             // Finding the instants which conflict with the bucket id
-            Set<String> instants = findTheConflictBucketIdInPartition(hoodieTable, partition, bucketId, pendingInstantsStr);
+            List<String> instants = findConflictInstantsInPartition(hoodieTable, partition, bucketId, pendingInstants);
 
             // Check if bucket data is valid
             throw new HoodieIOException("Find multiple files at partition path="
-                + partition + " belongs to the same bucket id = " + bucketId
+                + partition + " that belong to the same bucket id = " + bucketId
                 + ", these instants need to rollback: " + instants.toString()
-                + ", you can use rollback_to_instant procedure to recovery");
+                + ", you can use 'rollback_to_instant' procedure to revert the conflicts.");
           }
         });
     return bucketIdToFileIdMapping;
   }
 
   /**
-   * Find out the conflict files in bucket partition with bucket id
+   * Find out the conflict files in bucket partition with bucket id.
    */
-  public HashSet<String> findTheConflictBucketIdInPartition(HoodieTable hoodieTable, String partition, int bucketId, List<String> pendingInstantsStr) {
-    HashSet<String> instants = new HashSet<>();
+  public List<String> findConflictInstantsInPartition(HoodieTable hoodieTable, String partition, int bucketId, Set<String> pendingInstants) {
+    List<String> instants = new ArrayList<>();
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    StoragePath basePath = metaClient.getBasePathV2();
-    StoragePath partitionPath = new StoragePath(basePath.toString(), partition);
+    StoragePath partitionPath = new StoragePath(metaClient.getBasePathV2(), partition);
+
+    List<StoragePathInfo> filesInPartition = listFilesFromPartition(metaClient, partitionPath);
 
     Stream<FileSlice> latestFileSlicesIncludingInflight = hoodieTable.getSliceView().getLatestFileSlicesIncludingInflight(partition);
-    List<String> pendingInstants = latestFileSlicesIncludingInflight.map(fileSlice -> fileSlice.getLatestInstantTime())
-        .filter(fileSlice -> pendingInstantsStr.contains(fileSlice))
+    List<String> candidates = latestFileSlicesIncludingInflight.map(FileSlice::getLatestInstantTime)
+        .filter(pendingInstants::contains)
         .collect(Collectors.toList());
 
-    if (fileStatusesForPartition != null) {
-      fileStatusesForPartition.clear();
-    }
-
-    for (String i : pendingInstants) {
-      if (judgeInstantInPath(metaClient, partitionPath, i, bucketId)) {
+    for (String i : candidates) {
+      if (hasPendingDataFilesForInstant(filesInPartition, i, bucketId)) {
         instants.add(i);
       }
     }
     return instants;
   }
 
-  public Boolean judgeInstantInPath(HoodieTableMetaClient metaClient, StoragePath path, String instant, int bucketId) {
-    Boolean ret = false;
+  private static List<StoragePathInfo> listFilesFromPartition(HoodieTableMetaClient metaClient, StoragePath partitionPath) {
     try {
-      // list filestatus only once for one partiton
-      if (fileStatusesForPartition == null) {
-        fileStatusesForPartition = metaClient.getStorage().listFiles(path);
-      }
-
-      for (StoragePathInfo status : fileStatusesForPartition) {
-        String fileName = status.getPath().getName();
-
-        try {
-          if (status.isFile() && BucketIdentifier.bucketIdFromFileId(fileName) == bucketId && fileName.contains(instant)) {
-            ret = true;
-            break;
-          }
-        } catch (NumberFormatException e) {
-          LOG.warn("file is not bucket file");
-        }
-      }
+      return metaClient.getStorage().listFiles(partitionPath);
     } catch (IOException e) {
-      LOG.warn("partition {} is not exists", path.toString());
-      ret = false;
+      // ignore the exception though
+      return Collections.emptyList();
     }
+  }
 
-    return ret;
+  public Boolean hasPendingDataFilesForInstant(List<StoragePathInfo> filesInPartition, String instant, int bucketId) {
+    for (StoragePathInfo status : filesInPartition) {
+      String fileName = status.getPath().getName();
+
+      try {
+        if (status.isFile() && BucketIdentifier.bucketIdFromFileId(fileName) == bucketId && fileName.contains(instant)) {
+          return true;
+        }
+      } catch (NumberFormatException e) {
+        LOG.warn("File is not bucket file");
+      }
+    }
+    return false;
   }
 
   public int getBucketID(HoodieKey key) {
