@@ -151,3 +151,10 @@ f99aaa5d2 [ENG-9186][HUDI-7683] Make HoodieMetadataMetrics log level debug ro re
 12ef2fee3 [ENG-8638][HUDI-7689] Allow users to leverage HoodieTable and Engine Context in Compaction Strategy (#684)
 f9813a4f8 [ENG-8991][HUDI-7667] Created util method to get offset range for fetching new data (#673)
 42b27ed75 [AUDIT-764] Upgrade to version release-v1.12.0 (#680)
+
+---[2024-05-07 11:09:09] [release-v1.14.0] ---
+6e1adf5f4 [ENG-9415][HUDI-7718] Use source profile in HoodieIncrSource (#689)
+4544b991f [ENG-9405][INTERNAL] Expose BQ sync constructor so we can override implementations internally (#690)
+5d84aefcc [ENG-6678][INTERNAL] Set explicit name to sonar projects (#686)
+796d2fa8a [ENG-6678][INTERNAL] Upload coverage reports to sonar (#665)
+d36a374bd [AUDIT-776] Upgrade to version release-v1.13.0 (#685)
