@@ -26,6 +26,7 @@ import org.apache.hudi.client.utils.FileSliceMetricUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -101,5 +102,27 @@ public abstract class CompactionStrategy implements Serializable {
    */
   public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
     return allPartitionPaths;
+  }
+
+  /**
+   * Filter the operations based on io bounded.
+   *
+   * @param writeConfig
+   * @param operations
+   * @return
+   */
+  public List<HoodieCompactionOperation> filterOperationsWithIOBounded(HoodieWriteConfig writeConfig,
+      List<HoodieCompactionOperation> operations) {
+    List<HoodieCompactionOperation> finalOperations = new ArrayList<>();
+    long targetIORemaining = writeConfig.getTargetIOPerCompactionInMB();
+    for (HoodieCompactionOperation op : operations) {
+      long opIo = op.getMetrics().get(TOTAL_IO_MB).longValue();
+      targetIORemaining -= opIo;
+      finalOperations.add(op);
+      if (targetIORemaining <= 0) {
+        return finalOperations;
+      }
+    }
+    return finalOperations;
   }
 }

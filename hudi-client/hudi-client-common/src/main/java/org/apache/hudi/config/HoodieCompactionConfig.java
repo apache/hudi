@@ -155,6 +155,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of "
           + "latest partitions to compact during a compaction run.");
 
+  public static final ConfigProperty<String> DAYBASED_COMPACTION_WITH_IO_BOUNDED_ENABLED = ConfigProperty
+      .key("hoodie.compaction.daybased.io.bounded.enabled")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to control total io.");
+
   /**
    * Configs related to specific table types.
    */
@@ -433,6 +439,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withTargetPartitionsPerDayBasedCompaction(int targetPartitionsPerCompaction) {
       compactionConfig.setValue(TARGET_PARTITIONS_PER_DAYBASED_COMPACTION, String.valueOf(targetPartitionsPerCompaction));
+      return this;
+    }
+
+    public Builder withDayBasedCompactionWithIOBounded(boolean enableIOBounded) {
+      compactionConfig.setValue(DAYBASED_COMPACTION_WITH_IO_BOUNDED_ENABLED, Boolean.toString(enableIOBounded));
       return this;
     }
 

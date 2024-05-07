@@ -156,6 +156,58 @@ public class TestHoodieCompactionStrategy {
   }
 
   @Test
+  public void testDayBasedCompactionWithIOBounded() {
+    Map<Long, List<Long>> sizesMap = new HashMap<>();
+    sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
+    sizesMap.put(110 * MB, new ArrayList<>());
+    sizesMap.put(100 * MB, Collections.singletonList(MB));
+    sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
+
+    Map<Long, String> keyToPartitionMap = Collections.unmodifiableMap(new HashMap<Long, String>() {
+      {
+        put(120 * MB, partitionPaths[2]);
+        put(110 * MB, partitionPaths[2]);
+        put(100 * MB, partitionPaths[1]);
+        put(90 * MB, partitionPaths[0]);
+      }
+    });
+
+    DayBasedCompactionStrategy strategy = new DayBasedCompactionStrategy();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withCompactionStrategy(strategy)
+            .withTargetPartitionsPerDayBasedCompaction(1)
+            .withDayBasedCompactionWithIOBounded(true)
+            .withTargetIOPerCompactionInMB(200)
+            .build())
+        .build();
+
+    List<String> filterPartitions = strategy.filterPartitionPaths(writeConfig, Arrays.asList(partitionPaths));
+    assertEquals(1, filterPartitions.size(), "DayBasedCompactionStrategy should have resulted in fewer partitions");
+
+    List<HoodieCompactionOperation> operations = createCompactionOperationsForPartition(writeConfig, sizesMap, keyToPartitionMap, filterPartitions);
+    List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
+
+    assertEquals(1, returned.size(),
+        "DayBasedAndBoundedIOCompactionStrategy should have resulted in fewer compactions");
+
+    int comparison = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(),
+        returned.get(0).getPartitionPath());
+    // Either the partition paths are sorted in descending order or they are equal
+    assertTrue(comparison >= 0,
+        "DayBasedAndBoundedIOCompactionStrategy should sort partitions in descending order");
+
+    // Total size of all the log files
+    Long returnedSize = returned.stream()
+        .map(s -> s.getMetrics().get(DayBasedCompactionStrategy.TOTAL_IO_MB))
+        .map(Double::longValue).reduce(Long::sum).orElse(0L);
+    assertEquals(390, (long) returnedSize,
+        "Should chose the first and the third compactions which should result in a total IO of 591 MB");
+  }
+
+
+  @Test
   public void testBoundedPartitionAwareCompactionSimple() {
     Map<Long, List<Long>> sizesMap = new HashMap<>();
     sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));

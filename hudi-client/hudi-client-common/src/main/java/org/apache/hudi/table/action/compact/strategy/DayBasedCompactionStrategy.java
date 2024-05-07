@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.action.compact.strategy;
 
+import org.apache.hudi.avro.model.HoodieCompactionOperation;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
@@ -58,6 +60,17 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
 
   public Comparator<String> getComparator() {
     return comparator;
+  }
+
+  @Override
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
+      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+    boolean isIoBounded = writeConfig.isDayBasedCompactionWithIOBounded();
+    if (isIoBounded) {
+      return filterOperationsWithIOBounded(writeConfig, operations);
+    } else {
+      return operations;
+    }
   }
 
   @Override
