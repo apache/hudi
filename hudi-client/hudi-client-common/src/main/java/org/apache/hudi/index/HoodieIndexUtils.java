@@ -47,11 +47,11 @@ import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -173,8 +173,9 @@ public class HoodieIndexUtils {
    * @param candidateRecordKeys - Candidate keys to filter
    * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static Collection<Pair<String, Long>> filterKeysFromFile(Path filePath, Set<String> candidateRecordKeys,
-                                                                  Configuration configuration) throws HoodieIndexException {
+  public static Collection<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
+                                                            Set<String> candidateRecordKeys,
+                                                                  StorageConfiguration<?> configuration) throws HoodieIndexException {
     if (candidateRecordKeys.isEmpty()) {
       return Collections.emptyList();
     }

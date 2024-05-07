@@ -77,7 +77,7 @@ class CDCRelation(
         .startInstant(startInstant)
         .endInstant(endInstant)
         .nullableBoundary(true)
-        .rangeType(InstantRange.RangeType.OPEN_CLOSE).build())
+        .rangeType(InstantRange.RangeType.OPEN_CLOSED).build())
 
   override final def needConversion: Boolean = false
 

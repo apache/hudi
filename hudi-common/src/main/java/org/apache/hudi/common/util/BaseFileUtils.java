@@ -23,18 +23,21 @@ import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+
+import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -68,24 +71,76 @@ public abstract class BaseFileUtils {
   }
 
   /**
+   * Aggregate column range statistics across files in a partition.
+   *
+   * @param fileColumnRanges List of column range statistics for each file in a partition
+   */
+  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(@Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges) {
+    ValidationUtils.checkArgument(!fileColumnRanges.isEmpty(), "fileColumnRanges should not be empty.");
+    // There are multiple files. Compute min(file_mins) and max(file_maxs)
+    return fileColumnRanges.stream()
+        .reduce(BaseFileUtils::mergeRanges).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
+  }
+
+  private static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> mergeRanges(HoodieColumnRangeMetadata<T> one,
+                                                                                    HoodieColumnRangeMetadata<T> another) {
+    ValidationUtils.checkArgument(one.getColumnName().equals(another.getColumnName()),
+        "Column names should be the same for merging column ranges");
+    final T minValue = getMinValueForColumnRanges(one, another);
+    final T maxValue = getMaxValueForColumnRanges(one, another);
+
+    return HoodieColumnRangeMetadata.create(
+        null, one.getColumnName(), minValue, maxValue,
+        one.getNullCount() + another.getNullCount(),
+        one.getValueCount() + another.getValueCount(),
+        one.getTotalSize() + another.getTotalSize(),
+        one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
+  }
+
+  public static <T extends Comparable<T>> T getMaxValueForColumnRanges(HoodieColumnRangeMetadata<T> one, HoodieColumnRangeMetadata<T> another) {
+    final T maxValue;
+    if (one.getMaxValue() != null && another.getMaxValue() != null) {
+      maxValue = one.getMaxValue().compareTo(another.getMaxValue()) < 0 ? another.getMaxValue() : one.getMaxValue();
+    } else if (one.getMaxValue() == null) {
+      maxValue = another.getMaxValue();
+    } else {
+      maxValue = one.getMaxValue();
+    }
+    return maxValue;
+  }
+
+  public static <T extends Comparable<T>> T getMinValueForColumnRanges(HoodieColumnRangeMetadata<T> one, HoodieColumnRangeMetadata<T> another) {
+    final T minValue;
+    if (one.getMinValue() != null && another.getMinValue() != null) {
+      minValue = one.getMinValue().compareTo(another.getMinValue()) < 0 ? one.getMinValue() : another.getMinValue();
+    } else if (one.getMinValue() == null) {
+      minValue = another.getMinValue();
+    } else {
+      minValue = one.getMinValue();
+    }
+    return minValue;
+  }
+
+  /**
    * Read the rowKey list from the given data file.
    *
-   * @param filePath      The data file path
-   * @param configuration configuration to build fs object
-   * @return Set Set of row keys
+   * @param configuration configuration to build storage object.
+   * @param filePath      the data file path.
+   * @return set of row keys
    */
-  public Set<String> readRowKeys(Configuration configuration, Path filePath) {
+  public Set<String> readRowKeys(StorageConfiguration<?> configuration, StoragePath filePath) {
     return filterRowKeys(configuration, filePath, new HashSet<>())
         .stream().map(Pair::getKey).collect(Collectors.toSet());
   }
 
   /**
    * Read the bloom filter from the metadata of the given data file.
-   * @param configuration Configuration
-   * @param filePath The data file path
-   * @return a BloomFilter object
+   *
+   * @param configuration configuration.
+   * @param filePath      the data file path.
+   * @return a BloomFilter object.
    */
-  public BloomFilter readBloomFilterFromMetadata(Configuration configuration, Path filePath) {
+  public BloomFilter readBloomFilterFromMetadata(StorageConfiguration<?> configuration, StoragePath filePath) {
     Map<String, String> footerVals =
         readFooter(configuration, false, filePath,
             HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
@@ -110,11 +165,12 @@ public abstract class BaseFileUtils {
 
   /**
    * Read the min and max record key from the metadata of the given data file.
-   * @param configuration Configuration
-   * @param filePath The data file path
-   * @return A array of two string where the first is min record key and the second is max record key
+   *
+   * @param configuration configuration.
+   * @param filePath      the data file path.
+   * @return a array of two string where the first is min record key and the second is max record key.
    */
-  public String[] readMinMaxRecordKeys(Configuration configuration, Path filePath) {
+  public String[] readMinMaxRecordKeys(StorageConfiguration<?> configuration, StoragePath filePath) {
     Map<String, String> minMaxKeys = readFooter(configuration, true, filePath,
         HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER, HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER);
     if (minMaxKeys.size() != 2) {
@@ -129,93 +185,104 @@ public abstract class BaseFileUtils {
   /**
    * Read the data file
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
-   * @param configuration Configuration
-   * @param filePath The data file path
-   * @return A list of GenericRecord
+   *
+   * @param configuration configuration.
+   * @param filePath      the data file path.
+   * @return a list of GenericRecord.
    */
-  public abstract List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath);
+  public abstract List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath);
 
   /**
    * Read the data file using the given schema
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
-   * @param configuration Configuration
-   * @param filePath The data file path
-   * @return A list of GenericRecord
+   *
+   * @param configuration configuration.
+   * @param filePath      the data file path.
+   * @return a list of GenericRecord.
    */
-  public abstract List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath, Schema schema);
+  public abstract List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath, Schema schema);
 
   /**
    * Read the footer data of the given data file.
-   * @param configuration Configuration
-   * @param required require the footer data to be in data file
-   * @param filePath The data file path
-   * @param footerNames The footer names to read
-   * @return A map where the key is the footer name and the value is the footer value
+   *
+   * @param configuration configuration.
+   * @param required      require the footer data to be in data file.
+   * @param filePath      the data file path.
+   * @param footerNames   the footer names to read.
+   * @return a map where the key is the footer name and the value is the footer value.
    */
-  public abstract Map<String, String> readFooter(Configuration configuration, boolean required, Path filePath,
+  public abstract Map<String, String> readFooter(StorageConfiguration<?> configuration, boolean required, StoragePath filePath,
                                                  String... footerNames);
 
   /**
    * Returns the number of records in the data file.
-   * @param configuration Configuration
-   * @param filePath The data file path
+   *
+   * @param configuration configuration.
+   * @param filePath      the data file path.
    */
-  public abstract long getRowCount(Configuration configuration, Path filePath);
+  public abstract long getRowCount(StorageConfiguration<?> configuration, StoragePath filePath);
 
   /**
    * Read the rowKey list matching the given filter, from the given data file.
    * If the filter is empty, then this will return all the row keys and corresponding positions.
    *
-   * @param filePath      The data file path
-   * @param configuration configuration to build fs object
-   * @param filter        record keys filter
-   * @return Set Set of pairs of row key and position matching candidateRecordKeys
+   * @param configuration configuration to build storage object.
+   * @param filePath      the data file path.
+   * @param filter        record keys filter.
+   * @return set of pairs of row key and position matching candidateRecordKeys.
    */
-  public abstract Set<Pair<String, Long>> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter);
+  public abstract Set<Pair<String, Long>> filterRowKeys(StorageConfiguration<?> configuration, StoragePath filePath, Set<String> filter);
 
   /**
    * Fetch {@link HoodieKey}s with positions from the given data file.
    *
-   * @param configuration configuration to build fs object
-   * @param filePath      The data file path
-   * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file
+   * @param configuration configuration to build storage object.
+   * @param filePath      the data file path.
+   * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
-  public abstract List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath);
+  public abstract List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(StorageConfiguration<?> configuration, StoragePath filePath);
 
   /**
    * Provides a closable iterator for reading the given data file.
-   * @param configuration configuration to build fs object
-   * @param filePath      The data file path
+   *
+   * @param configuration   configuration to build storage object.
+   * @param filePath        the data file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
-   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file.
    */
-  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration,
+                                                                   StoragePath filePath,
+                                                                   Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Provides a closable iterator for reading the given data file.
-   * @param configuration configuration to build fs object
-   * @param filePath      The data file path
-   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file
+   *
+   * @param configuration configuration to build storage object.
+   * @param filePath      the data file path.
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file.
    */
-  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath);
+  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath);
 
   /**
    * Fetch {@link HoodieKey}s with positions from the given data file.
    *
-   * @param configuration   configuration to build fs object
-   * @param filePath        The data file path
+   * @param configuration   configuration to build storage object.
+   * @param filePath        the data file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
-   * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file
+   * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
-  public abstract List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(StorageConfiguration<?> configuration,
+                                                                           StoragePath filePath,
+                                                                           Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Read the Avro schema of the data file.
-   * @param configuration Configuration
-   * @param filePath The data file path
-   * @return The Avro schema of the data file
+   *
+   * @param configuration configuration.
+   * @param filePath      the data file path.
+   * @return the Avro schema of the data file.
    */
-  public abstract Schema readAvroSchema(Configuration configuration, Path filePath);
+  public abstract Schema readAvroSchema(StorageConfiguration<?> configuration, StoragePath filePath);
 
   /**
    * @return The subclass's {@link HoodieFileFormat}.
@@ -225,12 +292,12 @@ public abstract class BaseFileUtils {
   /**
    * Writes properties to the meta file.
    *
-   * @param fs       {@link FileSystem} instance.
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath file path to write to.
    * @param props    properties to write.
    * @throws IOException upon write error.
    */
-  public abstract void writeMetaFile(FileSystem fs,
-                                     Path filePath,
+  public abstract void writeMetaFile(HoodieStorage storage,
+                                     StoragePath filePath,
                                      Properties props) throws IOException;
 }

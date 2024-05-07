@@ -31,7 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.functional.HoodieFunctionalIndex;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
@@ -155,10 +155,15 @@ public class SparkMetadataWriterUtils {
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
       long fileSize,
       Path filePath) {
-    Dataset<Row> fileDf = readRecordsAsRow(new Path[] {filePath}, sqlContext, metaClient, readerSchema);
+    Dataset<Row> fileDf = readRecordsAsRow(
+        new StoragePath[] {new StoragePath(filePath.toUri())},
+        sqlContext,
+        metaClient,
+        readerSchema);
     Column indexedColumn = functionalIndex.apply(Arrays.asList(fileDf.col(columnToIndex)));
     fileDf = fileDf.withColumn(columnToIndex, indexedColumn);
-    HoodieColumnRangeMetadata<Comparable> columnRangeMetadata = computeColumnRangeMetadata(fileDf, columnToIndex, filePath.toString(), fileSize);
+    HoodieColumnRangeMetadata<Comparable> columnRangeMetadata =
+        computeColumnRangeMetadata(fileDf, columnToIndex, filePath.toString(), fileSize);
     columnRangeMetadataList.add(columnRangeMetadata);
   }
 
@@ -173,7 +178,9 @@ public class SparkMetadataWriterUtils {
       HoodieWriteConfig writeConfig,
       String partitionName,
       String instantTime) {
-    Dataset<Row> fileDf = readRecordsAsRow(new Path[] {filePath}, sqlContext, metaClient, readerSchema);
+    Dataset<Row> fileDf =
+        readRecordsAsRow(new StoragePath[] {new StoragePath(filePath.toUri())},
+            sqlContext, metaClient, readerSchema);
     Column indexedColumn = functionalIndex.apply(Arrays.asList(fileDf.col(columnToIndex)));
     fileDf = fileDf.withColumn(columnToIndex, indexedColumn);
     BloomFilter bloomFilter = HoodieFileWriterFactory.createBloomFilter(writeConfig);
@@ -183,11 +190,14 @@ public class SparkMetadataWriterUtils {
     });
     ByteBuffer bloomByteBuffer = ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString()));
     bloomFilterMetadataList.add(createBloomFilterMetadataRecord(
-        partitionName, filePath.toString(), instantTime, writeConfig.getBloomFilterType(), bloomByteBuffer, false));
+        partitionName, filePath.toString(), instantTime, writeConfig.getBloomFilterType(),
+        bloomByteBuffer, false));
   }
 
-  private static Dataset<Row> readRecordsAsRow(Path[] paths, SQLContext sqlContext, HoodieTableMetaClient metaClient, Schema schema) {
-    String readPathString = String.join(",", Arrays.stream(paths).map(Path::toString).toArray(String[]::new));
+  private static Dataset<Row> readRecordsAsRow(StoragePath[] paths, SQLContext sqlContext,
+                                               HoodieTableMetaClient metaClient, Schema schema) {
+    String readPathString =
+        String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
     HashMap<String, String> params = new HashMap<>();
     params.put(QUERY_TYPE_CONFIG, QUERY_TYPE_SNAPSHOT);
     params.put(READ_PATHS_CONFIG, readPathString);
@@ -245,7 +255,7 @@ public class SparkMetadataWriterUtils {
     if (partition.isEmpty()) {
       return new Path(basePath, filename);
     } else {
-      return new Path(basePath, partition + HoodieLocation.SEPARATOR + filename);
+      return new Path(basePath, partition + StoragePath.SEPARATOR + filename);
     }
   }
 }

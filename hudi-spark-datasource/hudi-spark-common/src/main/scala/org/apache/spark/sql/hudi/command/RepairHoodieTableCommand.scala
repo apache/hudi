@@ -18,18 +18,16 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
-
-import org.apache.hudi.common.table.HoodieTableConfig
-
+import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.execution.command.PartitionStatistics
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.util.ThreadUtils
 
 import java.util.concurrent.TimeUnit.MILLISECONDS
+
 import scala.util.control.NonFatal
 
 /**
@@ -86,12 +84,12 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
       val partitionStats = if (spark.sqlContext.conf.gatherFastStats) {
         HoodieSqlCommonUtils.getFilesInPartitions(spark, table, partitionSpecsAndLocs
           .map(_._2.toString))
-          .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLen).sum))
+          .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLength).sum))
       } else {
         Map.empty[String, PartitionStatistics]
       }
       logInfo(s"Finished to gather the fast stats for all $total partitions.")
-      addPartitions(spark, table, partitionSpecsAndLocs, partitionStats)
+      addPartitions(spark, table, partitionSpecsAndLocs, partitionStats.toMap)
       total
     } else 0
     // Updates the table to indicate that its partition metadata is stored in the Hive metastore.

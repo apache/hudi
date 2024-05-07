@@ -24,7 +24,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -35,6 +38,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
@@ -52,7 +56,7 @@ class TestHoodieWrapperFileSystem {
     if (shouldUseExternalHdfs()) {
       fs = useExternalHdfs();
     } else {
-      hdfsTestService = new HdfsTestService(HoodieTestUtils.getDefaultHadoopConf());
+      hdfsTestService = new HdfsTestService(HoodieTestUtils.getDefaultStorageConf().unwrap());
       dfsCluster = hdfsTestService.start(true);
       fs = dfsCluster.getFileSystem();
     }
@@ -71,13 +75,15 @@ class TestHoodieWrapperFileSystem {
   public void testCreateImmutableFileInPath() throws IOException {
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(HadoopFSUtils.getFs(basePath, new Configuration()), new NoOpConsistencyGuard());
     String testContent = "test content";
-    Path testFile = new Path(basePath + HoodieLocation.SEPARATOR + "clean.00000001");
+    StoragePath testFile = new StoragePath(basePath + StoragePath.SEPARATOR + "clean.00000001");
 
     // create same commit twice
-    fs.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
-    fs.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
+    HoodieStorage storage = HoodieStorageUtils.getStorage(fs);
+    storage.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
+    storage.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
+    List<StoragePathInfo> pathInfoList = storage.listDirectEntries(new StoragePath(basePath));
 
-    assertEquals(1, fs.listStatus(new Path(basePath)).length,
-        "create same file twice should only have one file exists, files: " + fs.listStatus(new Path(basePath)));
+    assertEquals(1, pathInfoList.size(),
+        "create same file twice should only have one file exists, files: " + pathInfoList);
   }
 }

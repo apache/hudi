@@ -19,14 +19,16 @@
 
 package org.apache.spark.sql.execution.datasources
 
+import org.apache.hudi.DataSourceReadOptions.{REALTIME_PAYLOAD_COMBINE_OPT_VAL, REALTIME_SKIP_MERGE_OPT_VAL}
+import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.{HoodieBaseRelation, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, LogFileIterator, MergeOnReadSnapshotRelation, RecordMergingFileIterator, SparkAdapterSupport}
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
-import org.apache.hudi.DataSourceReadOptions.{REALTIME_PAYLOAD_COMBINE_OPT_VAL, REALTIME_SKIP_MERGE_OPT_VAL}
-import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
-import org.apache.hudi.{HoodieBaseRelation, HoodieTableSchema, HoodieTableState, LogFileIterator, MergeOnReadSnapshotRelation, HoodiePartitionFileSliceMapping, RecordMergingFileIterator, SparkAdapterSupport}
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -38,8 +40,8 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 /**
  * File format that supports reading multiple base file formats in a table.
@@ -149,7 +151,7 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
                 val partitionValues = fileSliceMapping.getPartitionValues
                 val logFiles = getLogFilesFromSlice(fileSlice)
                 if (requiredSchemaWithMandatory.isEmpty) {
-                  val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
+                  val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getStoragePath, 0, hoodieBaseFile.getFileLen)
                   baseFileFormat match {
                     case "parquet" => parquetBaseFileReader(baseFile)
                     case "orc" => orcBaseFileReader(baseFile)
@@ -157,7 +159,7 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
                   }
                 } else {
                   if (logFiles.nonEmpty) {
-                    val baseFile = createPartitionedFile(InternalRow.empty, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
+                    val baseFile = createPartitionedFile(InternalRow.empty, hoodieBaseFile.getStoragePath, 0, hoodieBaseFile.getFileLen)
                     buildMergeOnReadIterator(
                       baseFileFormat match {
                         case "parquet" => preMergeParquetBaseFileReader(baseFile)
@@ -228,7 +230,7 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
    * Create iterator for a file slice that has log files
    */
   protected def buildMergeOnReadIterator(iter: Iterator[InternalRow], logFiles: List[HoodieLogFile],
-                                         partitionPath: Path, inputSchema: StructType, requiredSchemaWithMandatory: StructType,
+                                         partitionPath: StoragePath, inputSchema: StructType, requiredSchemaWithMandatory: StructType,
                                          outputSchema: StructType, partitionSchema: StructType, partitionValues: InternalRow,
                                          hadoopConf: Configuration): Iterator[InternalRow] = {
 

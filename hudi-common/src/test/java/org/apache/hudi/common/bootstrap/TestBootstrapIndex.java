@@ -31,8 +31,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +55,7 @@ import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -100,9 +101,9 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
     props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), "false");
     Properties properties = new Properties();
     properties.putAll(props);
-    HoodieTableConfig.create(metaClient.getFs(), new Path(metaClient.getMetaPath()), properties);
+    HoodieTableConfig.create(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()), properties);
 
-    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
+    metaClient = createMetaClient(metaClient.getStorageConf().newInstance(), basePath);
     BootstrapIndex bootstrapIndex = BootstrapIndex.getBootstrapIndex(metaClient);
     assert (bootstrapIndex instanceof NoOpBootstrapIndex);
   }

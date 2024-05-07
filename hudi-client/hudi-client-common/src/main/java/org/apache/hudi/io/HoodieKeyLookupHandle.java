@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
@@ -108,7 +109,7 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
 
     HoodieBaseFile baseFile = getLatestBaseFile();
     Collection<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
-        new CachingPath(baseFile.getPath()), candidateRecordKeys, hoodieTable.getHadoopConf());
+        new StoragePath(baseFile.getPath()), candidateRecordKeys, hoodieTable.getStorageConf());
     LOG.info(
         String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)", totalKeysChecked,
             candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeysAndPositions.size(), matchingKeysAndPositions.size()));

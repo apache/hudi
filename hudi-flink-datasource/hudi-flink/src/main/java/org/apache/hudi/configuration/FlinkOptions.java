@@ -189,9 +189,9 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> METADATA_ENABLED = ConfigOptions
       .key("metadata.enabled")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withFallbackKeys(HoodieMetadataConfig.ENABLE.key())
-      .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default disabled");
+      .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default enabled");
 
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("metadata.compaction.delta_commits")
@@ -290,7 +290,7 @@ public class FlinkOptions extends HoodieConfig {
           + "   log file records(combines the two records with same key for base and log file records), then read the left log file records");
 
   @AdvancedConfig
-  public static final ConfigOption<Boolean> UTC_TIMEZONE = ConfigOptions
+  public static final ConfigOption<Boolean> READ_UTC_TIMEZONE = ConfigOptions
       .key("read.utc-timezone")
       .booleanType()
       .defaultValue(true)
@@ -316,7 +316,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> READ_STREAMING_SKIP_COMPACT = ConfigOptions
       .key("read.streaming.skip_compaction")
       .booleanType()
-      .defaultValue(false)// default read as batch
+      .defaultValue(true)
       .withDescription("Whether to skip compaction instants and avoid reading compacted base files for streaming read to improve read performance.\n"
           + "This option can be used to avoid reading duplicates when changelog mode is enabled, it is a solution to keep data integrity\n");
 
@@ -325,9 +325,17 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> READ_STREAMING_SKIP_CLUSTERING = ConfigOptions
       .key("read.streaming.skip_clustering")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read "
           + "to improve read performance.");
+
+  // this option is experimental
+  public static final ConfigOption<Boolean> READ_STREAMING_SKIP_INSERT_OVERWRITE = ConfigOptions
+      .key("read.streaming.skip_insertoverwrite")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to skip insert overwrite instants to avoid reading base files of insert overwrite operations for streaming read. "
+          + "In streaming scenarios, insert overwrite is usually used to repair data, here you can control the visibility of downstream streaming read.");
 
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
@@ -489,6 +497,15 @@ public class FlinkOptions extends HoodieConfig {
   public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
   public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
   public static final String PARTITION_FORMAT_DASHED_DAY = "yyyy-MM-dd";
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_UTC_TIMEZONE = ConfigOptions
+        .key("write.utc-timezone")
+        .booleanType()
+        .defaultValue(true)
+        .withDescription("Use UTC timezone or local timezone to the conversion between epoch"
+            + " time and LocalDateTime. Default value is utc timezone for forward compatibility.");
+
   @AdvancedConfig
   public static final ConfigOption<String> PARTITION_FORMAT = ConfigOptions
       .key("write.partition.format")
@@ -719,6 +736,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("clean.async.enabled")
       .booleanType()
       .defaultValue(true)
+      .withFallbackKeys("hoodie.clean.async.enabled")
       .withDescription("Whether to cleanup the old commits immediately on new commits, enabled by default");
 
   @AdvancedConfig
@@ -726,6 +744,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("clean.policy")
       .stringType()
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+      .withFallbackKeys("hoodie.clean.policy")
       .withDescription("Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
           + "Default is KEEP_LATEST_COMMITS.");
 
@@ -733,6 +752,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("clean.retain_commits")
       .intType()
       .defaultValue(30)// default 30 commits
+      .withFallbackKeys("hoodie.clean.commits.retained")
       .withDescription("Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 30");
 
@@ -741,6 +761,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("clean.retain_hours")
       .intType()
       .defaultValue(24)// default 24 hours
+      .withFallbackKeys("hoodie.clean.hours.retained")
       .withDescription("Number of hours for which commits need to be retained. This config provides a more flexible option as"
           + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
           + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
@@ -750,6 +771,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("clean.retain_file_versions")
       .intType()
       .defaultValue(5)// default 5 version
+      .withFallbackKeys("hoodie.clean.fileversions.retained")
       .withDescription("Number of file versions to retain. default 5");
 
   public static final ConfigOption<Integer> ARCHIVE_MAX_COMMITS = ConfigOptions

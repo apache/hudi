@@ -49,7 +49,7 @@ public enum RecordPayloadType {
   @EnumFieldDescription("Subclass of OVERWRITE_LATEST_AVRO used for delta streamer.")
   OVERWRITE_NON_DEF_LATEST_AVRO(OverwriteNonDefaultsWithLatestAvroPayload.class.getName()),
 
-  @EnumFieldDescription("Default payload used for delta streamer.")
+  @EnumFieldDescription("Honors ordering field in preCombine and overwrites storage with latest delta record in combineAndGetUpdateValue")
   OVERWRITE_LATEST_AVRO(OverwriteWithLatestAvroPayload.class.getName()),
 
   @EnumFieldDescription("Used for partial update to Hudi Table.")

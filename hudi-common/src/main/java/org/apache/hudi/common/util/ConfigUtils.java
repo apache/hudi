@@ -26,10 +26,11 @@ import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -551,22 +552,22 @@ public class ConfigUtils {
   }
 
   public static TypedProperties fetchConfigs(
-      FileSystem fs,
+      HoodieStorage storage,
       String metaPath,
       String propertiesFile,
       String propertiesBackupFile,
       int maxReadRetries,
       int maxReadRetryDelayInMs) throws IOException {
-    Path cfgPath = new Path(metaPath, propertiesFile);
-    Path backupCfgPath = new Path(metaPath, propertiesBackupFile);
+    StoragePath cfgPath = new StoragePath(metaPath, propertiesFile);
+    StoragePath backupCfgPath = new StoragePath(metaPath, propertiesBackupFile);
     int readRetryCount = 0;
     boolean found = false;
 
     TypedProperties props = new TypedProperties();
     while (readRetryCount++ < maxReadRetries) {
-      for (Path path : Arrays.asList(cfgPath, backupCfgPath)) {
+      for (StoragePath path : Arrays.asList(cfgPath, backupCfgPath)) {
         // Read the properties and validate that it is a valid file
-        try (InputStream is = fs.open(path)) {
+        try (InputStream is = storage.open(path)) {
           props.clear();
           props.load(is);
           found = true;
@@ -591,22 +592,24 @@ public class ConfigUtils {
 
     // If we are here then after all retries either no properties file was found or only an invalid file was found.
     if (found) {
-      throw new IllegalArgumentException("hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
+      throw new IllegalArgumentException(
+          "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
     } else {
       throw new HoodieIOException("Could not load Hoodie properties from " + cfgPath);
     }
   }
 
-  public static void recoverIfNeeded(FileSystem fs, Path cfgPath, Path backupCfgPath) throws IOException {
-    if (!fs.exists(cfgPath)) {
+  public static void recoverIfNeeded(HoodieStorage storage, StoragePath cfgPath,
+                                     StoragePath backupCfgPath) throws IOException {
+    if (!storage.exists(cfgPath)) {
       // copy over from backup
-      try (InputStream in = fs.open(backupCfgPath);
-           OutputStream out = fs.create(cfgPath, false)) {
+      try (InputStream in = storage.open(backupCfgPath);
+           OutputStream out = storage.create(cfgPath, false)) {
         FileIOUtils.copy(in, out);
       }
     }
     // regardless, we don't need the backup anymore.
-    fs.delete(backupCfgPath, false);
+    storage.deleteFile(backupCfgPath);
   }
 
   public static void upsertProperties(Properties current, Properties updated) {
@@ -617,11 +620,11 @@ public class ConfigUtils {
     deleted.forEach((k, v) -> current.remove(k.toString()));
   }
 
-  public static HoodieConfig getReaderConfigs(Configuration conf) {
+  public static HoodieConfig getReaderConfigs(StorageConfiguration<?> storageConf) {
     HoodieConfig config = new HoodieConfig();
     config.setAll(DEFAULT_HUDI_CONFIG_FOR_READER.getProps());
     config.setValue(USE_NATIVE_HFILE_READER,
-        Boolean.toString(ConfigUtils.getBooleanWithAltKeys(conf, USE_NATIVE_HFILE_READER)));
+        Boolean.toString(storageConf.getBoolean(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue())));
     return config;
   }
 }

@@ -17,16 +17,17 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.avro.generic.IndexedRecord
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecordPayload}
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{FileIOUtils, ValidationUtils}
+import org.apache.hudi.storage.StoragePath
+
+import org.apache.avro.generic.IndexedRecord
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -54,22 +55,21 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     val merge: Boolean = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Boolean]
     val limit: Int = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Int]
     val basePath = getBasePath(table)
-    val client = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val fs = client.getFs
-    val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).iterator().asScala
+    val client = createMetaClient(jsc, basePath)
+    val storage = client.getStorage
+    val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
     ValidationUtils.checkArgument(logFilePaths.nonEmpty, "There is no log file")
     val converter = new AvroSchemaConverter()
     val allRecords: java.util.List[IndexedRecord] = new java.util.ArrayList[IndexedRecord]
     if (merge) {
-      val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.last))))
+      val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePaths.last))))
       val scanner = HoodieMergedLogRecordScanner.newBuilder
-        .withFileSystem(fs)
+        .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(logFilePaths.asJava)
         .withReaderSchema(schema)
         .withLatestInstantTime(client.getActiveTimeline.getCommitTimeline.lastInstant.get.getTimestamp)
-        .withReadBlocksLazily(java.lang.Boolean.parseBoolean(HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue))
         .withReverseReader(java.lang.Boolean.parseBoolean(HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue))
         .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue)
         .withMaxMemorySizeInBytes(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
@@ -86,8 +86,8 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     } else {
       logFilePaths.toStream.takeWhile(_ => allRecords.size() < limit).foreach {
         logFilePath => {
-          val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))))
-          val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(logFilePath), schema)
+          val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePath))))
+          val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePath), schema)
           while (reader.hasNext) {
             val block = reader.next()
             block match {
@@ -109,7 +109,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     allRecords.asScala.foreach(record => {
       rows.add(Row(record.toString))
     })
-    rows.asScala
+    rows.asScala.toSeq
   }
 
   override def build: Procedure = new ShowHoodieLogFileRecordsProcedure

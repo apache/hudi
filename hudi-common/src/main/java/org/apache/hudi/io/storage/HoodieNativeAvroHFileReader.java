@@ -28,22 +28,26 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
+import org.apache.hudi.io.ByteArraySeekableDataInputStream;
+import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.hfile.KeyValue;
 import org.apache.hudi.io.hfile.UTF8StringKey;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,13 +71,13 @@ import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
 public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieNativeAvroHFileReader.class);
 
-  private final Configuration conf;
-  private final Option<Path> path;
+  private final StorageConfiguration<?> conf;
+  private final Option<StoragePath> path;
   private final Option<byte[]> bytesContent;
   private Option<HFileReader> sharedHFileReader;
   private final Lazy<Schema> schema;
 
-  public HoodieNativeAvroHFileReader(Configuration conf, Path path, Option<Schema> schemaOption) {
+  public HoodieNativeAvroHFileReader(StorageConfiguration<?> conf, StoragePath path, Option<Schema> schemaOption) {
     this.conf = conf;
     this.path = Option.of(path);
     this.bytesContent = Option.empty();
@@ -82,7 +86,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         .orElseGet(() -> Lazy.lazily(() -> fetchSchema(getSharedHFileReader())));
   }
 
-  public HoodieNativeAvroHFileReader(Configuration conf, byte[] content, Option<Schema> schemaOption) {
+  public HoodieNativeAvroHFileReader(StorageConfiguration<?> conf, byte[] content, Option<Schema> schemaOption) {
     this.conf = conf;
     this.path = Option.empty();
     this.bytesContent = Option.of(content);
@@ -256,15 +260,15 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   private HFileReader newHFileReader() throws IOException {
-    FSDataInputStream inputStream;
+    SeekableDataInputStream inputStream;
     long fileSize;
     if (path.isPresent()) {
-      FileSystem fs = HadoopFSUtils.getFs(path.get(), conf);
-      fileSize = fs.getFileStatus(path.get()).getLen();
-      inputStream = fs.open(path.get());
+      HoodieStorage storage = HoodieStorageUtils.getStorage(path.get(), conf);
+      fileSize = storage.getPathInfo(path.get()).getLength();
+      inputStream = new HadoopSeekableDataInputStream((FSDataInputStream) storage.open(path.get()));
     } else {
       fileSize = bytesContent.get().length;
-      inputStream = new FSDataInputStream(new SeekableByteArrayInputStream(bytesContent.get()));
+      inputStream = new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(bytesContent.get()));
     }
     return new HFileReaderImpl(inputStream, fileSize);
   }

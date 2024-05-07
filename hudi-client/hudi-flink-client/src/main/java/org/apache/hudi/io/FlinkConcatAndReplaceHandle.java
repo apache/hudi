@@ -18,13 +18,14 @@
 
 package org.apache.hudi.io;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +48,7 @@ public class FlinkConcatAndReplaceHandle<T, I, K, O>
 
   public FlinkConcatAndReplaceHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                      Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                     TaskContextSupplier taskContextSupplier, Path basePath) {
+                                     TaskContextSupplier taskContextSupplier, StoragePath basePath) {
     super(config, instantTime, hoodieTable, Collections.emptyIterator(), partitionPath, fileId, taskContextSupplier, basePath);
     this.recordItr = recordItr;
   }
@@ -62,7 +63,8 @@ public class FlinkConcatAndReplaceHandle<T, I, K, O>
     try {
       fileWriter.write(key, oldRecord, writeSchema);
     } catch (IOException | RuntimeException e) {
-      String errMsg = String.format("Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
+      String errMsg = String.format(
+          "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
       LOG.debug("Old record is " + oldRecord);
       throw new HoodieUpsertException(errMsg, e);

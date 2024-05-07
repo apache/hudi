@@ -30,11 +30,13 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
@@ -83,23 +85,24 @@ public class ParquetUtils extends BaseFileUtils {
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
    * return all the rowkeys and corresponding positions.
    *
+   * @param configuration configuration to build storage object
    * @param filePath      The parquet file path.
-   * @param configuration configuration to build fs object
    * @param filter        record keys filter
    * @return Set Set of pairs of row key and position matching candidateRecordKeys
    */
   @Override
-  public Set<Pair<String, Long>> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
-    return filterParquetRowKeys(configuration, filePath, filter, HoodieAvroUtils.getRecordKeySchema());
+  public Set<Pair<String, Long>> filterRowKeys(StorageConfiguration<?> configuration, StoragePath filePath, Set<String> filter) {
+    return filterParquetRowKeys(configuration, new Path(filePath.toUri()), filter, HoodieAvroUtils.getRecordKeySchema());
   }
 
-  public static ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
+  public static ParquetMetadata readMetadata(StorageConfiguration<?> conf, StoragePath parquetFilePath) {
+    Path parquetFileHadoopPath = new Path(parquetFilePath.toUri());
     ParquetMetadata footer;
     try {
       // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader.readFooter(HadoopFSUtils.getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
+      footer = ParquetFileReader.readFooter(HadoopFSUtils.getFs(parquetFileHadoopPath.toString(), conf).getConf(), parquetFileHadoopPath);
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
+      throw new HoodieIOException("Failed to read footer for parquet " + parquetFileHadoopPath, e);
     }
     return footer;
   }
@@ -109,18 +112,19 @@ public class ParquetUtils extends BaseFileUtils {
    * return all the rowkeys.
    *
    * @param filePath      The parquet file path.
-   * @param configuration configuration to build fs object
+   * @param configuration configuration to build storage object
    * @param filter        record keys filter
    * @param readSchema    schema of columns to be read
    * @return Set Set of pairs of row key and position matching candidateRecordKeys
    */
-  private static Set<Pair<String, Long>> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter,
+  private static Set<Pair<String, Long>> filterParquetRowKeys(StorageConfiguration<?> configuration,
+                                                              Path filePath, Set<String> filter,
                                                               Schema readSchema) {
     Option<RecordKeysFilterFunction> filterFunction = Option.empty();
     if (filter != null && !filter.isEmpty()) {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
-    Configuration conf = new Configuration(configuration);
+    Configuration conf = configuration.unwrapCopyAs(Configuration.class);
     conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
@@ -149,44 +153,45 @@ public class ParquetUtils extends BaseFileUtils {
   /**
    * Fetch {@link HoodieKey}s with row positions from the given parquet file.
    *
+   * @param configuration configuration to build storage object
    * @param filePath      The parquet file path.
-   * @param configuration configuration to build fs object
    * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath) {
+  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(StorageConfiguration<?> configuration, StoragePath filePath) {
     return fetchRecordKeysWithPositions(configuration, filePath, Option.empty());
   }
 
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath) {
     return getHoodieKeyIterator(configuration, filePath, Option.empty());
   }
 
   /**
    * Returns a closable iterator for reading the given parquet file.
    *
-   * @param configuration configuration to build fs object
-   * @param filePath      The parquet file path
+   * @param configuration   configuration to build storage object
+   * @param filePath        The parquet file path
    * @param keyGeneratorOpt instance of KeyGenerator
-   *
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the parquet file
    */
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
-      Configuration conf = new Configuration(configuration);
+      Configuration conf = configuration.unwrapCopyAs(Configuration.class);
       conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
-      Schema readSchema = keyGeneratorOpt.map(keyGenerator -> {
-        List<String> fields = new ArrayList<>();
-        fields.addAll(keyGenerator.getRecordKeyFieldNames());
-        fields.addAll(keyGenerator.getPartitionPathFields());
-        return HoodieAvroUtils.getSchemaForFields(readAvroSchema(conf, filePath), fields);
-      })
+      Schema readSchema = keyGeneratorOpt
+          .map(keyGenerator -> {
+            List<String> fields = new ArrayList<>();
+            fields.addAll(keyGenerator.getRecordKeyFieldNames());
+            fields.addAll(keyGenerator.getPartitionPathFields());
+            return HoodieAvroUtils.getSchemaForFields(readAvroSchema(configuration, filePath), fields);
+          })
           .orElse(HoodieAvroUtils.getRecordKeyPartitionPathSchema());
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
       AvroReadSupport.setRequestedProjection(conf, readSchema);
-      ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(filePath).withConf(conf).build();
+      ParquetReader<GenericRecord> reader =
+          AvroParquetReader.<GenericRecord>builder(new Path(filePath.toUri())).withConf(conf).build();
       return HoodieKeyIterator.getInstance(new ParquetReaderIterator<>(reader), keyGeneratorOpt);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
@@ -196,13 +201,13 @@ public class ParquetUtils extends BaseFileUtils {
   /**
    * Fetch {@link HoodieKey}s with row positions from the given parquet file.
    *
-   * @param configuration   configuration to build fs object
+   * @param configuration   configuration to build storage object
    * @param filePath        The parquet file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     List<Pair<HoodieKey, Long>> hoodieKeysAndPositions = new ArrayList<>();
     long position = 0;
     try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, keyGeneratorOpt)) {
@@ -217,31 +222,31 @@ public class ParquetUtils extends BaseFileUtils {
   /**
    * Get the schema of the given parquet file.
    */
-  public MessageType readSchema(Configuration configuration, Path parquetFilePath) {
+  public MessageType readSchema(StorageConfiguration<?> configuration, StoragePath parquetFilePath) {
     return readMetadata(configuration, parquetFilePath).getFileMetaData().getSchema();
   }
 
   @Override
-  public Map<String, String> readFooter(Configuration configuration, boolean required,
-                                                       Path parquetFilePath, String... footerNames) {
+  public Map<String, String> readFooter(StorageConfiguration<?> configuration, boolean required,
+                                        StoragePath filePath, String... footerNames) {
     Map<String, String> footerVals = new HashMap<>();
-    ParquetMetadata footer = readMetadata(configuration, parquetFilePath);
+    ParquetMetadata footer = readMetadata(configuration, filePath);
     Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
     for (String footerName : footerNames) {
       if (metadata.containsKey(footerName)) {
         footerVals.put(footerName, metadata.get(footerName));
       } else if (required) {
         throw new MetadataNotFoundException(
-            "Could not find index in Parquet footer. Looked for key " + footerName + " in " + parquetFilePath);
+            "Could not find index in Parquet footer. Looked for key " + footerName + " in " + filePath);
       }
     }
     return footerVals;
   }
 
   @Override
-  public Schema readAvroSchema(Configuration conf, Path parquetFilePath) {
-    MessageType parquetSchema = readSchema(conf, parquetFilePath);
-    return new AvroSchemaConverter(conf).convert(parquetSchema);
+  public Schema readAvroSchema(StorageConfiguration<?> conf, StoragePath filePath) {
+    MessageType parquetSchema = readSchema(conf, filePath);
+    return new AvroSchemaConverter(conf.unwrapAs(Configuration.class)).convert(parquetSchema);
   }
 
   @Override
@@ -253,9 +258,10 @@ public class ParquetUtils extends BaseFileUtils {
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
   @Override
-  public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath) {
+  public List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath) {
     List<GenericRecord> records = new ArrayList<>();
-    try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(configuration).build()) {
+    try (ParquetReader reader = AvroParquetReader.builder(new Path(filePath.toUri()))
+        .withConf(configuration.unwrapAs(Configuration.class)).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
@@ -271,22 +277,22 @@ public class ParquetUtils extends BaseFileUtils {
   }
 
   @Override
-  public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath, Schema schema) {
-    AvroReadSupport.setAvroReadSchema(configuration, schema);
+  public List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath, Schema schema) {
+    AvroReadSupport.setAvroReadSchema(configuration.unwrapAs(Configuration.class), schema);
     return readAvroRecords(configuration, filePath);
   }
 
   /**
    * Returns the number of records in the parquet file.
    *
-   * @param conf            Configuration
-   * @param parquetFilePath path of the file
+   * @param conf     Configuration
+   * @param filePath path of the file
    */
   @Override
-  public long getRowCount(Configuration conf, Path parquetFilePath) {
+  public long getRowCount(StorageConfiguration<?> conf, StoragePath filePath) {
     ParquetMetadata footer;
     long rowCount = 0;
-    footer = readMetadata(conf, parquetFilePath);
+    footer = readMetadata(conf, filePath);
     for (BlockMetaData b : footer.getBlocks()) {
       rowCount += b.getRowCount();
     }
@@ -294,16 +300,15 @@ public class ParquetUtils extends BaseFileUtils {
   }
 
   @Override
-  public void writeMetaFile(FileSystem fs, Path filePath, Properties props) throws IOException {
+  public void writeMetaFile(HoodieStorage storage,
+                            StoragePath filePath,
+                            Properties props) throws IOException {
     // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
     // parameters are not important.
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
-    MessageType type = Types.buildMessage()
-        .optional(PrimitiveType.PrimitiveTypeName.INT64).named("dummyint").named("dummy");
-    HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(type, schema, Option.empty(), new Properties());
-    try (ParquetWriter writer = new ParquetWriter(
-        filePath, writeSupport, CompressionCodecName.UNCOMPRESSED, 1024, 1024)) {
+    MessageType type = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64).named("dummyint").named("dummy");
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(type, schema, Option.empty(), new Properties());
+    try (ParquetWriter writer = new ParquetWriter(new Path(filePath.toUri()), writeSupport, CompressionCodecName.UNCOMPRESSED, 1024, 1024)) {
       for (String key : props.stringPropertyNames()) {
         writeSupport.addFooterMetadata(key, props.getProperty(key));
       }
@@ -329,8 +334,8 @@ public class ParquetUtils extends BaseFileUtils {
    */
   @SuppressWarnings("rawtype")
   public List<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(
-      @Nonnull Configuration conf,
-      @Nonnull Path parquetFilePath,
+      @Nonnull StorageConfiguration<?> conf,
+      @Nonnull StoragePath parquetFilePath,
       @Nonnull List<String> cols
   ) {
     ParquetMetadata metadata = readMetadata(conf, parquetFilePath);
@@ -396,23 +401,8 @@ public class ParquetUtils extends BaseFileUtils {
       HoodieColumnRangeMetadata<T> one,
       HoodieColumnRangeMetadata<T> another
   ) {
-    final T minValue;
-    final T maxValue;
-    if (one.getMinValue() != null && another.getMinValue() != null) {
-      minValue = one.getMinValue().compareTo(another.getMinValue()) < 0 ? one.getMinValue() : another.getMinValue();
-    } else if (one.getMinValue() == null) {
-      minValue = another.getMinValue();
-    } else {
-      minValue = one.getMinValue();
-    }
-
-    if (one.getMaxValue() != null && another.getMaxValue() != null) {
-      maxValue = one.getMaxValue().compareTo(another.getMaxValue()) < 0 ? another.getMaxValue() : one.getMaxValue();
-    } else if (one.getMaxValue() == null) {
-      maxValue = another.getMaxValue();
-    } else {
-      maxValue = one.getMaxValue();
-    }
+    final T minValue = getMinValueForColumnRanges(one, another);
+    final T maxValue = getMaxValueForColumnRanges(one, another);
 
     return HoodieColumnRangeMetadata.create(
         one.getFilePath(),

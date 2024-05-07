@@ -23,6 +23,9 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
+import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -92,7 +95,7 @@ public class TestParquetInLining {
     long inlineLength = inlineBytes.length;
 
     // Generate phantom inline file
-    Path inlinePath = getPhantomFile(outerPath, startOffset, inlineLength);
+    Path inlinePath = new Path(getPhantomFile(new StoragePath(outerPath.toUri()), startOffset, inlineLength).toUri());
 
     // instantiate Parquet reader
     ParquetReader inLineReader = AvroParquetReader.builder(inlinePath).withConf(inlineConf).build();

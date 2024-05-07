@@ -41,9 +41,8 @@ public class TestParquetDFSSource extends AbstractDFSSourceTestBase {
   }
 
   @Override
-  public Source prepareDFSSource() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
+  public Source prepareDFSSource(TypedProperties props) {
+    props.setProperty("hoodie.streamer.source.dfs.root", dfsRoot);
     return new ParquetDFSSource(props, jsc, sparkSession, schemaProvider);
   }
 

@@ -20,11 +20,11 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,15 +50,7 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
   /**
    * The lock provider.
    */
-  private volatile LockProvider lockProvider;
-  /**
-   * The maximum times to retry in case there are failures.
-   */
-  private final int maxRetries;
-  /**
-   * The maximum time to wait for each time generation to resolve the clock skew issue on distributed hosts.
-   */
-  private final long maxWaitTimeInMs;
+  private volatile LockProvider<?> lockProvider;
   /**
    * The maximum time to block for acquiring a lock.
    */
@@ -70,34 +62,36 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
   /**
    * The hadoop configuration.
    */
-  private final SerializableConfiguration hadoopConf;
+  private final StorageConfiguration<?> storageConf;
 
   private final RetryHelper<Boolean, HoodieLockException> lockRetryHelper;
 
-  public TimeGeneratorBase(HoodieTimeGeneratorConfig config, SerializableConfiguration hadoopConf) {
+  public TimeGeneratorBase(HoodieTimeGeneratorConfig config, StorageConfiguration<?> storageConf) {
     this.config = config;
     this.lockConfiguration = config.getLockConfiguration();
-    this.hadoopConf = hadoopConf;
+    this.storageConf = storageConf;
 
-    maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
+    // The maximum times to retry in case there are failures.
+    int maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
         Integer.parseInt(DEFAULT_LOCK_ACQUIRE_NUM_RETRIES));
     lockAcquireWaitTimeInMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
         DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS);
-    maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
+    // The maximum time to wait for each time generation to resolve the clock skew issue on distributed hosts.
+    long maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
         Long.parseLong(DEFAULT_LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS));
     lockRetryHelper = new RetryHelper<>(maxWaitTimeInMs, maxRetries, maxWaitTimeInMs,
         Arrays.asList(HoodieLockException.class, InterruptedException.class), "acquire timeGenerator lock");
   }
 
-  protected LockProvider getLockProvider() {
+  protected LockProvider<?> getLockProvider() {
     // Perform lazy initialization of lock provider only if needed
     if (lockProvider == null) {
       synchronized (this) {
         if (lockProvider == null) {
           String lockProviderClass = lockConfiguration.getConfig().getString("hoodie.write.lock.provider");
           LOG.info("LockProvider for TimeGenerator: " + lockProviderClass);
-          lockProvider = (LockProvider) ReflectionUtils.loadClass(lockProviderClass,
-              lockConfiguration, hadoopConf.get());
+          lockProvider = (LockProvider<?>) ReflectionUtils.loadClass(lockProviderClass,
+              lockConfiguration, storageConf.unwrap());
         }
       }
     }

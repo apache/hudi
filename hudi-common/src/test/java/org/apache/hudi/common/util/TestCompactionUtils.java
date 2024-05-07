@@ -26,14 +26,15 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
 import org.apache.hudi.common.testutils.CompactionTestUtils.DummyHoodieBaseFile;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +57,7 @@ import static org.apache.hudi.common.testutils.CompactionTestUtils.createCompact
 import static org.apache.hudi.common.testutils.CompactionTestUtils.scheduleCompaction;
 import static org.apache.hudi.common.testutils.CompactionTestUtils.setupAndValidateCompactionOperations;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.common.util.CompactionUtils.COMPACTION_METADATA_VERSION_1;
 import static org.apache.hudi.common.util.CompactionUtils.LATEST_COMPACTION_METADATA_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -116,16 +118,20 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     // File Slice with data-file but no log files
     FileSlice noLogFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noLog1");
     noLogFileSlice.setBaseFile(new DummyHoodieBaseFile("/tmp/noLog_1_000" + extension));
-    op = CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], noLogFileSlice, Option.of(metricsCaptureFn));
+    op = CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], noLogFileSlice,
+        Option.of(metricsCaptureFn));
     testFileSliceCompactionOpEquality(noLogFileSlice, op, DEFAULT_PARTITION_PATHS[0],
         LATEST_COMPACTION_METADATA_VERSION);
     // File Slice with no data-file but log files present
     FileSlice noDataFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noData1");
     noDataFileSlice.addLogFile(
-        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
+        new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("noData1", ".log", "000", 1,
+            TEST_WRITE_TOKEN))));
     noDataFileSlice.addLogFile(
-        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
-    op = CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], noDataFileSlice, Option.of(metricsCaptureFn));
+        new HoodieLogFile(new StoragePath(
+            FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
+    op = CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], noDataFileSlice,
+        Option.of(metricsCaptureFn));
     testFileSliceCompactionOpEquality(noDataFileSlice, op, DEFAULT_PARTITION_PATHS[0],
         LATEST_COMPACTION_METADATA_VERSION);
 
@@ -133,11 +139,15 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     FileSlice fileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noData1");
     fileSlice.setBaseFile(new DummyHoodieBaseFile("/tmp/noLog_1_000" + extension));
     fileSlice.addLogFile(
-        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
+        new HoodieLogFile(new StoragePath(
+            FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
     fileSlice.addLogFile(
-        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
-    op = CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], fileSlice, Option.of(metricsCaptureFn));
-    testFileSliceCompactionOpEquality(fileSlice, op, DEFAULT_PARTITION_PATHS[0], LATEST_COMPACTION_METADATA_VERSION);
+        new HoodieLogFile(new StoragePath(
+            FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
+    op = CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], fileSlice,
+        Option.of(metricsCaptureFn));
+    testFileSliceCompactionOpEquality(fileSlice, op, DEFAULT_PARTITION_PATHS[0],
+        LATEST_COMPACTION_METADATA_VERSION);
   }
 
   /**
@@ -146,21 +156,28 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   private Pair<List<Pair<String, FileSlice>>, HoodieCompactionPlan> buildCompactionPlan() {
     String extension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
 
-    Path fullPartitionPath = new Path(new Path(metaClient.getBasePath()), DEFAULT_PARTITION_PATHS[0]);
+    StoragePath fullPartitionPath =
+        new StoragePath(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0]);
     FileSlice emptyFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "empty1");
     FileSlice fileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noData1");
-    fileSlice.setBaseFile(new DummyHoodieBaseFile(fullPartitionPath.toString() + "/data1_1_000" + extension));
+    fileSlice.setBaseFile(
+        new DummyHoodieBaseFile(fullPartitionPath.toString() + "/data1_1_000" + extension));
     fileSlice.addLogFile(new HoodieLogFile(
-        new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN)))));
+        new StoragePath(fullPartitionPath,
+            FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
     fileSlice.addLogFile(new HoodieLogFile(
-        new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN)))));
+        new StoragePath(fullPartitionPath,
+            FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
     FileSlice noLogFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noLog1");
-    noLogFileSlice.setBaseFile(new DummyHoodieBaseFile(fullPartitionPath.toString() + "/noLog_1_000" + extension));
+    noLogFileSlice.setBaseFile(
+        new DummyHoodieBaseFile(fullPartitionPath.toString() + "/noLog_1_000" + extension));
     FileSlice noDataFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noData1");
     noDataFileSlice.addLogFile(new HoodieLogFile(
-        new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN)))));
+        new StoragePath(fullPartitionPath,
+            FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
     noDataFileSlice.addLogFile(new HoodieLogFile(
-        new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN)))));
+        new StoragePath(fullPartitionPath,
+            FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
     List<FileSlice> fileSliceList = Arrays.asList(emptyFileSlice, noDataFileSlice, fileSlice, noLogFileSlice);
     List<Pair<String, FileSlice>> input =
         fileSliceList.stream().map(f -> Pair.of(DEFAULT_PARTITION_PATHS[0], f)).collect(Collectors.toList());
@@ -199,7 +216,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     // schedule similar plan again so that there will be duplicates
     plan1.getOperations().get(0).setDataFilePath("bla");
     scheduleCompaction(metaClient, "005", plan1);
-    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+    metaClient = HoodieTestUtils.createMetaClient(metaClient.getStorageConf(), basePath);
     assertThrows(IllegalStateException.class, () -> {
       CompactionUtils.getAllPendingCompactionOperations(metaClient);
     });
@@ -214,7 +231,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     scheduleCompaction(metaClient, "003", plan2);
     // schedule same plan again so that there will be duplicates. It should not fail as it is a full duplicate
     scheduleCompaction(metaClient, "005", plan1);
-    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+    metaClient = createMetaClient(metaClient.getStorageConf().newInstance(), basePath);
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> res =
         CompactionUtils.getAllPendingCompactionOperations(metaClient);
   }

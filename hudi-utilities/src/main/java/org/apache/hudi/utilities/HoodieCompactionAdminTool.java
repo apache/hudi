@@ -60,7 +60,9 @@ public class HoodieCompactionAdminTool {
    * Executes one of compaction admin operations.
    */
   public void run(JavaSparkContext jsc) throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+        .setBasePath(cfg.basePath).build();
     try (CompactionAdminClient admin = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), cfg.basePath)) {
       final FileSystem fs = HadoopFSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
       if (cfg.outputPath != null && fs.exists(new Path(cfg.outputPath))) {
@@ -107,11 +109,10 @@ public class HoodieCompactionAdminTool {
   private <T> void serializeOperationResult(FileSystem fs, T result) throws Exception {
     if ((cfg.outputPath != null) && (result != null)) {
       Path outputPath = new Path(cfg.outputPath);
-      OutputStream stream = fs.create(outputPath, true);
-      ObjectOutputStream out = new ObjectOutputStream(stream);
-      out.writeObject(result);
-      out.close();
-      stream.close();
+      try (OutputStream stream = fs.create(outputPath, true);
+           ObjectOutputStream out = new ObjectOutputStream(stream)) {
+        out.writeObject(result);
+      }
     }
   }
 

@@ -18,19 +18,21 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.internal.SQLConf;
 
 import java.io.IOException;
 
 public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
 
-  public HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
+  @Override
+  public HoodieFileReader newParquetFileReader(StorageConfiguration<?> conf, StoragePath path) {
     conf.setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
     conf.setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
     conf.setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
@@ -42,13 +44,16 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
     return new HoodieSparkParquetReader(conf, path);
   }
 
-  protected HoodieFileReader newHFileFileReader(Configuration conf,
-                                                Path path,
+  @Override
+  protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
+                                                StorageConfiguration<?> conf,
+                                                StoragePath path,
                                                 Option<Schema> schemaOption) throws IOException {
     throw new HoodieIOException("Not support read HFile");
   }
 
-  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
+  @Override
+  protected HoodieFileReader newOrcFileReader(StorageConfiguration<?> conf, StoragePath path) {
     throw new HoodieIOException("Not support read orc file");
   }
 

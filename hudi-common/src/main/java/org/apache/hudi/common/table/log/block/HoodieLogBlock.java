@@ -26,8 +26,8 @@ import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +39,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -198,8 +199,8 @@ public abstract class HoodieLogBlock {
    * intensive CompactedScanner, the location helps to lazily read contents from the log file
    */
   public static final class HoodieLogBlockContentLocation {
-    // Hadoop Config required to access the file
-    private final Configuration hadoopConf;
+    // Storage Config required to access the file
+    private final StorageConfiguration<?> storageConf;
     // The logFile that contains this block
     private final HoodieLogFile logFile;
     // The filePosition in the logFile for the contents of this block
@@ -209,20 +210,20 @@ public abstract class HoodieLogBlock {
     // The final position where the complete block ends
     private final long blockEndPos;
 
-    public HoodieLogBlockContentLocation(Configuration hadoopConf,
+    public HoodieLogBlockContentLocation(StorageConfiguration<?> storageConf,
                                          HoodieLogFile logFile,
                                          long contentPositionInLogFile,
                                          long blockSize,
                                          long blockEndPos) {
-      this.hadoopConf = hadoopConf;
+      this.storageConf = storageConf;
       this.logFile = logFile;
       this.contentPositionInLogFile = contentPositionInLogFile;
       this.blockSize = blockSize;
       this.blockEndPos = blockEndPos;
     }
 
-    public Configuration getHadoopConf() {
-      return hadoopConf;
+    public StorageConfiguration<?> getStorageConf() {
+      return storageConf;
     }
 
     public HoodieLogFile getLogFile() {
@@ -312,6 +313,10 @@ public abstract class HoodieLogBlock {
       inputStream.seek(this.getBlockContentLocation().get().getContentPositionInLogFile());
       inputStream.readFully(content.get(), 0, content.get().length);
       inputStream.seek(this.getBlockContentLocation().get().getBlockEndPos());
+    } catch (InterruptedIOException e) {
+      // Stop retry inflate if encounters InterruptedIOException
+      Thread.currentThread().interrupt();
+      throw new HoodieIOException("Thread is interrupted while inflating.", e);
     } catch (IOException e) {
       // TODO : fs.open() and return inputstream again, need to pass FS configuration
       // because the inputstream might close/timeout for large number of log blocks to be merged

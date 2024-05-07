@@ -63,6 +63,9 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -120,6 +123,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createRollbackFil
 import static org.apache.hudi.common.testutils.FileCreateUtils.createSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.deleteSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
+import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.BASE_FILE_EXTENSION;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
@@ -140,21 +144,26 @@ public class HoodieTestTable {
   private final List<String> inflightCommits = new ArrayList<>();
 
   protected final String basePath;
+  protected final HoodieStorage storage;
   protected final FileSystem fs;
   protected HoodieTableMetaClient metaClient;
   protected String currentInstantTime;
   private boolean isNonPartitioned = false;
   protected Option<HoodieEngineContext> context;
 
-  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient) {
-    this(basePath, fs, metaClient, Option.empty());
+  protected HoodieTestTable(String basePath, HoodieStorage storage,
+                            HoodieTableMetaClient metaClient) {
+    this(basePath, storage, metaClient, Option.empty());
   }
 
-  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Option<HoodieEngineContext> context) {
+  protected HoodieTestTable(String basePath, HoodieStorage storage,
+                            HoodieTableMetaClient metaClient, Option<HoodieEngineContext> context) {
     ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath()));
-    ValidationUtils.checkArgument(Objects.equals(fs, metaClient.getRawFs()));
+    ValidationUtils.checkArgument(Objects.equals(
+        storage.getFileSystem(), metaClient.getRawHoodieStorage().getFileSystem()));
     this.basePath = basePath;
-    this.fs = fs;
+    this.storage = storage;
+    this.fs = (FileSystem) storage.getFileSystem();
     this.metaClient = metaClient;
     testTableState = HoodieTestTableState.of();
     this.context = context;
@@ -162,7 +171,7 @@ public class HoodieTestTable {
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
     testTableState = HoodieTestTableState.of();
-    return new HoodieTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient);
+    return new HoodieTestTable(metaClient.getBasePath(), metaClient.getRawHoodieStorage(), metaClient);
   }
 
   public void setNonPartitioned() {
@@ -280,6 +289,14 @@ public class HoodieTestTable {
     return this;
   }
 
+  public void moveCompleteCommitToInflight(String instantTime) throws IOException {
+    if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+      FileCreateUtils.deleteCommit(basePath, instantTime);
+    } else {
+      FileCreateUtils.deleteDeltaCommit(basePath, instantTime);
+    }
+  }
+
   public HoodieTestTable addDeltaCommit(String instantTime) throws Exception {
     createRequestedDeltaCommit(basePath, instantTime);
     createInflightDeltaCommit(basePath, instantTime);
@@ -348,7 +365,7 @@ public class HoodieTestTable {
 
   public HoodieTestTable addClean(String instantTime) throws IOException {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(EMPTY_STRING, EMPTY_STRING, EMPTY_STRING),
-        EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
+        EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
     HoodieCleanStat cleanStats = new HoodieCleanStat(
         HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
         HoodieTestUtils.DEFAULT_PARTITION_PATHS[RANDOM.nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
@@ -357,19 +374,19 @@ public class HoodieTestTable {
         Collections.emptyList(),
         instantTime,
         "");
-    HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
+    HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats), Collections.EMPTY_MAP);
     return HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
   }
 
   public Pair<HoodieCleanerPlan, HoodieCleanMetadata> getHoodieCleanMetadata(String commitTime, HoodieTestTableState testTableState) {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(commitTime, CLEAN_ACTION, EMPTY_STRING),
-        EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
+        EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
     List<HoodieCleanStat> cleanStats = new ArrayList<>();
     for (Map.Entry<String, List<String>> entry : testTableState.getPartitionToFileIdMapForCleaner(commitTime).entrySet()) {
       cleanStats.add(new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
           entry.getKey(), entry.getValue(), entry.getValue(), Collections.emptyList(), commitTime, ""));
     }
-    return Pair.of(cleanerPlan, convertCleanMetadata(commitTime, Option.of(0L), cleanStats));
+    return Pair.of(cleanerPlan, convertCleanMetadata(commitTime, Option.of(0L), cleanStats, Collections.EMPTY_MAP));
   }
 
   public HoodieTestTable addRequestedRollback(String instantTime, HoodieRollbackPlan plan) throws IOException {
@@ -555,7 +572,7 @@ public class HoodieTestTable {
     if (newFileId.isPresent() && !StringUtils.isNullOrEmpty(newFileId.get())) {
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setPartitionPath(partition);
-      writeStat.setPath(partition + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", newFileId.get()));
+      writeStat.setPath(partition + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", newFileId.get(), BASE_FILE_EXTENSION));
       writeStat.setFileId(newFileId.get());
       writeStat.setTotalWriteBytes(1);
       writeStat.setFileSizeInBytes(1);
@@ -578,7 +595,7 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable deleteSavepoint(String instantTime) throws IOException {
-    deleteSavepointCommit(basePath, instantTime, fs);
+    deleteSavepointCommit(basePath, instantTime, storage);
     return this;
   }
 
@@ -738,22 +755,26 @@ public class HoodieTestTable {
 
   public boolean logFileExists(String partition, String instantTime, String fileId, int version) {
     try {
-      return fs.exists(new Path(Paths.get(basePath, partition, logFileName(instantTime, fileId, version)).toString()));
+      return fs.exists(new Path(
+          Paths.get(basePath, partition, logFileName(instantTime, fileId, version)).toString()));
     } catch (IOException e) {
       throw new HoodieTestTableException(e);
     }
   }
 
   public Path getInflightCommitFilePath(String instantTime) {
-    return new Path(Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME, instantTime + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION).toUri());
+    return new Path(Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME,
+        instantTime + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION).toUri());
   }
 
-  public Path getCommitFilePath(String instantTime) {
-    return HoodieTestUtils.getCompleteInstantPath(fs, new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME), instantTime, HoodieTimeline.COMMIT_ACTION);
+  public StoragePath getCommitFilePath(String instantTime) {
+    return HoodieTestUtils.getCompleteInstantPath(storage, new StoragePath(basePath,
+        HoodieTableMetaClient.METAFOLDER_NAME), instantTime, HoodieTimeline.COMMIT_ACTION);
   }
 
   public Path getRequestedCompactionFilePath(String instantTime) {
-    return new Path(Paths.get(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME, instantTime + HoodieTimeline.REQUESTED_COMPACTION_EXTENSION).toUri());
+    return new Path(Paths.get(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME,
+        instantTime + HoodieTimeline.REQUESTED_COMPACTION_EXTENSION).toUri());
   }
 
   public Path getPartitionPath(String partition) {
@@ -791,33 +812,38 @@ public class HoodieTestTable {
     return this.inflightCommits;
   }
 
-  public FileStatus[] listAllBaseFiles() throws IOException {
+  public List<StoragePathInfo> listAllBaseFiles() throws IOException {
     return listAllBaseFiles(HoodieFileFormat.PARQUET.getFileExtension());
   }
 
-  public FileStatus[] listAllBaseFiles(String fileExtension) throws IOException {
-    return FileSystemTestUtils.listRecursive(fs, new Path(basePath)).stream()
-        .filter(status -> status.getPath().getName().endsWith(fileExtension))
-        .toArray(FileStatus[]::new);
+  public List<StoragePathInfo> listAllBaseFiles(String fileExtension) throws IOException {
+    return FileSystemTestUtils.listRecursive(storage, new StoragePath(basePath)).stream()
+        .filter(fileInfo -> fileInfo.getPath().getName().endsWith(fileExtension))
+        .collect(Collectors.toList());
   }
 
-  public FileStatus[] listAllLogFiles() throws IOException {
+  public List<StoragePathInfo> listAllLogFiles() throws IOException {
     return listAllLogFiles(HoodieFileFormat.HOODIE_LOG.getFileExtension());
   }
 
-  public FileStatus[] listAllLogFiles(String fileExtension) throws IOException {
-    return FileSystemTestUtils.listRecursive(fs, new Path(basePath)).stream()
-        .filter(status -> !status.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))
-        .filter(status -> status.getPath().getName().contains(fileExtension))
-        .toArray(FileStatus[]::new);
+  public List<StoragePathInfo> listAllLogFiles(String fileExtension) throws IOException {
+    return FileSystemTestUtils.listRecursive(storage, new StoragePath(basePath)).stream()
+        .filter(
+            fileInfo -> !fileInfo.getPath().toString()
+                .contains(HoodieTableMetaClient.METAFOLDER_NAME))
+        .filter(fileInfo -> fileInfo.getPath().getName().contains(fileExtension))
+        .collect(Collectors.toList());
   }
 
-  public FileStatus[] listAllBaseAndLogFiles() throws IOException {
-    return Stream.concat(Stream.of(listAllBaseFiles()), Stream.of(listAllLogFiles())).toArray(FileStatus[]::new);
+  public List<StoragePathInfo> listAllBaseAndLogFiles() throws IOException {
+    List<StoragePathInfo> result = new ArrayList<>(listAllBaseFiles());
+    result.addAll(listAllLogFiles());
+    return result;
   }
 
   public FileStatus[] listAllFilesInPartition(String partitionPath) throws IOException {
-    return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, partitionPath).toString())).stream()
+    return FileSystemTestUtils.listRecursive(fs,
+            new Path(Paths.get(basePath, partitionPath).toString())).stream()
         .filter(entry -> {
           boolean toReturn = true;
           String filePath = entry.getPath().toString();
@@ -960,6 +986,19 @@ public class HoodieTestTable {
     Pair<HoodieCleanerPlan, HoodieCleanMetadata> cleanerMeta = getHoodieCleanMetadata(commitTime, testTableState);
     addClean(commitTime, cleanerMeta.getKey(), cleanerMeta.getValue());
     return cleanerMeta.getValue();
+  }
+
+  /**
+   * Repeats the same cleaning based on the cleaner plan and clean commit metadata.
+   *
+   * @param cleanCommitTime new clean commit time to use.
+   * @param cleanerPlan     cleaner plan to write to the metadata.
+   * @param cleanMetadata   clean metadata in data table to use.
+   */
+  public void repeatClean(String cleanCommitTime,
+                          HoodieCleanerPlan cleanerPlan,
+                          HoodieCleanMetadata cleanMetadata) throws IOException {
+    addClean(cleanCommitTime, cleanerPlan, cleanMetadata);
   }
 
   public HoodieCleanMetadata doCleanBasedOnCommits(String cleanCommitTime, List<String> commitsToClean) throws IOException {

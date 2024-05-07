@@ -21,7 +21,6 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -33,18 +32,13 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -57,30 +51,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Test cases for stream write.
  */
 public class TestWriteCopyOnWrite extends TestWriteBase {
-
-  protected Configuration conf;
-
-  @TempDir
-  File tempFile;
-
-  @BeforeEach
-  public void before() {
-    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
-    setUp(conf);
-  }
-
-  @AfterEach
-  public void after() {
-    conf = null;
-  }
-
-  /**
-   * Override to have custom configuration.
-   */
-  protected void setUp(Configuration conf) {
-    // for subclass extension
-  }
 
   @Test
   public void testCheckpoint() throws Exception {
@@ -148,6 +118,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
+  // Only when Job level fails with INSERT operationType can we roll back the unfinished instant.
+  // Task level failed retry, we should reuse the unfinished Instant with INSERT operationType
   @Test
   public void testPartialFailover() throws Exception {
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
@@ -163,7 +135,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertNextEvent()
         // if the write task can not fetch any pending instant when starts up(the coordinator restarts),
         // it will send an event to the coordinator
-        .coordinatorFails()
+        .restartCoordinator()
         .subTaskFails(0, 2)
         // the subtask can not fetch the instant to write until a new instant is initialized
         .checkpointThrows(4, "Timeout(1000ms) while waiting for instant initialize")
@@ -172,6 +144,13 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // the last checkpoint instant was rolled back by subTaskFails(0, 2)
         // with EAGER cleaning strategy
         .assertNoEvent()
+        .checkpoint(4)
+        .assertNextEvent()
+        .subTaskFails(0, 4)
+        // the last checkpoint instant can not be rolled back by subTaskFails(0, 4) with INSERT write operationType
+        // because last data has been snapshot by checkpoint complete but instant has not been committed
+        // so we need re-commit it
+        .assertEmptyEvent()
         .end();
   }
 
@@ -539,17 +518,18 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
       // now start pipeline2 and commit the txn
       Configuration conf2 = conf.clone();
       conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
-      preparePipeline(conf2)
+      TestHarness pipeline2 = preparePipeline(conf2)
           .consume(TestData.DATA_SET_INSERT_DUPLICATES)
           .assertEmptyDataFiles()
           .checkpoint(1)
           .assertNextEvent()
           .checkpointComplete(1)
-          .checkWrittenData(EXPECTED3, 1)
-          .end();
+          .checkWrittenData(EXPECTED3, 1);
+      // do not end the pipeline2 immediately because the embedded timeline server is reused.
       // step to commit the 2nd txn
       validateConcurrentCommit(pipeline1);
       pipeline1.end();
+      pipeline2.end();
     }
   }
 
@@ -669,21 +649,5 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // with LAZY cleaning strategy because clean action could roll back failed writes.
         .assertNextEvent()
         .end();
-  }
-
-  // -------------------------------------------------------------------------
-  //  Utilities
-  // -------------------------------------------------------------------------
-
-  private TestHarness preparePipeline() throws Exception {
-    return preparePipeline(conf);
-  }
-
-  protected TestHarness preparePipeline(Configuration conf) throws Exception {
-    return TestHarness.instance().preparePipeline(tempFile, conf);
-  }
-
-  protected HoodieTableType getTableType() {
-    return HoodieTableType.COPY_ON_WRITE;
   }
 }

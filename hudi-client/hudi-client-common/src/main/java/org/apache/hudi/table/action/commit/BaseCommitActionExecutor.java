@@ -93,7 +93,8 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     this.extraMetadata = extraMetadata;
     this.taskContextSupplier = context.getTaskContextSupplier();
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link BaseHoodieWriteClient}.
-    this.txnManagerOption = config.shouldAutoCommit() ? Option.of(new TransactionManager(config, table.getMetaClient().getFs())) : Option.empty();
+    this.txnManagerOption = config.shouldAutoCommit()
+        ? Option.of(new TransactionManager(config, table.getMetaClient().getStorage())) : Option.empty();
     if (this.txnManagerOption.isPresent() && this.txnManagerOption.get().isLockRequired()) {
       // these txn metadata are only needed for auto commit when optimistic concurrent control is also enabled
       this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
@@ -263,6 +264,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
                                                               Iterator<HoodieRecord<T>> recordItr) throws IOException;
 
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> executeClustering(HoodieClusteringPlan clusteringPlan) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Clustering records for " + config.getTableName());
     HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
     // Mark instant as clustering inflight
     table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
@@ -285,6 +287,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
     commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
+      LOG.info("Found empty commit metadata for clustering with instant time " + instantTime);
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));

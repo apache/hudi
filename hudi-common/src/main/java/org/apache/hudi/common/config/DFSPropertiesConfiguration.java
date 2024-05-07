@@ -24,10 +24,11 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +62,8 @@ public class DFSPropertiesConfiguration {
   public static final String DEFAULT_PROPERTIES_FILE = "hudi-defaults.conf";
   public static final String CONF_FILE_DIR_ENV_NAME = "HUDI_CONF_DIR";
   public static final String DEFAULT_CONF_FILE_DIR = "file:/etc/hudi/conf";
-  public static final Path DEFAULT_PATH = new Path(DEFAULT_CONF_FILE_DIR + "/" + DEFAULT_PROPERTIES_FILE);
+  public static final StoragePath DEFAULT_PATH = new StoragePath(
+      DEFAULT_CONF_FILE_DIR + "/" + DEFAULT_PROPERTIES_FILE);
 
   // props read from hudi-defaults.conf
   private static TypedProperties GLOBAL_PROPS = loadGlobalProps();
@@ -69,7 +71,7 @@ public class DFSPropertiesConfiguration {
   @Nullable
   private final Configuration hadoopConfig;
 
-  private Path mainFilePath;
+  private StoragePath mainFilePath;
 
   // props read from user defined configuration file or input stream
   private final HoodieConfig hoodieConfig;
@@ -77,7 +79,7 @@ public class DFSPropertiesConfiguration {
   // Keep track of files visited, to detect loops
   private final Set<String> visitedFilePaths;
 
-  public DFSPropertiesConfiguration(@Nonnull Configuration hadoopConf, @Nonnull Path filePath) {
+  public DFSPropertiesConfiguration(@Nonnull Configuration hadoopConf, @Nonnull StoragePath filePath) {
     this.hadoopConfig = hadoopConf;
     this.mainFilePath = filePath;
     this.hoodieConfig = new HoodieConfig();
@@ -103,7 +105,7 @@ public class DFSPropertiesConfiguration {
     URL configFile = Thread.currentThread().getContextClassLoader().getResource(DEFAULT_PROPERTIES_FILE);
     if (configFile != null) {
       try (BufferedReader br = new BufferedReader(new InputStreamReader(configFile.openStream()))) {
-        conf.addPropsFromStream(br, new Path(configFile.toURI()));
+        conf.addPropsFromStream(br, new StoragePath(configFile.toURI()));
         return conf.getProps();
       } catch (URISyntaxException e) {
         throw new HoodieException(String.format("Provided props file url is invalid %s", configFile), e);
@@ -113,7 +115,7 @@ public class DFSPropertiesConfiguration {
       }
     }
     // Try loading the external config file from local file system
-    Option<Path> defaultConfPath = getConfPathFromEnv();
+    Option<StoragePath> defaultConfPath = getConfPathFromEnv();
     if (defaultConfPath.isPresent()) {
       conf.addPropsFromFile(defaultConfPath.get());
     } else {
@@ -137,20 +139,20 @@ public class DFSPropertiesConfiguration {
   /**
    * Add properties from external configuration files.
    *
-   * @param filePath File path for configuration file
+   * @param filePath file path for configuration file.
    */
-  public void addPropsFromFile(Path filePath) {
+  public void addPropsFromFile(StoragePath filePath) {
     if (visitedFilePaths.contains(filePath.toString())) {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
 
-    FileSystem fs = HadoopFSUtils.getFs(
-        filePath.toString(),
-        Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+        filePath,
+        HadoopFSUtils.getStorageConf(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new))
     );
 
     try {
-      if (filePath.equals(DEFAULT_PATH) && !fs.exists(filePath)) {
+      if (filePath.equals(DEFAULT_PATH) && !storage.exists(filePath)) {
         LOG.warn("Properties file " + filePath + " not found. Ignoring to load props file");
         return;
       }
@@ -158,7 +160,7 @@ public class DFSPropertiesConfiguration {
       throw new HoodieIOException("Cannot check if the properties file exist: " + filePath, ioe);
     }
 
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(filePath)))) {
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(storage.open(filePath)))) {
       visitedFilePaths.add(filePath.toString());
       addPropsFromStream(reader, filePath);
     } catch (IOException ioe) {
@@ -173,7 +175,7 @@ public class DFSPropertiesConfiguration {
    * @param reader Buffered Reader
    * @throws IOException
    */
-  public void addPropsFromStream(BufferedReader reader, Path cfgFilePath) throws IOException {
+  public void addPropsFromStream(BufferedReader reader, StoragePath cfgFilePath) throws IOException {
     try {
       reader.lines().forEach(line -> {
         if (!isValidLine(line)) {
@@ -181,12 +183,13 @@ public class DFSPropertiesConfiguration {
         }
         String[] split = splitProperty(line);
         if (line.startsWith("include=") || line.startsWith("include =")) {
-          Path providedPath = new Path(split[1]);
-          FileSystem providedFs = HadoopFSUtils.getFs(split[1], hadoopConfig);
+          StoragePath providedPath = new StoragePath(split[1]);
+          HoodieStorage providedStorage = HoodieStorageUtils.getStorage(
+              split[1], HadoopFSUtils.getStorageConf(hadoopConfig));
           // In the case that only filename is provided, assume it's in the same directory.
-          if ((!providedPath.isAbsolute() || StringUtils.isNullOrEmpty(providedFs.getScheme()))
+          if ((!providedPath.isAbsolute() || StringUtils.isNullOrEmpty(providedStorage.getScheme()))
               && cfgFilePath != null) {
-            providedPath = new Path(cfgFilePath.getParent(), split[1]);
+            providedPath = new StoragePath(cfgFilePath.getParent(), split[1]);
           }
           addPropsFromFile(providedPath);
         } else {
@@ -219,7 +222,7 @@ public class DFSPropertiesConfiguration {
     return new TypedProperties(hoodieConfig.getProps(includeGlobalProps));
   }
 
-  private static Option<Path> getConfPathFromEnv() {
+  private static Option<StoragePath> getConfPathFromEnv() {
     String confDir = System.getenv(CONF_FILE_DIR_ENV_NAME);
     if (confDir == null) {
       LOG.warn("Cannot find " + CONF_FILE_DIR_ENV_NAME + ", please set it as the dir of " + DEFAULT_PROPERTIES_FILE);
@@ -228,7 +231,7 @@ public class DFSPropertiesConfiguration {
     if (StringUtils.isNullOrEmpty(URI.create(confDir).getScheme())) {
       confDir = "file://" + confDir;
     }
-    return Option.of(new Path(confDir + File.separator + DEFAULT_PROPERTIES_FILE));
+    return Option.of(new StoragePath(confDir + File.separator + DEFAULT_PROPERTIES_FILE));
   }
 
   private String[] splitProperty(String line) {

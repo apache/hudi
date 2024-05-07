@@ -20,8 +20,7 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-
-import org.apache.hadoop.fs.FileStatus;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -116,9 +115,9 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   /**
    * Load the instant from the meta FileStatus.
    */
-  public HoodieInstant(FileStatus fileStatus) {
+  public HoodieInstant(StoragePathInfo pathInfo) {
     // First read the instant timestamp. [==>20170101193025<==].commit
-    String fileName = fileStatus.getPath().getName();
+    String fileName = pathInfo.getPath().getName();
     Matcher matcher = NAME_FORMAT.matcher(fileName);
     if (matcher.find()) {
       String[] timestamps = matcher.group(1).split(UNDERSCORE);

@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
@@ -106,7 +107,7 @@ public class HiveSyncFunctionalTestHarness {
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(hadoopConf, hiveSyncConfig.getString(META_SYNC_BASE_PATH));
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
     return new HoodieHiveSyncClient(hiveSyncConfig);
   }
 

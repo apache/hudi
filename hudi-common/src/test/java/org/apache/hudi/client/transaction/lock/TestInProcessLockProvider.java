@@ -166,6 +166,9 @@ public class TestInProcessLockProvider {
     Assertions.assertTrue(writer3Completed.get());
     Assertions.assertEquals(lockProviderList.get(0).getLock(), lockProviderList.get(1).getLock());
     Assertions.assertEquals(lockProviderList.get(1).getLock(), lockProviderList.get(2).getLock());
+
+    writer2.interrupt();
+    writer3.interrupt();
   }
 
   @Test
@@ -254,6 +257,8 @@ public class TestInProcessLockProvider {
       //
     }
     Assertions.assertTrue(writer2Completed.get());
+
+    writer2.interrupt();
   }
 
   @Test
@@ -317,6 +322,9 @@ public class TestInProcessLockProvider {
     }
     Assertions.assertTrue(writer2Stream1Completed.get());
     Assertions.assertTrue(writer2Stream2Completed.get());
+
+    writer2Stream1.interrupt();
+    writer2Stream2.interrupt();
   }
 
   @Test
@@ -373,6 +381,8 @@ public class TestInProcessLockProvider {
     assertDoesNotThrow(() -> {
       inProcessLockProvider.unlock();
     });
+
+    writer2.interrupt();
   }
 
   @Test
@@ -414,6 +424,9 @@ public class TestInProcessLockProvider {
       // unlock by main thread should succeed.
       inProcessLockProvider.unlock();
     });
+
+    writer2.interrupt();
+    writer3.interrupt();
   }
 
   @Test
@@ -472,6 +485,9 @@ public class TestInProcessLockProvider {
     // Make sure both writers actually completed good
     Assertions.assertTrue(writer1Completed.get());
     Assertions.assertTrue(writer2Completed.get());
+
+    writer1.interrupt();
+    writer2.interrupt();
   }
 
   @Test

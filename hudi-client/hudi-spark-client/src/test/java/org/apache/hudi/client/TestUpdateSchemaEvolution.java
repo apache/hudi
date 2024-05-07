@@ -24,9 +24,9 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
@@ -36,6 +36,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
@@ -67,9 +68,9 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
   @BeforeEach
   public void setUp() throws Exception {
     initPath();
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath);
     initSparkContexts("TestUpdateSchemaEvolution");
-    initFileSystem();
+    initHoodieStorage();
     initTimelineService();
   }
 
@@ -101,7 +102,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
 
     final Path commitFile = new Path(config.getBasePath() + "/.hoodie/"
         + HoodieTimeline.makeCommitFileName("100" + "_" + InProcessTimeGenerator.createNewInstantTime()));
-    HadoopFSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf()).create(commitFile);
+    HadoopFSUtils.getFs(basePath, HoodieTestUtils.getDefaultStorageConf()).create(commitFile);
     return statuses.get(0);
   }
 
@@ -134,8 +135,8 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(updateTable.getConfig(), "101", updateTable,
             updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
         List<GenericRecord> oldRecords = BaseFileUtils.getInstance(updateTable.getBaseFileFormat())
-            .readAvroRecords(updateTable.getHadoopConf(),
-                new Path(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
+            .readAvroRecords(updateTable.getStorageConf(),
+                new StoragePath(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
                 mergeHandle.getWriterSchemaWithMetaFields());
         for (GenericRecord rec : oldRecords) {
           // TODO create hoodie record with rec can getRecordKey

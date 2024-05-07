@@ -30,12 +30,12 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -70,7 +70,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
   public void setUp() throws Exception {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     initMetaClient();
     HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
@@ -131,8 +131,9 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
 
     final String c1 = "20160401010101";
-    Path baseFilePath = testTable.forCommit(c1).withInserts(p2, fileId2, Collections.emptyList());
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    StoragePath baseFilePath = testTable.forCommit(c1)
+        .withInserts(p2, fileId2, Collections.emptyList());
+    long baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(p2,
         k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation(c1, WriteOperationType.UPSERT, Collections.singletonList(p2),
@@ -141,18 +142,18 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     final String c2 = "20150312101010";
     testTable.forCommit(c2);
     baseFilePath = testTable.withInserts(p3, fileId1, Collections.emptyList());
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(p3,
         k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
 
     baseFilePath = testTable.withInserts(p3, fileId3, Collections.singletonList(record1));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(p3,
         k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
 
     baseFilePath = testTable.withInserts(p3, fileId4, Arrays.asList(record2, record3, record4));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(p3,
         k -> new ArrayList<>()).add(Pair.of(fileId4, Integer.valueOf((int) baseFileLength)));
 
@@ -276,16 +277,18 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     String commitTime = "0000001";
-    Path baseFilePath = testTable.forCommit(commitTime).withInserts(partition2, fileId1, Collections.singletonList(record1));
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    StoragePath baseFilePath = testTable.forCommit(commitTime)
+        .withInserts(partition2, fileId1, Collections.singletonList(record1));
+    long baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partition2,
         k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Collections.singletonList(partition2),
         partitionToFilesNameLengthMap, false, false);
 
     commitTime = "0000002";
-    baseFilePath = testTable.forCommit(commitTime).withInserts(partition3, fileId2, Collections.emptyList());
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath =
+        testTable.forCommit(commitTime).withInserts(partition3, fileId2, Collections.emptyList());
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(partition3,
         k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
@@ -293,8 +296,9 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         partitionToFilesNameLengthMap, false, false);
 
     commitTime = "0000003";
-    baseFilePath = testTable.forCommit(commitTime).withInserts(partition3, fileId3, Collections.singletonList(record2));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath = testTable.forCommit(commitTime)
+        .withInserts(partition3, fileId3, Collections.singletonList(record2));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(partition3,
         k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
@@ -302,8 +306,9 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         partitionToFilesNameLengthMap, false, false);
 
     commitTime = "0000004";
-    baseFilePath = testTable.forCommit(commitTime).withInserts(partition3, fileId4, Collections.singletonList(record4));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath = testTable.forCommit(commitTime)
+        .withInserts(partition3, fileId4, Collections.singletonList(record4));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(partition3,
         k -> new ArrayList<>()).add(Pair.of(fileId4, Integer.valueOf((int) baseFileLength)));

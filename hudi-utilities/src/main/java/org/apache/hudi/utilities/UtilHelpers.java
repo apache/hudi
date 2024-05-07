@@ -46,7 +46,10 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
@@ -66,6 +69,7 @@ import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
+import org.apache.hudi.utilities.streamer.StreamContext;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -156,6 +160,24 @@ public class UtilHelpers {
     }
   }
 
+  public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
+                                    SparkSession sparkSession, HoodieIngestionMetrics metrics, StreamContext streamContext)
+      throws IOException {
+    try {
+      try {
+        return (Source) ReflectionUtils.loadClass(sourceClass,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
+                SparkSession.class,
+                HoodieIngestionMetrics.class, StreamContext.class},
+            cfg, jssc, sparkSession, metrics, streamContext);
+      } catch (HoodieException e) {
+        return createSource(sourceClass, cfg, jssc, sparkSession, streamContext.getSchemaProvider(), metrics);
+      }
+    } catch (Throwable e) {
+      throw new IOException("Could not load source class " + sourceClass, e);
+    }
+  }
+
   public static JsonKafkaSourcePostProcessor createJsonKafkaSourcePostProcessor(String postProcessorClassNames, TypedProperties props) throws IOException {
     if (StringUtils.isNullOrEmpty(postProcessorClassNames)) {
       return null;
@@ -224,13 +246,15 @@ public class UtilHelpers {
   public static InitialCheckPointProvider createInitialCheckpointProvider(
       String className, TypedProperties props) throws IOException {
     try {
-      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[]{TypedProperties.class}, props);
+      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
     } catch (Throwable e) {
       throw new IOException("Could not load initial checkpoint provider class " + className, e);
     }
   }
 
-  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
+  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig,
+                                                      StoragePath cfgPath,
+                                                      List<String> overriddenProps) {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
@@ -261,7 +285,7 @@ public class UtilHelpers {
   public static TypedProperties buildProperties(Configuration hadoopConf, String propsFilePath, List<String> props) {
     return StringUtils.isNullOrEmpty(propsFilePath)
         ? UtilHelpers.buildProperties(props)
-        : UtilHelpers.readConfig(hadoopConf, new Path(propsFilePath), props)
+        : UtilHelpers.readConfig(hadoopConf, new StoragePath(propsFilePath), props)
         .getProps(true);
   }
 
@@ -556,19 +580,25 @@ public class UtilHelpers {
 
   public static SchemaProvider getSchemaProviderForKafkaSource(SchemaProvider provider, TypedProperties cfg, JavaSparkContext jssc) {
     if (KafkaOffsetPostProcessor.Config.shouldAddOffsets(cfg)) {
-      return new SchemaProviderWithPostProcessor(provider, Option.ofNullable(new KafkaOffsetPostProcessor(cfg, jssc)));
+      return new SchemaProviderWithPostProcessor(provider,
+          Option.ofNullable(new KafkaOffsetPostProcessor(cfg, jssc)));
     }
     return provider;
   }
 
-  public static SchemaProvider createRowBasedSchemaProvider(StructType structType, TypedProperties cfg, JavaSparkContext jssc) {
+  public static SchemaProvider createRowBasedSchemaProvider(StructType structType,
+                                                            TypedProperties cfg,
+                                                            JavaSparkContext jssc) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
 
-  public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc, FileSystem fs, String basePath, HoodieTableMetaClient tableMetaClient) {
+  public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc,
+                                                    HoodieStorage storage,
+                                                    String basePath,
+                                                    HoodieTableMetaClient tableMetaClient) {
     try {
-      if (FSUtils.isTableExists(basePath, fs)) {
+      if (FSUtils.isTableExists(basePath, storage)) {
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
 
         return tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false);
@@ -583,7 +613,7 @@ public class UtilHelpers {
   public static HoodieTableMetaClient createMetaClient(
       JavaSparkContext jsc, String basePath, boolean shouldLoadActiveTimelineOnLoad) {
     return HoodieTableMetaClient.builder()
-        .setConf(jsc.hadoopConfiguration())
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
         .setBasePath(basePath)
         .setLoadActiveTimelineOnLoad(shouldLoadActiveTimelineOnLoad)
         .build();
@@ -608,6 +638,7 @@ public class UtilHelpers {
       } while (ret != 0 && maxRetryCount-- > 0);
     } catch (Throwable t) {
       LOG.error(errorMessage, t);
+      throw new RuntimeException("Failed in retry", t);
     }
     return ret;
   }

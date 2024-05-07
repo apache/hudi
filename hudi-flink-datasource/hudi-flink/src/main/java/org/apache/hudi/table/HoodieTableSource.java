@@ -46,9 +46,14 @@ import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
+import org.apache.hudi.source.filedistribution.partitioner.StreamReadAppendPartitioner;
+import org.apache.hudi.source.filedistribution.partitioner.StreamReadBucketIndexPartitioner;
+import org.apache.hudi.source.filedistribution.selector.StreamReadAppendKeySelector;
+import org.apache.hudi.source.filedistribution.selector.StreamReadBucketIndexKeySelector;
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
@@ -88,7 +93,6 @@ import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -204,24 +208,18 @@ public class HoodieTableSource implements
               conf, FilePathUtils.toFlinkPath(path), tableRowType, maxCompactionMemoryInBytes, partitionPruner);
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
-          DataStream<MergeOnReadInputSplit> monitorOperatorStream = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
+          SingleOutputStreamOperator<MergeOnReadInputSplit> monitorOperatorStream = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
               .uid(Pipelines.opUID("split_monitor", conf))
               .setParallelism(1)
               .setMaxParallelism(1);
-          SingleOutputStreamOperator<RowData> source;
-          if (OptionsResolver.isAppendMode(HoodieTableSource.this.conf)) {
-            source = monitorOperatorStream
-                .transform("split_reader", typeInfo, factory)
-                .uid(Pipelines.opUID("split_reader", conf))
-                .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
-          } else {
-            source = monitorOperatorStream
-                .keyBy(MergeOnReadInputSplit::getFileId)
-                .transform("split_reader", typeInfo, factory)
-                .uid(Pipelines.opUID("split_reader", conf))
-                .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
-          }
-          return new DataStreamSource<>(source);
+
+          DataStream<MergeOnReadInputSplit> sourceWithKey = addFileDistributionStrategy(monitorOperatorStream);
+
+          SingleOutputStreamOperator<RowData> streamReadSource = sourceWithKey
+              .transform("split_reader", typeInfo, factory)
+              .uid(Pipelines.opUID("split_reader", conf))
+              .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+          return new DataStreamSource<>(streamReadSource);
         } else {
           InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
           DataStreamSource<RowData> source = execEnv.addSource(func, asSummaryString(), typeInfo);
@@ -229,6 +227,20 @@ public class HoodieTableSource implements
         }
       }
     };
+  }
+
+  /**
+   * Specify the file distribution strategy based on different upstream writing mechanisms,
+   *  to prevent hot spot issues during stream reading.
+   */
+  private DataStream<MergeOnReadInputSplit> addFileDistributionStrategy(SingleOutputStreamOperator<MergeOnReadInputSplit> source) {
+    if (OptionsResolver.isMorWithBucketIndexUpsert(conf)) {
+      return source.partitionCustom(new StreamReadBucketIndexPartitioner(conf.getInteger(FlinkOptions.READ_TASKS)), new StreamReadBucketIndexKeySelector());
+    } else if (OptionsResolver.isAppendMode(conf)) {
+      return source.partitionCustom(new StreamReadAppendPartitioner(conf.getInteger(FlinkOptions.READ_TASKS)), new StreamReadAppendKeySelector());
+    } else {
+      return source.keyBy(MergeOnReadInputSplit::getFileId);
+    }
   }
 
   @Override
@@ -339,14 +351,15 @@ public class HoodieTableSource implements
     if (relPartitionPaths.size() == 0) {
       return Collections.emptyList();
     }
-    FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
-    if (fileStatuses.length == 0) {
+    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+    if (pathInfoList.size() == 0) {
       throw new HoodieException("No files found for reading in user provided path.");
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         // file-slice after pending compaction-requested instant-time is also considered valid
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), fileStatuses);
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(),
+        pathInfoList);
     if (!fsView.getLastInstant().isPresent()) {
       return Collections.emptyList();
     }
@@ -522,16 +535,16 @@ public class HoodieTableSource implements
   }
 
   private InputFormat<RowData, ?> baseFileOnlyInputFormat() {
-    final FileStatus[] fileStatuses = getReadFiles();
-    if (fileStatuses.length == 0) {
+    final List<StoragePathInfo> pathInfoList = getReadFiles();
+    if (pathInfoList.size() == 0) {
       return InputFormats.EMPTY_INPUT_FORMAT;
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), fileStatuses);
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), pathInfoList);
     Path[] paths = fsView.getLatestBaseFiles()
-        .map(HoodieBaseFile::getFileStatus)
-        .map(FileStatus::getPath).toArray(Path[]::new);
+        .map(HoodieBaseFile::getPathInfo)
+        .map(e -> new Path(e.getPath().toUri())).toArray(Path[]::new);
 
     if (paths.length == 0) {
       return InputFormats.EMPTY_INPUT_FORMAT;
@@ -548,7 +561,7 @@ public class HoodieTableSource implements
         this.predicates,
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf),
-        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
+        this.conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE),
         this.internalSchemaManager
     );
   }
@@ -607,11 +620,11 @@ public class HoodieTableSource implements
    * Get the reader paths with partition path expanded.
    */
   @VisibleForTesting
-  public FileStatus[] getReadFiles() {
+  public List<StoragePathInfo> getReadFiles() {
     FileIndex fileIndex = getOrBuildFileIndex();
     List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
     if (relPartitionPaths.size() == 0) {
-      return new FileStatus[0];
+      return Collections.emptyList();
     }
     return fileIndex.getFilesInPartitions();
   }

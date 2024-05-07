@@ -70,7 +70,7 @@ public class HoodieMetrics {
   public static final String ARCHIVE_ACTION = "archive";
   public static final String FINALIZE_ACTION = "finalize";
   public static final String INDEX_ACTION = "index";
-  
+
   private Metrics metrics;
   // Some timers
   public String rollbackTimerName = null;
@@ -110,7 +110,7 @@ public class HoodieMetrics {
     this.config = config;
     this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
-      metrics = Metrics.getInstance(config);
+      metrics = Metrics.getInstance(config.getMetricsConfig());
       this.rollbackTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.ROLLBACK_ACTION);
       this.cleanTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.CLEAN_ACTION);
       this.archiveTimerName = getMetricsName(TIMER_ACTION, ARCHIVE_ACTION);

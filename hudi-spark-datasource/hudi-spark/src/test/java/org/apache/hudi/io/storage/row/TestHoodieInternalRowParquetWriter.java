@@ -18,8 +18,6 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -30,8 +28,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.spark.sql.Dataset;
@@ -60,7 +61,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieInternalRowParquetWriter");
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     initTestDataGenerator();
     initMetaClient();
   }
@@ -83,13 +84,14 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     HoodieWriteConfig.Builder writeConfigBuilder =
         SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort);
 
-    HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf, parquetWriteLegacyFormatEnabled);
+    HoodieRowParquetWriteSupport writeSupport = getWriteSupport(
+        writeConfigBuilder, storageConf.unwrap(), parquetWriteLegacyFormatEnabled);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
         CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
         writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
 
-    Path filePath = new Path(basePath + "/internal_row_writer.parquet");
+    StoragePath filePath = new StoragePath(basePath + "/internal_row_writer.parquet");
 
     try (HoodieInternalRowParquetWriter writer = new HoodieInternalRowParquetWriter(filePath, parquetConfig)) {
       for (InternalRow row : rows) {
@@ -108,7 +110,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     String minKey = recordKeys.stream().min(Comparator.naturalOrder()).get();
     String maxKey = recordKeys.stream().max(Comparator.naturalOrder()).get();
 
-    FileMetaData parquetMetadata = ParquetUtils.readMetadata(hadoopConf, filePath).getFileMetaData();
+    FileMetaData parquetMetadata = ParquetUtils.readMetadata(storageConf, filePath).getFileMetaData();
 
     Map<String, String> extraMetadata = parquetMetadata.getKeyValueMetaData();
 
@@ -117,7 +119,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE), BloomFilterTypeCode.DYNAMIC_V0.name());
 
     // Step 3: Make sure Bloom Filter contains all the record keys
-    BloomFilter bloomFilter = new ParquetUtils().readBloomFilterFromMetadata(hadoopConf, filePath);
+    BloomFilter bloomFilter = new ParquetUtils().readBloomFilterFromMetadata(storageConf, filePath);
     recordKeys.forEach(recordKey -> {
       assertTrue(bloomFilter.mightContain(recordKey));
     });
@@ -131,6 +133,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
         writeConfig.getBloomFilterFPP(),
         writeConfig.getDynamicBloomFilterMaxNumEntries(),
         writeConfig.getBloomFilterType());
-    return new HoodieRowParquetWriteSupport(hadoopConf, SparkDatasetTestUtils.STRUCT_TYPE, Option.of(filter), writeConfig.getStorageConfig());
+    return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(hadoopConf,
+        SparkDatasetTestUtils.STRUCT_TYPE, Option.of(filter), writeConfig);
   }
 }

@@ -18,11 +18,11 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.DummyTaskContextSupplier;
 import org.apache.hudi.common.util.collection.ImmutablePair;
-import org.junit.jupiter.api.Test;
+
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,9 +30,11 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+
 public class TestHoodieJavaEngineContext {
   private HoodieJavaEngineContext context =
-      new HoodieJavaEngineContext(new Configuration(), new DummyTaskContextSupplier());
+      new HoodieJavaEngineContext(getDefaultStorageConf(), new DummyTaskContextSupplier());
 
   @Test
   public void testMap() {

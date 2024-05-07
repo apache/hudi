@@ -20,7 +20,6 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -35,6 +34,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.repair.RepairUtils;
 
 import com.beust.jcommander.JCommander;
@@ -160,12 +163,12 @@ public class HoodieRepairTool {
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
     this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath)
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())).setBasePath(cfg.basePath)
         .setLoadActiveTimelineOnLoad(true)
         .build();
 
     this.tableMetadata = new FileSystemBackedTableMetadata(
-        context, metaClient.getTableConfig(), context.getHadoopConf(), cfg.basePath);
+        context, metaClient.getTableConfig(), context.getStorageConf(), cfg.basePath);
   }
 
   public boolean run() {
@@ -245,18 +248,18 @@ public class HoodieRepairTool {
   static boolean copyFiles(
       HoodieEngineContext context, List<String> relativeFilePaths, String sourceBasePath,
       String destBasePath) {
-    SerializableConfiguration conf = context.getHadoopConf();
+    StorageConfiguration<?> conf = context.getStorageConf();
     List<Boolean> allResults = context.parallelize(relativeFilePaths)
         .mapPartitions(iterator -> {
           List<Boolean> results = new ArrayList<>();
-          FileSystem fs = HadoopFSUtils.getFs(destBasePath, conf.get());
+          HoodieStorage storage = HoodieStorageUtils.getStorage(destBasePath, conf);
           iterator.forEachRemaining(filePath -> {
             boolean success = false;
-            Path sourcePath = new Path(sourceBasePath, filePath);
-            Path destPath = new Path(destBasePath, filePath);
+            StoragePath sourcePath = new StoragePath(sourceBasePath, filePath);
+            StoragePath destPath = new StoragePath(destBasePath, filePath);
             try {
-              if (!fs.exists(destPath)) {
-                FileIOUtils.copy(fs, sourcePath, destPath);
+              if (!storage.exists(destPath)) {
+                FileIOUtils.copy(storage, sourcePath, destPath);
                 success = true;
               }
             } catch (IOException e) {
@@ -285,7 +288,7 @@ public class HoodieRepairTool {
    */
   static List<String> listFilesFromBasePath(
       HoodieEngineContext context, String basePathStr, int expectedLevel, int parallelism) {
-    FileSystem fs = HadoopFSUtils.getFs(basePathStr, context.getHadoopConf().get());
+    FileSystem fs = HadoopFSUtils.getFs(basePathStr, context.getStorageConf());
     Path basePath = new Path(basePathStr);
     return FSUtils.getFileStatusAtLevel(
             context, fs, basePath, expectedLevel, parallelism).stream()
@@ -308,10 +311,10 @@ public class HoodieRepairTool {
    */
   static boolean deleteFiles(
       HoodieEngineContext context, String basePath, List<String> relativeFilePaths) {
-    SerializableConfiguration conf = context.getHadoopConf();
+    StorageConfiguration<?> conf = context.getStorageConf();
     return context.parallelize(relativeFilePaths)
         .mapPartitions(iterator -> {
-          FileSystem fs = HadoopFSUtils.getFs(basePath, conf.get());
+          FileSystem fs = HadoopFSUtils.getFs(basePath, conf);
           List<Boolean> results = new ArrayList<>();
           iterator.forEachRemaining(relativeFilePath -> {
             boolean success = false;
@@ -341,7 +344,8 @@ public class HoodieRepairTool {
   boolean doRepair(
       Option<String> startingInstantOption, Option<String> endingInstantOption, boolean isDryRun) throws IOException {
     // Scans all partitions to find base and log files in the base path
-    List<Path> allFilesInPartitions = HoodieDataTableUtils.getBaseAndLogFilePathsFromFileSystem(tableMetadata, cfg.basePath);
+    List<StoragePath> allFilesInPartitions =
+        HoodieDataTableUtils.getBaseAndLogFilePathsFromFileSystem(tableMetadata, cfg.basePath);
     // Buckets the files based on instant time
     // instant time -> relative paths of base and log files to base path
     Map<String, List<String>> instantToFilesMap = RepairUtils.tagInstantsOfBaseAndLogFiles(
@@ -390,10 +394,10 @@ public class HoodieRepairTool {
    * @throws IOException upon errors.
    */
   boolean undoRepair() throws IOException {
-    FileSystem fs = metaClient.getFs();
+    HoodieStorage storage = metaClient.getStorage();
     String backupPathStr = cfg.backupPath;
-    Path backupPath = new Path(backupPathStr);
-    if (!fs.exists(backupPath)) {
+    StoragePath backupPath = new StoragePath(backupPathStr);
+    if (!storage.exists(backupPath)) {
       LOG.error("Cannot find backup path: " + backupPath);
       return false;
     }
@@ -439,9 +443,9 @@ public class HoodieRepairTool {
       cfg.backupPath = "/tmp/" + BACKUP_DIR_PREFIX + randomLong;
     }
 
-    Path backupPath = new Path(cfg.backupPath);
-    if (metaClient.getFs().exists(backupPath)
-        && metaClient.getFs().listStatus(backupPath).length > 0) {
+    StoragePath backupPath = new StoragePath(cfg.backupPath);
+    if (metaClient.getStorage().exists(backupPath)
+        && metaClient.getStorage().listDirectEntries(backupPath).size() > 0) {
       LOG.error(String.format("Cannot use backup path %s: it is not empty", cfg.backupPath));
       return -1;
     }
@@ -515,7 +519,7 @@ public class HoodieRepairTool {
    * @return the {@link TypedProperties} instance.
    */
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new StoragePath(cfg.propsFilePath), cfg.configs)
         .getProps(true);
   }
 

@@ -24,6 +24,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -41,12 +42,14 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +68,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieClient.class);
 
   private static final long serialVersionUID = 1L;
-  protected final transient FileSystem fs;
+  protected final transient HoodieStorage storage;
   protected final transient HoodieEngineContext context;
   protected final transient Configuration hadoopConf;
   protected final transient HoodieMetrics metrics;
@@ -89,18 +92,20 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
-    this.hadoopConf = context.getHadoopConf().get();
-    this.fs = HadoopFSUtils.getFs(clientConfig.getBasePath(), hadoopConf);
+    this.hadoopConf = context.getStorageConf().unwrapAs((Configuration.class));
+    this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), HadoopFSUtils.getStorageConf(hadoopConf));
     this.context = context;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
     this.timelineServer = timelineServer;
     shouldStopTimelineServer = !timelineServer.isPresent();
-    this.heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
-        clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
+    this.heartbeatClient = new HoodieHeartbeatClient(storage, this.basePath,
+        clientConfig.getHoodieClientHeartbeatIntervalInMs(),
+        clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config);
-    this.txnManager = new TransactionManager(config, fs);
-    this.timeGenerator = TimeGenerators.getTimeGenerator(config.getTimeGeneratorConfig(), hadoopConf);
+    this.txnManager = new TransactionManager(config, storage);
+    this.timeGenerator = TimeGenerators.getTimeGenerator(
+        config.getTimeGeneratorConfig(), HadoopFSUtils.getStorageConf(hadoopConf));
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();
@@ -177,7 +182,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
-    return HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(config.getBasePath())
+    return HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf)).setBasePath(config.getBasePath())
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
         .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
         .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
@@ -258,12 +264,36 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       if (finalizeCtx != null) {
         Option<Long> durationInMs = Option.of(metrics.getDurationInMs(finalizeCtx.stop()));
         durationInMs.ifPresent(duration -> {
-          LOG.info("Finalize write elapsed time (milliseconds): " + duration);
+          LOG.info("Finalize write elapsed time (milliseconds): {}", duration);
           metrics.updateFinalizeWriteMetrics(duration, stats.size());
         });
       }
     } catch (HoodieIOException ioe) {
       throw new HoodieCommitException("Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
+    }
+  }
+
+  /**
+   * Write the HoodieCommitMetadata to metadata table if available.
+   *
+   * @param table         {@link HoodieTable} of interest.
+   * @param instantTime   instant time of the commit.
+   * @param metadata      instance of {@link HoodieCommitMetadata}.
+   * @param writeStatuses Write statuses of the commit
+   */
+  protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
+    if (metadataWriterOpt.isPresent()) {
+      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+        metadataWriter.updateFromWriteStatuses(metadata, writeStatuses, instantTime);
+      } catch (Exception e) {
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to update metadata", e);
+        }
+      }
     }
   }
 }

@@ -31,16 +31,18 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.FlinkTables;
@@ -59,7 +61,6 @@ import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -218,10 +219,11 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
         // load parquet records
         fileSlice.getBaseFile().ifPresent(baseFile -> {
           // filter out crushed files
-          if (!isValidFile(baseFile.getFileStatus())) {
+          if (!isValidFile(baseFile.getPathInfo())) {
             return;
           }
-          try (ClosableIterator<HoodieKey> iterator = fileUtils.getHoodieKeyIterator(this.hadoopConf, new Path(baseFile.getPath()))) {
+          try (ClosableIterator<HoodieKey> iterator = fileUtils.getHoodieKeyIterator(
+              HadoopFSUtils.getStorageConf(this.hadoopConf), new StoragePath(baseFile.getPath()))) {
             iterator.forEachRemaining(hoodieKey -> {
               output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
             });
@@ -232,7 +234,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
         List<String> logPaths = fileSlice.getLogFiles()
             .sorted(HoodieLogFile.getLogFileComparator())
             // filter out crushed files
-            .filter(logFile -> isValidFile(logFile.getFileStatus()))
+            .filter(logFile -> isValidFile(logFile.getPathInfo()))
             .map(logFile -> logFile.getPath().toString())
             .collect(toList());
 

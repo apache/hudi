@@ -204,7 +204,8 @@ public class HMSDDLExecutor implements DDLExecutor {
           partitionSd.setInputFormat(sd.getInputFormat());
           partitionSd.setOutputFormat(sd.getOutputFormat());
           partitionSd.setSerdeInfo(sd.getSerdeInfo());
-          String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.getString(META_SYNC_BASE_PATH), x).toString();
+          String fullPartitionPath =
+              FSUtils.constructAbsolutePathInHadoopPath(syncConfig.getString(META_SYNC_BASE_PATH), x).toString();
           List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(x);
           partitionSd.setLocation(fullPartitionPath);
           partitionList.add(new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null));
@@ -228,7 +229,7 @@ public class HMSDDLExecutor implements DDLExecutor {
     try {
       StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
       List<Partition> partitionList = changedPartitions.stream().map(partition -> {
-        Path partitionPath = FSUtils.getPartitionPath(syncConfig.getString(META_SYNC_BASE_PATH), partition);
+        Path partitionPath = FSUtils.constructAbsolutePathInHadoopPath(syncConfig.getString(META_SYNC_BASE_PATH), partition);
         String partitionScheme = partitionPath.toUri().getScheme();
         String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
             ? FSUtils.getDFSFullPartitionPath(syncConfig.getHadoopFileSystem(), partitionPath) : partitionPath.toString();

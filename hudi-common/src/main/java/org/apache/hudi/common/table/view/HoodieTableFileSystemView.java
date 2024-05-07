@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,8 +28,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,10 +114,13 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     super.init(metaClient, visibleActiveTimeline);
   }
 
+  /**
+   * Visible for testing
+   */
   public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileStatus[] fileStatuses) {
+                   List<StoragePathInfo> pathInfoList) {
     init(metaClient, visibleActiveTimeline);
-    addFilesToView(fileStatuses);
+    addFilesToView(pathInfoList);
   }
 
   @Override
@@ -172,9 +174,9 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    * Create a file system view, as of the given timeline, with the provided file statuses.
    */
   public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileStatus[] fileStatuses) {
+                                   List<StoragePathInfo> pathInfoList) {
     this(metaClient, visibleActiveTimeline);
-    addFilesToView(fileStatuses);
+    addFilesToView(pathInfoList);
   }
 
   /**
@@ -416,19 +418,6 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   protected Option<HoodieInstant> getReplaceInstant(final HoodieFileGroupId fileGroupId) {
     return Option.ofNullable(fgIdToReplaceInstants.get(fileGroupId));
-  }
-
-  /**
-   * Get the latest file slices for a given partition including the inflight ones.
-   *
-   * @param partitionPath
-   * @return Stream of latest {@link FileSlice} in the partition path.
-   */
-  public Stream<FileSlice> fetchLatestFileSlicesIncludingInflight(String partitionPath) {
-    return fetchAllStoredFileGroups(partitionPath)
-        .map(HoodieFileGroup::getLatestFileSlicesIncludingInflight)
-        .filter(Option::isPresent)
-        .map(Option::get);
   }
 
   @Override

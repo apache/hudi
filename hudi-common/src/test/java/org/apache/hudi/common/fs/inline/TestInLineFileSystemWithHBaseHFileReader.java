@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.fs.inline;
 
+import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.io.util.IOUtils;
 

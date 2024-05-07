@@ -437,6 +437,18 @@ public class StreamWriteOperatorCoordinator
           .filter(evt -> evt.getWriteStatuses().size() > 0)
           .findFirst().map(WriteMetadataEvent::getInstantTime)
           .orElse(WriteMetadataEvent.BOOTSTRAP_INSTANT);
+
+      // if currentInstant is pending && bootstrap event instant is empty
+      // reuse currentInstant, reject bootstrap
+      if (this.metaClient.reloadActiveTimeline().filterInflightsAndRequested().containsInstant(this.instant)
+              && instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT)
+              && this.tableState.operationType == WriteOperationType.INSERT) {
+        LOG.warn("Reuse current pending Instant {} with {} operationType, "
+                + "ignoring empty bootstrap event.", this.instant, WriteOperationType.INSERT.value());
+        reset();
+        return;
+      }
+
       initInstant(instant);
     }
   }
@@ -576,12 +588,17 @@ public class StreamWriteOperatorCoordinator
       }
     } else {
       LOG.error("Error when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
-      LOG.error("The first 100 error messages");
-      writeResults.stream().filter(WriteStatus::hasErrors).limit(100).forEach(ws -> {
-        LOG.error("Global error for partition path {} and fileID {}: {}",
-            ws.getGlobalError(), ws.getPartitionPath(), ws.getFileId());
+      LOG.error("The first 10 files with write errors:");
+      writeResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
+        if (ws.getGlobalError() != null) {
+          LOG.error("Global error for partition path {} and fileID {}: {}",
+              ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
+        }
         if (ws.getErrors().size() > 0) {
-          ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " and value " + value));
+          LOG.error("The first 100 records-level errors for partition path {} and fileID {}:",
+              ws.getPartitionPath(), ws.getFileId());
+          ws.getErrors().entrySet().stream().limit(100).forEach(entry -> LOG.error("Error for key: "
+              + entry.getKey() + " and Exception: " + entry.getValue().getMessage()));
         }
       });
       // Rolls back instant

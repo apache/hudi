@@ -26,6 +26,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -37,9 +40,10 @@ import java.io.IOException;
  */
 public class HoodieCLI {
 
-  public static Configuration conf;
+  public static StorageConfiguration<Configuration> conf;
   public static ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
-  public static FileSystem fs;
+  public static HoodieTimeGeneratorConfig timeGeneratorConfig;
+  public static HoodieStorage storage;
   public static CLIState state = CLIState.INIT;
   public static String basePath;
   protected static HoodieTableMetaClient tableMetadata;
@@ -58,6 +62,10 @@ public class HoodieCLI {
     consistencyGuardConfig = config;
   }
 
+  public static void setTimeGeneratorConfig(HoodieTimeGeneratorConfig config) {
+    timeGeneratorConfig = config;
+  }
+
   private static void setTableMetaClient(HoodieTableMetaClient tableMetadata) {
     HoodieCLI.tableMetadata = tableMetadata;
   }
@@ -73,23 +81,26 @@ public class HoodieCLI {
 
   public static boolean initConf() {
     if (HoodieCLI.conf == null) {
-      HoodieCLI.conf = HadoopFSUtils.prepareHadoopConf(new Configuration());
+      HoodieCLI.conf = HadoopFSUtils.getStorageConf(
+          HadoopFSUtils.prepareHadoopConf(new Configuration()));
       return true;
     }
     return false;
   }
 
   public static void initFS(boolean force) throws IOException {
-    if (fs == null || force) {
-      fs = (tableMetadata != null) ? tableMetadata.getFs() : FileSystem.get(conf);
+    if (storage == null || force) {
+      storage = (tableMetadata != null)
+          ? tableMetadata.getStorage()
+          : HoodieStorageUtils.getStorage(FileSystem.get(conf.unwrap()));
     }
   }
 
   public static void refreshTableMetadata() {
-    setTableMetaClient(HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(basePath).setLoadActiveTimelineOnLoad(false)
+    setTableMetaClient(HoodieTableMetaClient.builder()
+        .setConf(HoodieCLI.conf.newInstance()).setBasePath(basePath).setLoadActiveTimelineOnLoad(false)
         .setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
-        // TODO [HUDI-6884] Generate HoodieTimeGeneratorConfig from props user set
-        .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.defaultConfig(basePath))
+        .setTimeGeneratorConfig(timeGeneratorConfig == null ? HoodieTimeGeneratorConfig.defaultConfig(basePath) : timeGeneratorConfig)
         .setLayoutVersion(Option.of(layoutVersion)).build());
   }
 

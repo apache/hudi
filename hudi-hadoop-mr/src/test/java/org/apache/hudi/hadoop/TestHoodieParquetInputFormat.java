@@ -30,10 +30,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -214,8 +214,8 @@ public class TestHoodieParquetInputFormat {
   public void testInputFormatLoadWithEmptyTable() throws IOException {
     // initial hoodie table
     String bathPathStr = "/tmp/test_empty_table";
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, bathPathStr);
 
@@ -345,8 +345,8 @@ public class TestHoodieParquetInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
-            HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+        HoodieTableType.COPY_ON_WRITE, baseFileFormat);
     assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
         "When hoodie.database.name is not set, it should default to null");
 
@@ -360,8 +360,8 @@ public class TestHoodieParquetInputFormat {
     assertEquals(0, files.length,
         "We should exclude commit 100 when returning incremental pull with start commit time as 100");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
         String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
 
@@ -382,8 +382,8 @@ public class TestHoodieParquetInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1, HoodieTestUtils.HOODIE_DATABASE, true);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
-            HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+        HoodieTableType.COPY_ON_WRITE, baseFileFormat);
     assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
         "When hoodie.database.name is not set, it should default to null");
 
@@ -391,8 +391,8 @@ public class TestHoodieParquetInputFormat {
     assertEquals(10, files.length,
         "When hoodie.database.name is null, then the incremental query will not take effect");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, "");
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, "");
     assertEquals("", metaClient.getTableConfig().getDatabaseName(),
         "The hoodie.database.name should be empty");
 
@@ -400,8 +400,8 @@ public class TestHoodieParquetInputFormat {
     assertEquals(10, files.length,
         "When hoodie.database.name is empty, then the incremental query will not take effect");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
             String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
 
@@ -782,7 +782,7 @@ public class TestHoodieParquetInputFormat {
 
     Schema schema = SchemaTestUtil.getSchemaFromResource(getClass(), "/test_timetype.avsc");
     String commit = "20160628071126";
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
         HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET);
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "06", "28"));
     String fileId = FSUtils.makeBaseFileName(commit, "1-0-1", "fileid1",

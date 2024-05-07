@@ -21,9 +21,8 @@ package org.apache.hudi.table.action.index.functional;
 
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,14 +46,15 @@ public abstract class BaseHoodieFunctionalIndexClient {
     LOG.info("Registering index {} of using {}", indexName, indexType);
     String indexMetaPath = metaClient.getTableConfig().getIndexDefinitionPath()
         .orElseGet(() -> metaClient.getMetaPath()
-            + HoodieLocation.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FOLDER_NAME
-            + HoodieLocation.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FILE_NAME);
+            + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FOLDER_NAME
+            + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FILE_NAME);
     // build HoodieFunctionalIndexMetadata and then add to index definition file
     metaClient.buildFunctionalIndexDefinition(indexMetaPath, indexName, indexType, columns, options);
     // update table config if necessary
     if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.INDEX_DEFINITION_PATH) || !metaClient.getTableConfig().getIndexDefinitionPath().isPresent()) {
       metaClient.getTableConfig().setValue(HoodieTableConfig.INDEX_DEFINITION_PATH, indexMetaPath);
-      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+      HoodieTableConfig.update(metaClient.getStorage(),
+          new StoragePath(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
     }
   }
 

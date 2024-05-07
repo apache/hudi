@@ -62,9 +62,9 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
     new File(topicPath + "/year=2016/month=05/day=02/"
         + "random_snappy_2" + BASE_FILE_EXTENSION).createNewFile();
     final TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.checkpoint.provider.path", topicPath.toString());
+    props.put("hoodie.streamer.checkpoint.provider.path", topicPath.toString());
     final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
-    provider.init(HoodieTestUtils.getDefaultHadoopConf());
+    provider.init(HoodieTestUtils.getDefaultStorageConf().unwrap());
     assertEquals("topic1,0:300,1:200", provider.getCheckpoint());
   }
 
@@ -83,9 +83,9 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
     new File(topicPath + "/year=2016/month=05/day=02/"
         + "topic1+0+201+300" + BASE_FILE_EXTENSION).createNewFile();
     final TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.checkpoint.provider.path", topicPath.toString());
+    props.put("hoodie.streamer.checkpoint.provider.path", topicPath.toString());
     final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
-    provider.init(HoodieTestUtils.getDefaultHadoopConf());
+    provider.init(HoodieTestUtils.getDefaultStorageConf().unwrap());
     assertThrows(HoodieException.class, provider::getCheckpoint);
   }
 }

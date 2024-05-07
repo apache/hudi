@@ -23,8 +23,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.AbstractMigratorBase;
 import org.apache.hudi.common.util.ValidationUtils;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,8 +54,9 @@ public class CompactionV2MigrationHandler extends AbstractMigratorBase<HoodieCom
       v2CompactionOperationList = input.getOperations().stream().map(inp ->
         HoodieCompactionOperation.newBuilder().setBaseInstantTime(inp.getBaseInstantTime())
             .setFileId(inp.getFileId()).setPartitionPath(inp.getPartitionPath()).setMetrics(inp.getMetrics())
-            .setDataFilePath(inp.getDataFilePath() == null ? null : new Path(inp.getDataFilePath()).getName()).setDeltaFilePaths(
-                inp.getDeltaFilePaths().stream().map(s -> new Path(s).getName()).collect(Collectors.toList()))
+            .setDataFilePath(inp.getDataFilePath() == null ? null : new StoragePath(inp.getDataFilePath()).getName())
+            .setDeltaFilePaths(
+                inp.getDeltaFilePaths().stream().map(s -> new StoragePath(s).getName()).collect(Collectors.toList()))
         .build()).collect(Collectors.toList());
     }
     compactionPlan.setOperations(v2CompactionOperationList);

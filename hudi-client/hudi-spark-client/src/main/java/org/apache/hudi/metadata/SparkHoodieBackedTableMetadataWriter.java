@@ -18,10 +18,10 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.HoodieSparkFunctionalIndex;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
@@ -38,12 +38,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.functional.HoodieFunctionalIndex;
-import org.apache.hudi.index.functional.HoodieSparkFunctionalIndex;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.SQLContext;
@@ -79,7 +78,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    *                                 attempting to bootstrap the table.
    * @return An instance of the {@code HoodieTableMetadataWriter}
    */
-  public static HoodieTableMetadataWriter create(Configuration conf,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context,
                                                  Option<String> inflightInstantTimestamp) {
@@ -87,7 +86,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         conf, writeConfig, EAGER, context, inflightInstantTimestamp);
   }
 
-  public static HoodieTableMetadataWriter create(Configuration conf,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
@@ -96,12 +95,12 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
   }
 
-  public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
     return create(conf, writeConfig, context, Option.empty());
   }
 
-  SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
+  SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
                                        HoodieWriteConfig writeConfig,
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
@@ -120,7 +119,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       } else {
         registry = Registry.getRegistry("HoodieMetadata");
       }
-      this.metrics = Option.of(new HoodieMetadataMetrics(registry));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig()));
     } else {
       this.metrics = Option.empty();
     }
@@ -159,7 +158,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs,
                                                                HoodieFunctionalIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
-                                                               Schema readerSchema, SerializableConfiguration hadoopConf) {
+                                                               Schema readerSchema, StorageConfiguration<?> storageConf) {
     HoodieFunctionalIndex<Column, Column> functionalIndex = new HoodieSparkFunctionalIndex(
         indexDefinition.getIndexName(),
         indexDefinition.getIndexFunction(),

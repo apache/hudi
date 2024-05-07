@@ -19,7 +19,6 @@
 package org.apache.hudi.timeline.service.functional;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -33,12 +32,12 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TestHoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,9 +48,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -67,14 +67,14 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
     FileSystemViewStorageConfig sConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
 
     try {
       server = new TimelineService(localEngineContext, new Configuration(),
-          TimelineService.Config.builder().serverPort(0).build(), FileSystem.get(new Configuration()),
-          FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
+          TimelineService.Config.builder().serverPort(0).build(),
+          HoodieStorageUtils.getStorage(getDefaultStorageConf()),
+          FileSystemViewManager.createViewManager(localEngineContext, sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);
@@ -167,8 +167,10 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
   }
 
   private Stream<HoodieFileGroup> readFileGroupStream(String result, ObjectMapper mapper) throws IOException {
-    return DTOUtils.fileGroupDTOsToFileGroups((List<FileGroupDTO>) mapper.readValue(result, new TypeReference<List<FileGroupDTO>>() {}),
-        metaClient);
+    return DTOUtils.fileGroupDTOsToFileGroups(
+        (List<FileGroupDTO>) mapper.readValue(
+            result, new TypeReference<List<FileGroupDTO>>() {
+            }), metaClient);
   }
 
   private HoodieFileGroup createHoodieFileGroup() {

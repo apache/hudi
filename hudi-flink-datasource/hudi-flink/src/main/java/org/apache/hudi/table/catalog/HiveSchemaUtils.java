@@ -68,8 +68,8 @@ public class HiveSchemaUtils {
     allCols.addAll(hiveTable.getPartitionKeys());
 
     String pkConstraintName = hiveTable.getParameters().get(TableOptionProperties.PK_CONSTRAINT_NAME);
-    String pkColumnStr = hiveTable.getParameters().getOrDefault(FlinkOptions.RECORD_KEY_FIELD.key(), FlinkOptions.RECORD_KEY_FIELD.defaultValue());
-    List<String> pkColumns = StringUtils.split(pkColumnStr, ",");
+    String pkColumnStr = hiveTable.getParameters().get(FlinkOptions.RECORD_KEY_FIELD.key());
+    List<String> pkColumns = pkColumnStr == null ? new ArrayList<>() : StringUtils.split(pkColumnStr, ",");
 
     String[] colNames = new String[allCols.size()];
     DataType[] colTypes = new DataType[allCols.size()];
@@ -88,7 +88,7 @@ public class HiveSchemaUtils {
     org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder().fromFields(colNames, colTypes);
     if (!StringUtils.isNullOrEmpty(pkConstraintName)) {
       builder.primaryKeyNamed(pkConstraintName, pkColumns);
-    } else {
+    } else if (!pkColumns.isEmpty()) {
       builder.primaryKey(pkColumns);
     }
 

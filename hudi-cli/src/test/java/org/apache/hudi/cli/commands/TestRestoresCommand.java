@@ -102,7 +102,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
             .build();
 
-    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf(), config, context)) {
+    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(metaClient.getStorageConf(), config, context)) {
       HoodieTestTable hoodieTestTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context))
           .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
           .addCommit("100")

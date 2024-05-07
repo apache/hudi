@@ -22,7 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -68,6 +68,18 @@ public class DataSourceTestUtils {
       Object[] values = new Object[3];
       values[0] = HoodieTestDataGenerator.genPseudoRandomUUID(RANDOM).toString();
       values[1] = partitions.get(RANDOM.nextInt(3));
+      values[2] = new Date().getTime();
+      toReturn.add(RowFactory.create(values));
+    }
+    return toReturn;
+  }
+
+  public static List<Row> generateRandomRowsByPartition(int count, String partition) {
+    List<Row> toReturn = new ArrayList<>();
+    for (int i = 0; i < count; i++) {
+      Object[] values = new Object[3];
+      values[0] = HoodieTestDataGenerator.genPseudoRandomUUID(RANDOM).toString();
+      values[1] = partition;
       values[2] = new Date().getTime();
       toReturn.add(RowFactory.create(values));
     }
@@ -138,7 +150,7 @@ public class DataSourceTestUtils {
     while (files.hasNext()) {
       LocatedFileStatus file = files.next();
       // skip meta folder
-      if (file.isFile() && !file.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME + HoodieLocation.SEPARATOR)) {
+      if (file.isFile() && !file.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME + StoragePath.SEPARATOR)) {
         if (FSUtils.isBaseFile(file.getPath())) {
           return false;
         }

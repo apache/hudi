@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -46,15 +47,14 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
   public DistributedTestDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.numTestSourcePartitions =
-        props.getInteger(SourceTestConfig.NUM_SOURCE_PARTITIONS_PROP.key(), SourceTestConfig.NUM_SOURCE_PARTITIONS_PROP.defaultValue());
+    this.numTestSourcePartitions = ConfigUtils.getIntWithAltKeys(props, SourceTestConfig.NUM_SOURCE_PARTITIONS_PROP);
   }
 
   @Override
   protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
     int nextCommitNum = lastCkptStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
     String instantTime = String.format("%05d", nextCommitNum);
-    LOG.info("Source Limit is set to " + sourceLimit);
+    LOG.info("Source Limit is set to {}", sourceLimit);
 
     // No new data.
     if (sourceLimit <= 0) {
@@ -65,15 +65,14 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
     newProps.putAll(props);
 
     // Set the maxUniqueRecords per partition for TestDataSource
-    int maxUniqueRecords =
-        props.getInteger(SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.defaultValue());
+    int maxUniqueRecords = ConfigUtils.getIntWithAltKeys(props, SourceTestConfig.MAX_UNIQUE_RECORDS_PROP);
     String maxUniqueRecordsPerPartition = String.valueOf(Math.max(1, maxUniqueRecords / numTestSourcePartitions));
     newProps.setProperty(SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), maxUniqueRecordsPerPartition);
     int perPartitionSourceLimit = Math.max(1, (int) (sourceLimit / numTestSourcePartitions));
     JavaRDD<GenericRecord> avroRDD =
         sparkContext.parallelize(IntStream.range(0, numTestSourcePartitions).boxed().collect(Collectors.toList()),
             numTestSourcePartitions).mapPartitionsWithIndex((p, idx) -> {
-              LOG.info("Initializing source with newProps=" + newProps);
+              LOG.info("Initializing source with newProps={}", newProps);
               if (!dataGeneratorMap.containsKey(p)) {
                 initDataGen(newProps, p);
               }

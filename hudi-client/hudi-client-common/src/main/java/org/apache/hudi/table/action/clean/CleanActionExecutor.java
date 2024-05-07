@@ -69,7 +69,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime, boolean skipLocking) {
     super(context, config, table, instantTime);
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
     this.skipLocking = skipLocking;
   }
 
@@ -91,7 +91,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   private static Stream<Pair<String, PartitionCleanStat>> deleteFilesFunc(Iterator<Pair<String, CleanFileInfo>> cleanFileInfo, HoodieTable table) {
     Map<String, PartitionCleanStat> partitionCleanStatMap = new HashMap<>();
-    FileSystem fs = table.getMetaClient().getFs();
+    FileSystem fs = (FileSystem) table.getMetaClient().getStorage().getFileSystem();
 
     cleanFileInfo.forEachRemaining(partitionDelFileTuple -> {
       String partitionPath = partitionDelFileTuple.getLeft();
@@ -152,7 +152,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     partitionsToBeDeleted.forEach(entry -> {
       try {
         if (!isNullOrEmpty(entry)) {
-          deleteFileAndGetResult(table.getMetaClient().getFs(), table.getMetaClient().getBasePath() + "/" + entry);
+          deleteFileAndGetResult((FileSystem) table.getMetaClient().getStorage().getFileSystem(),
+              table.getMetaClient().getBasePath() + "/" + entry);
         }
       } catch (IOException e) {
         LOG.warn("Partition deletion failed " + entry);
@@ -219,7 +220,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
           inflightInstant.getTimestamp(),
           Option.of(timer.endTimer()),
-          cleanStats
+          cleanStats,
+          cleanerPlan.getExtraMetadata()
       );
       if (!skipLocking) {
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
@@ -233,7 +235,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       throw new HoodieIOException("Failed to clean up after commit", e);
     } finally {
       if (!skipLocking) {
-        this.txnManager.endTransaction(Option.of(inflightInstant));
+        this.txnManager.endTransaction(Option.ofNullable(inflightInstant));
       }
     }
   }

@@ -27,10 +27,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 
 public class HoodieFileGroupReaderTestUtils {
   public static HoodieFileGroupReader<IndexedRecord> createFileGroupReader(
@@ -42,14 +42,14 @@ public class HoodieFileGroupReaderTestUtils {
       long start,
       long length,
       TypedProperties properties,
-      Configuration hadoopConf,
+      StorageConfiguration<?> storageConf,
       HoodieTableConfig tableConfig,
       HoodieReaderContext<IndexedRecord> readerContext
   ) {
     assert (fileSliceOpt.isPresent());
     return new HoodieFileGroupReaderBuilder()
         .withReaderContext(readerContext)
-        .withHadoopConf(hadoopConf)
+        .withStorageConf(storageConf)
         .withFileSlice(fileSliceOpt.get())
         .withStart(start)
         .withLength(length)
@@ -61,7 +61,7 @@ public class HoodieFileGroupReaderTestUtils {
   public static class HoodieFileGroupReaderBuilder {
     private HoodieReaderContext<IndexedRecord> readerContext;
     private FileSlice fileSlice;
-    private Configuration hadoopConf;
+    private StorageConfiguration<?> storageConf;
     private TypedProperties props;
     private long start;
     private long length;
@@ -78,8 +78,8 @@ public class HoodieFileGroupReaderTestUtils {
       return this;
     }
 
-    public HoodieFileGroupReaderBuilder withHadoopConf(Configuration hadoopConf) {
-      this.hadoopConf = hadoopConf;
+    public HoodieFileGroupReaderBuilder withStorageConf(StorageConfiguration<?> storageConf) {
+      this.storageConf = storageConf;
       return this;
     }
 
@@ -113,7 +113,7 @@ public class HoodieFileGroupReaderTestUtils {
     ) {
       return new HoodieFileGroupReader<>(
           readerContext,
-          hadoopConf,
+          storageConf,
           basePath,
           latestCommitTime,
           fileSlice,

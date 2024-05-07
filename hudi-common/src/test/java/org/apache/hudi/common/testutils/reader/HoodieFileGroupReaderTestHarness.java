@@ -29,9 +29,9 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterAll;
 
@@ -40,7 +40,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultHadoopConf;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 
 public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
   protected static final String PARTITION_PATH = "any-partition-path";
@@ -55,7 +55,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
   protected static List<String> instantTimes;
 
   // Environmental variables.
-  protected static Configuration hadoopConf;
+  protected static StorageConfiguration<?> storageConf;
   protected static HoodieTestTable testTable;
   protected static HoodieReaderContext<IndexedRecord> readerContext;
   protected static TypedProperties properties;
@@ -65,7 +65,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
     properties = new TypedProperties();
     properties.setProperty(
         "hoodie.datasource.write.precombine.field", "timestamp");
-    hadoopConf = getDefaultHadoopConf();
+    storageConf = getDefaultStorageConf();
     readerContext = new HoodieTestReaderContext(
         Option.empty(), Option.empty());
   }
@@ -95,7 +95,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
 
     Option<FileSlice> fileSliceOpt =
         HoodieFileSliceTestUtils.getFileSlice(
-            readerContext.getFs(basePath, hadoopConf),
+            readerContext.getStorage(basePath, storageConf),
             keyRanges.subList(0, numFiles),
             timestamps.subList(0, numFiles),
             operationTypes.subList(0, numFiles),
@@ -117,7 +117,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             0L,
             Long.MAX_VALUE,
             properties,
-            hadoopConf,
+            storageConf,
             tableConfig,
             readerContext
         );
