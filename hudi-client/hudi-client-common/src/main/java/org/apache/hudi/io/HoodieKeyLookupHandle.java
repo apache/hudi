@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.storage.StoragePath;
