@@ -103,7 +103,7 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
    * @param referenceTime last commit time or creation time for partition
    */
   protected boolean isPartitionExpired(String referenceTime) {
-    String expiredTime = instantTimePlusMillis(fixInstantTimeCompatibility(referenceTime), ttlInMilis);
+    String expiredTime = instantTimePlusMillis(referenceTime, ttlInMilis);
     return fixInstantTimeCompatibility(instantTime).compareTo(expiredTime) > 0;
   }
 

@@ -164,6 +164,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     super(context, writeConfig, timelineService);
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
+    this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
   }
 
   protected abstract HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig);
@@ -554,8 +555,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected void mayBeCleanAndArchive(HoodieTable table) {
     autoCleanOnCommit();
-    // reload table to that timeline reflects the clean commit
-    autoArchiveOnCommit(createTable(config, hadoopConf));
+    autoArchiveOnCommit(table);
   }
 
   protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
@@ -1231,7 +1231,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.txnManager.beginTransaction(ownerInstant, Option.empty());
     try {
       tryUpgrade(metaClient, instantTime);
-      initMetadataTable(instantTime);
+      initMetadataTable(instantTime, metaClient);
     } finally {
       this.txnManager.endTransaction(ownerInstant);
     }
@@ -1242,7 +1242,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *
    * @param instantTime current inflight instant time
    */
-  protected void initMetadataTable(Option<String> instantTime) {
+  protected void initMetadataTable(Option<String> instantTime, HoodieTableMetaClient metaClient) {
     // by default do nothing.
   }
 

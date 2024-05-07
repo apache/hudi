@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -84,6 +85,80 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         EngineType.SPARK
     );
     assertTrue(result.isEmpty());
+  }
+
+  @Test
+  public void testConvertFilesToPartitionStatsRecords() throws Exception {
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    String instant1 = "20230918120000000";
+    hoodieTestTable = hoodieTestTable.addCommit(instant1);
+    String instant2 = "20230918121110000";
+    hoodieTestTable = hoodieTestTable.addCommit(instant2);
+    List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList = new ArrayList<>();
+    // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
+    DATE_PARTITIONS.forEach(p -> {
+      try {
+        String fileId1 = UUID.randomUUID().toString();
+        FileSlice fileSlice1 = new FileSlice(p, instant1, fileId1);
+        StoragePath storagePath1 = new StoragePath(hoodieTestTable.getBaseFilePath(p, fileId1).toUri());
+        writeParquetFile(
+            instant1,
+            storagePath1,
+            dataGen.generateInsertsForPartition(instant1, 10, p),
+            metaClient,
+            engineContext);
+        HoodieBaseFile baseFile1 = new HoodieBaseFile(hoodieTestTable.getBaseFilePath(p, fileId1).toString());
+        fileSlice1.setBaseFile(baseFile1);
+        String fileId2 = UUID.randomUUID().toString();
+        FileSlice fileSlice2 = new FileSlice(p, instant2, fileId2);
+        StoragePath storagePath2 = new StoragePath(hoodieTestTable.getBaseFilePath(p, fileId2).toUri());
+        writeParquetFile(
+            instant2,
+            storagePath2,
+            dataGen.generateInsertsForPartition(instant2, 10, p),
+            metaClient,
+            engineContext);
+        HoodieBaseFile baseFile2 = new HoodieBaseFile(hoodieTestTable.getBaseFilePath(p, fileId2).toString());
+        fileSlice2.setBaseFile(baseFile2);
+        partitionInfoList.add(new HoodieTableMetadataUtil.DirectoryInfo(
+            p,
+            metaClient.getStorage().listDirectEntries(Arrays.asList(storagePath1, storagePath2)),
+            instant2,
+            Collections.emptySet()));
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    });
+
+    List<String> columnsToIndex = Arrays.asList("rider", "driver");
+    HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
+        engineContext,
+        partitionInfoList,
+        HoodieMetadataConfig.newBuilder().enable(true)
+            .withMetadataIndexColumnStats(true)
+            .withMetadataIndexPartitionStats(true)
+            .withColumnStatsIndexForColumns("rider,driver")
+            .withPartitionStatsIndexParallelism(1)
+            .build(),
+        metaClient);
+    // Validate the result.
+    List<HoodieRecord> records = result.collectAsList();
+    // 3 partitions * 2 columns = 6 partition stats records
+    assertEquals(6, records.size());
+    assertEquals(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), records.get(0).getPartitionPath());
+    ((HoodieMetadataPayload) result.collectAsList().get(0).getData()).getColumnStatMetadata().get().getColumnName();
+    records.forEach(r -> {
+      HoodieMetadataPayload payload = (HoodieMetadataPayload) r.getData();
+      assertTrue(payload.getColumnStatMetadata().isPresent());
+      // instant1 < instant2 so instant1 should be in the min value and instant2 should be in the max value.
+      if (payload.getColumnStatMetadata().get().getColumnName().equals("rider")) {
+        assertEquals(String.format("{\"value\": \"rider-%s\"}", instant1), String.valueOf(payload.getColumnStatMetadata().get().getMinValue()));
+        assertEquals(String.format("{\"value\": \"rider-%s\"}", instant2), String.valueOf(payload.getColumnStatMetadata().get().getMaxValue()));
+      } else if (payload.getColumnStatMetadata().get().getColumnName().equals("driver")) {
+        assertEquals(String.format("{\"value\": \"driver-%s\"}", instant1), String.valueOf(payload.getColumnStatMetadata().get().getMinValue()));
+        assertEquals(String.format("{\"value\": \"driver-%s\"}", instant2), String.valueOf(payload.getColumnStatMetadata().get().getMaxValue()));
+      }
+    });
   }
 
   @Test

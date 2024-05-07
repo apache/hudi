@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory
 
 import java.util.stream.Collectors
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable.{Buffer, HashMap, HashSet, ListBuffer}
 
 /**
@@ -83,10 +83,10 @@ class DedupeSparkJob(basePath: String,
     val allFiles = storage.listDirectEntries(new StoragePath(s"$basePath/$duplicatedPartitionPath"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(), allFiles)
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
-    val filteredStatuses = latestFiles.map(f => f.getPath)
+    val filteredStatuses = latestFiles.asScala.map(f => f.getPath)
     LOG.info(s" List of files under partition: ${} =>  ${filteredStatuses.mkString(" ")}")
 
-    val df = sqlContext.parquetFile(filteredStatuses: _*)
+    val df = sqlContext.parquetFile(filteredStatuses.toSeq: _*)
     df.registerTempTable(tmpTableName)
     val dupeKeyDF = getDupeKeyDF(tmpTableName)
     dupeKeyDF.registerTempTable(dedupeTblName)
@@ -99,7 +99,7 @@ class DedupeSparkJob(basePath: String,
         JOIN $dedupeTblName d
         ON h.`_hoodie_record_key` = d.dupe_key
                       """
-    val dupeMap = sqlContext.sql(dupeDataSql).collectAsList().groupBy(r => r.getString(0))
+    val dupeMap = sqlContext.sql(dupeDataSql).collectAsList().asScala.groupBy(r => r.getString(0))
     getDedupePlan(dupeMap)
   }
 
@@ -196,7 +196,7 @@ class DedupeSparkJob(basePath: String,
 
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
 
-    val fileNameToPathMap = latestFiles.map(f => (f.getFileId, new Path(f.getPath))).toMap
+    val fileNameToPathMap = latestFiles.asScala.map(f => (f.getFileId, new Path(f.getPath))).toMap
     val dupeFixPlan = planDuplicateFix()
 
     // 1. Copy all latest files into the temp fix path

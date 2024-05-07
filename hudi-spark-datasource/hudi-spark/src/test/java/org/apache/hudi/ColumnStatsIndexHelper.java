@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
@@ -61,9 +62,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters$;
 
 // TODO merge w/ ColumnStatsIndexSupport
 public class ColumnStatsIndexHelper {
@@ -236,13 +234,13 @@ public class ColumnStatsIndexHelper {
                 indexRow.add(colMetadata.getNullCount());
               });
 
-              return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(indexRow));
+              return Row$.MODULE$.apply(JavaScalaConverters.<Object>convertJavaListToScalaSeq(indexRow));
             })
             .filter(Objects::nonNull);
 
     StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
-          JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSeq(),
-          JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSet(),
+        JavaScalaConverters.<String>convertJavaListToScalaSeq(columnNames),
+        JavaScalaConverters.convertJavaListToScalaList(columnNames).toSet(),
           StructType$.MODULE$.apply(orderedColumnSchemas)
     )._1;
 

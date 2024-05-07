@@ -25,14 +25,14 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
+import org.apache.spark.sql.{Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import java.util.function.{Consumer, Predicate, ToLongFunction}
 
-import scala.collection.JavaConversions
+import scala.collection.JavaConverters._
 
 /**
  * Relation to implement the Hoodie's file-system view for the table
@@ -110,7 +110,7 @@ class FileSystemRelation(val sqlContext: SQLContext,
 
     // Using deprecated `JavaConversions` to be compatible with scala versions < 2.12.
     // Can replace with JavaConverters.seqAsJavaList(...) once the support for scala versions < 2.12 is stopped
-    sqlContext.createDataFrame(JavaConversions.seqAsJavaList(data), schema).rdd
+    sqlContext.createDataFrame(data.asJava, schema).rdd
   }
 
   private def toJavaConsumer[T](consumer: (T) => Unit): Consumer[T] = {

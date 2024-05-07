@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -38,6 +40,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
@@ -45,6 +48,9 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
 import org.hamcrest.MatcherAssert;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
@@ -122,6 +128,30 @@ public class TestWriteBase {
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
+
+  protected Configuration conf;
+
+  @TempDir
+  protected File tempFile;
+
+  @BeforeEach
+  public void before() {
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
+    setUp(conf);
+  }
+
+  /**
+   * Override to have custom configuration.
+   */
+  protected void setUp(Configuration conf) {
+    // for subclass extension
+  }
+
+  @AfterEach
+  public void after() {
+    conf = null;
+  }
 
   /**
    * Utils to composite the test stages.
@@ -572,5 +602,21 @@ public class TestWriteBase {
       assertEquals(count, TestUtils.getCompletedInstantCount(basePath, isMor ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION));
       return this;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  protected TestHarness preparePipeline() throws Exception {
+    return preparePipeline(conf);
+  }
+
+  protected TestHarness preparePipeline(Configuration conf) throws Exception {
+    return TestHarness.instance().preparePipeline(tempFile, conf);
+  }
+
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.COPY_ON_WRITE;
   }
 }

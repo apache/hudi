@@ -114,14 +114,6 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     return this;
   }
 
-  public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata, boolean ignoreWriter) throws IOException {
-    super.moveInflightCommitToComplete(instantTime, metadata);
-    if (!ignoreWriter && writer != null) {
-      writer.updateFromWriteStatuses(metadata, context.get().emptyHoodieData(), instantTime);
-    }
-    return this;
-  }
-
   @Override
   public HoodieTestTable moveInflightCompactionToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
     super.moveInflightCompactionToComplete(instantTime, metadata);

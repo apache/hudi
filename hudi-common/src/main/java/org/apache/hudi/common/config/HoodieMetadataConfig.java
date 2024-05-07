@@ -330,6 +330,27 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating functional index.");
 
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.enable")
+      .defaultValue(true)
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable aggregating stats for each column at the storage partition level.");
+
+  public static final ConfigProperty<Integer> METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.file.group.count")
+      .defaultValue(1)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Metadata partition stats file group count. This controls the size of the base and "
+          + "log files and read parallelism in the partition stats index.");
+
+  public static final ConfigProperty<Integer> PARTITION_STATS_INDEX_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.parallelism")
+      .defaultValue(200)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Parallelism to use, when generating partition stats index.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -460,6 +481,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getFunctionalIndexParallelism() {
     return getInt(FUNCTIONAL_INDEX_PARALLELISM);
+  }
+
+  public boolean isPartitionStatsIndexEnabled() {
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_PARTITION_STATS);
+  }
+
+  public int getPartitionStatsIndexFileGroupCount() {
+    return getInt(METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT);
+  }
+
+  public int getPartitionStatsIndexParallelism() {
+    return getInt(PARTITION_STATS_INDEX_PARALLELISM);
   }
 
   public static class Builder {
@@ -642,6 +675,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withFunctionalIndexParallelism(int parallelism) {
       metadataConfig.setValue(FUNCTIONAL_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withMetadataIndexPartitionStats(boolean enable) {
+      metadataConfig.setValue(ENABLE_METADATA_INDEX_PARTITION_STATS, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataIndexPartitionStatsFileGroupCount(int fileGroupCount) {
+      metadataConfig.setValue(METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+      return this;
+    }
+
+    public Builder withPartitionStatsIndexParallelism(int parallelism) {
+      metadataConfig.setValue(PARTITION_STATS_INDEX_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 
