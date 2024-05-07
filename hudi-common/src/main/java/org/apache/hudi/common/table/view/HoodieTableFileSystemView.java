@@ -308,10 +308,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partition) {
     List<HoodieFileGroup> hoodieFileGroups = partitionToFileGroupsMap.get(partition);
-    if (hoodieFileGroups == null) {
-      
-    }
-    if (!isPartitionAvailableInStore(partition)) {
+    if (hoodieFileGroups == null || hoodieFileGroups.size() == 0) {
       LOG.warn("partition: {} is not available in store");
       return Stream.empty();
     }
