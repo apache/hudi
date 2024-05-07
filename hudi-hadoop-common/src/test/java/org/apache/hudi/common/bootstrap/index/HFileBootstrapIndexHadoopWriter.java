@@ -73,7 +73,7 @@ public class HFileBootstrapIndexHadoopWriter extends BootstrapIndex.IndexWriter 
 
   private final Map<String, List<BootstrapFileMapping>> sourceFileMappings = new HashMap<>();
 
-  private HFileBootstrapIndexHadoopWriter(String bootstrapBasePath, HoodieTableMetaClient metaClient) {
+  public HFileBootstrapIndexHadoopWriter(String bootstrapBasePath, HoodieTableMetaClient metaClient) {
     super(metaClient);
     try {
       metaClient.initializeBootstrapDirsIfNotExists();
