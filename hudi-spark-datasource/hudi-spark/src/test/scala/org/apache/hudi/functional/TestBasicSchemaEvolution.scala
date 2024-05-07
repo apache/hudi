@@ -178,7 +178,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
         StructField("partition", IntegerType, nullable = true) :: Nil)
 
     // Second schema for the table is expected to reconcile ordering if enabled
-    val secondSchema = StructType(
+    val secondSchemaWithOrdering = StructType(
       StructField("_row_key", StringType, nullable = true) ::
         StructField("first_name", StringType, nullable = false) ::
         StructField("last_name", StringType, nullable = true) ::
@@ -208,10 +208,12 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     //       entailing that the data in the added columns for table's existing records will be added w/ nulls,
     //       in case new column is nullable, and would fail otherwise
     if (true) {
+      val secondSchema = if (shouldReconcileSchema) secondInputSchema else secondSchemaWithOrdering
       assertEquals(secondSchema, tableSchemaAfterSecondBatch)
 
       val ageColOrd = secondSchema.indexWhere(_.name == "age")
-      val expectedRows = injectColumnAt(firstBatch, ageColOrd, null) ++ secondBatchWithProperOrder
+      val rowsToAdd = if (shouldReconcileSchema) secondBatch else secondBatchWithProperOrder
+      val expectedRows = injectColumnAt(firstBatch, ageColOrd, null) ++ rowsToAdd
 
       assertEquals(expectedRows, rowsAfterSecondBatch)
     }
@@ -221,12 +223,19 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     // col drop is enabled)
     //
 
-    val thirdSchema = StructType(
+    val thirdInputSchema = StructType(
       StructField("_row_key", StringType, nullable = true) ::
         StructField("first_name", StringType, nullable = false) ::
         StructField("age", StringType, nullable = true) ::
         StructField("timestamp", IntegerType, nullable = true) ::
         StructField("partition", IntegerType, nullable = true) :: Nil)
+
+    val thirdSchemaWithOrdering = StructType(
+      StructField("_row_key", StringType, nullable = true) ::
+        StructField("first_name", StringType, nullable = false) ::
+        StructField("timestamp", IntegerType, nullable = true) ::
+        StructField("partition", IntegerType, nullable = true) ::
+        StructField("age", StringType, nullable = true) :: Nil)
 
     val thirdBatch = Seq(
       Row("7", "Harry", "15", 1, 1),
@@ -234,12 +243,12 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       Row("9", "Germiona", "16", 1, 1))
 
     if (shouldReconcileSchema) {
-      appendData(thirdSchema, thirdBatch)
+      appendData(thirdInputSchema, thirdBatch)
     } else {
       assertThrows(classOf[SchemaCompatibilityException]) {
-        appendData(thirdSchema, thirdBatch)
+        appendData(thirdInputSchema, thirdBatch)
       }
-      appendData(thirdSchema, thirdBatch, shouldAllowDroppedColumns = true)
+      appendData(thirdInputSchema, thirdBatch, shouldAllowDroppedColumns = true)
     }
     val (tableSchemaAfterThirdBatch, rowsAfterThirdBatch) = loadTable()
 
@@ -250,17 +259,22 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     //       In case schema reconciliation is DISABLED, table will be overwritten in the batch's schema,
     //       entailing that the data in the dropped columns for table's existing records will be dropped.
     if (shouldReconcileSchema) {
-      assertEquals(secondSchema, tableSchemaAfterThirdBatch)
+      assertEquals(secondInputSchema, tableSchemaAfterThirdBatch)
 
       val lastNameColOrd = firstSchema.indexWhere(_.name == "last_name")
       val expectedRows = rowsAfterSecondBatch ++ injectColumnAt(thirdBatch, lastNameColOrd, null)
 
       assertEquals(expectedRows, rowsAfterThirdBatch)
     } else {
-      assertEquals(thirdSchema, tableSchemaAfterThirdBatch)
+      assertEquals(thirdSchemaWithOrdering, tableSchemaAfterThirdBatch)
 
-      val lastNameColOrd = secondSchema.indexWhere(_.name == "last_name")
-      val expectedRows = dropColumn(rowsAfterSecondBatch, lastNameColOrd) ++ thirdBatch
+      val lastNameColOrd = secondSchemaWithOrdering.indexWhere(_.name == "last_name")
+      // properly maintain order of columns
+      val rowsToAdd = Seq(
+        Row("7", "Harry", 1, 1, "15"),
+        Row("8", "Ron", 1, 1, "14"),
+        Row("9", "Germiona", 1, 1, "16"))
+      val expectedRows = dropColumn(rowsAfterSecondBatch, lastNameColOrd) ++ rowsToAdd
 
       assertEquals(expectedRows, rowsAfterThirdBatch)
     }
@@ -275,6 +289,12 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
         StructField("age", StringType, nullable = true) ::
         StructField("timestamp", IntegerType, nullable = true) ::
         StructField("partition", IntegerType, nullable = true) :: Nil)
+
+    val fourthSchemaWithOrdering = StructType(
+      StructField("_row_key", StringType, nullable = true) ::
+        StructField("timestamp", IntegerType, nullable = true) ::
+        StructField("partition", IntegerType, nullable = true) ::
+        StructField("age", StringType, nullable = true) :: Nil)
 
     val fourthBatch = Seq(
       Row("10", "15", 1, 1),
@@ -299,12 +319,17 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       appendData(fourthSchema, fourthBatch, shouldAllowDroppedColumns = true)
       val (latestTableSchema, rows) = loadTable()
 
-      assertEquals(fourthSchema, latestTableSchema)
+      assertEquals(fourthSchemaWithOrdering, latestTableSchema)
 
-      val firstNameColOrd = thirdSchema.indexWhere(_.name == "first_name")
+      val firstNameColOrd = thirdSchemaWithOrdering.indexWhere(_.name == "first_name")
 
+      // Order the columns
+      val rowsToAdd = Seq(
+        Row("10", 1, 1, "15"),
+        Row("11", 1, 1, "14"),
+        Row("12", 1, 1, "16"))
       val expectedRecords =
-        dropColumn(rowsAfterThirdBatch, firstNameColOrd) ++ fourthBatch
+        dropColumn(rowsAfterThirdBatch, firstNameColOrd) ++ rowsToAdd
 
       assertEquals(expectedRecords, rows)
     }
