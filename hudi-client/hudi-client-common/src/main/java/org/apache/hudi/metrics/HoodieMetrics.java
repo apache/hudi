@@ -399,6 +399,22 @@ public class HoodieMetrics {
     }
   }
 
+  public void emitMetadataEnablementMetrics(boolean isMetadataEnabled, boolean isMetadataColStatsEnabled, boolean isMetadataBloomFilterEnabled,
+                                            boolean isMetadataRliEnabled) {
+    if (config.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("metadata", "isEnabled"), isMetadataEnabled ? 1 : 0);
+      metrics.registerGauge(getMetricsName("metadata", "isColSatsEnabled"), isMetadataColStatsEnabled ? 1 : 0);
+      metrics.registerGauge(getMetricsName("metadata", "isBloomFilterEnabled"), isMetadataBloomFilterEnabled ? 1 : 0);
+      metrics.registerGauge(getMetricsName("metadata", "isRliEnabled"), isMetadataRliEnabled ? 1 : 0);
+    }
+  }
+
+  public void emitIndexTypeMetrics(int indexTypeOrdinal) {
+    if (config.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("index", "type"), indexTypeOrdinal);
+    }
+  }
+
   private Counter getCounter(Counter counter, String name) {
     if (counter == null) {
       return metrics.getRegistry().counter(name);

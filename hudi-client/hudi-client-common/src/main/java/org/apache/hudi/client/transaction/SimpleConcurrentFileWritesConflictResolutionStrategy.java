@@ -38,7 +38,6 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
@@ -69,7 +68,6 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
         .getTimelineOfActions(CollectionUtils.createSet(REPLACE_COMMIT_ACTION, COMPACTION_ACTION))
         .findInstantsAfter(currentInstant.getTimestamp())
         .filterInflightsAndRequested()
-        .filter(i -> (!i.getAction().equals(COMPACTION_ACTION)) || i.getState().equals(REQUESTED))
         .getInstantsAsStream();
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
   }
