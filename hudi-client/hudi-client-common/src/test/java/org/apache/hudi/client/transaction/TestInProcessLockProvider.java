@@ -23,9 +23,9 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import junit.framework.AssertionFailedError;
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -37,13 +37,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestInProcessLockProvider {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestInProcessLockProvider.class);
-  private final Configuration hadoopConfiguration = new Configuration();
+  private final StorageConfiguration<?> storageConf = getDefaultStorageConf();
   private final LockConfiguration lockConfiguration1;
   private final LockConfiguration lockConfiguration2;
 
@@ -64,7 +65,7 @@ public class TestInProcessLockProvider {
     // Writer 2:   try lock   |      ...    lock |------| unlock and close
     // Writer 3:                          try lock  | ...  lock |------| unlock and close
     List<InProcessLockProvider> lockProviderList = new ArrayList<>();
-    InProcessLockProvider lockProvider1 = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider lockProvider1 = new InProcessLockProvider(lockConfiguration1, storageConf);
     lockProviderList.add(lockProvider1);
     AtomicBoolean writer1Completed = new AtomicBoolean(false);
     AtomicBoolean writer2TryLock = new AtomicBoolean(false);
@@ -82,7 +83,7 @@ public class TestInProcessLockProvider {
     // Writer 2 thread in parallel, should block
     // and later acquire the lock once it is released
     Thread writer2 = new Thread(() -> {
-      InProcessLockProvider lockProvider2 = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+      InProcessLockProvider lockProvider2 = new InProcessLockProvider(lockConfiguration1, storageConf);
       lockProviderList.add(lockProvider2);
       assertDoesNotThrow(() -> {
         LOG.info("Writer 2 tries to acquire the lock.");
@@ -118,7 +119,7 @@ public class TestInProcessLockProvider {
         }
       }
       // Lock instance of Writer 3 should be held by Writer 2
-      InProcessLockProvider lockProvider3 = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+      InProcessLockProvider lockProvider3 = new InProcessLockProvider(lockConfiguration1, storageConf);
       lockProviderList.add(lockProvider3);
       boolean isLocked = lockProvider3.getLock().isWriteLocked();
       if (!isLocked) {
@@ -174,7 +175,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testLockAcquisition() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     assertDoesNotThrow(() -> {
       inProcessLockProvider.lock();
     });
@@ -185,7 +186,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testLockReAcquisitionBySameThread() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     assertDoesNotThrow(() -> {
       inProcessLockProvider.lock();
     });
@@ -199,8 +200,8 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testLockReAcquisitionBySameThreadWithTwoTables() {
-    InProcessLockProvider inProcessLockProvider1 = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
-    InProcessLockProvider inProcessLockProvider2 = new InProcessLockProvider(lockConfiguration2, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider1 = new InProcessLockProvider(lockConfiguration1, storageConf);
+    InProcessLockProvider inProcessLockProvider2 = new InProcessLockProvider(lockConfiguration2, storageConf);
 
     assertDoesNotThrow(() -> {
       inProcessLockProvider1.lock();
@@ -224,7 +225,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testLockReAcquisitionByDifferentThread() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     final AtomicBoolean writer2Completed = new AtomicBoolean(false);
 
     // Main test thread
@@ -264,8 +265,8 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testLockReAcquisitionByDifferentThreadWithTwoTables() {
-    InProcessLockProvider inProcessLockProvider1 = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
-    InProcessLockProvider inProcessLockProvider2 = new InProcessLockProvider(lockConfiguration2, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider1 = new InProcessLockProvider(lockConfiguration1, storageConf);
+    InProcessLockProvider inProcessLockProvider2 = new InProcessLockProvider(lockConfiguration2, storageConf);
 
     final AtomicBoolean writer2Stream1Completed = new AtomicBoolean(false);
     final AtomicBoolean writer2Stream2Completed = new AtomicBoolean(false);
@@ -330,7 +331,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testTryLockAcquisition() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     Assertions.assertTrue(inProcessLockProvider.tryLock());
     assertDoesNotThrow(() -> {
       inProcessLockProvider.unlock();
@@ -339,7 +340,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testTryLockAcquisitionWithTimeout() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     Assertions.assertTrue(inProcessLockProvider.tryLock(1, TimeUnit.MILLISECONDS));
     assertDoesNotThrow(() -> {
       inProcessLockProvider.unlock();
@@ -348,7 +349,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testTryLockReAcquisitionBySameThread() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     Assertions.assertTrue(inProcessLockProvider.tryLock());
     assertThrows(HoodieLockException.class, () -> {
       inProcessLockProvider.tryLock(1, TimeUnit.MILLISECONDS);
@@ -360,7 +361,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testTryLockReAcquisitionByDifferentThread() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     final AtomicBoolean writer2Completed = new AtomicBoolean(false);
 
     // Main test thread
@@ -388,7 +389,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testTryUnLockByDifferentThread() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     final AtomicBoolean writer3Completed = new AtomicBoolean(false);
 
     // Main test thread
@@ -432,7 +433,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testTryLockAcquisitionBeforeTimeOutFromTwoThreads() {
-    final InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    final InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     final int threadCount = 3;
     final long awaitMaxTimeoutMs = 2000L;
     final CountDownLatch latch = new CountDownLatch(threadCount);
@@ -493,7 +494,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testLockReleaseByClose() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     assertDoesNotThrow(() -> {
       inProcessLockProvider.lock();
     });
@@ -504,7 +505,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testRedundantUnlock() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     assertDoesNotThrow(() -> {
       inProcessLockProvider.lock();
     });
@@ -518,7 +519,7 @@ public class TestInProcessLockProvider {
 
   @Test
   public void testUnlockWithoutLock() {
-    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     assertDoesNotThrow(() -> {
       inProcessLockProvider.unlock();
     });
