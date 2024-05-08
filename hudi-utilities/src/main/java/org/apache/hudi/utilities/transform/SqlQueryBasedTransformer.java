@@ -54,6 +54,11 @@ public class SqlQueryBasedTransformer implements Transformer {
       throw new HoodieTransformException("Missing configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL.key() + ")");
     }
 
+    if (rowDataset.schema().length() == 0) {
+      LOG.info("rowDataset does not have schema, skipping SQL Transformer");
+      return rowDataset;
+    }
+
     try {
       // tmp table name doesn't like dashes
       String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
