@@ -110,7 +110,7 @@ public abstract class DebeziumSource extends RowSource {
       try {
         String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(props.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
         props.put(KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA, schemaStr);
-      } catch (IOException e) {
+      } catch (HoodieIOException e) {
         throw new HoodieIOException("Error setting deserializer");
       }
     }
