@@ -162,3 +162,7 @@ d36a374bd [AUDIT-776] Upgrade to version release-v1.13.0 (#685)
 ---[2024-05-07 14:18:30] [release-v1.14.1] Upgrade to version release-v1.14.1---
 787c8cc4dbb [ENG-9371][HUDI-7710] Use compaction.requested during conflict resolution (#687)
 d94e34c5898 [AUDIT-781] Upgrade to version release-v1.14.0 (#691)
+
+---[2024-05-08 23:22:38] [release-v1.14.2] ---
+53358e4e8 [ENG-9415][HUDI-7718] Try to fetch the latestSourceProfile in HoodieIncrSource (#693)
+c29d62a70 [AUDIT-781]: Upgrade to version release-v1.14.1 (#692)
