@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -87,12 +88,12 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
   private ScheduledFuture<?> future = null;
   private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
 
-  public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
+  public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     this(lockConfiguration);
     try {
       HiveConf hiveConf = new HiveConf();
       setHiveLockConfs(hiveConf);
-      hiveConf.addResource(conf);
+      hiveConf.addResource(conf.unwrapAs(Configuration.class));
       this.hiveClient = IMetaStoreClientUtil.getMSC(hiveConf);
     } catch (MetaException | HiveException e) {
       throw new HoodieLockException("Failed to create HiveMetaStoreClient", e);
