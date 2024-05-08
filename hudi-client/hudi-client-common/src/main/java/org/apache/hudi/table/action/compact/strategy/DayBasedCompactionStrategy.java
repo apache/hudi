@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
  * This strategy orders compactions in reverse order of creation of Hive Partitions. It helps to compact data in latest
  * partitions first and then older capped at the Total_IO allowed.
  */
-public class DayBasedCompactionStrategy extends CompactionStrategy {
+public class DayBasedCompactionStrategy extends BoundedIOCompactionStrategy {
 
   // For now, use SimpleDateFormat as default partition format
   protected static final String DATE_PARTITION_FORMAT = "yyyy/MM/dd";
@@ -60,17 +60,6 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
 
   public Comparator<String> getComparator() {
     return comparator;
-  }
-
-  @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
-    boolean isIoBounded = writeConfig.isDayBasedCompactionWithIOBounded();
-    if (isIoBounded) {
-      return filterOperationsWithIOBounded(writeConfig, operations);
-    } else {
-      return operations;
-    }
   }
 
   @Override

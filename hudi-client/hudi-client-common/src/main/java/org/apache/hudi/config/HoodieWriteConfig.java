@@ -1715,10 +1715,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION);
   }
 
-  public boolean isDayBasedCompactionWithIOBounded() {
-    return getBoolean(HoodieCompactionConfig.DAYBASED_COMPACTION_WITH_IO_BOUNDED_ENABLED);
-  }
-
   public int getCommitArchivalBatchSize() {
     return getInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE);
   }

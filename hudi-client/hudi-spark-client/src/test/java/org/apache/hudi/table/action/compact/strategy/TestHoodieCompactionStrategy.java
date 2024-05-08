@@ -178,7 +178,6 @@ public class TestHoodieCompactionStrategy {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy)
             .withTargetPartitionsPerDayBasedCompaction(1)
-            .withDayBasedCompactionWithIOBounded(true)
             .withTargetIOPerCompactionInMB(200)
             .build())
         .build();
