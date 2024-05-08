@@ -22,12 +22,10 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieMergeKey;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.HoodieSimpleMergeKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -83,7 +81,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
   // Map of compacted/merged records
-  private final ExternalSpillableMap<HoodieMergeKey, HoodieRecord> records;
+  private final ExternalSpillableMap<String, HoodieRecord> records;
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
   private final Set<String> scannedPrefixes;
   // count of merged records in log
@@ -93,7 +91,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
-  private HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
+  HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
                                        String latestInstantTime, Long maxMemorySizeInBytes,
                                        boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                        Option<InstantRange> instantRange,
@@ -153,13 +151,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return; // no-op
     }
 
-    Set<String> existingKeys = records.keySet().stream()
-        .map(HoodieMergeKey::getRecordKey)
-        .map(Object::toString)
-        .collect(Collectors.toSet());
-
     List<String> missingKeys = keys.stream()
-        .filter(key -> !existingKeys.contains(key))
+        .filter(key -> !records.containsKey(key))
         .collect(Collectors.toList());
 
     if (missingKeys.isEmpty()) {
@@ -229,12 +222,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   public Map<String, HoodieRecord> getRecords() {
-    return records.entrySet().stream().collect(
-        Collectors.toMap(entry -> getRecordKey(entry.getKey()), Map.Entry::getValue));
-  }
-
-  private String getRecordKey(HoodieMergeKey mergeKey) {
-    return mergeKey.getRecordKey().toString();
+    return records;
   }
 
   public HoodieRecordType getRecordType() {
@@ -255,48 +243,30 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   @Override
   public <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
     String key = newRecord.getRecordKey();
-    HoodieMergeKey mergeKey = newRecord.getMergeKey();
-    if (mergeKey == null) {
-      // If mergeKey is null, then create a simple merge key using record key
-      mergeKey = new HoodieSimpleMergeKey(newRecord.getKey());
-    }
-    HoodieRecord<T> prevRecord = records.get(mergeKey);
+    HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {
       // Merge and store the combined record
-      try {
-        HoodieMergeKey finalMergeKey = mergeKey;
-        recordMerger.fullOuterMerge(prevRecord, readerSchema, newRecord, readerSchema, this.getPayloadProps()).forEach(
-            mergedRecord -> {
-              HoodieRecord<T> combinedRecord = mergedRecord.getLeft();
-              if (combinedRecord.getData() != prevRecord.getData()) {
-                HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
-                records.put(finalMergeKey, latestHoodieRecord.copy());
-              }
-            });
-      } catch (UnsupportedOperationException e) {
-        LOG.warn("Error merging records: Full outer merge not supported, falling back to default merge for key {}", key);
-        HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
-            newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
-        // If pre-combine returns existing record, no need to update it
-        if (combinedRecord.getData() != prevRecord.getData()) {
-          HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
+      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
+          newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
+      // If pre-combine returns existing record, no need to update it
+      if (combinedRecord.getData() != prevRecord.getData()) {
+        HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
 
-          // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-          //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-          //       it since these records will be put into records(Map).
-          records.put(mergeKey, latestHoodieRecord.copy());
-        }
+        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+        //       it since these records will be put into records(Map).
+        records.put(key, latestHoodieRecord.copy());
       }
     } else {
       // Put the record as is
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
-      records.put(mergeKey, newRecord.copy());
+      records.put(key, newRecord.copy());
     }
   }
 
-  private static <T> HoodieRecord getLatestHoodieRecord(HoodieRecord<T> newRecord, HoodieRecord<T> combinedRecord, String key) {
+  static <T> HoodieRecord getLatestHoodieRecord(HoodieRecord<T> newRecord, HoodieRecord<T> combinedRecord, String key) {
     HoodieRecord latestHoodieRecord =
         combinedRecord.newInstance(new HoodieKey(key, newRecord.getPartitionPath()), newRecord.getOperation());
 
@@ -309,8 +279,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
     String key = deleteRecord.getRecordKey();
-    HoodieMergeKey mergeKey = new HoodieSimpleMergeKey(deleteRecord.getHoodieKey());
-    HoodieRecord oldRecord = records.get(mergeKey);
+    HoodieRecord oldRecord = records.get(key);
     if (oldRecord != null) {
       // Merge and store the merged record. The ordering val is taken to decide whether the same key record
       // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
@@ -330,11 +299,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
     // Put the DELETE record
     if (recordType == HoodieRecordType.AVRO) {
-      records.put(mergeKey, SpillableMapUtils.generateEmptyPayload(key,
+      records.put(key, SpillableMapUtils.generateEmptyPayload(key,
           deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
     } else {
       HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
-      records.put(mergeKey, record);
+      records.put(key, record);
     }
   }
 

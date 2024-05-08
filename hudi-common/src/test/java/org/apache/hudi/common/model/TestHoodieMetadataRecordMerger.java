@@ -33,13 +33,11 @@ import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
- * Tests for {@link HoodieMergeKeyBasedRecordMerger}.
+ * Tests for {@link HoodieMetadataRecordMerger}.
  */
-public class TestMergeKeyBasedRecordMerger extends HoodieCommonTestHarness {
+public class TestHoodieMetadataRecordMerger extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setUp() {
@@ -52,24 +50,12 @@ public class TestMergeKeyBasedRecordMerger extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testFullOuterMergeWithSimpleMergeKey() throws IOException {
+  public void testFullOuterMerge() throws IOException {
     List<HoodieRecord> newRecordList = dataGen.generateInserts("000", 1);
     List<HoodieRecord> updateRecordList = dataGen.generateUpdates("0001", newRecordList);
-    HoodieMergeKeyBasedRecordMerger recordMerger = new HoodieMergeKeyBasedRecordMerger();
+    HoodieMetadataRecordMerger recordMerger = new HoodieMetadataRecordMerger();
     List<Pair<HoodieRecord, Schema>> mergedRecords = recordMerger.fullOuterMerge(newRecordList.get(0), AVRO_SCHEMA, updateRecordList.get(0), AVRO_SCHEMA, new TypedProperties());
-    // should fallback to parent merge method
     assertEquals(1, mergedRecords.size());
-  }
-
-  @Test
-  public void testFullOuterMergeWithCompositeMergeKey() throws IOException {
-    HoodieRecord oldRecord = mock(HoodieRecord.class);
-    when(oldRecord.getMergeKey()).thenReturn(new HoodieCompositeMergeKey<>("000", "001"));
-    HoodieRecord newRecord = mock(HoodieRecord.class);
-    when(newRecord.getMergeKey()).thenReturn(new HoodieCompositeMergeKey<>("001", "001"));
-    HoodieMergeKeyBasedRecordMerger recordMerger = new HoodieMergeKeyBasedRecordMerger();
-    List<Pair<HoodieRecord, Schema>> mergedRecords = recordMerger.fullOuterMerge(oldRecord, AVRO_SCHEMA, newRecord, AVRO_SCHEMA, new TypedProperties());
-    // currently, just combines the two records (will change with secondary keys)
-    assertEquals(2, mergedRecords.size());
+    assertEquals(updateRecordList.get(0), mergedRecords.get(0).getLeft());
   }
 }

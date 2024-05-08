@@ -128,7 +128,7 @@ public interface HoodieRecordMerger extends Serializable {
   }
 
   /**
-   * Merges two records with the same key. For {@link HoodieCompositeMergeKey}, it returns both.
+   * Merges two records with the same key in full outer merge fashion i.e. all fields from both records are included.
    */
   default List<Pair<HoodieRecord, Schema>> fullOuterMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     throw new UnsupportedOperationException("Partial merging logic is not implemented.");

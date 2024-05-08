@@ -18,10 +18,10 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.common.model.HoodieMergeKeyBasedRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieMetadataMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -151,13 +151,12 @@ public class HoodieMetadataLogRecordReader implements Closeable {
    * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
    */
   public static class Builder {
-    private final HoodieMergedLogRecordScanner.Builder scannerBuilder =
-        new HoodieMergedLogRecordScanner.Builder()
+    private final HoodieMetadataMergedLogRecordScanner.Builder scannerBuilder =
+        new HoodieMetadataMergedLogRecordScanner.Builder()
             .withKeyFieldOverride(HoodieMetadataPayload.KEY_FIELD_NAME)
             // NOTE: Merging of Metadata Table's records is currently handled using {@code HoodiePreCombineAvroRecordMerger}
             //       for compatibility purposes; In the future it {@code HoodieMetadataPayload} semantic
             //       will be migrated to its own custom instance of {@code RecordMerger}
-            .withRecordMerger(HoodieMergeKeyBasedRecordMerger.INSTANCE)
             .withReverseReader(false)
             .withOperationField(false);
 

@@ -25,25 +25,19 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
- * Record merger based on {@link HoodieMergeKey}. If the merge keys are of type {@link HoodieCompositeMergeKey},
- * then it returns the older and newer records. Otherwise, it calls the merge method from the parent class.
+ * Record merger that accumulates metadata records.
  */
-public class HoodieMergeKeyBasedRecordMerger extends HoodiePreCombineAvroRecordMerger {
+public class HoodieMetadataRecordMerger extends HoodiePreCombineAvroRecordMerger {
 
-  public static final HoodieMergeKeyBasedRecordMerger INSTANCE = new HoodieMergeKeyBasedRecordMerger();
+  public static final HoodieMetadataRecordMerger INSTANCE = new HoodieMetadataRecordMerger();
 
   @Override
   public List<Pair<HoodieRecord, Schema>> fullOuterMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    // TODO: Implement this method. Currently, it just checks if the merge keys are of type HoodieSimpleMergeKey,
-    //       then it calls the merge method from the parent class. Otherwise, it returns the older and newer records.
-    //       We need to implement the full outer merge logic for HoodieCompositeMergeKey.
-    if (older.getMergeKey() instanceof HoodieCompositeMergeKey && newer.getMergeKey() instanceof HoodieCompositeMergeKey) {
-      return Arrays.asList(Pair.of(older, oldSchema), Pair.of(newer, newSchema));
-    }
-    return Arrays.asList(super.merge(older, oldSchema, newer, newSchema, props).get());
+    // TODO: Implement this method for secondary keys. Currently, it just mimics the superclass.
+    return Collections.singletonList(super.merge(older, oldSchema, newer, newSchema, props).get());
   }
 }
