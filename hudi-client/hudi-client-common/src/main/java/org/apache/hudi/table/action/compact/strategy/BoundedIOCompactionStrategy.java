@@ -44,10 +44,10 @@ public class BoundedIOCompactionStrategy extends CompactionStrategy {
     for (HoodieCompactionOperation op : operations) {
       long opIo = op.getMetrics().get(TOTAL_IO_MB).longValue();
       targetIORemaining -= opIo;
-      finalOperations.add(op);
-      if (targetIORemaining <= 0) {
+      if (targetIORemaining < 0) {
         return finalOperations;
       }
+      finalOperations.add(op);
     }
     return finalOperations;
   }
