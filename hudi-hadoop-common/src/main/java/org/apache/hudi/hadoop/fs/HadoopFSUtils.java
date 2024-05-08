@@ -252,4 +252,12 @@ public class HadoopFSUtils {
   private static StorageConfiguration<Configuration> getStorageConf(Configuration conf, boolean copy) {
     return new HadoopStorageConfiguration(conf, copy);
   }
+
+  public static Configuration registerFileSystem(StoragePath file, Configuration conf) {
+    Configuration returnConf = new Configuration(conf);
+    String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
+    returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
+        HoodieWrapperFileSystem.class.getName());
+    return returnConf;
+  }
 }

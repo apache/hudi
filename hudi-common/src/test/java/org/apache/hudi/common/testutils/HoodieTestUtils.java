@@ -56,6 +56,8 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.storage.HoodieStorageUtils.HADOOP_STORAGE_CONF;
+
 /**
  * A utility class for testing.
  */
@@ -68,7 +70,7 @@ public class HoodieTestUtils {
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
 
   public static StorageConfiguration<Configuration> getDefaultStorageConf() {
-    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HadoopStorageConfiguration",
+    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
         new Class<?>[] {Boolean.class}, false);
   }
 
@@ -199,17 +201,6 @@ public class HoodieTestUtils {
   }
 
   /**
-   * @param conf storage configuration.
-   * @param basePath    base path of the Hudi table.
-   * @return a new {@link HoodieTableMetaClient} instance.
-   */
-  public static HoodieTableMetaClient createMetaClient(Configuration conf,
-                                                       String basePath) {
-    return HoodieTableMetaClient.builder()
-        .setConf(HoodieStorageUtils.getStorageConf(conf)).setBasePath(basePath).build();
-  }
-
-  /**
    * @param storageConf storage configuration.
    * @param basePath    base path of the Hudi table.
    * @return a new {@link HoodieTableMetaClient} instance.
@@ -218,6 +209,17 @@ public class HoodieTestUtils {
                                                        String basePath) {
     return HoodieTableMetaClient.builder()
         .setConf(storageConf).setBasePath(basePath).build();
+  }
+
+  /**
+   * @param conf storage configuration.
+   * @param basePath    base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(Configuration conf,
+                                                       String basePath) {
+    return HoodieTableMetaClient.builder()
+        .setConf(HoodieStorageUtils.getStorageConfWithCopy(conf)).setBasePath(basePath).build();
   }
 
   /**

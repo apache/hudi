@@ -30,6 +30,7 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -63,8 +64,6 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   private final Option<Double> expectedCompressionRatio;
   private final Option<Boolean> useDictionaryEncoding;
 
-  private final HoodieStorage storage;
-
   public HoodieParquetDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                                 Option<byte[]> content,
                                 boolean readBlockLazily,
@@ -72,14 +71,12 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                 Option<Schema> readerSchema,
                                 Map<HeaderMetadataType, String> header,
                                 Map<HeaderMetadataType, String> footer,
-                                String keyField,
-                                HoodieStorage storage) {
+                                String keyField) {
     super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
 
     this.compressionCodecName = Option.empty();
     this.expectedCompressionRatio = Option.empty();
     this.useDictionaryEncoding = Option.empty();
-    this.storage = storage;
   }
 
   public HoodieParquetDataBlock(List<HoodieRecord> records,
@@ -88,15 +85,13 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                 String keyField,
                                 CompressionCodecName compressionCodecName,
                                 double expectedCompressionRatio,
-                                boolean useDictionaryEncoding,
-                                HoodieStorage storage
+                                boolean useDictionaryEncoding
   ) {
     super(records, shouldWriteRecordPositions, header, new HashMap<>(), keyField);
 
     this.compressionCodecName = Option.of(compressionCodecName);
     this.expectedCompressionRatio = Option.of(expectedCompressionRatio);
     this.useDictionaryEncoding = Option.of(useDictionaryEncoding);
-    this.storage = storage;
   }
 
   @Override
@@ -126,7 +121,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         parquetWriter = HoodieFileWriterFactory.getFileWriter(
             HoodieFileFormat.PARQUET,
             outputStream,
-            storage.getConf(),
+            HoodieStorageUtils.getNewStorageConf(),
             config,
             writerSchema,
             recordType);
@@ -153,10 +148,10 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   @Override
   protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
-
+    HoodieStorage storage = HoodieStorageUtils.getStorage(blockContentLoc.getLogFile().getPath(), blockContentLoc.getStorageConf());
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
-    StorageConfiguration<?> inlineConf = storage.buildInlineConf(blockContentLoc.getStorageConf());
+    StorageConfiguration<?> inlineConf = storage.buildInlineConf(storage.getConf());
 
     StoragePath inlineLogFilePath = storage.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
@@ -175,10 +170,10 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   @Override
   protected <T> ClosableIterator<T> readRecordsFromBlockPayload(HoodieReaderContext<T> readerContext) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
-
+    HoodieStorage storage = HoodieStorageUtils.getStorage(blockContentLoc.getLogFile().getPath(), blockContentLoc.getStorageConf());
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
-    StorageConfiguration<?> inlineConf = storage.buildInlineConf(blockContentLoc.getStorageConf());
+    StorageConfiguration<?> inlineConf = storage.buildInlineConf(storage.getConf());
 
     StoragePath inlineLogFilePath = storage.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),

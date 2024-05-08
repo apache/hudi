@@ -55,7 +55,7 @@ import java.util.Set;
  *
  * Note: Not reusing commons-configuration since it has too many conflicting runtime deps.
  */
-public class DFSPropertiesConfiguration implements PropertiesConfig {
+public class DFSPropertiesConfiguration extends PropertiesConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(DFSPropertiesConfiguration.class);
 

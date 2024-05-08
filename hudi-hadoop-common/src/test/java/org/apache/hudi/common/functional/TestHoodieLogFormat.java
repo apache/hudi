@@ -2877,9 +2877,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(records, header, Compression.Algorithm.GZ, pathForReader, HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue(), storage);
+        return new HoodieHFileDataBlock(records, header, Compression.Algorithm.GZ, pathForReader, HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true, storage);
+        return new HoodieParquetDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true);
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }

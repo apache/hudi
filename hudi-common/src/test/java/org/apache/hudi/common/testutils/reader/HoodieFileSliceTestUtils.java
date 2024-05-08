@@ -78,6 +78,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
+import static org.apache.hudi.io.storage.HoodieAvroFileWriterFactory.HOODIE_AVRO_PARQUET_WRITER;
 
 public class HoodieFileSliceTestUtils {
   public static final String FORWARD_SLASH = "/";
@@ -167,23 +168,21 @@ public class HoodieFileSliceTestUtils {
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<IndexedRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      StoragePath logFilePath,
-      HoodieStorage storage
+      StoragePath logFilePath
   ) {
     return createDataBlock(
         dataBlockType,
         records.stream().map(HoodieAvroIndexedRecord::new)
             .collect(Collectors.toList()),
         header,
-        logFilePath, storage);
+        logFilePath);
   }
 
   private static HoodieDataBlock createDataBlock(
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<HoodieRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      StoragePath pathForReader,
-      HoodieStorage storage
+      StoragePath pathForReader
   ) {
     switch (dataBlockType) {
       case CDC_DATA_BLOCK:
@@ -203,8 +202,7 @@ public class HoodieFileSliceTestUtils {
             header,
             Compression.Algorithm.GZ,
             pathForReader,
-            HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue(),
-            storage);
+            HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,
@@ -213,8 +211,7 @@ public class HoodieFileSliceTestUtils {
             HoodieRecord.RECORD_KEY_METADATA_FIELD,
             CompressionCodecName.GZIP,
             0.1,
-            true,
-            storage);
+            true);
       default:
         throw new RuntimeException(
             "Unknown data block type " + dataBlockType);
@@ -273,7 +270,7 @@ public class HoodieFileSliceTestUtils {
         0.1,
         true);
 
-    try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieAvroParquetWriter",
+    try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) ReflectionUtils.loadClass(HOODIE_AVRO_PARQUET_WRITER,
         new Class<?>[] {StoragePath.class, HoodieParquetConfig.class, String.class, TaskContextSupplier.class, boolean.class},
         new StoragePath(baseFilePath),
         parquetConfig,
@@ -312,7 +309,7 @@ public class HoodieFileSliceTestUtils {
 
       if (blockType != DELETE_BLOCK) {
         HoodieDataBlock dataBlock = getDataBlock(
-            blockType, records, header, new StoragePath(logFilePath), storage);
+            blockType, records, header, new StoragePath(logFilePath));
         writer.appendBlock(dataBlock);
       } else {
         HoodieDeleteBlock deleteBlock = getDeleteBlock(
