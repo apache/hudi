@@ -29,6 +29,8 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
@@ -109,7 +111,8 @@ public class LockManager implements Serializable, AutoCloseable {
     if (lockProvider == null) {
       LOG.info("LockProvider " + writeConfig.getLockProviderClass());
       lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
-          lockConfiguration, hadoopConf.get());
+          new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
+          lockConfiguration, HadoopFSUtils.getStorageConf(hadoopConf.get()));
     }
     return lockProvider;
   }

@@ -50,7 +50,7 @@ public class TestWaitBasedTimeGenerator {
       NEED_TO_LOCK_LATER.set(lockLater);
     }
 
-    public MockInProcessLockProvider(LockConfiguration lockConfiguration, Configuration conf) {
+    public MockInProcessLockProvider(LockConfiguration lockConfiguration, StorageConfiguration<?> conf) {
       super(lockConfiguration, conf);
     }
 
