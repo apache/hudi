@@ -83,12 +83,15 @@ public class HoodieMultiTableStreamer {
     this.failedTables = new HashSet<>();
     this.jssc = jssc;
     String commonPropsFile = config.propsFilePath;
+    logger.info("config.propsFilePath: " + config.propsFilePath);
+    logger.info("commonPropsFile: " + commonPropsFile);
     String configFolder = config.configFolder;
     ValidationUtils.checkArgument(!config.filterDupes || config.operation != WriteOperationType.UPSERT,
         "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
     FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
+    logger.info("configFolder: " + configFolder);
     TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<String>()).getProps();
     //get the tables to be ingested and their corresponding config files from this properties instance
     populateTableExecutionContextList(commonProperties, configFolder, fs, config);
@@ -228,6 +231,7 @@ public class HoodieMultiTableStreamer {
     }
 
     static void deepCopyConfigs(Config globalConfig, HoodieStreamer.Config tableConfig) {
+      tableConfig.propsFilePath = globalConfig.propsFilePath;
       tableConfig.enableHiveSync = globalConfig.enableHiveSync;
       tableConfig.enableMetaSync = globalConfig.enableMetaSync;
       tableConfig.syncClientToolClassNames = globalConfig.syncClientToolClassNames;
