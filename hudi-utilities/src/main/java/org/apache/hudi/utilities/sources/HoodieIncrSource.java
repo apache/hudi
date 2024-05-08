@@ -29,6 +29,8 @@ import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
+import org.apache.hudi.utilities.streamer.SourceProfile;
+import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -155,7 +157,6 @@ public class HoodieIncrSource extends RowSource {
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
     checkRequiredConfigProperties(props, Collections.singletonList(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH));
     String srcPath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
-    int numInstantsPerFetch = getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH);
     boolean readLatestOnMissingCkpt = getBooleanWithAltKeys(
         props, HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT);
     IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy =
@@ -172,12 +173,13 @@ public class HoodieIncrSource extends RowSource {
         lastCkptStr.isPresent() ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr : Option.empty();
 
     // If source profile exists, use the numInstants from source profile.
-    boolean sourceProfileExists = sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null;
-    if (sourceProfileExists) {
-      int numInstantsFromSourceProfile = (int) sourceProfileSupplier.get().getSourceProfile().getSourceSpecificContext();
-      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsPerFetchThroughConfig {}", numInstantsFromSourceProfile, numInstantsPerFetch);
-      numInstantsPerFetch = numInstantsFromSourceProfile;
-    }
+    final int numInstantsFromConfig = getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH);
+    int numInstantsPerFetch = getLatestSourceProfile().map(sourceProfile -> {
+      int numInstantsFromSourceProfile = sourceProfile.getSourceSpecificContext();
+      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}", numInstantsFromSourceProfile, numInstantsFromConfig);
+      return numInstantsFromSourceProfile;
+    }).orElse(numInstantsFromConfig);
+
     HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     QueryInfo queryInfo = generateQueryInfo(sparkContext, srcPath,
         numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode,
@@ -237,12 +239,17 @@ public class HoodieIncrSource extends RowSource {
     // Remove Hoodie meta columns except partition path from input source
     String[] colsToDrop = shouldDropMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
         HoodieRecord.HOODIE_META_COLUMNS.stream().filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new);
-    Dataset<Row> src = source.drop(colsToDrop);
-    if (sourceProfileExists) {
-      src = coalesceOrRepartition(src, sourceProfileSupplier.get().getSourceProfile().getSourcePartitions());
-      metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(sourceProfileSupplier.get().getSourceProfile().getMaxSourceBytes()));
-      metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfileSupplier.get().getSourceProfile().getSourcePartitions()));
-    }
+    // Use sourceProfile for adjusting parallelism.
+    final Dataset<Row> src = getLatestSourceProfile().map(sourceProfile -> {
+      metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(sourceProfile.getMaxSourceBytes()));
+      metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfile.getSourcePartitions()));
+      return coalesceOrRepartition(source.drop(colsToDrop), sourceProfile.getSourcePartitions());
+    }).orElse(source.drop(colsToDrop));
     return Pair.of(Option.of(src), queryInfo.getEndInstant());
+  }
+
+  // Try to fetch the latestSourceProfile, this ensures the profile is refreshed if it's no longer valid.
+  private Option<SourceProfile<Integer>> getLatestSourceProfile() {
+    return sourceProfileSupplier.map(SourceProfileSupplier::getSourceProfile);
   }
 }
