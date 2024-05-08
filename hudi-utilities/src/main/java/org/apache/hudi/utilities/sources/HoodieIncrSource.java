@@ -31,6 +31,8 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
+import org.apache.hudi.utilities.streamer.SourceProfile;
+import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -183,9 +185,8 @@ public class HoodieIncrSource extends RowSource {
         lastCkptStr.isPresent() ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr : Option.empty();
 
     // If source profile exists, use the numInstants from source profile.
-    boolean sourceProfileExists = sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null;
-    if (sourceProfileExists) {
-      int numInstantsFromSourceProfile = (int) sourceProfileSupplier.get().getSourceProfile().getSourceSpecificContext();
+    if (getLatestSourceProfile().isPresent()) {
+      int numInstantsFromSourceProfile = getLatestSourceProfile().get().getSourceSpecificContext();
       LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsPerFetchThroughConfig {}", numInstantsFromSourceProfile, numInstantsPerFetch);
       numInstantsPerFetch = numInstantsFromSourceProfile;
     }
@@ -243,9 +244,14 @@ public class HoodieIncrSource extends RowSource {
     String[] colsToDrop = shouldDropMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
         HoodieRecord.HOODIE_META_COLUMNS.stream().filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new);
     Dataset<Row> src = source.drop(colsToDrop);
-    if (sourceProfileExists) {
-      src = coalesceOrRepartition(src, sourceProfileSupplier.get().getSourceProfile().getSourcePartitions());
+    if (getLatestSourceProfile().isPresent()) {
+      src = coalesceOrRepartition(src, getLatestSourceProfile().get().getSourcePartitions());
     }
     return Pair.of(Option.of(src), queryInfo.getEndInstant());
+  }
+
+  // Try to fetch the latestSourceProfile, this ensures the profile is refreshed if it's no longer valid.
+  private Option<SourceProfile<Integer>> getLatestSourceProfile() {
+    return sourceProfileSupplier.map(SourceProfileSupplier::getSourceProfile);
   }
 }
