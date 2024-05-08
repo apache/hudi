@@ -240,7 +240,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       LOG.info("Opening HFile for reading :" + hFilePath);
       StoragePath path = new StoragePath(hFilePath);
       long fileSize = storage.getPathInfo(path).getLength();
-      SeekableDataInputStream stream = storage.openSeekable(path);
+      SeekableDataInputStream stream = storage.openSeekable(path, true);
       return new HFileReaderImpl(stream, fileSize);
     }
 

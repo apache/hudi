@@ -74,6 +74,11 @@ public class HoodieTestUtils {
         new Class<?>[] {Boolean.class}, false);
   }
 
+  public static StorageConfiguration<Configuration> getDefaultStorageConfWithDefaults() {
+    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
+        new Class<?>[] {Boolean.class}, true);
+  }
+
   public static HoodieStorage getStorage(String path) {
     return HoodieStorageUtils.getStorage(path, getDefaultStorageConf());
   }

@@ -29,12 +29,13 @@ import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -121,7 +122,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         parquetWriter = HoodieFileWriterFactory.getFileWriter(
             HoodieFileFormat.PARQUET,
             outputStream,
-            HoodieStorageUtils.getNewStorageConf(),
+            HoodieStorageUtils.getStorageConf(new Configuration()),
             config,
             writerSchema,
             recordType);
@@ -148,12 +149,12 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   @Override
   protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
-    HoodieStorage storage = HoodieStorageUtils.getStorage(blockContentLoc.getLogFile().getPath(), blockContentLoc.getStorageConf());
+
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
-    StorageConfiguration<?> inlineConf = storage.buildInlineConf(storage.getConf());
+    StorageConfiguration<?> inlineConf = blockContentLoc.getStorageConf().getInline();
 
-    StoragePath inlineLogFilePath = storage.getInlineFilePath(
+    StoragePath inlineLogFilePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
@@ -170,12 +171,12 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   @Override
   protected <T> ClosableIterator<T> readRecordsFromBlockPayload(HoodieReaderContext<T> readerContext) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
-    HoodieStorage storage = HoodieStorageUtils.getStorage(blockContentLoc.getLogFile().getPath(), blockContentLoc.getStorageConf());
+
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
-    StorageConfiguration<?> inlineConf = storage.buildInlineConf(storage.getConf());
+    StorageConfiguration<?> inlineConf = blockContentLoc.getStorageConf().getInline();
 
-    StoragePath inlineLogFilePath = storage.getInlineFilePath(
+    StoragePath inlineLogFilePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),

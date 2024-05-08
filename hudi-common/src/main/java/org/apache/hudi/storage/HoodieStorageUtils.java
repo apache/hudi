@@ -39,10 +39,6 @@ public class HoodieStorageUtils {
     return (HoodieStorage) ReflectionUtils.loadClass(HUDI_HADOOP_STORAGE, new Class<?>[] {FileSystem.class}, fs);
   }
 
-  public static HoodieStorage getStorage(String basePath) {
-    return (HoodieStorage) ReflectionUtils.loadClass(HUDI_HADOOP_STORAGE, new Class<?>[] {String.class}, basePath);
-  }
-
   public static HoodieStorage getStorage(String basePath, StorageConfiguration<?> conf) {
     return (HoodieStorage) ReflectionUtils.loadClass(HUDI_HADOOP_STORAGE, new Class<?>[] {String.class, StorageConfiguration.class}, basePath, conf);
   }
@@ -72,10 +68,6 @@ public class HoodieStorageUtils {
 
   public static HoodieStorage getRawStorage(HoodieStorage storage) {
     return (HoodieStorage) ReflectionUtils.loadClass(HUDI_HADOOP_STORAGE, new Class<?>[] {HoodieStorage.class}, storage);
-  }
-
-  public static StorageConfiguration<?> getNewStorageConf() {
-    return ReflectionUtils.loadClass(HADOOP_STORAGE_CONF);
   }
 
   public static StorageConfiguration<?> getStorageConf(Configuration conf) {

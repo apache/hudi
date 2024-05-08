@@ -24,7 +24,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
 import org.apache.hudi.hadoop.fs.HoodieRetryWrapperFileSystem;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -66,14 +65,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
     } else {
       this.fs = fs;
     }
-  }
-
-  public HoodieHadoopStorage(StoragePath path) {
-    this(path, new HadoopStorageConfiguration());
-  }
-
-  public HoodieHadoopStorage(String basePath) {
-    this(basePath, new HadoopStorageConfiguration());
   }
 
   public HoodieHadoopStorage(String basePath, Configuration conf) {
@@ -152,9 +143,9 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
-  public SeekableDataInputStream openSeekable(StoragePath path, int bufferSize) throws IOException {
+  public SeekableDataInputStream openSeekable(StoragePath path, int bufferSize, boolean wrapStream) throws IOException {
     return new HadoopSeekableDataInputStream(
-        HadoopFSUtils.getFSDataInputStream(fs, path, bufferSize));
+        HadoopFSUtils.getFSDataInputStream(fs, path, bufferSize, wrapStream));
   }
 
   @Override
@@ -265,16 +256,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public Configuration unwrapConf() {
     return fs.getConf();
-  }
-
-  @Override
-  public StorageConfiguration<?> buildInlineConf(StorageConfiguration<?> storageConf) {
-    return HadoopInLineFSUtils.buildInlineConf(storageConf);
-  }
-
-  @Override
-  public StoragePath getInlineFilePath(StoragePath outerPath, String origScheme, long inLineStartOffset, long inLineLength) {
-    return HadoopInLineFSUtils.getInlineFilePath(outerPath, origScheme, inLineStartOffset, inLineLength);
   }
 
   @Override

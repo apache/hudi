@@ -21,6 +21,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -62,7 +63,7 @@ public final class TestTablePathUtils {
   private void setup(Option<HoodieFileFormat> partitionMetafileFormat) throws IOException {
     URI tablePathURI = Paths.get(tempDir.getAbsolutePath(), "test_table").toUri();
     tablePath = new StoragePath(tablePathURI);
-    storage = HoodieStorageUtils.getStorage(tablePathURI.toString());
+    storage = HoodieStorageUtils.getStorage(tablePathURI.toString(), HoodieTestUtils.getDefaultStorageConfWithDefaults());
 
     // Create bootstrap index folder
     assertTrue(new File(
