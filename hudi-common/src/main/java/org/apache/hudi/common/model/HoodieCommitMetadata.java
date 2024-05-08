@@ -147,7 +147,7 @@ public class HoodieCommitMetadata implements Serializable {
     if (getPartitionToWriteStats().get(partitionPath) != null) {
       for (HoodieWriteStat stat : getPartitionToWriteStats().get(partitionPath)) {
         if ((stat.getFileId() != null)) {
-          String fullPath = FSUtils.constructAbsolutePathInHadoopPath(basePath, stat.getPath()).toString();
+          String fullPath = FSUtils.constructAbsolutePath(basePath, stat.getPath()).toString();
           fullPaths.add(fullPath);
         }
       }
