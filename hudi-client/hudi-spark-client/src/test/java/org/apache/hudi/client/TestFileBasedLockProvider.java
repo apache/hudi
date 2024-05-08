@@ -22,6 +22,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,7 @@ import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PA
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,7 +50,7 @@ public class TestFileBasedLockProvider {
   Path tempDir;
   String basePath;
   LockConfiguration lockConfiguration;
-  Configuration hadoopConf;
+  StorageConfiguration<Configuration> storageConf;
 
   @BeforeEach
   public void setUp() throws IOException {
@@ -60,12 +62,12 @@ public class TestFileBasedLockProvider {
     properties.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
     properties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
     lockConfiguration = new LockConfiguration(properties);
-    hadoopConf = new Configuration();
+    storageConf = getDefaultStorageConf();
   }
 
   @Test
   public void testAcquireLock() {
-    FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, hadoopConf);
+    FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, storageConf);
     assertTrue(fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
         .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     fileBasedLockProvider.unlock();
@@ -75,7 +77,7 @@ public class TestFileBasedLockProvider {
   public void testAcquireLockWithDefaultPath() {
     lockConfiguration.getConfig().remove(FILESYSTEM_LOCK_PATH_PROP_KEY);
     lockConfiguration.getConfig().setProperty(HoodieWriteConfig.BASE_PATH.key(), basePath);
-    FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, hadoopConf);
+    FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, storageConf);
     assertTrue(fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
         .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     fileBasedLockProvider.unlock();
@@ -84,7 +86,7 @@ public class TestFileBasedLockProvider {
 
   @Test
   public void testUnLock() {
-    FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, hadoopConf);
+    FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, storageConf);
     assertTrue(fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
         .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     fileBasedLockProvider.unlock();
@@ -94,7 +96,7 @@ public class TestFileBasedLockProvider {
 
   @Test
   public void testReentrantLock() {
-    FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, hadoopConf);
+    FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, storageConf);
     assertTrue(fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
         .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     assertFalse(fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
@@ -105,7 +107,7 @@ public class TestFileBasedLockProvider {
   @Test
   public void testUnlockWithoutLock() {
     assertDoesNotThrow(() -> {
-      FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, hadoopConf);
+      FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, storageConf);
       fileBasedLockProvider.unlock();
     });
   }
