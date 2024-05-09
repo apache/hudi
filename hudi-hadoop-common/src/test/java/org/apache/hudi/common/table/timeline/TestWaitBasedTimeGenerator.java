@@ -21,11 +21,10 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -50,7 +49,7 @@ public class TestWaitBasedTimeGenerator {
       NEED_TO_LOCK_LATER.set(lockLater);
     }
 
-    public MockInProcessLockProvider(LockConfiguration lockConfiguration, Configuration conf) {
+    public MockInProcessLockProvider(LockConfiguration lockConfiguration, StorageConfiguration<?> conf) {
       super(lockConfiguration, conf);
     }
 
@@ -75,7 +74,7 @@ public class TestWaitBasedTimeGenerator {
   // Clock skew time
   private final long clockSkewTime = 20L;
 
-  private final StorageConfiguration<?> storageConf = HoodieStorageUtils.getNewStorageConf();
+  private final StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConfWithDefaults();
 
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
 

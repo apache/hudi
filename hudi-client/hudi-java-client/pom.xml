@@ -39,13 +39,13 @@
         <!-- Hudi  -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-client-common</artifactId>
-            <version>${project.parent.version}</version>
+            <artifactId>hudi-hadoop-common</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-hadoop-common</artifactId>
-            <version>${project.version}</version>
+            <artifactId>hudi-client-common</artifactId>
+            <version>${project.parent.version}</version>
         </dependency>
 
         <!-- Kryo -->

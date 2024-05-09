@@ -19,7 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.util.VisibleForTesting;
-import org.apache.hudi.hadoop.fs.HoodieHadoopUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.StoragePath;
 
@@ -52,8 +52,9 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
 
   public HoodieBaseParquetWriter(StoragePath file,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
+    Configuration hadoopConf = parquetConfig.getStorageConf().unwrapAs(Configuration.class);
     ParquetWriter.Builder parquetWriterbuilder = new ParquetWriter.Builder(
-        HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf())) {
+        HoodieWrapperFileSystem.convertToHoodiePath(file, hadoopConf)) {
       @Override
       protected ParquetWriter.Builder self() {
         return this;
@@ -73,8 +74,8 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     parquetWriterbuilder.withDictionaryEncoding(parquetConfig.dictionaryEnabled());
     parquetWriterbuilder.withValidation(ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED);
     parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
-    parquetWriterbuilder.withConf(HoodieHadoopUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
-    handleParquetBloomFilters(parquetWriterbuilder, parquetConfig.getHadoopConf());
+    parquetWriterbuilder.withConf(HadoopFSUtils.registerFileSystem(file, hadoopConf));
+    handleParquetBloomFilters(parquetWriterbuilder, hadoopConf);
 
     parquetWriter = parquetWriterbuilder.build();
     // We cannot accurately measure the snappy compressed output file size. We are choosing a

@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
-public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReaderBase
+public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
     implements HoodieSeekingFileReader<IndexedRecord> {
   // TODO HoodieHFileReader right now tightly coupled to MT, we should break that coupling
   public static final String SCHEMA_KEY = "schema";
@@ -54,7 +54,7 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
    * <p>
    * Reads all the records with given schema
    */
-  public static List<IndexedRecord> readAllRecords(HoodieAvroFileReaderBase reader)
+  public static List<IndexedRecord> readAllRecords(HoodieAvroFileReader reader)
       throws IOException {
     Schema schema = reader.getSchema();
     return toStream(reader.getIndexedRecordIterator(schema))

@@ -28,6 +28,7 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import com.codahale.metrics.MetricRegistry;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,7 +98,7 @@ public class Metrics {
   private List<MetricsReporter> addAdditionalMetricsExporters(HoodieMetricsConfig metricConfig) {
     List<MetricsReporter> reporterList = new ArrayList<>();
     List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
-    try (HoodieStorage storage = HoodieStorageUtils.getStorage(propPathList.get(0))) {
+    try (HoodieStorage storage = HoodieStorageUtils.getStorage(propPathList.get(0), new Configuration())) {
       for (String propPath : propPathList) {
         HoodieMetricsConfig secondarySourceConfig = HoodieMetricsConfig.newBuilder().fromInputStream(
             storage.open(new StoragePath(propPath))).withPath(metricConfig.getBasePath()).build();

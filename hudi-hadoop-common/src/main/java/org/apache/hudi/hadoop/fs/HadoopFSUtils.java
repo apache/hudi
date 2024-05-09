@@ -84,7 +84,7 @@ public class HadoopFSUtils {
   }
 
   public static FileSystem getFs(StoragePath path, Configuration conf) {
-    return getFs(new Path(path.toUri()), conf);
+    return getFs(convertToHadoopPath(path), conf);
   }
 
   public static FileSystem getFs(Path path, Configuration conf) {
@@ -167,16 +167,22 @@ public class HadoopFSUtils {
    * @param fs         instance of {@link FileSystem} in use.
    * @param filePath   path of the file.
    * @param bufferSize buffer size to be used.
+   * @param wrapStream if false, don't attempt to wrap the stream
    * @return the right {@link FSDataInputStream} as required.
    */
   public static FSDataInputStream getFSDataInputStream(FileSystem fs,
                                                        StoragePath filePath,
-                                                       int bufferSize) {
+                                                       int bufferSize,
+                                                       boolean wrapStream) {
     FSDataInputStream fsDataInputStream = null;
     try {
       fsDataInputStream = fs.open(convertToHadoopPath(filePath), bufferSize);
     } catch (IOException e) {
       throw new HoodieIOException(String.format("Exception creating input stream from file: %s", filePath), e);
+    }
+
+    if (!wrapStream) {
+      return fsDataInputStream;
     }
 
     if (isGCSFileSystem(fs)) {
@@ -188,12 +194,10 @@ public class HadoopFSUtils {
       return new BoundedFsDataInputStream(fs, convertToHadoopPath(filePath), fsDataInputStream);
     }
 
-    /*
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
       return new TimedFSDataInputStream(convertToHadoopPath(filePath), new FSDataInputStream(
           new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
     }
-     */
 
     // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
     // need to wrap in another BufferedFSInputStream the make bufferSize work?
@@ -251,5 +255,13 @@ public class HadoopFSUtils {
 
   private static StorageConfiguration<Configuration> getStorageConf(Configuration conf, boolean copy) {
     return new HadoopStorageConfiguration(conf, copy);
+  }
+
+  public static Configuration registerFileSystem(StoragePath file, Configuration conf) {
+    Configuration returnConf = new Configuration(conf);
+    String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
+    returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
+        HoodieWrapperFileSystem.class.getName());
+    return returnConf;
   }
 }

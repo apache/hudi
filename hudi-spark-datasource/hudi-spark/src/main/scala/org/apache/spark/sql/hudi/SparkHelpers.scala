@@ -61,12 +61,12 @@ object SparkHelpers {
         HoodieStorageConfig.PARQUET_BLOCK_SIZE.defaultValue.toInt,
         HoodieStorageConfig.PARQUET_PAGE_SIZE.defaultValue.toInt,
         HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.defaultValue.toInt,
-        conf.unwrap(),
+        conf,
         HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue.toDouble,
         HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED.defaultValue)
 
     // Add current classLoad for config, if not will throw classNotFound of 'HoodieWrapperFileSystem'.
-    parquetConfig.getHadoopConf().setClassLoader(Thread.currentThread.getContextClassLoader)
+    conf.unwrap().setClassLoader(Thread.currentThread.getContextClassLoader)
 
     val writer = new HoodieAvroParquetWriter(destinationFile, parquetConfig, instantTime, new SparkTaskContextSupplier(), true)
     for (rec <- sourceRecords) {

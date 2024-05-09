@@ -63,6 +63,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
 
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+
 /**
  * HoodieWrapperFileSystem wraps the default file system. It holds state about the open streams in the file system to
  * support getting the written size to each of the open streams.
@@ -144,7 +147,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   public static Path convertToHoodiePath(StoragePath file, Configuration conf) {
     try {
       String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
-      return convertPathWithScheme(new Path(file.toUri()), getHoodieScheme(scheme));
+      return convertPathWithScheme(convertToHadoopPath(file), getHoodieScheme(scheme));
     } catch (HoodieIOException e) {
       throw e;
     }
@@ -359,7 +362,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
       if (success) {
         try {
-          consistencyGuard.waitTillFileDisappears(new StoragePath(f.toUri()));
+          consistencyGuard.waitTillFileDisappears(convertToStoragePath(f));
         } catch (TimeoutException e) {
           throw new HoodieException("Timed out waiting for " + f + " to disappear", e);
         }
@@ -971,7 +974,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   private StoragePath convertToDefaultStoragePath(Path oldPath) {
-    return new StoragePath(convertPathWithScheme(oldPath, getScheme()).toUri());
+    return convertToStoragePath(convertPathWithScheme(oldPath, getScheme()));
   }
 
   private Path convertToLocalPath(Path oldPath) {

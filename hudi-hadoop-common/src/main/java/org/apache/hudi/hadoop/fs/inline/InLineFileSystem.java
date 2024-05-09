@@ -34,6 +34,8 @@ import org.apache.hadoop.util.Progressable;
 import java.io.IOException;
 import java.net.URI;
 
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+
 /**
  * Enables reading any inline file at a given offset and length. This {@link FileSystem} is used only in read path and does not support
  * any write apis.
@@ -71,7 +73,7 @@ public class InLineFileSystem extends FileSystem {
     Path outerPath = HadoopInLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FSDataInputStream outerStream = outerFs.open(outerPath, bufferSize);
-    StoragePath inlineStoragePath = new StoragePath(inlinePath.toUri());
+    StoragePath inlineStoragePath = convertToStoragePath(inlinePath);
     return new InLineFsDataInputStream(HadoopInLineFSUtils.startOffset(inlineStoragePath), outerStream, HadoopInLineFSUtils.length(inlineStoragePath));
   }
 
@@ -89,7 +91,7 @@ public class InLineFileSystem extends FileSystem {
     Path outerPath = HadoopInLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FileStatus status = outerFs.getFileStatus(outerPath);
-    FileStatus toReturn = new FileStatus(HadoopInLineFSUtils.length(new StoragePath(inlinePath.toUri())), status.isDirectory(), status.getReplication(), status.getBlockSize(),
+    FileStatus toReturn = new FileStatus(HadoopInLineFSUtils.length(convertToStoragePath(inlinePath)), status.isDirectory(), status.getReplication(), status.getBlockSize(),
         status.getModificationTime(), status.getAccessTime(), status.getPermission(), status.getOwner(),
         status.getGroup(), inlinePath);
     return toReturn;

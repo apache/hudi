@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
+import org.apache.hudi.io.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;

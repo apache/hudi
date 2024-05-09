@@ -20,6 +20,7 @@
 package org.apache.hudi.storage.hadoop;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
@@ -36,10 +37,6 @@ public class HadoopStorageConfiguration extends StorageConfiguration<Configurati
   private static final long serialVersionUID = 1L;
 
   private transient Configuration configuration;
-
-  public HadoopStorageConfiguration() {
-    this(true);
-  }
 
   public HadoopStorageConfiguration(Boolean loadDefaults) {
     this(new Configuration(loadDefaults));
@@ -84,6 +81,11 @@ public class HadoopStorageConfiguration extends StorageConfiguration<Configurati
   @Override
   public Option<String> getString(String key) {
     return Option.ofNullable(configuration.get(key));
+  }
+
+  @Override
+  public StorageConfiguration<Configuration> getInline() {
+    return HadoopInLineFSUtils.buildInlineConf(this);
   }
 
   @Override
