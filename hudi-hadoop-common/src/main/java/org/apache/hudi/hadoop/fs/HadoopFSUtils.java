@@ -20,6 +20,7 @@
 package org.apache.hudi.hadoop.fs;
 
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.SeekableDataOutputStream;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -29,6 +30,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BufferedFSInputStream;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -38,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Map;
 
 /**
@@ -263,5 +266,9 @@ public class HadoopFSUtils {
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
         HoodieWrapperFileSystem.class.getName());
     return returnConf;
+  }
+
+  public static SeekableDataOutputStream makeOutputStreamSeekable(OutputStream stream) throws IOException {
+    return new HadoopSeekableDataOutputStream(new FSDataOutputStream(stream, null));
   }
 }

@@ -29,13 +29,13 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.SeekableDataOutputStream;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+import java.io.OutputStream;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
@@ -72,7 +72,7 @@ public class HoodieFileWriterFactory {
     return factory.getFileWriterByFormat(extension, instantTime, path, conf, config, schema, taskContextSupplier);
   }
 
-  public static <T, I, K, O> HoodieFileWriter getFileWriter(HoodieFileFormat format, SeekableDataOutputStream outputStream,
+  public static <T, I, K, O> HoodieFileWriter getFileWriter(HoodieFileFormat format, OutputStream outputStream,
                                                             StorageConfiguration<?> conf, HoodieConfig config, Schema schema, HoodieRecordType recordType)
       throws IOException {
     HoodieFileWriterFactory factory = getWriterFactory(recordType);
@@ -94,7 +94,7 @@ public class HoodieFileWriterFactory {
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(HoodieFileFormat format, SeekableDataOutputStream outputStream,
+  protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(HoodieFileFormat format, OutputStream outputStream,
                                                                 StorageConfiguration<?> conf, HoodieConfig config, Schema schema) throws IOException {
     switch (format) {
       case PARQUET:
@@ -111,7 +111,7 @@ public class HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newParquetFileWriter(
-      SeekableDataOutputStream outputStream, StorageConfiguration<?> conf, HoodieConfig config, Schema schema) throws IOException {
+      OutputStream outputStream, StorageConfiguration<?> conf, HoodieConfig config, Schema schema) throws IOException {
     throw new UnsupportedOperationException();
   }
 

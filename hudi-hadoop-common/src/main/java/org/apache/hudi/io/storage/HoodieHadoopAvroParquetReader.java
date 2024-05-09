@@ -52,7 +52,7 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 /**
  * {@link HoodieFileReader} implementation for parquet format.
  */
-public class HoodieHadoopAvroParquetReader extends HoodieAvroFileReaderBase {
+public class HoodieHadoopAvroParquetReader extends HoodieAvroFileReader {
 
   private final StoragePath path;
   private final StorageConfiguration<?> conf;

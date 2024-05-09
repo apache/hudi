@@ -356,7 +356,8 @@ public class TableSchemaResolver {
   private MessageType readSchemaFromORCBaseFile(StoragePath orcFilePath) throws IOException {
     LOG.info("Reading schema from {}", orcFilePath);
     HoodieFileReader orcReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-        .getFileReader(null, metaClient.getRawHoodieStorage().getConf(), orcFilePath,  HoodieFileFormat.ORC, Option.empty());
+        .getFileReader(metaClient.getTableConfig(), metaClient.getRawHoodieStorage().getConf(), orcFilePath,
+            HoodieFileFormat.ORC, Option.empty());
     return convertAvroSchemaToParquet(orcReader.getSchema());
   }
 

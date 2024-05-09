@@ -25,7 +25,6 @@ import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
-import org.apache.hudi.io.SeekableDataOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -130,16 +129,6 @@ public abstract class HoodieStorage implements Closeable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract SeekableDataInputStream openSeekable(StoragePath path, int bufferSize, boolean wrapStream) throws IOException;
-
-  /**
-   * Creates a SeekableDataOutputStream from a given OutputStream
-   *
-   * @param stream the output stream to make seekable
-   * @return seekable output stream
-   * @throws IOException IO error.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract SeekableDataOutputStream makeOutputSeekable(OutputStream stream) throws IOException;
 
   /**
    * Appends to an existing file (optional operation).

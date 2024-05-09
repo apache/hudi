@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.SeekableDataInputStream;
-import org.apache.hudi.io.SeekableDataOutputStream;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -107,39 +106,35 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     }
 
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    StorageConfiguration<?> configuration = HoodieStorageUtils.getStorageConf(new Configuration());
-    try (SeekableDataOutputStream outputStream = HoodieStorageUtils.getStorage(configuration).makeOutputSeekable(baos)) {
-      HoodieFileWriter parquetWriter = null;
-      HoodieConfig config = new HoodieConfig();
-      config.setValue(PARQUET_COMPRESSION_CODEC_NAME.key(), compressionCodecName.get().name());
-      config.setValue(PARQUET_BLOCK_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_BLOCK_SIZE));
-      config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
-      config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
-      config.setValue(PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(expectedCompressionRatio.get()));
-      config.setValue(PARQUET_DICTIONARY_ENABLED, String.valueOf(useDictionaryEncoding.get()));
-      HoodieRecordType recordType = records.iterator().next().getRecordType();
-      try {
-        parquetWriter = HoodieFileWriterFactory.getFileWriter(
-            HoodieFileFormat.PARQUET,
-            outputStream,
-            configuration,
-            config,
-            writerSchema,
-            recordType);
-        for (HoodieRecord<?> record : records) {
-          String recordKey = getRecordKey(record).orElse(null);
-          parquetWriter.write(recordKey, record, writerSchema);
-        }
-        outputStream.flush();
-      } finally {
-        if (parquetWriter != null) {
-          parquetWriter.close();
-        }
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    HoodieFileWriter parquetWriter = null;
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(PARQUET_COMPRESSION_CODEC_NAME.key(), compressionCodecName.get().name());
+    config.setValue(PARQUET_BLOCK_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_BLOCK_SIZE));
+    config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
+    config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
+    config.setValue(PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(expectedCompressionRatio.get()));
+    config.setValue(PARQUET_DICTIONARY_ENABLED, String.valueOf(useDictionaryEncoding.get()));
+    HoodieRecordType recordType = records.iterator().next().getRecordType();
+    try {
+      parquetWriter = HoodieFileWriterFactory.getFileWriter(
+          HoodieFileFormat.PARQUET,
+          outputStream,
+          HoodieStorageUtils.getStorageConf(new Configuration()),
+          config,
+          writerSchema,
+          recordType);
+      for (HoodieRecord<?> record : records) {
+        String recordKey = getRecordKey(record).orElse(null);
+        parquetWriter.write(recordKey, record, writerSchema);
+      }
+      outputStream.flush();
+    } finally {
+      if (parquetWriter != null) {
+        parquetWriter.close();
       }
     }
-
-    return baos.toByteArray();
+    return outputStream.toByteArray();
   }
 
   /**
