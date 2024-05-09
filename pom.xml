@@ -138,7 +138,7 @@
     <http.version>4.4.1</http.version>
     <spark.version>${spark3.version}</spark.version>
     <spark2.version>2.4.4</spark2.version>
-    <spark3.version>3.4.3</spark3.version>
+    <spark3.version>3.5.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
     <flink1.18.version>1.18.0</flink1.18.version>
     <flink1.17.version>1.17.1</flink1.17.version>
