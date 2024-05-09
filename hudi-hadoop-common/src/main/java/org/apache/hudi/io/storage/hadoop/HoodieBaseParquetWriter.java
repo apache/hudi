@@ -76,8 +76,8 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     parquetWriterbuilder.withDictionaryEncoding(parquetConfig.dictionaryEnabled());
     parquetWriterbuilder.withValidation(ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED);
     parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
-    parquetWriterbuilder.withConf(HadoopFSUtils.registerFileSystem(file, hadoopConf));
-    handleParquetBloomFilters(parquetWriterbuilder, hadoopConf);
+    parquetWriterbuilder.withConf(HadoopFSUtils.registerFileSystem(file, parquetConfig.getStorageConf().unwrapAs(Configuration.class)));
+    handleParquetBloomFilters(parquetWriterbuilder, parquetConfig.getStorageConf().unwrapAs(Configuration.class));
 
     parquetWriter = parquetWriterbuilder.build();
     // We cannot accurately measure the snappy compressed output file size. We are choosing a
