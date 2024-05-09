@@ -258,7 +258,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.validateAllFileGroups = true;
 
     // lets ensure we have a pending commit when FS based polling is done. and the commit completes when MDT is polled.
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(jsc.hadoopConfiguration()).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())).build();
     // moving out the completed commit meta file to a temp location
     HoodieInstant lastInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get();
     String latestCompletedCommitMetaFile = basePath + "/.hoodie/" + lastInstant.getFileName();
