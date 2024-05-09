@@ -217,14 +217,13 @@ public class HoodieTestUtils {
   }
 
   /**
-   * @param conf storage configuration.
-   * @param basePath    base path of the Hudi table.
+   * @param conf     file system configuration.
+   * @param basePath base path of the Hudi table.
    * @return a new {@link HoodieTableMetaClient} instance.
    */
   public static HoodieTableMetaClient createMetaClient(Configuration conf,
                                                        String basePath) {
-    return HoodieTableMetaClient.builder()
-        .setConf(HoodieStorageUtils.getStorageConfWithCopy(conf)).setBasePath(basePath).build();
+    return createMetaClient(HoodieStorageUtils.getStorageConfWithCopy(conf), basePath);
   }
 
   /**

@@ -23,7 +23,6 @@ package org.apache.hudi.common.config;
  * Used for loading filesystem specific configs
  */
 public abstract class PropertiesConfig {
-
   /**
    * return any global properties for the filesystem
    */
