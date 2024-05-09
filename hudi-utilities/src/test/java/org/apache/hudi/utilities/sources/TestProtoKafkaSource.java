@@ -108,6 +108,8 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
         "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer");
     props.put("schema.registry.url", MOCK_REGISTRY_URL);
     props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    // class name is not required so we'll remove it
+    props.remove(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key());
     SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
     ProtoKafkaSource protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(protoKafkaSource);
