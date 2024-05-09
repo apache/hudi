@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
@@ -50,7 +51,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -389,9 +389,7 @@ public class HoodieTableMetaClient implements Serializable {
           consistencyGuardConfig)
           : new NoOpConsistencyGuard();
 
-      storage = (HoodieStorage) ReflectionUtils.loadClass("org.apache.hudi.storage.hadoop.HoodieHadoopStorage",
-          new Class<?>[] {StoragePath.class, StorageConfiguration.class, boolean.class, long.class, int.class,
-              long.class, String.class, ConsistencyGuard.class},
+      storage = HoodieStorageUtils.getStorage(
           metaPath,
           getStorageConf(),
           fileSystemRetryConfig.isFileSystemActionRetryEnable(),

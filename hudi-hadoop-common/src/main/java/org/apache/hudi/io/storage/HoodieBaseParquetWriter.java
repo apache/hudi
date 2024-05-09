@@ -19,7 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.util.VisibleForTesting;
-import org.apache.hudi.hadoop.fs.HoodieHadoopUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.StoragePath;
 
@@ -74,7 +74,7 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     parquetWriterbuilder.withDictionaryEncoding(parquetConfig.dictionaryEnabled());
     parquetWriterbuilder.withValidation(ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED);
     parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
-    parquetWriterbuilder.withConf(HoodieHadoopUtils.registerFileSystem(file, hadoopConf));
+    parquetWriterbuilder.withConf(HadoopFSUtils.registerFileSystem(file, hadoopConf));
     handleParquetBloomFilters(parquetWriterbuilder, hadoopConf);
 
     parquetWriter = parquetWriterbuilder.build();

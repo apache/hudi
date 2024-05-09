@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
@@ -98,7 +99,7 @@ public class TestTableSchemaResolver {
     assertEquals(
         new AvroSchemaConverter().convert(expectedSchema),
         TableSchemaResolver.readSchemaFromLogFile(HoodieStorageUtils.getStorage(
-            logFilePath, HoodieStorageUtils.getNewStorageConf()), logFilePath));
+            logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
   }
 
   private String initTestDir(String folderName) throws IOException {
@@ -109,7 +110,7 @@ public class TestTableSchemaResolver {
 
   private StoragePath writeLogFile(StoragePath partitionPath, Schema schema) throws IOException, URISyntaxException, InterruptedException {
     HoodieStorage storage = HoodieStorageUtils.getStorage(
-        partitionPath, HoodieStorageUtils.getNewStorageConf());
+        partitionPath, HoodieTestUtils.getDefaultStorageConfWithDefaults());
     HoodieLogFormat.Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").withDeltaCommit("100").withStorage(storage).build();

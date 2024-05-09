@@ -19,6 +19,15 @@
 
 package org.apache.hudi.common.config;
 
-public interface PropertiesConfig {
-  public abstract TypedProperties getGlobalProperties();
+/**
+ * Used for loading filesystem specific configs
+ */
+public abstract class PropertiesConfig {
+
+  /**
+   * return any global properties for the filesystem
+   */
+  public TypedProperties getGlobalProperties() {
+    return new TypedProperties();
+  }
 }

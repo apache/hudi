@@ -38,6 +38,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -82,8 +83,6 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private final StoragePath pathForReader;
   private final HoodieConfig hFileReaderConfig;
 
-  private final HoodieStorage storage;
-
   public HoodieHFileDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                               Option<byte[]> content,
                               boolean readBlockLazily,
@@ -93,27 +92,23 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Map<HeaderMetadataType, String> footer,
                               boolean enablePointLookups,
                               StoragePath pathForReader,
-                              boolean useNativeHFileReader,
-                              HoodieStorage storage) {
+                              boolean useNativeHFileReader) {
     super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema,
         header, footer, HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME, enablePointLookups);
     this.compressionAlgorithm = Option.empty();
     this.pathForReader = pathForReader;
     this.hFileReaderConfig = getHFileReaderConfig(useNativeHFileReader);
-    this.storage = storage;
   }
 
   public HoodieHFileDataBlock(List<HoodieRecord> records,
                               Map<HeaderMetadataType, String> header,
                               Compression.Algorithm compressionAlgorithm,
                               StoragePath pathForReader,
-                              boolean useNativeHFileReader,
-                              HoodieStorage storage) {
+                              boolean useNativeHFileReader) {
     super(records, false, header, new HashMap<>(), HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME);
     this.compressionAlgorithm = Option.of(compressionAlgorithm);
     this.pathForReader = pathForReader;
     this.hFileReaderConfig = getHFileReaderConfig(useNativeHFileReader);
-    this.storage = storage;
   }
 
   @Override
@@ -193,7 +188,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
-    StorageConfiguration<?> storageConf = storage.buildInlineConf(getBlockContentLocation().get().getStorageConf());
+    StorageConfiguration<?> storageConf = getBlockContentLocation().get().getStorageConf().getInline();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(pathForReader, storageConf);
     // Read the content
     try (HoodieFileReader reader =
              HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getContentReader(
@@ -208,7 +204,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
-    StorageConfiguration<?> storageConf = storage.buildInlineConf(getBlockContentLocation().get().getStorageConf());
+    StorageConfiguration<?> storageConf = getBlockContentLocation().get().getStorageConf().getInline();
     HoodieStorage storage = HoodieStorageUtils.getStorage(pathForReader, storageConf);
     // Read the content
     try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
@@ -226,9 +222,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
-    StorageConfiguration<?> inlineConf = storage.buildInlineConf(blockContentLoc.getStorageConf());
+    StorageConfiguration<?> inlineConf = blockContentLoc.getStorageConf().getInline();
 
-    StoragePath inlinePath = storage.getInlineFilePath(
+    StoragePath inlinePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),

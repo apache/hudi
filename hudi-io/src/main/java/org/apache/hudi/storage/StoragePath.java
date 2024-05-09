@@ -23,7 +23,6 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -238,7 +237,7 @@ public class StoragePath implements Comparable<StoragePath>, Serializable {
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getFileExtension() {
-    String fileName = new File(getName()).getName();
+    String fileName = getName();
     int dotIndex = fileName.lastIndexOf('.');
     return dotIndex == -1 ? "" : fileName.substring(dotIndex);
   }

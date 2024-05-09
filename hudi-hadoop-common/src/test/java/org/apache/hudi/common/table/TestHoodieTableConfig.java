@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -61,7 +62,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     initPath();
-    storage = HoodieStorageUtils.getStorage(basePath);
+    storage = HoodieStorageUtils.getStorage(basePath, HoodieTestUtils.getDefaultStorageConfWithDefaults());
     metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.NAME.key(), "test-table");

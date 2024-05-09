@@ -47,7 +47,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -125,7 +124,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           new AvroSchemaConverter().convert(schema), schema, Option.of(filter), new Properties());
       HoodieParquetConfig<HoodieAvroWriteSupport> config = new HoodieParquetConfig<>(writeSupport, CompressionCodecName.GZIP,
           ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
-          new HadoopStorageConfiguration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()), true);
+          storage.getConf(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()), true);
       try (HoodieAvroParquetWriter writer = new HoodieAvroParquetWriter(
           new StoragePath(Paths.get(basePath, partition, fileName).toString()), config, currentInstantTime,
           contextSupplier, populateMetaFields)) {

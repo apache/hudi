@@ -16,22 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source.filedistribution.partitioner;
-
-import org.apache.hudi.index.bucket.BucketIdentifier;
+package org.apache.hudi.source.rebalance.partitioner;
 
 import org.apache.flink.api.common.functions.Partitioner;
 
-public class StreamReadBucketIndexPartitioner implements Partitioner<String> {
+/**
+ * Partitioner for regular streaming read.
+ */
+public class StreamReadAppendPartitioner implements Partitioner<Integer> {
 
-  private final int parallNum;
+  private final int parallelism;
 
-  public StreamReadBucketIndexPartitioner(int parallNum) {
-    this.parallNum = parallNum;
+  public StreamReadAppendPartitioner(int parallelism) {
+    this.parallelism = parallelism;
   }
 
   @Override
-  public int partition(String fileName, int maxParallelism) {
-    return BucketIdentifier.bucketIdFromFileId(fileName) % parallNum;
+  public int partition(Integer splitNum, int maxParallelism) {
+    return splitNum % parallelism;
   }
 }

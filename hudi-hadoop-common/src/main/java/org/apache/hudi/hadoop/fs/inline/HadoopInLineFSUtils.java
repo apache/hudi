@@ -26,7 +26,8 @@ import org.apache.hudi.storage.inline.InLineFSUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Utils to parse InLineFileSystem paths.
@@ -36,15 +37,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  */
 public class HadoopInLineFSUtils extends InLineFSUtils {
 
-  public static Configuration buildInlineConf(Configuration conf) {
-    Configuration inlineConf = new Configuration(conf);
-    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-    inlineConf.setClassLoader(InLineFileSystem.class.getClassLoader());
-    return inlineConf;
-  }
-
-  public static StorageConfiguration<?> buildInlineConf(StorageConfiguration<?> storageConf) {
-    StorageConfiguration<?> inlineConf = storageConf.newInstance();
+  public static StorageConfiguration<Configuration> buildInlineConf(StorageConfiguration<Configuration> storageConf) {
+    StorageConfiguration<Configuration> inlineConf = storageConf.newInstance();
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
     (inlineConf.unwrapAs(Configuration.class)).setClassLoader(InLineFileSystem.class.getClassLoader());
     return inlineConf;
@@ -65,22 +59,8 @@ public class HadoopInLineFSUtils extends InLineFSUtils {
    * @return Outer file Path from the InLineFS Path
    */
   public static Path getOuterFilePathFromInlinePath(Path inlineFSPath) {
-    assertInlineFSPath(inlineFSPath);
-
-    final String outerFileScheme = inlineFSPath.getParent().getName();
-    final Path basePath = inlineFSPath.getParent().getParent();
-    checkArgument(basePath.toString().contains(SCHEME_SEPARATOR),
-        "Invalid InLineFS path: " + inlineFSPath);
-
-    final String pathExceptScheme = basePath.toString().substring(basePath.toString().indexOf(SCHEME_SEPARATOR) + 1);
-    final String fullPath = outerFileScheme + SCHEME_SEPARATOR
-        + (outerFileScheme.equals(LOCAL_FILESYSTEM_SCHEME) ? StoragePath.SEPARATOR : "")
-        + pathExceptScheme;
-    return new Path(fullPath);
-  }
-
-  private static void assertInlineFSPath(Path inlinePath) {
-    String scheme = inlinePath.toUri().getScheme();
-    checkArgument(InLineFileSystem.SCHEME.equals(scheme));
+    StoragePath storagePath = convertToStoragePath(inlineFSPath);
+    StoragePath outerFilePath = getOuterFilePathFromInlinePath(storagePath);
+    return convertToHadoopPath(outerFilePath);
   }
 }

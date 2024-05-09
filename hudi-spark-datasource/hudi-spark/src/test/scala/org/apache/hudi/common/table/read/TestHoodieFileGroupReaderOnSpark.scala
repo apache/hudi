@@ -74,7 +74,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   override def getStorageConf: StorageConfiguration[_] = {
-    HoodieTestUtils.getDefaultStorageConf
+    HoodieTestUtils.getDefaultStorageConf.getInline
   }
 
   override def getBasePath: String = {

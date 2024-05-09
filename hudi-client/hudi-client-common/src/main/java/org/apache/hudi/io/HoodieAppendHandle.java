@@ -57,7 +57,6 @@ import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -468,9 +467,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         String keyField = config.populateMetaFields()
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
+
         blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, shouldWriteRecordPositions,
             getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
-                addBlockIdentifier()), keyField, storage));
+                addBlockIdentifier()), keyField));
       }
 
       if (appendDeleteBlocks && recordsToDeleteWithPositions.size() > 0) {
@@ -674,15 +674,14 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
                                          List<HoodieRecord> records,
                                          boolean shouldWriteRecordPositions,
                                          Map<HeaderMetadataType, String> header,
-                                         String keyField,
-                                         HoodieStorage storage) {
+                                         String keyField) {
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, shouldWriteRecordPositions, header, keyField);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(
             records, header, writeConfig.getHFileCompressionAlgorithm(), new StoragePath(writeConfig.getBasePath()),
-            writeConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER), storage);
+            writeConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,
@@ -691,9 +690,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             keyField,
             writeConfig.getParquetCompressionCodec(),
             writeConfig.getParquetCompressionRatio(),
-            writeConfig.parquetDictionaryEnabled(),
-            storage
-            );
+            writeConfig.parquetDictionaryEnabled());
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }

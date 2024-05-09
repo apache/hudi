@@ -263,7 +263,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     if (path.isPresent()) {
       HoodieStorage storage = HoodieStorageUtils.getStorage(path.get(), conf);
       fileSize = storage.getPathInfo(path.get()).getLength();
-      inputStream = storage.openSeekable(path.get());
+      inputStream = storage.openSeekable(path.get(), false);
     } else {
       fileSize = bytesContent.get().length;
       inputStream = new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(bytesContent.get()));

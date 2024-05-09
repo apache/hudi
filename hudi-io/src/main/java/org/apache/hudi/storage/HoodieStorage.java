@@ -124,11 +124,12 @@ public abstract class HoodieStorage implements Closeable {
    *
    * @param path       the file to open.
    * @param bufferSize buffer size to use.
+   * @param wrapStream true if we want to wrap the inputstream based on filesystem specific criteria
    * @return the InputStream to read from.
    * @throws IOException IO error.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract SeekableDataInputStream openSeekable(StoragePath path, int bufferSize) throws IOException;
+  public abstract SeekableDataInputStream openSeekable(StoragePath path, int bufferSize, boolean wrapStream) throws IOException;
 
   /**
    * Creates a SeekableDataOutputStream from a given OutputStream
@@ -289,19 +290,6 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract Object unwrapConf();
 
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract StorageConfiguration<?> buildInlineConf(StorageConfiguration<?> storageConf);
-
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public final StoragePath getInlineFilePath(StoragePath outerPath, long inLineStartOffset, long inLineLength) {
-    return getInlineFilePath(outerPath, getScheme(), inLineStartOffset, inLineLength);
-  }
-
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract StoragePath getInlineFilePath(StoragePath outerPath, String origScheme, long inLineStartOffset, long inLineLength);
-
-
-
   /**
    * Creates a new file with overwrite set to false. This ensures files are created
    * only once and never rewritten, also, here we take care if the content is not
@@ -416,12 +404,13 @@ public abstract class HoodieStorage implements Closeable {
    * Opens an SeekableDataInputStream at the indicated path with seeks supported.
    *
    * @param path the file to open.
+   * @param wrapStream true if we want to wrap the inputstream based on filesystem specific criteria
    * @return the InputStream to read from.
    * @throws IOException IO error.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public SeekableDataInputStream openSeekable(StoragePath path) throws IOException {
-    return openSeekable(path, getDefaultBlockSize(path));
+  public SeekableDataInputStream openSeekable(StoragePath path, boolean wrapStream) throws IOException {
+    return openSeekable(path, getDefaultBlockSize(path), wrapStream);
   }
 
   /**

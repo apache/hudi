@@ -28,6 +28,7 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -83,6 +84,10 @@ public class HiveSyncFunctionalTestHarness {
 
   public HiveConf hiveConf() {
     return hiveTestService.getHiveServer().getHiveConf();
+  }
+
+  public StorageConfiguration<Configuration> storageConf() {
+    return HadoopFSUtils.getStorageConf(hiveConf());
   }
 
   public ZookeeperTestService zkService() {
