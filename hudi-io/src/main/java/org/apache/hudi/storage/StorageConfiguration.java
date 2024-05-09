@@ -64,6 +64,13 @@ public abstract class StorageConfiguration<T> implements Serializable {
   public abstract Option<String> getString(String key);
 
   /**
+   * Gets an inline version of this storage configuration
+   *
+   * @return copy of this storage configuration that is inline
+   */
+  public abstract StorageConfiguration<T> getInline();
+
+  /**
    * @param clazz class of U, which is assignable from T.
    * @param <U>   type to return.
    * @return the underlying configuration cast to type {@link U}.

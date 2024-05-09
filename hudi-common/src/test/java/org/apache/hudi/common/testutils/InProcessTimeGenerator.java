@@ -23,9 +23,6 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-
-import org.apache.hadoop.conf.Configuration;
 
 /**
  * An in-process time generator that always use in-process lock for time generation.
@@ -35,8 +32,7 @@ import org.apache.hadoop.conf.Configuration;
 public class InProcessTimeGenerator {
 
   private static final TimeGenerator TIME_GENERATOR = TimeGenerators.getTimeGenerator(
-      HoodieTimeGeneratorConfig.defaultConfig(""),
-      HadoopFSUtils.getStorageConf(new Configuration()));
+      HoodieTimeGeneratorConfig.defaultConfig(""), HoodieTestUtils.getDefaultStorageConfWithDefaults());
 
   public static String createNewInstantTime() {
     return createNewInstantTime(0L);

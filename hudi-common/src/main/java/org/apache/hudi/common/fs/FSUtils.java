@@ -34,17 +34,13 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
-import org.apache.hudi.hadoop.fs.CachingPath;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
-import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -75,6 +71,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.storage.HoodieStorageUtils.getStorageConfWithCopy;
+
 /**
  * Utility functions related to accessing the file storage.
  */
@@ -92,20 +90,6 @@ public class FSUtils {
   private static final String LOG_FILE_EXTENSION = ".log";
 
   private static final StoragePathFilter ALLOW_ALL_FILTER = file -> true;
-
-  public static Configuration buildInlineConf(Configuration conf) {
-    Configuration inlineConf = new Configuration(conf);
-    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-    inlineConf.setClassLoader(InLineFileSystem.class.getClassLoader());
-    return inlineConf;
-  }
-
-  public static StorageConfiguration<?> buildInlineConf(StorageConfiguration<?> storageConf) {
-    StorageConfiguration<?> inlineConf = storageConf.newInstance();
-    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-    (inlineConf.unwrapAs(Configuration.class)).setClassLoader(InLineFileSystem.class.getClassLoader());
-    return inlineConf;
-  }
 
   /**
    * Check if table already exists in the given path.
@@ -209,21 +193,7 @@ public class FSUtils {
    * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
   public static String getRelativePartitionPath(Path basePath, Path fullPartitionPath) {
-    basePath = CachingPath.getPathWithoutSchemeAndAuthority(basePath);
-    fullPartitionPath = CachingPath.getPathWithoutSchemeAndAuthority(fullPartitionPath);
-
-    String fullPartitionPathStr = fullPartitionPath.toString();
-
-    if (!fullPartitionPathStr.startsWith(basePath.toString())) {
-      throw new IllegalArgumentException("Partition path \"" + fullPartitionPathStr
-          + "\" does not belong to base-path \"" + basePath + "\"");
-    }
-
-    int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
-        basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
-    // Partition-Path could be empty for non-partitioned tables
-    return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
-        : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
+    return getRelativePartitionPath(new StoragePath(basePath.toUri()), new StoragePath(fullPartitionPath.toUri()));
   }
 
   public static String getRelativePartitionPath(StoragePath basePath, StoragePath fullPartitionPath) {
@@ -489,14 +459,12 @@ public class FSUtils {
 
   public static boolean isLogFile(StoragePath logPath) {
     String scheme = logPath.toUri().getScheme();
-    return isLogFile(InLineFileSystem.SCHEME.equals(scheme)
+    return isLogFile(InLineFSUtils.SCHEME.equals(scheme)
         ? InLineFSUtils.getOuterFilePathFromInlinePath(logPath).getName() : logPath.getName());
   }
 
   public static boolean isLogFile(Path logPath) {
-    String scheme = logPath.toUri().getScheme();
-    return isLogFile(InLineFileSystem.SCHEME.equals(scheme)
-        ? InLineFSUtils.getOuterFilePathFromInlinePath(logPath).getName() : logPath.getName());
+    return isLogFile(new StoragePath(logPath.getName()));
   }
 
   public static boolean isLogFile(String fileName) {
@@ -635,16 +603,7 @@ public class FSUtils {
   }
 
   public static Path constructAbsolutePathInHadoopPath(String basePath, String relativePartitionPath) {
-    if (StringUtils.isNullOrEmpty(relativePartitionPath)) {
-      return new Path(basePath);
-    }
-
-    // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
-    //       absolute path
-    String properPartitionPath = relativePartitionPath.startsWith(PATH_SEPARATOR)
-        ? relativePartitionPath.substring(1)
-        : relativePartitionPath;
-    return constructAbsolutePath(new CachingPath(basePath), properPartitionPath);
+    return new Path(constructAbsolutePath(basePath, relativePartitionPath).toUri());
   }
 
   public static StoragePath constructAbsolutePath(String basePath, String relativePartitionPath) {
@@ -658,11 +617,6 @@ public class FSUtils {
         ? relativePartitionPath.substring(1)
         : relativePartitionPath;
     return constructAbsolutePath(new StoragePath(basePath), properPartitionPath);
-  }
-
-  public static Path constructAbsolutePath(Path basePath, String relativePartitionPath) {
-    // For non-partitioned table, return only base-path
-    return StringUtils.isNullOrEmpty(relativePartitionPath) ? basePath : new CachingPath(basePath, relativePartitionPath);
   }
 
   public static StoragePath constructAbsolutePath(StoragePath basePath, String relativePartitionPath) {
@@ -693,14 +647,6 @@ public class FSUtils {
    */
   public static String getDFSFullPartitionPath(FileSystem fs, Path fullPartitionPath) {
     return fs.getUri() + fullPartitionPath.toUri().getRawPath();
-  }
-
-  public static Configuration registerFileSystem(StoragePath file, Configuration conf) {
-    Configuration returnConf = new Configuration(conf);
-    String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
-    returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
-        HoodieWrapperFileSystem.class.getName());
-    return returnConf;
   }
 
   /**
@@ -756,7 +702,7 @@ public class FSUtils {
       List<String> subPaths) {
     Map<String, T> result = new HashMap<>();
     if (subPaths.size() > 0) {
-      StorageConfiguration<Configuration> conf = HadoopFSUtils.getStorageConfWithCopy(fs.getConf());
+      StorageConfiguration<Configuration> conf = getStorageConfWithCopy(fs.getConf());
       int actualParallelism = Math.min(subPaths.size(), parallelism);
 
       hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),

@@ -235,6 +235,13 @@ public class StoragePath implements Comparable<StoragePath>, Serializable {
     return new StoragePath(newUri);
   }
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public String getFileExtension() {
+    String fileName = getName();
+    int dotIndex = fileName.lastIndexOf('.');
+    return dotIndex == -1 ? "" : fileName.substring(dotIndex);
+  }
+
   @Override
   public String toString() {
     // This value could be overwritten concurrently and that's okay, since

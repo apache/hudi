@@ -28,8 +28,8 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -56,6 +56,8 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.storage.HoodieStorageUtils.HADOOP_STORAGE_CONF;
+
 /**
  * A utility class for testing.
  */
@@ -68,7 +70,13 @@ public class HoodieTestUtils {
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
 
   public static StorageConfiguration<Configuration> getDefaultStorageConf() {
-    return HadoopFSUtils.getStorageConf(new Configuration(false));
+    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
+        new Class<?>[] {Boolean.class}, false);
+  }
+
+  public static StorageConfiguration<Configuration> getDefaultStorageConfWithDefaults() {
+    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
+        new Class<?>[] {Boolean.class}, true);
   }
 
   public static HoodieStorage getStorage(String path) {
@@ -215,7 +223,7 @@ public class HoodieTestUtils {
    */
   public static HoodieTableMetaClient createMetaClient(Configuration conf,
                                                        String basePath) {
-    return createMetaClient(HadoopFSUtils.getStorageConfWithCopy(conf), basePath);
+    return createMetaClient(HoodieStorageUtils.getStorageConfWithCopy(conf), basePath);
   }
 
   /**

@@ -51,12 +51,13 @@ import java.util.stream.Collectors;
  * Utils for Hudi base file.
  */
 public abstract class BaseFileUtils {
+  public static final String ORC_UTILS = "org.apache.hudi.common.util.OrcUtils";
 
   public static BaseFileUtils getInstance(String path) {
     if (path.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
       return new ParquetUtils();
     } else if (path.endsWith(HoodieFileFormat.ORC.getFileExtension())) {
-      return new OrcUtils();
+      return ReflectionUtils.loadClass(ORC_UTILS);
     }
     throw new UnsupportedOperationException("The format for file " + path + " is not supported yet.");
   }
@@ -65,7 +66,7 @@ public abstract class BaseFileUtils {
     if (HoodieFileFormat.PARQUET.equals(fileFormat)) {
       return new ParquetUtils();
     } else if (HoodieFileFormat.ORC.equals(fileFormat)) {
-      return new OrcUtils();
+      return ReflectionUtils.loadClass(ORC_UTILS);
     }
     throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
   }
