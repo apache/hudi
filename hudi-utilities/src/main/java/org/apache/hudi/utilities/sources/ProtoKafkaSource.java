@@ -67,15 +67,18 @@ public class ProtoKafkaSource extends KafkaSource<JavaRDD<Message>> {
   public ProtoKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession, HoodieIngestionMetrics metrics, StreamContext streamContext) {
     super(properties, sparkContext, sparkSession, SourceType.PROTO, metrics,
         new DefaultStreamContext(UtilHelpers.getSchemaProviderForKafkaSource(streamContext.getSchemaProvider(), properties, sparkContext), streamContext.getSourceProfileSupplier()));
-    checkRequiredConfigProperties(props, Collections.singletonList(
-        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME));
     this.deserializerName = ConfigUtils.getStringWithAltKeys(props, KafkaSourceConfig.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS, true);
     if (!deserializerName.equals(ByteArrayDeserializer.class.getName()) && !deserializerName.equals(KafkaProtobufDeserializer.class.getName())) {
       throw new HoodieReadFromSourceException("Only ByteArrayDeserializer and KafkaProtobufDeserializer are supported for ProtoKafkaSource");
     }
+    if (deserializerName.equals(ByteArrayDeserializer.class.getName())) {
+      checkRequiredConfigProperties(props, Collections.singletonList(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME));
+      className = getStringWithAltKeys(props, ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME);
+    } else {
+      className = null;
+    }
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
     props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, deserializerName);
-    className = getStringWithAltKeys(props, ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME);
     this.offsetGen = new KafkaOffsetGen(props);
     if (this.shouldAddOffsets) {
       throw new HoodieReadFromSourceException("Appending kafka offsets to ProtoKafkaSource is not supported");
