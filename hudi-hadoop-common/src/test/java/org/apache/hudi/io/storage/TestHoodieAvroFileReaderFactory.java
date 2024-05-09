@@ -47,7 +47,7 @@ public class TestHoodieAvroFileReaderFactory {
     final StoragePath parquetPath = new StoragePath("/partition/path/f1_1-0-1_000.parquet");
     HoodieFileReader parquetReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, storageConf, parquetPath);
-    assertTrue(parquetReader instanceof HoodieHadoopAvroParquetReader);
+    assertTrue(parquetReader instanceof HoodieAvroParquetReader);
 
     // log file format.
     final StoragePath logPath = new StoragePath(
@@ -62,6 +62,6 @@ public class TestHoodieAvroFileReaderFactory {
     final StoragePath orcPath = new StoragePath("/partition/path/f1_1-0-1_000.orc");
     HoodieFileReader orcReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, storageConf, orcPath);
-    assertTrue(orcReader instanceof HoodieHadoopAvroOrcReader);
+    assertTrue(orcReader instanceof HoodieAvroOrcReader);
   }
 }

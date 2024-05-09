@@ -27,12 +27,12 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -93,7 +93,7 @@ public class HoodieHadoopAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE), // todo: 1024*1024*1024
         conf, config.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         config.getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
-    return new HoodieParquetStreamWriter(HadoopFSUtils.makeOutputStreamSeekable(outputStream), parquetConfig);
+    return new HoodieParquetStreamWriter(new FSDataOutputStream(outputStream, null), parquetConfig);
   }
 
   protected HoodieFileWriter newHFileFileWriter(

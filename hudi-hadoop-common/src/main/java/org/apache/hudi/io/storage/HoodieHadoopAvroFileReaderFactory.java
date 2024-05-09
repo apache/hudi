@@ -34,7 +34,7 @@ import java.io.IOException;
 public class HoodieHadoopAvroFileReaderFactory extends HoodieFileReaderFactory {
   @Override
   protected HoodieFileReader newParquetFileReader(StorageConfiguration<?> conf, StoragePath path) {
-    return new HoodieHadoopAvroParquetReader(conf, path);
+    return new HoodieAvroParquetReader(conf, path);
   }
 
   @Override
@@ -69,7 +69,7 @@ public class HoodieHadoopAvroFileReaderFactory extends HoodieFileReaderFactory {
 
   @Override
   protected HoodieFileReader newOrcFileReader(StorageConfiguration<?> conf, StoragePath path) {
-    return new HoodieHadoopAvroOrcReader(conf, path);
+    return new HoodieAvroOrcReader(conf, path);
   }
 
   @Override

@@ -52,14 +52,14 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 /**
  * {@link HoodieFileReader} implementation for parquet format.
  */
-public class HoodieHadoopAvroParquetReader extends HoodieAvroFileReader {
+public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   private final StoragePath path;
   private final StorageConfiguration<?> conf;
   private final BaseFileUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
-  public HoodieHadoopAvroParquetReader(StorageConfiguration<?> storageConf, StoragePath path) {
+  public HoodieAvroParquetReader(StorageConfiguration<?> storageConf, StoragePath path) {
     // We have to clone the Hadoop Config as it might be subsequently modified
     // by the Reader (for proper config propagation to Parquet components)
     this.conf = tryOverrideDefaultConfigs(storageConf.newInstance());

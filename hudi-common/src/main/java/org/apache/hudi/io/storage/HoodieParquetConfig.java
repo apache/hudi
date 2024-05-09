@@ -32,18 +32,18 @@ public class HoodieParquetConfig<T> {
   private final int blockSize;
   private final int pageSize;
   private final long maxFileSize;
-  private final StorageConfiguration<?> conf;
+  private final StorageConfiguration<?> storageConf;
   private final double compressionRatio;
   private final boolean dictionaryEnabled;
 
   public HoodieParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize, int pageSize,
-                             long maxFileSize, StorageConfiguration<?> conf, double compressionRatio, boolean dictionaryEnabled) {
+                             long maxFileSize, StorageConfiguration<?> storageConf, double compressionRatio, boolean dictionaryEnabled) {
     this.writeSupport = writeSupport;
     this.compressionCodecName = compressionCodecName;
     this.blockSize = blockSize;
     this.pageSize = pageSize;
     this.maxFileSize = maxFileSize;
-    this.conf = conf;
+    this.storageConf = storageConf;
     this.compressionRatio = compressionRatio;
     this.dictionaryEnabled = dictionaryEnabled;
   }
@@ -65,7 +65,7 @@ public class HoodieParquetConfig<T> {
   }
 
   public StorageConfiguration<?> getStorageConf() {
-    return conf;
+    return storageConf;
   }
 
   public double getCompressionRatio() {

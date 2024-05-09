@@ -18,14 +18,14 @@
 
 package org.apache.hudi.io.storage;
 
+import java.io.IOException;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.io.SeekableDataOutputStream;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
 import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
@@ -33,14 +33,12 @@ import org.apache.parquet.io.OutputFile;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 
-import java.io.IOException;
-
 public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, AutoCloseable {
   private final ParquetWriter<InternalRow> writer;
   private final HoodieRowParquetWriteSupport writeSupport;
 
-  public HoodieSparkParquetStreamWriter(SeekableDataOutputStream outputStream,
-                                        HoodieRowParquetConfig parquetConfig) throws IOException {
+  public HoodieSparkParquetStreamWriter(FSDataOutputStream outputStream,
+      HoodieRowParquetConfig parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
     this.writer = new Builder<>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
         .withWriteMode(ParquetFileWriter.Mode.CREATE)

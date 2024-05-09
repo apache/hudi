@@ -17,9 +17,27 @@
  * under the License.
  */
 
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -28,8 +46,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PositionedReadable;
-import org.apache.hadoop.fs.Seekable;
 import org.apache.hadoop.hbase.io.FSDataInputStreamWrapper;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
@@ -43,39 +59,6 @@ import java.io.IOException;
  * Util class for HFile reading and writing in Hudi
  */
 public class HoodieHFileUtils {
-
-  static class SeekableByteArrayInputStream extends ByteBufferBackedInputStream
-      implements Seekable, PositionedReadable {
-    public SeekableByteArrayInputStream(byte[] buf) {
-      super(buf);
-    }
-
-    @Override
-    public long getPos() throws IOException {
-      return getPosition();
-    }
-
-    @Override
-    public boolean seekToNewSource(long targetPos) throws IOException {
-      return false;
-    }
-
-    @Override
-    public int read(long position, byte[] buffer, int offset, int length) throws IOException {
-      return copyFrom(position, buffer, offset, length);
-    }
-
-    @Override
-    public void readFully(long position, byte[] buffer) throws IOException {
-      read(position, buffer, 0, buffer.length);
-    }
-
-    @Override
-    public void readFully(long position, byte[] buffer, int offset, int length) throws IOException {
-      read(position, buffer, offset, length);
-    }
-  }
-
   // Based on HBase 2.4.9, the primaryReplicaReader is mainly used for constructing
   // block cache key, so if we do not use block cache then it is OK to set it as any
   // value. We use true here.
@@ -134,7 +117,8 @@ public class HoodieHFileUtils {
     // Avoid loading default configs, from the FS, since this configuration is mostly
     // used as a stub to initialize HFile reader
     Configuration conf = new Configuration(false);
-    SeekableByteArrayInputStream bis = new SeekableByteArrayInputStream(content);
+    HoodieHBaseAvroHFileReader.SeekableByteArrayInputStream bis =
+        new HoodieHBaseAvroHFileReader.SeekableByteArrayInputStream(content);
     FSDataInputStream fsdis = new FSDataInputStream(bis);
     FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
     ReaderContext context = new ReaderContextBuilder()

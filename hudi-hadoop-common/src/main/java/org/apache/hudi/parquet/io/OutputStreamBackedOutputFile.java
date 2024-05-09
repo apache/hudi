@@ -18,8 +18,7 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.io.SeekableDataOutputStream;
-
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.parquet.io.OutputFile;
 import org.apache.parquet.io.PositionOutputStream;
 
@@ -34,9 +33,9 @@ public class OutputStreamBackedOutputFile implements OutputFile {
 
   private static final long DEFAULT_BLOCK_SIZE = 1024L * 1024L;
 
-  private final SeekableDataOutputStream outputStream;
+  private final FSDataOutputStream outputStream;
 
-  public OutputStreamBackedOutputFile(SeekableDataOutputStream outputStream) {
+  public OutputStreamBackedOutputFile(FSDataOutputStream outputStream) {
     this.outputStream = outputStream;
   }
 
@@ -61,9 +60,9 @@ public class OutputStreamBackedOutputFile implements OutputFile {
   }
 
   private static class PositionOutputStreamAdapter extends PositionOutputStream {
-    private final SeekableDataOutputStream delegate;
+    private final FSDataOutputStream delegate;
 
-    PositionOutputStreamAdapter(SeekableDataOutputStream delegate) {
+    PositionOutputStreamAdapter(FSDataOutputStream delegate) {
       this.delegate = delegate;
     }
 

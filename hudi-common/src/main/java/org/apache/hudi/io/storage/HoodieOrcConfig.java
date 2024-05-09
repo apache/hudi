@@ -30,12 +30,12 @@ public class HoodieOrcConfig {
   private final int stripeSize;
   private final int blockSize;
   private final long maxFileSize;
-  private final StorageConfiguration<?> conf;
+  private final StorageConfiguration<?> storageConf;
   private final BloomFilter bloomFilter;
 
-  public HoodieOrcConfig(StorageConfiguration<?> conf, CompressionKind compressionKind, int stripeSize,
+  public HoodieOrcConfig(StorageConfiguration<?> storageConf, CompressionKind compressionKind, int stripeSize,
       int blockSize, long maxFileSize, BloomFilter bloomFilter) {
-    this.conf = conf;
+    this.storageConf = storageConf;
     this.compressionKind = compressionKind;
     this.stripeSize = stripeSize;
     this.blockSize = blockSize;
@@ -44,7 +44,7 @@ public class HoodieOrcConfig {
   }
 
   public StorageConfiguration<?> getStorageConf() {
-    return conf;
+    return storageConf;
   }
 
   public CompressionKind getCompressionKind() {
