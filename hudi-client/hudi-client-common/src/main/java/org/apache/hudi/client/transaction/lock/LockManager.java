@@ -20,7 +20,6 @@ package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -51,7 +50,7 @@ public class LockManager implements Serializable, AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(LockManager.class);
   private final HoodieWriteConfig writeConfig;
   private final LockConfiguration lockConfiguration;
-  private final SerializableConfiguration hadoopConf;
+  private final StorageConfiguration<?> storageConf;
   private final int maxRetries;
   private final long maxWaitTimeInMs;
   private final RetryHelper<Boolean, HoodieLockException> lockRetryHelper;
@@ -64,7 +63,7 @@ public class LockManager implements Serializable, AutoCloseable {
 
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs, TypedProperties lockProps) {
     this.writeConfig = writeConfig;
-    this.hadoopConf = new SerializableConfiguration(fs.getConf());
+    this.storageConf = HadoopFSUtils.getStorageConfWithCopy(fs.getConf());
     this.lockConfiguration = new LockConfiguration(lockProps);
     maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
         Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
@@ -112,7 +111,7 @@ public class LockManager implements Serializable, AutoCloseable {
       LOG.info("LockProvider " + writeConfig.getLockProviderClass());
       lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
           new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
-          lockConfiguration, HadoopFSUtils.getStorageConf(hadoopConf.get()));
+          lockConfiguration, storageConf);
     }
     return lockProvider;
   }

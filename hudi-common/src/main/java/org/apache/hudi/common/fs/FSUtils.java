@@ -20,7 +20,6 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -38,12 +37,10 @@ import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
 import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
@@ -707,22 +704,6 @@ public class FSUtils {
   }
 
   /**
-   * Get the FS implementation for this table.
-   * @param path  Path String
-   * @param hadoopConf  Serializable Hadoop Configuration
-   * @param consistencyGuardConfig Consistency Guard Config
-   * @return HoodieWrapperFileSystem
-   */
-  public static HoodieWrapperFileSystem getFs(String path, SerializableConfiguration hadoopConf,
-      ConsistencyGuardConfig consistencyGuardConfig) {
-    FileSystem fileSystem = HadoopFSUtils.getFs(path, hadoopConf.newCopy());
-    return new HoodieWrapperFileSystem(fileSystem,
-        consistencyGuardConfig.isConsistencyCheckEnabled()
-            ? new FailSafeConsistencyGuard(HoodieStorageUtils.getStorage(fileSystem), consistencyGuardConfig)
-            : new NoOpConsistencyGuard());
-  }
-
-  /**
    * Helper to filter out paths under metadata folder when running fs.globStatus.
    *
    * @param storage  {@link HoodieStorage} instance.
@@ -767,44 +748,15 @@ public class FSUtils {
     return false;
   }
 
-  /**
-   * Processes sub-path in parallel.
-   *
-   * @param hoodieEngineContext {@code HoodieEngineContext} instance
-   * @param fs file system
-   * @param dirPath directory path
-   * @param parallelism parallelism to use for sub-paths
-   * @param subPathPredicate predicate to use to filter sub-paths for processing
-   * @param pairFunction actual processing logic for each sub-path
-   * @param <T> type of result to return for each sub-path
-   * @return a map of sub-path to result of the processing
-   */
-  public static <T> Map<String, T> parallelizeSubPathProcess(
-      HoodieEngineContext hoodieEngineContext, FileSystem fs, Path dirPath, int parallelism,
-      Predicate<FileStatus> subPathPredicate, SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction) {
-    Map<String, T> result = new HashMap<>();
-    try {
-      FileStatus[] fileStatuses = fs.listStatus(dirPath);
-      List<String> subPaths = Arrays.stream(fileStatuses)
-          .filter(subPathPredicate)
-          .map(fileStatus -> fileStatus.getPath().toString())
-          .collect(Collectors.toList());
-      result = parallelizeFilesProcess(hoodieEngineContext, fs, parallelism, pairFunction, subPaths);
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
-    }
-    return result;
-  }
-
   public static <T> Map<String, T> parallelizeFilesProcess(
       HoodieEngineContext hoodieEngineContext,
       FileSystem fs,
       int parallelism,
-      SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction,
+      SerializableFunction<Pair<String, StorageConfiguration<Configuration>>, T> pairFunction,
       List<String> subPaths) {
     Map<String, T> result = new HashMap<>();
     if (subPaths.size() > 0) {
-      SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
+      StorageConfiguration<Configuration> conf = HadoopFSUtils.getStorageConfWithCopy(fs.getConf());
       int actualParallelism = Math.min(subPaths.size(), parallelism);
 
       hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),
@@ -817,6 +769,18 @@ public class FSUtils {
     return result;
   }
 
+  /**
+   * Processes sub-path in parallel.
+   *
+   * @param hoodieEngineContext {@link HoodieEngineContext} instance
+   * @param storage             {@link HoodieStorage} instance
+   * @param dirPath             directory path
+   * @param parallelism         parallelism to use for sub-paths
+   * @param subPathPredicate    predicate to use to filter sub-paths for processing
+   * @param pairFunction        actual processing logic for each sub-path
+   * @param <T>                 type of result to return for each sub-path
+   * @return a map of sub-path to result of the processing
+   */
   public static <T> Map<String, T> parallelizeSubPathProcess(
       HoodieEngineContext hoodieEngineContext, HoodieStorage storage, StoragePath dirPath, int parallelism,
       Predicate<StoragePathInfo> subPathPredicate, SerializableFunction<Pair<String, StorageConfiguration<?>>, T> pairFunction) {
@@ -900,7 +864,7 @@ public class FSUtils {
           pairOfSubPathAndConf -> {
             Path path = new Path(pairOfSubPathAndConf.getKey());
             try {
-              FileSystem fileSystem = path.getFileSystem(pairOfSubPathAndConf.getValue().get());
+              FileSystem fileSystem = path.getFileSystem(pairOfSubPathAndConf.getValue().unwrap());
               return Arrays.stream(fileSystem.listStatus(path))
                 .collect(Collectors.toList());
             } catch (IOException e) {

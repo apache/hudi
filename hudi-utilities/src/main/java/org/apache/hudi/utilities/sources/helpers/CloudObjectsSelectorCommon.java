@@ -20,13 +20,13 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -90,16 +90,16 @@ public class CloudObjectsSelectorCommon {
    * Return a function that extracts filepaths from a list of Rows.
    * Here Row is assumed to have the schema [bucket_name, filepath_relative_to_bucket, object_size]
    * @param storageUrlSchemePrefix    Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
-   * @param serializableHadoopConf
+   * @param storageConf               storage configuration.
    * @param checkIfExists             check if each file exists, before adding it to the returned list
    * @return
    */
   public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(
-      String storageUrlSchemePrefix, SerializableConfiguration serializableHadoopConf, boolean checkIfExists) {
+      String storageUrlSchemePrefix, StorageConfiguration<Configuration> storageConf, boolean checkIfExists) {
     return rows -> {
       List<CloudObjectMetadata> cloudObjectMetadataPerPartition = new ArrayList<>();
       rows.forEachRemaining(row -> {
-        Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, serializableHadoopConf, checkIfExists);
+        Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, storageConf, checkIfExists);
         filePathUrl.ifPresent(url -> {
           LOG.info("Adding file: " + url);
           long size;
@@ -130,9 +130,9 @@ public class CloudObjectsSelectorCommon {
    * @param storageUrlSchemePrefix Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
    */
   private static Option<String> getUrlForFile(Row row, String storageUrlSchemePrefix,
-                                              SerializableConfiguration serializableConfiguration,
+                                              StorageConfiguration<Configuration> storageConf,
                                               boolean checkIfExists) {
-    final Configuration configuration = serializableConfiguration.newCopy();
+    final Configuration configuration = storageConf.unwrapCopy();
 
     String bucket = row.getString(0);
     String filePath = storageUrlSchemePrefix + bucket + "/" + row.getString(1);
