@@ -18,13 +18,13 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -86,11 +86,11 @@ public class HiveSyncContext {
     return new HiveSyncTool(props, hiveConf);
   }
 
-  public static HiveSyncContext create(Configuration conf, SerializableConfiguration serConf) {
+  public static HiveSyncContext create(Configuration conf, StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf) {
     Properties props = buildSyncConfig(conf);
     org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     HiveConf hiveConf = new HiveConf();
-    hiveConf.addResource(serConf.get());
+    hiveConf.addResource(storageConf.unwrap());
     if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_METASTORE_URIS)) {
       hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
     }
