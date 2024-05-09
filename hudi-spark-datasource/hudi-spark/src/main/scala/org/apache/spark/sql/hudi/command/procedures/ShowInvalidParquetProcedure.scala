@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
@@ -52,16 +51,16 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     val limit = getArgValueOrDefault(args, PARAMETERS(1))
     val partitionPaths: java.util.List[String] = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), srcPath, false)
     val javaRdd: JavaRDD[String] = jsc.parallelize(partitionPaths, partitionPaths.size())
-    val serHadoopConf = new SerializableConfiguration(jsc.hadoopConfiguration())
+    val storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())
     val parquetRdd = javaRdd.rdd.map(part => {
-      val fs = HadoopFSUtils.getFs(new Path(srcPath), serHadoopConf.get())
+        val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
       FSUtils.getAllDataFilesInPartition(fs, FSUtils.constructAbsolutePathInHadoopPath(srcPath, part))
     }).flatMap(_.toList)
       .filter(status => {
         val filePath = status.getPath
         var isInvalid = false
         if (filePath.toString.endsWith(".parquet")) {
-          try ParquetFileReader.readFooter(serHadoopConf.get(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {
+          try ParquetFileReader.readFooter(storageConf.unwrap(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {
             case e: Exception =>
               isInvalid = e.getMessage.contains("is not a Parquet file")
           }
