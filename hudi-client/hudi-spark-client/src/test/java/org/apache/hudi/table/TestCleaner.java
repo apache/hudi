@@ -963,14 +963,14 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
     // Deletions:
     // . FileId   Base  Logs  Total Retained_Commits  Under_Compaction
-    //   FileId7  1     2     3     001,003           false
-    //   FileId6  1     2     3     001,003           false
-    //   FileId5  1     2     3     001,003           true
-    //   FileId4  1     2     3     001,003           true
+    //   FileId7  2     4     6     001,003           false
+    //   FileId6  2     4     6     001,003           false
+    //   FileId5  2     4     6     001,003           true
+    //   FileId4  2     4     6     001,003           true
     //   FileId3  1     2     3     001               true
     //   FileId2  0     0     0     000               true
     //   FileId1  0     0     0     000               false
-    testPendingCompactions(config, 15, 9, false);
+    testPendingCompactions(config, 27, 15, false);
   }
 
   /**

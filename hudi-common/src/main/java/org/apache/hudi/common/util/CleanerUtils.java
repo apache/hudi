@@ -131,27 +131,26 @@ public class CleanerUtils {
 
     if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS
         && completedCommitsTimeline.countInstants() > commitsRetained) {
-      Option<HoodieInstant> earliestPendingCommits =
-          commitsTimeline.filter(s -> !s.isCompleted()).firstInstant();
-      if (earliestPendingCommits.isPresent()) {
-        // Earliest commit to retain must not be later than the earliest pending commit
-        earliestCommitToRetain =
-            completedCommitsTimeline.nthInstant(completedCommitsTimeline.countInstants() - commitsRetained).map(nthInstant -> {
-              if (nthInstant.compareTo(earliestPendingCommits.get()) <= 0) {
-                return Option.of(nthInstant);
-              } else {
-                return completedCommitsTimeline.findInstantsBefore(earliestPendingCommits.get().getTimestamp()).lastInstant();
-              }
-            }).orElse(Option.empty());
-      } else {
-        earliestCommitToRetain = completedCommitsTimeline.nthInstant(completedCommitsTimeline.countInstants()
-            - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list
-      }
+      earliestCommitToRetain = completedCommitsTimeline.nthInstant(completedCommitsTimeline.countInstants()
+          - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list
     } else if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
       ZonedDateTime latestDateTime = ZonedDateTime.ofInstant(latestInstant, timeZone.getZoneId());
       String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(latestDateTime.minusHours(hoursRetained).toInstant()));
       earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
           HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
+    }
+    return earliestCommitToRetain.map(earliestCommitToRetain0 -> maybeReplacedByEarliestPending(earliestCommitToRetain0, commitsTimeline));
+  }
+
+  /**
+   * If there is a pending commit in timeline earlier than the earliestCommitToRetain generate by clean policy, use it as earliestCommitToRetain.
+   */
+  private static HoodieInstant maybeReplacedByEarliestPending(HoodieInstant earliestCommitToRetain, HoodieTimeline commitsTimeline) {
+    Option<HoodieInstant> earliestPendingCommits =
+        commitsTimeline.filter(s -> !s.isCompleted()).firstInstant();
+    if (earliestPendingCommits.isPresent() && earliestCommitToRetain.getTimestamp().compareTo(earliestPendingCommits.get().getTimestamp()) > 0) {
+      // Earliest commit to retain must not be later than the earliest pending commit
+      earliestCommitToRetain = earliestPendingCommits.get();
     }
     return earliestCommitToRetain;
   }
