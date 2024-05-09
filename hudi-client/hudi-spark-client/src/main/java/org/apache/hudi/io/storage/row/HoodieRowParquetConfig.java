@@ -30,10 +30,10 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 public class HoodieRowParquetConfig extends HoodieParquetConfig<HoodieRowParquetWriteSupport> {
 
   public HoodieRowParquetConfig(HoodieRowParquetWriteSupport writeSupport, CompressionCodecName compressionCodecName,
-      int blockSize, int pageSize, long maxFileSize, Configuration conf,
+      int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf,
       double compressionRatio, boolean enableDictionary) {
-    super(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize, new HadoopStorageConfiguration(conf),
-        compressionRatio, enableDictionary);
+    super(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize,
+        new HadoopStorageConfiguration(hadoopConf), compressionRatio, enableDictionary);
   }
 
   public Configuration getHadoopConf() {

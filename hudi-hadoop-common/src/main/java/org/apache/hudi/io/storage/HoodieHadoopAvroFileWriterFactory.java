@@ -54,6 +54,7 @@ public class HoodieHadoopAvroFileWriterFactory extends HoodieFileWriterFactory {
   public static final String HOODIE_AVRO_PARQUET_WRITER = "org.apache.hudi.io.storage.HoodieAvroParquetWriter";
   public static final String HOODIE_AVRO_HFILE_WRITER = "org.apache.hudi.io.storage.HoodieAvroHFileWriter";
   public static final String HOODIE_AVRO_ORC_WRITER = "org.apache.hudi.io.storage.HoodieAvroOrcWriter";
+
   @Override
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, StoragePath path, StorageConfiguration<?> conf, HoodieConfig config, Schema schema,

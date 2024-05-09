@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -198,7 +199,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BOOTSTRAP_INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.index.class")
-      .defaultValue("org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex")
+      .defaultValue(HFileBootstrapIndex.class.getName())
       .deprecatedAfter("1.0.0")
       .withDocumentation("Implementation to use, for mapping base files to bootstrap base file, that contain actual data.");
 
