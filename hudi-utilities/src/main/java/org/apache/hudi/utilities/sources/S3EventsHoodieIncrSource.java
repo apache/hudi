@@ -18,12 +18,13 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
@@ -34,6 +35,7 @@ import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
@@ -161,13 +163,13 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     String s3Prefix = s3FS + "://";
 
     // Create S3 paths
-    SerializableConfiguration serializableHadoopConf = new SerializableConfiguration(sparkContext.hadoopConfiguration());
+    StorageConfiguration<Configuration> storageConf = HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration());
     List<CloudObjectMetadata> cloudObjectMetadata = checkPointAndDataset.getRight().get()
         .select(CloudObjectsSelectorCommon.S3_BUCKET_NAME,
                 CloudObjectsSelectorCommon.S3_OBJECT_KEY,
                 CloudObjectsSelectorCommon.S3_OBJECT_SIZE)
         .distinct()
-        .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, serializableHadoopConf, checkIfFileExists), Encoders.kryo(CloudObjectMetadata.class))
+        .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, storageConf, checkIfFileExists), Encoders.kryo(CloudObjectMetadata.class))
         .collectAsList();
     LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
 
