@@ -24,7 +24,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.orc.CompressionKind;
 
 public class HoodieOrcConfig {
-  static final String AVRO_SCHEMA_METADATA_KEY = "orc.avro.schema";
+  public static final String AVRO_SCHEMA_METADATA_KEY = "orc.avro.schema";
 
   private final CompressionKind compressionKind;
   private final int stripeSize;

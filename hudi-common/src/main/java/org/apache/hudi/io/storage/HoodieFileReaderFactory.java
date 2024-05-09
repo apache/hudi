@@ -49,7 +49,7 @@ public class HoodieFileReaderFactory {
 
         try {
           Class<?> clazz =
-              ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieHadoopAvroFileReaderFactory");
+              ReflectionUtils.getClass("org.apache.hudi.io.storage.hadoop.HoodieAvroFileReaderFactory");
           return (HoodieFileReaderFactory) clazz.newInstance();
         } catch (IllegalArgumentException | IllegalAccessException | InstantiationException e) {
           throw new HoodieException("Unable to create hoodie avro file reader factory", e);
