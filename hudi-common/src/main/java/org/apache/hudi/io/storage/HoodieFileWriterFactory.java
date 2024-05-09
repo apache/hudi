@@ -47,7 +47,7 @@ public class HoodieFileWriterFactory {
     switch (recordType) {
       case AVRO:
         try {
-          Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieHadoopAvroFileWriterFactory");
+          Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.hadoop.HoodieAvroFileWriterFactory");
           return (HoodieFileWriterFactory) clazz.newInstance();
         } catch (IllegalAccessException | IllegalArgumentException | InstantiationException e) {
           throw new HoodieException("Unable to create hoodie avro file writer factory", e);

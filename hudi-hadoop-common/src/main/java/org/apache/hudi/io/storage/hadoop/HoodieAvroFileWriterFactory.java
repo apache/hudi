@@ -7,16 +7,17 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -27,6 +28,11 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.HoodieOrcConfig;
+import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -43,17 +49,16 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Properties;
 
-import static org.apache.hudi.io.storage.HoodieHFileConfig.CACHE_DATA_IN_L1;
-import static org.apache.hudi.io.storage.HoodieHFileConfig.DROP_BEHIND_CACHE_COMPACTION;
-import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
-import static org.apache.hudi.io.storage.HoodieHFileConfig.PREFETCH_ON_OPEN;
+import static org.apache.hudi.io.storage.hadoop.HoodieHFileConfig.CACHE_DATA_IN_L1;
+import static org.apache.hudi.io.storage.hadoop.HoodieHFileConfig.DROP_BEHIND_CACHE_COMPACTION;
+import static org.apache.hudi.io.storage.hadoop.HoodieHFileConfig.HFILE_COMPARATOR;
+import static org.apache.hudi.io.storage.hadoop.HoodieHFileConfig.PREFETCH_ON_OPEN;
 
-public class HoodieHadoopAvroFileWriterFactory extends HoodieFileWriterFactory {
-
+public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   //hardcoded classes to remove at a later time
-  public static final String HOODIE_AVRO_PARQUET_WRITER = "org.apache.hudi.io.storage.HoodieAvroParquetWriter";
-  public static final String HOODIE_AVRO_HFILE_WRITER = "org.apache.hudi.io.storage.HoodieAvroHFileWriter";
-  public static final String HOODIE_AVRO_ORC_WRITER = "org.apache.hudi.io.storage.HoodieAvroOrcWriter";
+  public static final String HOODIE_AVRO_PARQUET_WRITER = "org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter";
+  public static final String HOODIE_AVRO_HFILE_WRITER = "org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter";
+  public static final String HOODIE_AVRO_ORC_WRITER = "org.apache.hudi.io.storage.hadoop.HoodieAvroOrcWriter";
 
   @Override
   protected HoodieFileWriter newParquetFileWriter(
