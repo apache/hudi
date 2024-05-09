@@ -16,16 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source.filedistribution.selector;
+package org.apache.hudi.source.rebalance.selector;
 
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
 import org.apache.flink.api.java.functions.KeySelector;
 
-public class StreamReadAppendKeySelector implements KeySelector<MergeOnReadInputSplit, Integer> {
+public class StreamReadBucketIndexKeySelector implements KeySelector<MergeOnReadInputSplit, String> {
 
   @Override
-  public Integer getKey(MergeOnReadInputSplit mergeOnReadInputSplit) throws Exception {
-    return mergeOnReadInputSplit.getSplitNumber();
+  public String getKey(MergeOnReadInputSplit mergeOnReadInputSplit) throws Exception {
+    return mergeOnReadInputSplit.getFileId();
   }
 }
