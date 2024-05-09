@@ -166,3 +166,7 @@ d94e34c5898 [AUDIT-781] Upgrade to version release-v1.14.0 (#691)
 ---[2024-05-08 23:22:38] [release-v1.14.2] ---
 53358e4e8 [ENG-9415][HUDI-7718] Try to fetch the latestSourceProfile in HoodieIncrSource (#693)
 c29d62a70 [AUDIT-781]: Upgrade to version release-v1.14.1 (#692)
+
+---[2024-05-09 13:39:51] [release-v1.14.3] ---
+87c9171b278 [ENG-9551][HUDI-4732] Add support for confluent schema registry with proto (#695)
+354f664ecbb [AUDIT-781] Upgrade to version release-v1.14.2 (#694)
