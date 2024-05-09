@@ -19,6 +19,7 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.BootstrapFileMapping;
@@ -38,7 +39,9 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.HoodieCleanerTestBase;
 
 import org.junit.jupiter.api.Test;
@@ -630,6 +633,85 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
         assertTrue(testTable.baseFileExists(p2, commitInstant, file1P2), "p2 retained");
         assertTrue(testTable.baseFileExists(p2, commitInstant, file2P2), "p2 retained");
       }
+    } finally {
+      testTable.close();
+    }
+  }
+
+  /**
+   * Test canCleanBeSkipped for MOR metadata table.
+   * Verifies the optimization that skips clean when:
+   * - Table type is MOR
+   * - Table is a metadata table
+   * - Only delta commits exist after the last clean
+   */
+  @Test
+  public void testCanCleanBeSkippedForMetadataTable() throws Exception {
+    // Initialize metadata table with MOR type
+    String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(metadataTableBasePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMetadataIndexColumnStats(false)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .retainFileVersions(1)
+            .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .build())
+        .build();
+
+    HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.init(storageConf, metadataTableBasePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestTable testTable = HoodieTestTable.of(metadataMetaClient);
+    try {
+      String p0 = "files";
+
+      // Create first delta commit
+      String firstDelta = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(firstDelta);
+
+      // Create a clean
+      String cleanInstant = WriteClientTestUtils.createNewInstantTime();
+      testTable.addClean(cleanInstant);
+
+      // Create delta commits after clean (these should allow clean to be skipped)
+      String secondDelta = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(secondDelta);
+
+      String thirdDelta = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(thirdDelta);
+
+      // Reload metaClient to get latest timeline
+      metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+
+      // Create CleanPlanner on the metadata table
+      org.apache.hudi.table.HoodieSparkTable sparkTable = org.apache.hudi.table.HoodieSparkTable.create(config, context, metadataMetaClient);
+      org.apache.hudi.table.action.clean.CleanPlanner cleanPlanner =
+          new org.apache.hudi.table.action.clean.CleanPlanner(context, sparkTable, config);
+
+      // Use reflection to invoke the private canCleanBeSkipped method
+      java.lang.reflect.Method canCleanBeSkippedMethod =
+          org.apache.hudi.table.action.clean.CleanPlanner.class.getDeclaredMethod("canCleanBeSkipped");
+      canCleanBeSkippedMethod.setAccessible(true);
+      boolean result = (boolean) canCleanBeSkippedMethod.invoke(cleanPlanner);
+
+      // Verify canCleanBeSkipped returns true for metadata table with only delta commits after clean
+      assertTrue(result, "canCleanBeSkipped should return true for MOR metadata table with only delta commits after clean");
+
+      // Now add a non-delta commit (e.g., COMMIT from compaction) and verify it returns false
+      String compactionCommit = WriteClientTestUtils.createNewInstantTime();
+      testTable.addCommit(compactionCommit);
+
+      metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+      sparkTable = org.apache.hudi.table.HoodieSparkTable.create(config, context, metadataMetaClient);
+      cleanPlanner = new org.apache.hudi.table.action.clean.CleanPlanner(context, sparkTable, config);
+
+      result = (boolean) canCleanBeSkippedMethod.invoke(cleanPlanner);
+
+      // Verify canCleanBeSkipped returns false when there's a non-delta commit after clean
+      assertFalse(result, "canCleanBeSkipped should return false when there are non-delta commits after the last clean");
     } finally {
       testTable.close();
     }

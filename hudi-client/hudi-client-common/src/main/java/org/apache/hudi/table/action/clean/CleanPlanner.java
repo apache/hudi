@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -156,10 +157,35 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       case KEEP_LATEST_BY_HOURS:
         return getPartitionPathsForCleanByCommits(earliestRetainedInstant);
       case KEEP_LATEST_FILE_VERSIONS:
+        if (canCleanBeSkipped()) {
+          return Collections.emptyList();
+        }
         return getPartitionPathsForFullCleaning();
       default:
         throw new IllegalStateException("Unknown Cleaner Policy");
     }
+  }
+
+  /**
+   * Returns true if clean can be skipped for MOR metadata tables when only delta commits occurred after the last clean.
+   */
+  private boolean canCleanBeSkipped() {
+    if (!HoodieTableType.MERGE_ON_READ.equals(hoodieTable.getMetaClient().getTableType())
+        || !hoodieTable.isMetadataTable()) {
+      return false;
+    }
+    HoodieTimeline activeTimeline = hoodieTable.getActiveTimeline();
+    Option<HoodieInstant> lastCleanInstant = activeTimeline.getCleanerTimeline().lastInstant();
+    if (!lastCleanInstant.isPresent()) {
+      return false;
+    }
+
+    // Check whether there are any other commits apart from deltacommits after last clean's requested time.
+    return activeTimeline.getWriteTimeline()
+        .filterCompletedInstants()
+        .filter(instant -> !instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
+        .filter(instant -> InstantComparison.compareTimestamps(instant.getCompletionTime(),
+            GREATER_THAN, lastCleanInstant.get().requestedTime())).countInstants() == 0;
   }
 
   /**
