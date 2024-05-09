@@ -154,10 +154,33 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       case KEEP_LATEST_BY_HOURS:
         return getPartitionPathsForCleanByCommits(earliestRetainedInstant);
       case KEEP_LATEST_FILE_VERSIONS:
+        if (canCleanBeSkipped()) {
+          return Collections.emptyList();
+        }
         return getPartitionPathsForFullCleaning();
       default:
         throw new IllegalStateException("Unknown Cleaner Policy");
     }
+  }
+
+  /**
+   * Returns true if the clean operation can be skipped entirely
+   * Basically it checks if last_compaction_timestamp < last_clean_timestamp and modified time of last completed compaction
+   * is less than modified time of last clean's requested instant
+   * In such cases, clean call can be skipped.
+   */
+  private boolean canCleanBeSkipped() {
+    Option<HoodieInstant> lastCleanInstant = hoodieTable.getActiveTimeline().getCleanerTimeline().lastInstant();
+    Option<HoodieInstant> cleanRequestInstant = lastCleanInstant.isPresent()
+        ? Option.of(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, lastCleanInstant.get().getTimestamp()))
+        : Option.empty();
+    Option<HoodieInstant> lastCompactionInstant = commitTimeline
+        .filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)).lastInstant();
+    return lastCompactionInstant.isPresent() && lastCleanInstant.isPresent()
+        && HoodieTimeline.compareTimestamps(lastCompactionInstant.get().getTimestamp(),
+        HoodieTimeline.LESSER_THAN, lastCleanInstant.get().getTimestamp())
+        && HoodieTimeline.compareTimestamps(lastCompactionInstant.get().getModifiedTimestamp(hoodieTable.getMetaClient()),
+        HoodieTimeline.LESSER_THAN, cleanRequestInstant.get().getModifiedTimestamp(hoodieTable.getMetaClient()));
   }
 
   /**
