@@ -75,6 +75,7 @@ public class HoodieStorageUtils {
   }
 
   public static StorageConfiguration<Configuration> getStorageConfWithCopy(Configuration conf) {
-    return (StorageConfiguration<Configuration>) getStorageConf(conf).newInstance();
+    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
+        new Class<?>[] {Configuration.class, boolean.class}, conf, true);
   }
 }

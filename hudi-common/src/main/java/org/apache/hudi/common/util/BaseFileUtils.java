@@ -66,7 +66,7 @@ public abstract class BaseFileUtils {
     if (HoodieFileFormat.PARQUET.equals(fileFormat)) {
       return new ParquetUtils();
     } else if (HoodieFileFormat.ORC.equals(fileFormat)) {
-      return ReflectionUtils.loadClass("org.apache.hudi.common.util.OrcUtils");
+      return ReflectionUtils.loadClass(ORC_UTILS);
     }
     throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
   }
