@@ -48,8 +48,7 @@ import static org.apache.hudi.io.storage.HoodieHFileConfig.DROP_BEHIND_CACHE_COM
 import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.apache.hudi.io.storage.HoodieHFileConfig.PREFETCH_ON_OPEN;
 
-public class HoodieHadoopAvroFileWriterFactory extends HoodieFileWriterFactory {
-
+public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   //hardcoded classes to remove at a later time
   public static final String HOODIE_AVRO_PARQUET_WRITER = "org.apache.hudi.io.storage.HoodieAvroParquetWriter";
   public static final String HOODIE_AVRO_HFILE_WRITER = "org.apache.hudi.io.storage.HoodieAvroHFileWriter";

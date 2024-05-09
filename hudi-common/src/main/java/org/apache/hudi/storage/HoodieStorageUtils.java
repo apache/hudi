@@ -26,7 +26,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
 public class HoodieStorageUtils {
-
   public static final String HUDI_HADOOP_STORAGE = "org.apache.hudi.storage.hadoop.HoodieHadoopStorage";
   public static final String HADOOP_STORAGE_CONF = "org.apache.hudi.storage.hadoop.HadoopStorageConfiguration";
   public static final String DEFAULT_URI = "file:///";
@@ -76,6 +75,7 @@ public class HoodieStorageUtils {
   }
 
   public static StorageConfiguration<Configuration> getStorageConfWithCopy(Configuration conf) {
-    return (StorageConfiguration<Configuration>) getStorageConf(conf).newInstance();
+    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
+        new Class<?>[] {Configuration.class, boolean.class}, conf, true);
   }
 }
