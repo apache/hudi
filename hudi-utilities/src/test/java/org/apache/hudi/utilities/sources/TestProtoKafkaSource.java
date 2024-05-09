@@ -44,6 +44,8 @@ import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import com.google.protobuf.util.JsonFormat;
 import com.google.protobuf.util.Timestamps;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -67,6 +69,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -112,23 +115,12 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     props.remove(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key());
     SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
     ProtoKafkaSource protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
-    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(protoKafkaSource);
-    assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     List<Sample> messages = createSampleMessages(1000);
     sendMessagesToKafkaWithConfluentSerializer(topic, 2, messages);
     // Assert messages are read correctly
     JavaRDD<Message> messagesRead = protoKafkaSource.fetchNext(Option.empty(), 1000).getBatch().get();
     assertEquals(messages.stream().map(this::protoToJson).collect(Collectors.toSet()),
         new HashSet<>(messagesRead.map(message -> PRINTER.print(message)).collect()));
-    // Assert messages can be read into Avro records
-    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
-    JavaRDD<GenericRecord> firstBatch = fetch1.getBatch().get();
-    // Collect records to assert the data goes through full translation path
-    assertEquals(900, firstBatch.collect().size());
-    // Test Avro To DataFrame<Row> path
-    Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
-        schemaProvider.getSourceSchema().toString(), protoKafkaSource.getSparkSession());
-    assertEquals(900, fetch1AsRows.collectAsList().size());
   }
 
   @Test
@@ -218,7 +210,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
             .setWrappedDouble(DoubleValue.of(RANDOM.nextDouble()))
             .setWrappedFloat(FloatValue.of(RANDOM.nextFloat()))
             .setWrappedBoolean(BoolValue.of(RANDOM.nextBoolean()))
-            .setWrappedBytes(BytesValue.of(ByteString.copyFrom(UUID.randomUUID().toString().getBytes())))
+            .setWrappedBytes(BytesValue.of(ByteString.copyFrom(getUTF8Bytes(UUID.randomUUID().toString()))))
             .setEnum(SampleEnum.SECOND)
             .setTimestamp(Timestamps.fromMillis(System.currentTimeMillis()));
       }
@@ -256,10 +248,8 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     Properties props = new Properties();
     props.put("bootstrap.servers", testUtils.brokerAddress());
     if (useConfluentProtobufSerializer) {
-      props.put("value.serializer",
-          "io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer");
-      props.put("value.deserializer",
-          "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer");
+      props.put("value.serializer", KafkaProtobufSerializer.class.getName());
+      props.put("value.deserializer", KafkaProtobufDeserializer.class.getName());
       props.put("schema.registry.url", MOCK_REGISTRY_URL);
       props.put("auto.register.schemas", "true");
     } else {

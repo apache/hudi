@@ -73,10 +73,12 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
     }
     if (deserializerName.equals(ByteArrayDeserializer.class.getName())) {
       checkRequiredConfigProperties(props, Collections.singletonList(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME));
+      className = getStringWithAltKeys(props, ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME);
+    } else {
+      className = null;
     }
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
     props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, deserializerName);
-    className = getStringWithAltKeys(props, ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME);
     this.offsetGen = new KafkaOffsetGen(props);
     if (this.shouldAddOffsets) {
       throw new HoodieReadFromSourceException("Appending kafka offsets to ProtoKafkaSource is not supported");
