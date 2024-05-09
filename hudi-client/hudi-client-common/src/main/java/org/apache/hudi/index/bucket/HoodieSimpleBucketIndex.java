@@ -96,7 +96,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
   }
 
   /**
-   * Find out the conflict files in bucket partition with bucket id.
+   * Find out the conflict instants with given partition and bucket id.
    */
   public List<String> findConflictInstantsInPartition(HoodieTable hoodieTable, String partition, int bucketId, Set<String> pendingInstants) {
     List<String> instants = new ArrayList<>();
