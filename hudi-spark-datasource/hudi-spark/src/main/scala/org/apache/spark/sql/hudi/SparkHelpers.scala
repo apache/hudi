@@ -30,7 +30,7 @@ import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileSystem
-import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter
+import org.apache.hudi.io.hadoop.HoodieAvroParquetWriter
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.spark.sql.{DataFrame, SQLContext}

@@ -20,6 +20,7 @@
 package org.apache.hudi.common.testutils.reader;
 
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -81,7 +82,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       StorageConfiguration<?> conf
   ) throws IOException {
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieFileReaderFactory
-        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(null,
+        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
             conf, filePath, HoodieFileFormat.PARQUET, Option.empty());
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }

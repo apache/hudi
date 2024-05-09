@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.io.storage.hadoop;
+package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -76,8 +76,8 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     parquetWriterbuilder.withDictionaryEncoding(parquetConfig.dictionaryEnabled());
     parquetWriterbuilder.withValidation(ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED);
     parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
-    parquetWriterbuilder.withConf(HadoopFSUtils.registerFileSystem(file, parquetConfig.getStorageConf().unwrapAs(Configuration.class)));
-    handleParquetBloomFilters(parquetWriterbuilder, parquetConfig.getStorageConf().unwrapAs(Configuration.class));
+    parquetWriterbuilder.withConf(HadoopFSUtils.registerFileSystem(file, hadoopConf));
+    handleParquetBloomFilters(parquetWriterbuilder, hadoopConf);
 
     parquetWriter = parquetWriterbuilder.build();
     // We cannot accurately measure the snappy compressed output file size. We are choosing a

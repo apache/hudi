@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.io.storage.hadoop;
+package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
