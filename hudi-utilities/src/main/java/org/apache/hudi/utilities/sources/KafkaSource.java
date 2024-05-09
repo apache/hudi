@@ -27,18 +27,21 @@ import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.streamer.SourceProfile;
+import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import java.util.Arrays;
 
-abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
+
+public abstract class KafkaSource<T> extends Source<T> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
   // these are native kafka's config. do not change the config names.
   protected static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
@@ -60,25 +63,41 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   }
 
   @Override
-  protected InputBatch<JavaRDD<T>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
+  protected InputBatch<T> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
     try {
-      OffsetRange[] offsetRanges;
-      if (sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null) {
-        SourceProfile<Long> kafkaSourceProfile = sourceProfileSupplier.get().getSourceProfile();
-        offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getSourcePartitions(), metrics);
-        LOG.info("About to read numEvents {} of size {} bytes in {} partitions from Kafka for topic {} with offsetRanges {}",
-            kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getMaxSourceBytes(),
-            kafkaSourceProfile.getSourcePartitions(), offsetGen.getTopicName(), offsetRanges);
-      } else {
-        offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
-      }
-      return toInputBatch(offsetRanges);
+      return toInputBatch(getOffsetRanges(props, sourceProfileSupplier, offsetGen, metrics,
+          lastCheckpointStr, sourceLimit));
     } catch (org.apache.kafka.common.errors.TimeoutException e) {
       throw new HoodieSourceTimeoutException("Kafka Source timed out " + e.getMessage());
     }
   }
 
-  private InputBatch<JavaRDD<T>> toInputBatch(OffsetRange[] offsetRanges) {
+  @SuppressWarnings("unchecked")
+  public static OffsetRange[] getOffsetRanges(TypedProperties props,
+                                              Option<SourceProfileSupplier> sourceProfileSupplier,
+                                              KafkaOffsetGen offsetGen,
+                                              HoodieIngestionMetrics metrics,
+                                              Option<String> lastCheckpointStr,
+                                              long sourceLimit) {
+    OffsetRange[] offsetRanges;
+    if (sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null) {
+      SourceProfile<Long> kafkaSourceProfile = sourceProfileSupplier.get().getSourceProfile();
+      offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, kafkaSourceProfile.getSourceSpecificContext(),
+          kafkaSourceProfile.getSourcePartitions(), metrics);
+      LOG.info("About to read maxEventsInSyncRound {} of size {} bytes in {} partitions from Kafka for topic {} with offsetRanges {}",
+          kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getMaxSourceBytes(),
+          kafkaSourceProfile.getSourcePartitions(), offsetGen.getTopicName(), offsetRanges);
+    } else {
+      long minPartitions = getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
+      offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
+      LOG.info("About to read sourceLimit {} in {} spark partitions from kafka for topic {} with offset ranges {}",
+          sourceLimit, minPartitions, offsetGen.getTopicName(),
+          Arrays.toString(offsetRanges));
+    }
+    return offsetRanges;
+  }
+
+  private InputBatch<T> toInputBatch(OffsetRange[] offsetRanges) {
     long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
     LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
     if (totalNewMsgs <= 0) {
@@ -86,11 +105,11 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
       return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
     }
     metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, totalNewMsgs);
-    JavaRDD<T> newDataRDD = toRDD(offsetRanges);
-    return new InputBatch<>(Option.of(newDataRDD), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
+    T newBatch = toBatch(offsetRanges);
+    return new InputBatch<>(Option.of(newBatch), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
-  abstract JavaRDD<T> toRDD(OffsetRange[] offsetRanges);
+  protected abstract T toBatch(OffsetRange[] offsetRanges);
 
   @Override
   public void onCommit(String lastCkptStr) {

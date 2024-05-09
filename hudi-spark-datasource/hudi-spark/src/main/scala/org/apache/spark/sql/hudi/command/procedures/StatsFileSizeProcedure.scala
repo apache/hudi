@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils
 import org.apache.hudi.storage.StoragePath
 
@@ -28,7 +27,6 @@ import org.apache.spark.sql.hudi.command.procedures.StatsFileSizeProcedure.MAX_F
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters.{asScalaBufferConverter, mapAsScalaMapConverter}
 
 class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
@@ -66,7 +64,7 @@ class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
     val globRegex = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
     val limit: Int = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Int]
     val basePath = getBasePath(table)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val storage = metaClient.getStorage
     val isTablePartitioned = metaClient.getTableConfig.isTablePartitioned
     val maximumPartitionDepth = if (isTablePartitioned) metaClient.getTableConfig.getPartitionFields.get.length else 0

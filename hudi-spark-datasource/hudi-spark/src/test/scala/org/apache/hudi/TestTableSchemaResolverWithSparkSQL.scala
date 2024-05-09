@@ -17,14 +17,16 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.model.HoodieMetadataRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
@@ -65,10 +67,7 @@ class TestTableSchemaResolverWithSparkSQL extends HoodieSparkWriterTestBase {
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df1)
 
     val metadataTablePath = tempPath.toAbsolutePath.toString + "/.hoodie/metadata"
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(metadataTablePath)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
+    val metaClient = createMetaClient(spark, metadataTablePath)
 
     // Delete latest metadata table deltacommit
     // Get schema from metadata table hfile format base file.
@@ -107,10 +106,7 @@ class TestTableSchemaResolverWithSparkSQL extends HoodieSparkWriterTestBase {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableModifier, df1)
 
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(tempPath.toAbsolutePath.toString)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
+    val metaClient = createMetaClient(spark, tempPath.toAbsolutePath.toString)
 
     assertTrue(new TableSchemaResolver(metaClient).hasOperationField)
     schemaValuationBasedOnDataFile(metaClient, schema.toString())

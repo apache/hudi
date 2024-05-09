@@ -55,10 +55,11 @@ import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -132,13 +133,13 @@ public class HoodieStreamer implements Serializable {
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc,
-        HoodieStorageUtils.getStorage(cfg.targetBasePath, jssc.hadoopConfiguration()),
+        HoodieStorageUtils.getStorage(cfg.targetBasePath, HadoopFSUtils.getStorageConf(jssc.hadoopConfiguration())),
         jssc.hadoopConfiguration(), Option.empty());
   }
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, Option<TypedProperties> props) throws IOException {
     this(cfg, jssc,
-        HoodieStorageUtils.getStorage(cfg.targetBasePath, jssc.hadoopConfiguration()),
+        HoodieStorageUtils.getStorage(cfg.targetBasePath, HadoopFSUtils.getStorageConf(jssc.hadoopConfiguration())),
         jssc.hadoopConfiguration(), props);
   }
 
@@ -691,7 +692,7 @@ public class HoodieStreamer implements Serializable {
       if (this.storage.exists(new StoragePath(cfg.targetBasePath))) {
         try {
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-              .setConf(new Configuration((Configuration) this.storage.getConf()))
+              .setConf(this.storage.getConf().newInstance())
               .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
           tableType = meta.getTableType();
           // This will guarantee there is no surprise with table type
@@ -898,8 +899,9 @@ public class HoodieStreamer implements Serializable {
         } else {
           asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(hoodieSparkContext, writeClient));
           // Enqueue existing pending compactions first
-          HoodieTableMetaClient meta =
-              HoodieTableMetaClient.builder().setConf(new Configuration(hoodieSparkContext.hadoopConfiguration())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
+          HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(hoodieSparkContext.hadoopConfiguration()))
+              .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
           pending.forEach(hoodieInstant -> asyncCompactService.get().enqueuePendingAsyncServiceInstant(hoodieInstant));
           asyncCompactService.get().start(error -> true);
@@ -920,7 +922,7 @@ public class HoodieStreamer implements Serializable {
         } else {
           asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(hoodieSparkContext, writeClient));
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-              .setConf(new Configuration(hoodieSparkContext.hadoopConfiguration()))
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(hoodieSparkContext.hadoopConfiguration()))
               .setBasePath(cfg.targetBasePath)
               .setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = ClusteringUtils.getPendingClusteringInstantTimes(meta);

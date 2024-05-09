@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.CorruptedLogFileException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -41,11 +40,11 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,7 +72,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private static final String REVERSE_LOG_READER_HAS_NOT_BEEN_ENABLED = "Reverse log reader has not been enabled";
 
   private final HoodieStorage storage;
-  private final Configuration hadoopConf;
+  private final StorageConfiguration<?> storageConf;
   private final HoodieLogFile logFile;
   private final int bufferSize;
   private final byte[] magicBuffer = new byte[6];
@@ -104,7 +103,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
                              boolean enableRecordLookups, String keyField, InternalSchema internalSchema) throws IOException {
     this.storage = storage;
-    this.hadoopConf = (Configuration) this.storage.getConf();
+    this.storageConf = this.storage.getConf();
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
     //       further
@@ -185,7 +184,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     long blockEndPos = inputStream.getPos();
 
     HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc =
-        new HoodieLogBlock.HoodieLogBlockContentLocation(hadoopConf, logFile, contentPosition, contentLength, blockEndPos);
+        new HoodieLogBlock.HoodieLogBlockContentLocation(storageConf, logFile, contentPosition, contentLength, blockEndPos);
 
     switch (Objects.requireNonNull(blockType)) {
       case AVRO_DATA_BLOCK:
@@ -202,7 +201,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         return new HoodieHFileDataBlock(
             () -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
             Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath(),
-            ConfigUtils.getBooleanWithAltKeys((Configuration) storage.getConf(), HoodieReaderConfig.USE_NATIVE_HFILE_READER));
+            storage.getConf().getBoolean(HoodieReaderConfig.USE_NATIVE_HFILE_READER.key(),
+                HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue()));
 
       case PARQUET_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
@@ -259,7 +259,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     long contentPosition = inputStream.getPos();
     Option<byte[]> corruptedBytes = HoodieLogBlock.tryReadContent(inputStream, corruptedBlockSize, true);
     HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc =
-        new HoodieLogBlock.HoodieLogBlockContentLocation(hadoopConf, logFile, contentPosition, corruptedBlockSize, nextBlockOffset);
+        new HoodieLogBlock.HoodieLogBlockContentLocation(storageConf, logFile, contentPosition, corruptedBlockSize, nextBlockOffset);
     return new HoodieCorruptBlock(corruptedBytes, () -> getDataInputStream(storage, this.logFile, bufferSize), true, Option.of(logBlockContentLoc), new HashMap<>(), new HashMap<>());
   }
 

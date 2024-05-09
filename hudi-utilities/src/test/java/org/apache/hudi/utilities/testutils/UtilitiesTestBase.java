@@ -36,9 +36,9 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.testutils.HiveTestService;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
@@ -87,7 +87,9 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import scala.Tuple2;
@@ -137,9 +139,7 @@ public class UtilitiesTestBase {
   }
 
   public static void initTestServices(boolean needsHdfs, boolean needsHive, boolean needsZookeeper) throws Exception {
-    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    hadoopConf.set("hive.exec.scratchdir", System.getenv("java.io.tmpdir") + "/hive");
-
+    hadoopConf = HoodieTestUtils.getDefaultStorageConf().unwrap();
     if (needsHdfs) {
       hdfsTestService = new HdfsTestService(hadoopConf);
       dfsCluster = hdfsTestService.start(true);
@@ -152,6 +152,7 @@ public class UtilitiesTestBase {
     }
     storage = HoodieStorageUtils.getStorage(fs);
 
+    hadoopConf.set("hive.exec.scratchdir", basePath + "/.tmp/hive");
     if (needsHive) {
       hiveTestService = new HiveTestService(hadoopConf);
       hiveServer = hiveTestService.start();
@@ -163,7 +164,7 @@ public class UtilitiesTestBase {
       zookeeperTestService.start();
     }
 
-    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[8]");
+    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4]", sparkConf());
     context = new HoodieSparkEngineContext(jsc);
     sqlContext = new SQLContext(jsc);
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
@@ -266,6 +267,17 @@ public class UtilitiesTestBase {
     TestDataSource.resetDataGen();
   }
 
+  private static Map<String, String> sparkConf() {
+    Map<String, String> conf = new HashMap<>();
+    conf.put("spark.default.parallelism", "2");
+    conf.put("spark.sql.shuffle.partitions", "2");
+    conf.put("spark.executor.memory", "1G");
+    conf.put("spark.driver.memory", "1G");
+    conf.put("spark.hadoop.mapred.output.compress", "true");
+    conf.put("spark.ui.enable", "false");
+    return conf;
+  }
+
   /**
    * Helper to get hive sync config.
    * 
@@ -298,7 +310,7 @@ public class UtilitiesTestBase {
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
       .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
-      .initTable(fs.getConf(), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
+      .initTable(storage.getConf().newInstance(), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
 
     QueryBasedDDLExecutor ddlExecutor = new JDBCExecutor(hiveSyncConfig);
     ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.getString(META_SYNC_DATABASE_NAME));
@@ -407,7 +419,7 @@ public class UtilitiesTestBase {
     public static void saveParquetToDFS(List<GenericRecord> records, Path targetFile, Schema schema) throws IOException {
       try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(targetFile)
           .withSchema(schema)
-          .withConf(HoodieTestUtils.getDefaultHadoopConf())
+          .withConf(HoodieTestUtils.getDefaultStorageConf().unwrap())
           .withWriteMode(Mode.OVERWRITE)
           .build()) {
         for (GenericRecord record : records) {
@@ -421,7 +433,8 @@ public class UtilitiesTestBase {
     }
 
     public static void saveORCToDFS(List<GenericRecord> records, Path targetFile, TypeDescription schema) throws IOException {
-      OrcFile.WriterOptions options = OrcFile.writerOptions(HoodieTestUtils.getDefaultHadoopConf()).setSchema(schema);
+      OrcFile.WriterOptions options = OrcFile.writerOptions(
+          HoodieTestUtils.getDefaultStorageConf().unwrap()).setSchema(schema);
       try (Writer writer = OrcFile.createWriter(targetFile, options)) {
         VectorizedRowBatch batch = schema.createRowBatch();
         for (GenericRecord record : records) {
@@ -442,7 +455,7 @@ public class UtilitiesTestBase {
     }
 
     public static void saveAvroToDFS(List<GenericRecord> records, Path targetFile, Schema schema) throws IOException {
-      FileSystem fs = targetFile.getFileSystem(HoodieTestUtils.getDefaultHadoopConf());
+      FileSystem fs = targetFile.getFileSystem(HoodieTestUtils.getDefaultStorageConf().unwrap());
       OutputStream output = fs.create(targetFile);
       try (DataFileWriter<IndexedRecord> dataFileWriter = new DataFileWriter<>(new GenericDatumWriter(schema)).create(schema, output)) {
         for (GenericRecord record : records) {

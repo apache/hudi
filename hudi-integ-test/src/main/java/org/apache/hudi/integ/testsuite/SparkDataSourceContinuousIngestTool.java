@@ -29,6 +29,7 @@ import org.apache.hudi.utilities.UtilHelpers;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -107,7 +108,8 @@ public class SparkDataSourceContinuousIngestTool {
   public void run() {
     try {
       SparkDataSourceContinuousIngest sparkDataSourceContinuousIngest =
-          new SparkDataSourceContinuousIngest(sparkSession, context.getHadoopConf().get(), new Path(cfg.sourcePath), cfg.sparkFormat,
+          new SparkDataSourceContinuousIngest(
+              sparkSession, context.getStorageConf().unwrapAs(Configuration.class), new Path(cfg.sourcePath), cfg.sparkFormat,
               new Path(cfg.checkpointFilePath), new Path(cfg.basePath), getPropsAsMap(props),
               cfg.minSyncIntervalSeconds);
       sparkDataSourceContinuousIngest.startIngestion();

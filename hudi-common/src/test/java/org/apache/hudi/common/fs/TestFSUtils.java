@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -47,6 +46,8 @@ import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -187,7 +188,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   public void testEnvVarVariablesPickedup() {
     environmentVariables.set("HOODIE_ENV_fs_DOT_key1", "value1");
-    Configuration conf = HadoopFSUtils.prepareHadoopConf(HoodieTestUtils.getDefaultHadoopConf());
+    Configuration conf = HadoopFSUtils.prepareHadoopConf(HoodieTestUtils.getDefaultStorageConf().unwrap());
     assertEquals("value1", conf.get("fs.key1"));
     conf.set("fs.key1", "value11");
     conf.set("fs.key2", "value2");
@@ -205,35 +206,20 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertThrows(IllegalArgumentException.class, () -> FSUtils.getRelativePartitionPath(basePath, nonPartitionPath));
   }
 
-  @Test
-  public void testGetRelativePartitionPathWithStoragePath() {
-    StoragePath basePath = new StoragePath("/test/apache");
-    StoragePath partitionPath = new StoragePath("/test/apache/hudi/sub");
-    assertEquals("hudi/sub", FSUtils.getRelativePartitionPath(basePath, partitionPath));
-
-    StoragePath nonPartitionPath = new StoragePath("/test/something/else");
-    assertThrows(IllegalArgumentException.class, () -> FSUtils.getRelativePartitionPath(basePath, nonPartitionPath));
-  }
-
-  @Test
-  public void testGetRelativePartitionPathSameFolder() {
-    Path basePath = new Path("/test");
-    Path partitionPath = new Path("/test");
-    assertEquals("", FSUtils.getRelativePartitionPath(basePath, partitionPath));
-  }
-
-  @Test
-  public void testGetRelativePartitionPathRepeatedFolderNameBasePath() {
-    Path basePath = new Path("/test/apache/apache");
-    Path partitionPath = new Path("/test/apache/apache/hudi");
-    assertEquals("hudi", FSUtils.getRelativePartitionPath(basePath, partitionPath));
-  }
-
-  @Test
-  public void testGetRelativePartitionPathRepeatedFolderNamePartitionPath() {
-    Path basePath = new Path("/test/apache");
-    Path partitionPath = new Path("/test/apache/apache/hudi");
-    assertEquals("apache/hudi", FSUtils.getRelativePartitionPath(basePath, partitionPath));
+  @ParameterizedTest
+  @CsvSource({
+      "/test,/test,",
+      "s3://test,s3://test,",
+      "s3://test/foo,s3://test/foo,",
+      "/test/foo,/test/foo,",
+      "/test/apache/apache,/test/apache/apache/hudi,hudi",
+      "/test/apache,/test/apache/hudi,hudi",
+      "s3://test/apache,s3://test/apache/apache/hudi,apache/hudi"})
+  public void testGetRelativePartitionPath(String basePathStr, String partitionPathStr, String expected) {
+    StoragePath basePath = new StoragePath(basePathStr);
+    StoragePath partitionPath = new StoragePath(partitionPathStr);
+    String result = FSUtils.getRelativePartitionPath(basePath, partitionPath);
+    assertEquals(expected == null ? "" : expected, result);
   }
 
   @Test
@@ -408,7 +394,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     Files.createFile(partitionPath.resolve(log3));
 
     assertEquals(3, (int) FSUtils.getLatestLogVersion(
-            HoodieStorageUtils.getStorage(basePath, new Configuration()),
+            HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(new Configuration())),
             new StoragePath(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime).get()
         .getLeft());
   }
@@ -458,7 +444,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     assertTrue(storage.exists(rootDir));
     assertTrue(FSUtils.deleteDir(
-        new HoodieLocalEngineContext(metaClient.getHadoopConf()), storage, rootDir, 2));
+        new HoodieLocalEngineContext(metaClient.getStorageConf()), storage, rootDir, 2));
     assertFalse(storage.exists(rootDir));
   }
 
@@ -468,7 +454,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     cleanUpTestDirectory(metaClient.getStorage(), rootDir);
 
     assertFalse(FSUtils.deleteDir(
-        new HoodieLocalEngineContext(metaClient.getHadoopConf()), metaClient.getStorage(), rootDir, 2));
+        new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getStorage(), rootDir, 2));
   }
 
   @Test
@@ -478,8 +464,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     HoodieStorage storage = metaClient.getStorage();
     prepareTestDirectory(storage, rootDir);
 
-    assertTrue(FSUtils.deleteSubPath(
-        subDir.toString(), new SerializableConfiguration((Configuration) storage.getConf()), true));
+    assertTrue(FSUtils.deleteSubPath(subDir.toString(), storage.getConf(), true));
   }
 
   @Test
@@ -491,8 +476,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     assertThrows(
         HoodieIOException.class,
-        () -> FSUtils.deleteSubPath(
-            subDir.toString(), new SerializableConfiguration((Configuration) storage.getConf()), false));
+        () -> FSUtils.deleteSubPath(subDir.toString(), storage.getConf(), false));
   }
 
   @Test
@@ -502,8 +486,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     HoodieStorage storage = metaClient.getStorage();
     prepareTestDirectory(storage, rootDir);
 
-    assertTrue(FSUtils.deleteSubPath(
-        subDir.toString(), new SerializableConfiguration((Configuration) storage.getConf()), false));
+    assertTrue(FSUtils.deleteSubPath(subDir.toString(), storage.getConf(), false));
   }
 
   @Test
@@ -513,8 +496,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     HoodieStorage storage = metaClient.getStorage();
     cleanUpTestDirectory(storage, rootDir);
 
-    assertFalse(FSUtils.deleteSubPath(
-        subDir.toString(), new SerializableConfiguration((Configuration) storage.getConf()), true));
+    assertFalse(FSUtils.deleteSubPath(subDir.toString(), storage.getConf(), true));
   }
 
   @Test
@@ -523,13 +505,13 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     HoodieStorage storage = metaClient.getStorage();
     prepareTestDirectory(storage, rootDir);
     Map<String, List<String>> result = FSUtils.parallelizeSubPathProcess(
-        new HoodieLocalEngineContext((Configuration) storage.getConf()), storage, rootDir, 2,
+        new HoodieLocalEngineContext(storage.getConf()), storage, rootDir, 2,
         fileStatus -> !fileStatus.getPath().getName().contains("1"),
         pairOfSubPathAndConf -> {
           Path subPath = new Path(pairOfSubPathAndConf.getKey());
           List<String> listFiles = new ArrayList<>();
           try {
-            FileSystem fs = subPath.getFileSystem(pairOfSubPathAndConf.getValue().get());
+            FileSystem fs = subPath.getFileSystem(pairOfSubPathAndConf.getValue().unwrapAs(Configuration.class));
             FileStatus[] fileStatuses = fs.listStatus(subPath);
             listFiles = Arrays.stream(fileStatuses)
                 .map(fileStatus -> fileStatus.getPath().getName()).collect(Collectors.toList());
@@ -555,7 +537,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     HoodieStorage storage = metaClient.getStorage();
     prepareTestDirectory(storage, hoodieTempDir);
     List<FileStatus> fileStatusList = FSUtils.getFileStatusAtLevel(
-        new HoodieLocalEngineContext((Configuration) storage.getConf()), (FileSystem) storage.getFileSystem(),
+        new HoodieLocalEngineContext(storage.getConf()), (FileSystem) storage.getFileSystem(),
         new Path(baseUri), 3, 2);
     assertEquals(CollectionUtils.createImmutableSet(
             new Path(baseUri.toString(), ".hoodie/.temp/subdir1/file1.txt"),

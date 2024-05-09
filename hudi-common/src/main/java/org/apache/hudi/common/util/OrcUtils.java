@@ -31,6 +31,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -71,14 +72,14 @@ public class OrcUtils extends BaseFileUtils {
   /**
    * Provides a closable iterator for reading the given ORC file.
    *
-   * @param configuration configuration to build fs object
+   * @param configuration configuration to build storage object
    * @param filePath      The ORC file path
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the ORC file
    */
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, StoragePath filePath) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath) {
     try {
-      Configuration conf = new Configuration(configuration);
+      Configuration conf = configuration.unwrapCopyAs(Configuration.class);
       conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
       Reader reader = OrcFile.createReader(new Path(filePath.toUri()), OrcFile.readerOptions(conf));
 
@@ -110,12 +111,12 @@ public class OrcUtils extends BaseFileUtils {
   /**
    * Fetch {@link HoodieKey}s from the given ORC file.
    *
-   * @param configuration configuration to build fs object
+   * @param configuration configuration to build storage object
    * @param filePath      The ORC file path.
    * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
    */
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, StoragePath filePath) {
+  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(StorageConfiguration<?> configuration, StoragePath filePath) {
     try {
       if (!HoodieStorageUtils.getStorage(filePath, configuration).exists(filePath)) {
         return Collections.emptyList();
@@ -135,12 +136,12 @@ public class OrcUtils extends BaseFileUtils {
   }
 
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new UnsupportedOperationException("Custom key generator is not supported yet");
   }
 
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new UnsupportedOperationException("Custom key generator is not supported yet");
   }
 
@@ -148,9 +149,10 @@ public class OrcUtils extends BaseFileUtils {
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
   @Override
-  public List<GenericRecord> readAvroRecords(Configuration configuration, StoragePath filePath) {
+  public List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath) {
     Schema avroSchema;
-    try (Reader reader = OrcFile.createReader(new Path(filePath.toUri()), OrcFile.readerOptions(configuration))) {
+    try (Reader reader = OrcFile.createReader(
+        new Path(filePath.toUri()), OrcFile.readerOptions(configuration.unwrapAs(Configuration.class)))) {
       avroSchema = AvroOrcUtils.createAvroSchema(reader.getSchema());
     } catch (IOException io) {
       throw new HoodieIOException("Unable to read Avro records from an ORC file:" + filePath, io);
@@ -162,11 +164,13 @@ public class OrcUtils extends BaseFileUtils {
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
   @Override
-  public List<GenericRecord> readAvroRecords(Configuration configuration, StoragePath filePath, Schema avroSchema) {
+  public List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath, Schema avroSchema) {
     List<GenericRecord> records = new ArrayList<>();
-    try (Reader reader = OrcFile.createReader(new Path(filePath.toUri()), OrcFile.readerOptions(configuration))) {
+    try (Reader reader = OrcFile.createReader(
+        new Path(filePath.toUri()), OrcFile.readerOptions(configuration.unwrapAs(Configuration.class)))) {
       TypeDescription orcSchema = reader.getSchema();
-      try (RecordReader recordReader = reader.rows(new Options(configuration).schema(orcSchema))) {
+      try (RecordReader recordReader = reader.rows(
+          new Options(configuration.unwrapAs(Configuration.class)).schema(orcSchema))) {
         OrcReaderIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, avroSchema, orcSchema);
         while (iterator.hasNext()) {
           GenericRecord record = iterator.next();
@@ -183,18 +187,19 @@ public class OrcUtils extends BaseFileUtils {
    * Read the rowKey list matching the given filter, from the given ORC file. If the filter is empty, then this will
    * return all the rowkeys.
    *
-   * @param conf     configuration to build fs object.
+   * @param conf     configuration to build storage object.
    * @param filePath The ORC file path.
    * @param filter   record keys filter
    * @return Set Set of pairs of row key and position matching candidateRecordKeys
    */
   @Override
-  public Set<Pair<String, Long>> filterRowKeys(Configuration conf, StoragePath filePath, Set<String> filter)
+  public Set<Pair<String, Long>> filterRowKeys(StorageConfiguration<?> conf, StoragePath filePath, Set<String> filter)
       throws HoodieIOException {
     long rowPosition = 0;
-    try (Reader reader = OrcFile.createReader(new Path(filePath.toUri()), OrcFile.readerOptions(conf));) {
+    try (Reader reader = OrcFile.createReader(
+        new Path(filePath.toUri()), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)))) {
       TypeDescription schema = reader.getSchema();
-      try (RecordReader recordReader = reader.rows(new Options(conf).schema(schema))) {
+      try (RecordReader recordReader = reader.rows(new Options(conf.unwrapAs(Configuration.class)).schema(schema))) {
         Set<Pair<String, Long>> filteredRowKeys = new HashSet<>();
         List<String> fieldNames = schema.getFieldNames();
         VectorizedRowBatch batch = schema.createRowBatch();
@@ -228,9 +233,10 @@ public class OrcUtils extends BaseFileUtils {
   }
 
   @Override
-  public Map<String, String> readFooter(Configuration conf, boolean required,
+  public Map<String, String> readFooter(StorageConfiguration<?> conf, boolean required,
                                         StoragePath filePath, String... footerNames) {
-    try (Reader reader = OrcFile.createReader(new Path(filePath.toUri()), OrcFile.readerOptions(conf))) {
+    try (Reader reader = OrcFile.createReader(
+        new Path(filePath.toUri()), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)))) {
       Map<String, String> footerVals = new HashMap<>();
       List<UserMetadataItem> metadataItemList = reader.getFileTail().getFooter().getMetadataList();
       Map<String, String> metadata = metadataItemList.stream().collect(Collectors.toMap(
@@ -251,8 +257,9 @@ public class OrcUtils extends BaseFileUtils {
   }
 
   @Override
-  public Schema readAvroSchema(Configuration conf, StoragePath filePath) {
-    try (Reader reader = OrcFile.createReader(new Path(filePath.toUri()), OrcFile.readerOptions(conf))) {
+  public Schema readAvroSchema(StorageConfiguration<?> conf, StoragePath filePath) {
+    try (Reader reader = OrcFile.createReader(
+        new Path(filePath.toUri()), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)))) {
       if (reader.hasMetadataValue("orc.avro.schema")) {
         ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
         byte[] bytes = toBytes(metadataValue);
@@ -272,8 +279,9 @@ public class OrcUtils extends BaseFileUtils {
   }
 
   @Override
-  public long getRowCount(Configuration conf, StoragePath filePath) {
-    try (Reader reader = OrcFile.createReader(new Path(filePath.toUri()), OrcFile.readerOptions(conf))) {
+  public long getRowCount(StorageConfiguration<?> conf, StoragePath filePath) {
+    try (Reader reader = OrcFile.createReader(
+        new Path(filePath.toUri()), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)))) {
       return reader.getNumberOfRows();
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get row count for ORC file:" + filePath, io);
@@ -285,7 +293,7 @@ public class OrcUtils extends BaseFileUtils {
     // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
     // parameters are not important.
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
-    OrcFile.WriterOptions writerOptions = OrcFile.writerOptions((Configuration) storage.getConf())
+    OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(storage.unwrapConfAs(Configuration.class))
         .fileSystem((FileSystem) storage.getFileSystem())
         .setSchema(AvroOrcUtils.createOrcSchema(schema));
     try (Writer writer = OrcFile.createWriter(new Path(filePath.toUri()), writerOptions)) {

@@ -17,16 +17,14 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.{DataSourceUtils, HoodieWriterUtils}
 import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{CommitUtils, Option}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
 import org.apache.hudi.internal.schema.action.TableChanges
@@ -34,6 +32,10 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager
 import org.apache.hudi.internal.schema.utils.{SchemaChangeUtils, SerDeHelper}
 import org.apache.hudi.table.HoodieSparkTable
+import org.apache.hudi.{DataSourceUtils, HoodieWriterUtils}
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
@@ -188,9 +190,9 @@ case class Spark30AlterTableCommand(table: CatalogTable, changes: Seq[TableChang
 
   def getInternalSchemaAndHistorySchemaStr(sparkSession: SparkSession): (InternalSchema, String) = {
     val path = Spark30AlterTableCommand.getTableLocation(table, sparkSession)
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
+    val storageConf = HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf())
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
-      .setConf(hadoopConf).build()
+      .setConf(storageConf).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
 
     val schema = schemaUtil.getTableInternalSchemaFromCommitMetadata().orElse {
@@ -221,10 +223,10 @@ object Spark30AlterTableCommand extends Logging {
         HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(table.storage.properties ++ table.properties) ++
           sparkSession.sqlContext.conf.getAllConfs).asJava)
 
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
+    val storageConf = HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf())
     val metaClient = HoodieTableMetaClient.builder()
       .setBasePath(path)
-      .setConf(hadoopConf)
+      .setConf(storageConf)
       .setTimeGeneratorConfig(client.getConfig.getTimeGeneratorConfig)
       .build()
 

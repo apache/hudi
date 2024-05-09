@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodiePartitionMetadata
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.storage.StoragePath
@@ -33,7 +33,7 @@ import java.io.IOException
 import java.util
 import java.util.Properties
 import java.util.function.{Consumer, Supplier}
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -59,14 +59,14 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
     val dryRun = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
     val tablePath = getBasePath(tableName)
 
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(tablePath).build
+    val metaClient = createMetaClient(jsc, tablePath)
 
-    val engineContext: HoodieLocalEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf)
+    val engineContext: HoodieLocalEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf)
     val partitionPaths: util.List[String] = FSUtils.getAllPartitionPaths(engineContext, tablePath, false)
     val basePath: StoragePath = new StoragePath(tablePath)
 
     val rows = new util.ArrayList[Row](partitionPaths.size)
-    for (partitionPath <- partitionPaths) {
+    for (partitionPath <- partitionPaths.asScala) {
       val partition: StoragePath = FSUtils.constructAbsolutePath(tablePath, partitionPath)
       val textFormatFile: Option[StoragePath] = HoodiePartitionMetadata.textFormatMetaPathIfExists(
         metaClient.getStorage, partition)

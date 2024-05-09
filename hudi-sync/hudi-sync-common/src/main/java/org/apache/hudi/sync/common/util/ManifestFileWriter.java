@@ -28,7 +28,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,7 +66,7 @@ public class ManifestFileWriter {
         LOG.warn("No base file to generate manifest file.");
         return;
       } else {
-        LOG.info("Writing base file names to manifest file: " + baseFiles.size());
+        LOG.info("Writing base file names to manifest file: {}", baseFiles.size());
       }
       final StoragePath manifestFilePath = getManifestFilePath(useAbsolutePath);
       try (OutputStream outputStream = metaClient.getStorage().create(manifestFilePath, true);
@@ -85,16 +84,22 @@ public class ManifestFileWriter {
   public static Stream<String> fetchLatestBaseFilesForAllPartitions(HoodieTableMetaClient metaClient,
       boolean useFileListingFromMetadata, boolean useAbsolutePath) {
     try {
-      List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getHadoopConf()),
-          metaClient.getBasePath(), useFileListingFromMetadata);
-      LOG.info("Retrieve all partitions: " + partitions.size());
-
-      Configuration hadoopConf = metaClient.getHadoopConf();
-      HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
+      HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
       HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
           metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
           HoodieMetadataConfig.newBuilder().enable(useFileListingFromMetadata).build());
-      return partitions.parallelStream().flatMap(partition -> fsView.getLatestBaseFiles(partition).map(useAbsolutePath ? HoodieBaseFile::getPath : HoodieBaseFile::getFileName));
+      Stream<HoodieBaseFile> allLatestBaseFiles;
+      if (useFileListingFromMetadata) {
+        LOG.info("Fetching all base files from MDT.");
+        fsView.loadAllPartitions();
+        allLatestBaseFiles = fsView.getLatestBaseFiles();
+      } else {
+        List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getStorageConf()),
+            metaClient.getBasePathV2().toString(), false);
+        LOG.info("Retrieve all partitions from fs: {}", partitions.size());
+        allLatestBaseFiles =  partitions.parallelStream().flatMap(fsView::getLatestBaseFiles);
+      }
+      return allLatestBaseFiles.map(useAbsolutePath ? HoodieBaseFile::getPath : HoodieBaseFile::getFileName);
     } catch (Exception e) {
       throw new HoodieException("Error in fetching latest base files.", e);
     }

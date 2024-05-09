@@ -19,16 +19,17 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -135,15 +136,14 @@ public class DatePartitionPathSelector extends DFSPathSelector {
             + currentDate);
     long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
-    SerializableConfiguration serializedConf = new SerializableConfiguration(
-        ((FileSystem) storage.getFileSystem()).getConf());
+    StorageConfiguration<?> storageConf = storage.getConf();
     List<String> prunedPartitionPaths = pruneDatePartitionPaths(
         context, storage, getStringWithAltKeys(props, ROOT_INPUT_PATH),
         currentDate);
 
     List<StoragePathInfo> eligibleFiles = context.flatMap(prunedPartitionPaths,
         path -> {
-          HoodieStorage storage = HoodieStorageUtils.getStorage(path, serializedConf.get());
+          HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
           return listEligibleFiles(storage, new StoragePath(path), lastCheckpointTime).stream();
         }, partitionsListParallelism);
     // sort them by modification time ascending.
@@ -195,12 +195,12 @@ public class DatePartitionPathSelector extends DFSPathSelector {
     if (datePartitionDepth <= 0) {
       return partitionPaths;
     }
-    SerializableConfiguration serializedConf = new SerializableConfiguration(
+    StorageConfiguration<Configuration> storageConf = HadoopFSUtils.getStorageConfWithCopy(
         ((FileSystem) storage.getFileSystem()).getConf());
     for (int i = 0; i < datePartitionDepth; i++) {
       partitionPaths = context.flatMap(partitionPaths, path -> {
         Path subDir = new Path(path);
-        FileSystem fileSystem = subDir.getFileSystem(serializedConf.get());
+        FileSystem fileSystem = subDir.getFileSystem(storageConf.unwrap());
         // skip files/dirs whose names start with (_, ., etc)
         FileStatus[] statuses = fileSystem.listStatus(subDir,
             file -> IGNORE_FILEPREFIX_LIST.stream()

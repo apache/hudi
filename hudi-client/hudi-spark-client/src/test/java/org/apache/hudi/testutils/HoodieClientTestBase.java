@@ -31,14 +31,15 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -101,14 +102,14 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
    */
   public static Function2<List<HoodieRecord>, String, Integer> wrapRecordsGenFunctionForPreppedCalls(
       final String basePath,
-      final Configuration hadoopConf,
+      final StorageConfiguration<?> storageConf,
       final HoodieSparkEngineContext context,
       final HoodieWriteConfig writeConfig,
       final Function2<List<HoodieRecord>, String, Integer> recordsGenFunction) {
     return (commit, numRecords) -> {
       final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords);
-      final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
       JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, context, context.getJavaSparkContext().parallelize(records, 1), table);
       return taggedRecords.collect();
@@ -126,14 +127,14 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
    */
   public static Function3<List<HoodieRecord>, String, Integer, String> wrapPartitionRecordsGenFunctionForPreppedCalls(
       final String basePath,
-      final Configuration hadoopConf,
+      final StorageConfiguration<?> storageConf,
       final HoodieSparkEngineContext context,
       final HoodieWriteConfig writeConfig,
       final Function3<List<HoodieRecord>, String, Integer, String> recordsGenFunction) {
     return (commit, numRecords, partition) -> {
       final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords, partition);
-      final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
       JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, context, context.getJavaSparkContext().parallelize(records, 1), table);
       return taggedRecords.collect();
@@ -151,14 +152,14 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
    */
   public static Function<Integer, List<HoodieKey>> wrapDeleteKeysGenFunctionForPreppedCalls(
       final String basePath,
-      final Configuration hadoopConf,
+      final StorageConfiguration<?> storageConf,
       final HoodieSparkEngineContext context,
       final HoodieWriteConfig writeConfig,
       final Function<Integer, List<HoodieKey>> keyGenFunction) {
     return (numRecords) -> {
       final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
-      final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
       JavaRDD<HoodieRecord> recordsToDelete = context.getJavaSparkContext().parallelize(records, 1)
           .map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
@@ -179,7 +180,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
       HoodieWriteConfig writeConfig,
       Function2<List<HoodieRecord>, String, Integer> wrapped) {
     if (isPreppedAPI) {
-      return wrapRecordsGenFunctionForPreppedCalls(basePath, hadoopConf, context, writeConfig, wrapped);
+      return wrapRecordsGenFunctionForPreppedCalls(basePath, storageConf, context, writeConfig, wrapped);
     } else {
       return wrapped;
     }
@@ -196,7 +197,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
   public Function3<List<HoodieRecord>, String, Integer, String> generateWrapRecordsForPartitionFn(boolean isPreppedAPI,
       HoodieWriteConfig writeConfig, Function3<List<HoodieRecord>, String, Integer, String> wrapped) {
     if (isPreppedAPI) {
-      return wrapPartitionRecordsGenFunctionForPreppedCalls(basePath, hadoopConf, context, writeConfig, wrapped);
+      return wrapPartitionRecordsGenFunctionForPreppedCalls(basePath, storageConf, context, writeConfig, wrapped);
     } else {
       return wrapped;
     }
@@ -213,7 +214,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
   public Function<Integer, List<HoodieKey>> generateWrapDeleteKeysFn(boolean isPreppedAPI,
       HoodieWriteConfig writeConfig, Function<Integer, List<HoodieKey>> wrapped) {
     if (isPreppedAPI) {
-      return wrapDeleteKeysGenFunctionForPreppedCalls(basePath, hadoopConf, context, writeConfig, wrapped);
+      return wrapDeleteKeysGenFunctionForPreppedCalls(basePath, storageConf, context, writeConfig, wrapped);
     } else {
       return wrapped;
     }
@@ -476,7 +477,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
     assertPartitionMetadataForRecords(basePath, records, storage);
 
     // verify that there is a commit
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
     HoodieTimeline timeline = metaClient.getCommitsTimeline();
 
     if (assertForCommit) {
@@ -528,7 +529,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
     assertNoWriteErrors(statuses);
 
     // verify that there is a commit
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
 
     if (assertForCommit) {

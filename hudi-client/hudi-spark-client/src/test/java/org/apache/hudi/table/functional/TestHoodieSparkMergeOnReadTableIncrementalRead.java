@@ -71,9 +71,9 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
 
   @BeforeEach
   void setUp() {
-    roSnapshotJobConf = new JobConf(hadoopConf());
-    roJobConf = new JobConf(hadoopConf());
-    rtJobConf = new JobConf(hadoopConf());
+    roSnapshotJobConf = new JobConf(storageConf().unwrap());
+    roJobConf = new JobConf(storageConf().unwrap());
+    rtJobConf = new JobConf(storageConf().unwrap());
   }
 
   // test incremental read does not go past compaction instant for RO views
@@ -235,7 +235,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
 
     assertEquals(expectedNumFiles, files.length);
     Set<String> expectedCommitsSet = Arrays.stream(expectedCommits).collect(Collectors.toSet());
-    List<GenericRecord> records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(),
+    List<GenericRecord> records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(),
         Collections.singletonList(Paths.get(basePath(), partitionPath).toString()), basePath(), jobConf, realtime);
     assertEquals(expectedRecords, records.size());
     Set<String> actualCommits = records.stream().map(r ->

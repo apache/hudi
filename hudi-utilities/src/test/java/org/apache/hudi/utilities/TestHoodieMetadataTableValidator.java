@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
@@ -136,7 +137,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
 
     TimeGenerator timeGenerator = TimeGenerators
-        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath), jsc.hadoopConfiguration());
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
+            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
 
     if (testFailureCase) {
       // 3rd partition which is additional in MDT should have creation time before last instant in timeline.

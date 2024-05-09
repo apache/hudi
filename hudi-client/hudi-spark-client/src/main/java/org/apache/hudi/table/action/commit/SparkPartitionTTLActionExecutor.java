@@ -23,6 +23,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieDeletePartitionPendingTableServiceException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -33,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 public class SparkPartitionTTLActionExecutor<T>
@@ -47,11 +49,22 @@ public class SparkPartitionTTLActionExecutor<T>
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    HoodieWriteMetadata<HoodieData<WriteStatus>> emptyResult = new HoodieWriteMetadata<>();
+    emptyResult.setPartitionToReplaceFileIds(Collections.emptyMap());
+    emptyResult.setWriteStatuses(context.emptyHoodieData());
     try {
       PartitionTTLStrategy strategy = HoodiePartitionTTLStrategyFactory.createStrategy(table, config.getProps(), instantTime);
       List<String> expiredPartitions = strategy.getExpiredPartitionPaths();
+      if (expiredPartitions.isEmpty()) {
+        return emptyResult;
+      }
       LOG.info("Partition ttl find the following expired partitions to delete:  " + String.join(",", expiredPartitions));
-      return new SparkDeletePartitionCommitActionExecutor<>(context, config, table, instantTime, expiredPartitions).execute();
+      // Auto commit is disabled in config, copy config and enable auto commit for SparkDeletePartitionCommitActionExecutor.
+      HoodieWriteConfig autoCommitConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps()).withAutoCommit(true).build();
+      return new SparkDeletePartitionCommitActionExecutor<>(context, autoCommitConfig, table, instantTime, expiredPartitions).execute();
+    } catch (HoodieDeletePartitionPendingTableServiceException deletePartitionPendingTableServiceException) {
+      LOG.info("Partition is under table service, do nothing, call delete partition next time.");
+      return emptyResult;
     } catch (IOException e) {
       throw new HoodieIOException("Error executing hoodie partition ttl: ", e);
     }

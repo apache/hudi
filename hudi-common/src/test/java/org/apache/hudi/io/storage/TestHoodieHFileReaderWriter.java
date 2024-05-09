@@ -19,6 +19,8 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -41,12 +43,12 @@ public class TestHoodieHFileReaderWriter extends TestHoodieHFileReaderWriterBase
 
   @Override
   protected HoodieAvroFileReader createReader(
-      Configuration conf) throws Exception {
+      StorageConfiguration<?> conf) throws Exception {
     return new HoodieNativeAvroHFileReader(conf, getFilePath(), Option.empty());
   }
 
   @Override
-  protected HoodieAvroHFileReaderImplBase createHFileReader(Configuration conf,
+  protected HoodieAvroHFileReaderImplBase createHFileReader(StorageConfiguration<?> conf,
                                                             byte[] content) throws IOException {
     return new HoodieNativeAvroHFileReader(conf, content, Option.empty());
   }
@@ -57,7 +59,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieHFileReaderWriterBase
                                    boolean mayUseDefaultComparator,
                                    Class<?> expectedComparatorClazz,
                                    int count) throws IOException {
-    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(new Configuration(), content)) {
+    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(
+        HadoopFSUtils.getStorageConf(new Configuration()), content)) {
       assertEquals(count, hfileReader.getTotalRecords());
     }
   }
@@ -65,8 +68,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieHFileReaderWriterBase
   @Test
   public void testReaderGetRecordIteratorByKeysWithBackwardSeek() throws Exception {
     writeFileWithSimpleSchema();
-    try (HoodieAvroHFileReaderImplBase hfileReader =
-             (HoodieAvroHFileReaderImplBase) createReader(new Configuration())) {
+    try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
+        createReader(HadoopFSUtils.getStorageConf(new Configuration()))) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       // Filter for "key00001, key05, key24, key16, key31, key61".

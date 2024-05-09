@@ -41,7 +41,6 @@ import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestFunctionWrapper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -89,6 +88,7 @@ import java.util.stream.IntStream;
 import static junit.framework.TestCase.assertEquals;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_PROPERTIES_FILE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 import static org.hamcrest.CoreMatchers.is;
@@ -350,6 +350,14 @@ public class TestData {
   public static List<RowData> DATA_SET_SINGLE_INSERT = Collections.singletonList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+
+  public static List<RowData> DATA_SET_PART1 = Collections.singletonList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+
+  public static List<RowData> DATA_SET_PART2 = Collections.singletonList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par2")));
 
   public static List<RowData> DATA_SET_SINGLE_DELETE = Collections.singletonList(
       deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
@@ -816,7 +824,7 @@ public class TestData {
       Function<GenericRecord, String> extractor) throws IOException {
 
     // 1. init flink table
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(basePath.toURI().toString(), new org.apache.hadoop.conf.Configuration());
+    HoodieTableMetaClient metaClient = createMetaClient(basePath.toURI().toString());
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath.toURI().toString()).build();
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
 
@@ -872,7 +880,7 @@ public class TestData {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .fromFile(hoodiePropertiesFile)
         .withPath(basePath).build();
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(basePath, new org.apache.hadoop.conf.Configuration());
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
 

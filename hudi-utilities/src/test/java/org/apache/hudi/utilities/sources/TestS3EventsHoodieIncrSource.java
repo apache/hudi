@@ -102,7 +102,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
   @BeforeEach
   public void setUp() throws IOException {
     jsc = JavaSparkContext.fromSparkContext(spark().sparkContext());
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     String schemaFilePath = TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_gcs_data.avsc").getPath();
     TypedProperties props = new TypedProperties();
     props.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
@@ -358,8 +358,8 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1"), 1000L, "2", typedProperties);
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file3.json"), 1000L, "2", typedProperties);
-    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("2#path/to/skip4.json"), 1000L, "2", typedProperties);
-    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("2#path/to/skip5.json"), 1000L, "2", typedProperties);
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("2#path/to/skip4.json"), 1000L, "2#path/to/skip4.json", typedProperties);
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("2#path/to/skip5.json"), 1000L, "2#path/to/skip5.json", typedProperties);
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("2"), 1000L, "2", typedProperties);
   }
 
@@ -434,7 +434,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
   @CsvSource({
       "1,1#path/to/file2.json,3#path/to/file4.json,1#path/to/file1.json,1",
       "2,1#path/to/file2.json,3#path/to/file4.json,1#path/to/file1.json,2",
-      "3,3#path/to/file5.json,3,1#path/to/file1.json,3"
+      "3,3#path/to/file5.json,3#path/to/file5.json,1#path/to/file1.json,3"
   })
   public void testSplitSnapshotLoad(String snapshotCheckPoint, String exptected1, String exptected2, String exptected3, String exptected4) throws IOException {
 

@@ -20,15 +20,15 @@ package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.sink.utils.Pipelines;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.JsonDeserializationFunction;
 import org.apache.hudi.util.StreamerUtil;
@@ -202,8 +202,7 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
         // ignored
       }
     }
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
-        tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
+    HoodieStorage storage = HoodieTestUtils.getStorage(tempFile.getAbsolutePath());
     TestData.checkWrittenDataMOR(storage, tempFile, expected, 4);
   }
 }

@@ -110,7 +110,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
   @BeforeEach
   public void setUp() throws IOException {
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     jsc = JavaSparkContext.fromSparkContext(spark().sparkContext());
     String schemaFilePath = TestGcsEventsHoodieIncrSource.class.getClassLoader().getResource("schema/sample_gcs_data.avsc").getPath();
     TypedProperties props = new TypedProperties();
@@ -242,7 +242,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   @CsvSource({
       "1,1#path/to/file2.json,3#path/to/file4.json,1#path/to/file1.json,1",
       "2,1#path/to/file2.json,3#path/to/file4.json,1#path/to/file1.json,2",
-      "3,3#path/to/file5.json,3,1#path/to/file1.json,3"
+      "3,3#path/to/file5.json,3#path/to/file5.json,1#path/to/file1.json,3"
   })
   public void testSplitSnapshotLoad(String snapshotCheckPoint, String exptected1, String exptected2, String exptected3, String exptected4) throws IOException {
 

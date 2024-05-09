@@ -24,13 +24,14 @@ import org.apache.hudi.HoodieDataSourceHelpers.{hasNewCommits, latestCommit, lis
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.WriteOperationType.{BULK_INSERT, INSERT, UPSERT}
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
+
 import org.apache.spark.sql
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.{Dataset, Row}
@@ -38,7 +39,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.scalatest.Inspectors.forAll
 
 import java.io.File
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 @SparkSQLCoreFlow
 class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
@@ -229,10 +230,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   }
 
   def assertOperation(basePath: String, count: Int, operationType: WriteOperationType): Boolean = {
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
+    val metaClient = createMetaClient(spark, basePath)
     val timeline = metaClient.getActiveTimeline.getAllCommitsTimeline
     assert(timeline.countInstants() == count)
     val latestCommit = timeline.lastInstant()
@@ -310,12 +308,12 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
   def generateInserts(dataGen: HoodieTestDataGenerator, instantTime: String, n: Int): sql.DataFrame = {
     val recs = dataGen.generateInsertsNestedExample(instantTime, n)
-    spark.read.json(spark.sparkContext.parallelize(recordsToStrings(recs), 2))
+    spark.read.json(spark.sparkContext.parallelize(recordsToStrings(recs).asScala.toSeq, 2))
   }
 
   def generateUniqueUpdates(dataGen: HoodieTestDataGenerator, instantTime: String, n: Int): sql.DataFrame = {
     val recs = dataGen.generateUniqueUpdatesNestedExample(instantTime, n)
-    spark.read.json(spark.sparkContext.parallelize(recordsToStrings(recs), 2))
+    spark.read.json(spark.sparkContext.parallelize(recordsToStrings(recs).asScala.toSeq, 2))
   }
 
   def compareUpdateDfWithHudiDf(inputDf: Dataset[Row], hudiDf: Dataset[Row], beforeDf: Dataset[Row]): Unit = {

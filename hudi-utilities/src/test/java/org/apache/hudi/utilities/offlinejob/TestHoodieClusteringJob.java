@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 
@@ -60,7 +61,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         .fromProperties(props)
         .build();
 
-    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), tableBasePath, metaClientProps);
+    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(
+        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath, metaClientProps);
     client = new SparkRDDWriteClient(context, config);
 
     writeData(false, client.createNewInstantTime(), 100, true);
@@ -70,8 +72,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     HoodieClusteringJob hoodieCluster =
         init(tableBasePath, true, "scheduleAndExecute", false);
     hoodieCluster.cluster(0);
-    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(1, tableBasePath, fs);
-    HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath, fs);
+    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(1, tableBasePath);
+    HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath);
 
     writeData(false, client.createNewInstantTime(), 100, true);
     writeData(false, client.createNewInstantTime(), 100, true);
@@ -80,8 +82,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     hoodieCluster =
         init(tableBasePath, true, "scheduleAndExecute", true);
     hoodieCluster.cluster(0);
-    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(2, tableBasePath, fs);
-    HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(1, tableBasePath, fs);
+    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(2, tableBasePath);
+    HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(1, tableBasePath);
   }
 
   @Test
@@ -96,7 +98,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         .fromProperties(props)
         .build();
 
-    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), tableBasePath, metaClientProps);
+    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(
+        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath, metaClientProps);
     client = new SparkRDDWriteClient(context, config);
 
     writeData(false, client.createNewInstantTime(), 100, true);
@@ -106,8 +109,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     HoodieClusteringJob hoodieCluster =
         init(tableBasePath, true, "scheduleAndExecute", false);
     hoodieCluster.cluster(0);
-    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(1, tableBasePath, fs);
-    HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath, fs);
+    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(1, tableBasePath);
+    HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath);
 
     // remove the completed instant from timeline and trigger purge of pending clustering instant.
     HoodieInstant latestClusteringInstant = metaClient.getActiveTimeline()
@@ -120,7 +123,7 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         getClusteringConfigForPurge(tableBasePath, true, PURGE_PENDING_INSTANT, false, latestClusteringInstant.getTimestamp());
     hoodieCluster.cluster(0);
     // validate that there are no clustering commits in timeline.
-    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(0, tableBasePath, fs);
+    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(0, tableBasePath);
 
     // validate that no records match the clustering instant.
     String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];

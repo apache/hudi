@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.metadata.{HoodieTableMetadata, SparkHoodieBackedTableMetadataWriter}
 import org.apache.hudi.storage.StoragePath
@@ -49,7 +48,7 @@ class CreateMetadataTableProcedure extends BaseProcedure with ProcedureBuilder w
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
 
     val basePath = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val metadataPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))
 
     try {
@@ -64,8 +63,8 @@ class CreateMetadataTableProcedure extends BaseProcedure with ProcedureBuilder w
     }
     val timer = HoodieTimer.start
     val writeConfig = getWriteConfig(basePath)
-    SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf, writeConfig, new HoodieSparkEngineContext(jsc))
-    Seq(Row("Created Metadata Table in " +  metadataPath + " (duration=" + timer.endTimer / 1000.0 + "secs)"))
+    SparkHoodieBackedTableMetadataWriter.create(metaClient.getStorageConf, writeConfig, new HoodieSparkEngineContext(jsc))
+    Seq(Row("Created Metadata Table in " + metadataPath + " (duration=" + timer.endTimer / 1000.0 + "secs)"))
   }
 
   override def build = new CreateMetadataTableProcedure()

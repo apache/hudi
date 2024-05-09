@@ -20,7 +20,6 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -38,12 +37,11 @@ import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.hadoop.fs.NoOpConsistencyGuard;
 import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -99,6 +97,13 @@ public class FSUtils {
     Configuration inlineConf = new Configuration(conf);
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
     inlineConf.setClassLoader(InLineFileSystem.class.getClassLoader());
+    return inlineConf;
+  }
+
+  public static StorageConfiguration<?> buildInlineConf(StorageConfiguration<?> storageConf) {
+    StorageConfiguration<?> inlineConf = storageConf.newInstance();
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+    (inlineConf.unwrapAs(Configuration.class)).setClassLoader(InLineFileSystem.class.getClassLoader());
     return inlineConf;
   }
 
@@ -226,17 +231,16 @@ public class FSUtils {
     fullPartitionPath = getPathWithoutSchemeAndAuthority(fullPartitionPath);
 
     String fullPartitionPathStr = fullPartitionPath.toString();
+    String basePathString = basePath.toString();
 
-    if (!fullPartitionPathStr.startsWith(basePath.toString())) {
+    if (!fullPartitionPathStr.startsWith(basePathString)) {
       throw new IllegalArgumentException("Partition path \"" + fullPartitionPathStr
           + "\" does not belong to base-path \"" + basePath + "\"");
     }
 
-    int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
-        basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
     // Partition-Path could be empty for non-partitioned tables
-    return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
-        : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
+    return fullPartitionPathStr.length() == basePathString.length() ? ""
+        : fullPartitionPathStr.substring(basePathString.length() + 1);
   }
 
   public static StoragePath getPathWithoutSchemeAndAuthority(StoragePath path) {
@@ -596,14 +600,6 @@ public class FSUtils {
     return Option.empty();
   }
 
-  public static int getDefaultBufferSize(final FileSystem fs) {
-    return fs.getConf().getInt("io.file.buffer.size", 4096);
-  }
-
-  public static Short getDefaultReplication(FileSystem fs, Path path) {
-    return fs.getDefaultReplication(path);
-  }
-
   /**
    * When a file was opened and the task died without closing the stream, another task executor cannot open because the
    * existing lease will be active. We will try to recover the lease, from HDFS. If a data node went down, it takes
@@ -611,11 +607,11 @@ public class FSUtils {
    */
   public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
       throws IOException, InterruptedException {
-    LOG.info("Recover lease on dfs file " + p);
+    LOG.info("Recover lease on dfs file {}", p);
     // initiate the recovery
     boolean recovered = false;
     for (int nbAttempt = 0; nbAttempt < MAX_ATTEMPTS_RECOVER_LEASE; nbAttempt++) {
-      LOG.info("Attempt " + nbAttempt + " to recover lease on dfs file " + p);
+      LOG.info("Attempt {} to recover lease on dfs file {}", nbAttempt, p);
       recovered = dfs.recoverLease(p);
       if (recovered) {
         break;
@@ -708,22 +704,6 @@ public class FSUtils {
   }
 
   /**
-   * Get the FS implementation for this table.
-   * @param path  Path String
-   * @param hadoopConf  Serializable Hadoop Configuration
-   * @param consistencyGuardConfig Consistency Guard Config
-   * @return HoodieWrapperFileSystem
-   */
-  public static HoodieWrapperFileSystem getFs(String path, SerializableConfiguration hadoopConf,
-      ConsistencyGuardConfig consistencyGuardConfig) {
-    FileSystem fileSystem = HadoopFSUtils.getFs(path, hadoopConf.newCopy());
-    return new HoodieWrapperFileSystem(fileSystem,
-        consistencyGuardConfig.isConsistencyCheckEnabled()
-            ? new FailSafeConsistencyGuard(HoodieStorageUtils.getStorage(fileSystem), consistencyGuardConfig)
-            : new NoOpConsistencyGuard());
-  }
-
-  /**
    * Helper to filter out paths under metadata folder when running fs.globStatus.
    *
    * @param storage  {@link HoodieStorage} instance.
@@ -768,44 +748,15 @@ public class FSUtils {
     return false;
   }
 
-  /**
-   * Processes sub-path in parallel.
-   *
-   * @param hoodieEngineContext {@code HoodieEngineContext} instance
-   * @param fs file system
-   * @param dirPath directory path
-   * @param parallelism parallelism to use for sub-paths
-   * @param subPathPredicate predicate to use to filter sub-paths for processing
-   * @param pairFunction actual processing logic for each sub-path
-   * @param <T> type of result to return for each sub-path
-   * @return a map of sub-path to result of the processing
-   */
-  public static <T> Map<String, T> parallelizeSubPathProcess(
-      HoodieEngineContext hoodieEngineContext, FileSystem fs, Path dirPath, int parallelism,
-      Predicate<FileStatus> subPathPredicate, SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction) {
-    Map<String, T> result = new HashMap<>();
-    try {
-      FileStatus[] fileStatuses = fs.listStatus(dirPath);
-      List<String> subPaths = Arrays.stream(fileStatuses)
-          .filter(subPathPredicate)
-          .map(fileStatus -> fileStatus.getPath().toString())
-          .collect(Collectors.toList());
-      result = parallelizeFilesProcess(hoodieEngineContext, fs, parallelism, pairFunction, subPaths);
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
-    }
-    return result;
-  }
-
   public static <T> Map<String, T> parallelizeFilesProcess(
       HoodieEngineContext hoodieEngineContext,
       FileSystem fs,
       int parallelism,
-      SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction,
+      SerializableFunction<Pair<String, StorageConfiguration<Configuration>>, T> pairFunction,
       List<String> subPaths) {
     Map<String, T> result = new HashMap<>();
     if (subPaths.size() > 0) {
-      SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
+      StorageConfiguration<Configuration> conf = HadoopFSUtils.getStorageConfWithCopy(fs.getConf());
       int actualParallelism = Math.min(subPaths.size(), parallelism);
 
       hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),
@@ -818,9 +769,21 @@ public class FSUtils {
     return result;
   }
 
+  /**
+   * Processes sub-path in parallel.
+   *
+   * @param hoodieEngineContext {@link HoodieEngineContext} instance
+   * @param storage             {@link HoodieStorage} instance
+   * @param dirPath             directory path
+   * @param parallelism         parallelism to use for sub-paths
+   * @param subPathPredicate    predicate to use to filter sub-paths for processing
+   * @param pairFunction        actual processing logic for each sub-path
+   * @param <T>                 type of result to return for each sub-path
+   * @return a map of sub-path to result of the processing
+   */
   public static <T> Map<String, T> parallelizeSubPathProcess(
       HoodieEngineContext hoodieEngineContext, HoodieStorage storage, StoragePath dirPath, int parallelism,
-      Predicate<StoragePathInfo> subPathPredicate, SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction) {
+      Predicate<StoragePathInfo> subPathPredicate, SerializableFunction<Pair<String, StorageConfiguration<?>>, T> pairFunction) {
     Map<String, T> result = new HashMap<>();
     try {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(dirPath);
@@ -839,18 +802,18 @@ public class FSUtils {
       HoodieEngineContext hoodieEngineContext,
       HoodieStorage storage,
       int parallelism,
-      SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction,
+      SerializableFunction<Pair<String, StorageConfiguration<?>>, T> pairFunction,
       List<String> subPaths) {
     Map<String, T> result = new HashMap<>();
     if (subPaths.size() > 0) {
-      SerializableConfiguration conf = new SerializableConfiguration((Configuration) storage.getConf());
+      StorageConfiguration<?> storageConf = storage.getConf();
       int actualParallelism = Math.min(subPaths.size(), parallelism);
 
       hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),
           "Parallel listing paths " + String.join(",", subPaths));
 
       result = hoodieEngineContext.mapToPair(subPaths,
-          subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
+          subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, storageConf))),
           actualParallelism);
     }
     return result;
@@ -860,14 +823,14 @@ public class FSUtils {
    * Deletes a sub-path.
    *
    * @param subPathStr sub-path String
-   * @param conf       serializable config
+   * @param conf       storage config
    * @param recursive  is recursive or not
    * @return {@code true} if the sub-path is deleted; {@code false} otherwise.
    */
-  public static boolean deleteSubPath(String subPathStr, SerializableConfiguration conf, boolean recursive) {
+  public static boolean deleteSubPath(String subPathStr, StorageConfiguration<?> conf, boolean recursive) {
     try {
       Path subPath = new Path(subPathStr);
-      FileSystem fileSystem = subPath.getFileSystem(conf.get());
+      FileSystem fileSystem = subPath.getFileSystem(conf.unwrapAs(Configuration.class));
       return fileSystem.delete(subPath, recursive);
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
@@ -901,7 +864,7 @@ public class FSUtils {
           pairOfSubPathAndConf -> {
             Path path = new Path(pairOfSubPathAndConf.getKey());
             try {
-              FileSystem fileSystem = path.getFileSystem(pairOfSubPathAndConf.getValue().get());
+              FileSystem fileSystem = path.getFileSystem(pairOfSubPathAndConf.getValue().unwrap());
               return Arrays.stream(fileSystem.listStatus(path))
                 .collect(Collectors.toList());
             } catch (IOException e) {

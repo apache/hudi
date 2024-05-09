@@ -74,6 +74,18 @@ public class DataSourceTestUtils {
     return toReturn;
   }
 
+  public static List<Row> generateRandomRowsByPartition(int count, String partition) {
+    List<Row> toReturn = new ArrayList<>();
+    for (int i = 0; i < count; i++) {
+      Object[] values = new Object[3];
+      values[0] = HoodieTestDataGenerator.genPseudoRandomUUID(RANDOM).toString();
+      values[1] = partition;
+      values[2] = new Date().getTime();
+      toReturn.add(RowFactory.create(values));
+    }
+    return toReturn;
+  }
+
   public static List<Row> generateUpdates(List<Row> records, int count) {
     List<Row> toReturn = new ArrayList<>();
     for (int i = 0; i < count; i++) {

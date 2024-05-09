@@ -28,6 +28,7 @@ import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
@@ -45,9 +46,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters;
 
 /**
  * Helper class for HoodieBulkInsertDataInternalWriter used by Spark datasource v2.
@@ -135,7 +133,7 @@ public class BulkInsertDataInternalWriterHelper {
         // Drop the partition columns from the row
         // Using the deprecated JavaConversions to be compatible with scala versions < 2.12. Once hudi support for scala versions < 2.12 is
         // stopped, can move this to JavaConverters.seqAsJavaList(...)
-        List<String> partitionCols = JavaConversions.<String>seqAsJavaList(HoodieDatasetBulkInsertHelper.getPartitionPathCols(this.writeConfig));
+        List<String> partitionCols = JavaScalaConverters.convertScalaListToJavaList(HoodieDatasetBulkInsertHelper.getPartitionPathCols(this.writeConfig));
         Set<Integer> partitionIdx = new HashSet<Integer>();
         for (String col : partitionCols) {
           partitionIdx.add(this.structType.fieldIndex(col));
@@ -143,7 +141,7 @@ public class BulkInsertDataInternalWriterHelper {
 
         // Relies on InternalRow::toSeq(...) preserving the column ordering based on the supplied schema
         // Using the deprecated JavaConversions to be compatible with scala versions < 2.12.
-        List<Object> cols = JavaConversions.<Object>seqAsJavaList(row.toSeq(structType));
+        List<Object> cols = JavaScalaConverters.convertScalaListToJavaList(row.toSeq(structType));
         int idx = 0;
         List<Object> newCols = new ArrayList<Object>();
         for (Object o : cols) {
@@ -152,7 +150,7 @@ public class BulkInsertDataInternalWriterHelper {
           }
           idx += 1;
         }
-        InternalRow newRow = InternalRow.fromSeq(JavaConverters.<Object>asScalaIteratorConverter(newCols.iterator()).asScala().toSeq());
+        InternalRow newRow = InternalRow.fromSeq(JavaScalaConverters.<Object>convertJavaListToScalaSeq(newCols));
         handle.write(newRow);
       } else {
         handle.write(row);

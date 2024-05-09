@@ -17,19 +17,19 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{common, AvroConversionUtils, ColumnStatsIndexSupport}
 import org.apache.hudi.avro.model._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.FileSlice
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.StoragePathInfo
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport}
 
 import org.apache.avro.generic.IndexedRecord
 import org.apache.spark.internal.Logging
@@ -38,9 +38,8 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.{Function, Supplier}
-
-import scala.collection.{mutable, JavaConversions}
-import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter}
+import scala.collection.mutable
+import scala.collection.JavaConverters._
 
 class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -74,7 +73,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val metadataConfig = HoodieMetadataConfig.newBuilder
       .enable(true)
       .build
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val schemaUtil = new TableSchemaResolver(metaClient)
     val schema = AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
@@ -134,7 +133,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
 
   def buildFileSystemView(table: Option[Any]): HoodieTableFileSystemView = {
     val basePath = getBasePath(table)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
 
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
 
@@ -149,7 +148,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     }
 
     val filteredTimeline = new HoodieDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
+      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
 
     new HoodieTableFileSystemView(metaClient, filteredTimeline, new java.util.ArrayList[StoragePathInfo])
   }

@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -67,11 +68,12 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     FileSystemViewStorageConfig sConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
 
     try {
       server = new TimelineService(localEngineContext, new Configuration(),
-          TimelineService.Config.builder().serverPort(0).build(), HoodieStorageUtils.getStorage(new Configuration()),
+          TimelineService.Config.builder().serverPort(0).build(),
+          HoodieStorageUtils.getStorage(getDefaultStorageConf()),
           FileSystemViewManager.createViewManager(localEngineContext, sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {

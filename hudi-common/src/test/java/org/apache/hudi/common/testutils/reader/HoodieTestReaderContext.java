@@ -35,13 +35,13 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieAvroParquetReader;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.List;
@@ -65,7 +65,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public HoodieStorage getStorage(String path, Configuration conf) {
+  public HoodieStorage getStorage(String path, StorageConfiguration<?> conf) {
     return HoodieStorageUtils.getStorage(path, conf);
   }
 
@@ -76,7 +76,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       long length,
       Schema dataSchema,
       Schema requiredSchema,
-      Configuration conf
+      StorageConfiguration<?> conf
   ) throws IOException {
     HoodieAvroParquetReader reader = new HoodieAvroParquetReader(conf, new StoragePath(filePath.toUri()));
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);

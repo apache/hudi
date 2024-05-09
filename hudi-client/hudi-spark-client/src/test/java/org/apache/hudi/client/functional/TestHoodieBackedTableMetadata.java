@@ -255,10 +255,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     // 2nd commit
     doWriteOperation(testTable, "0000001", INSERT);
 
-    final HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf)
-        .setBasePath(metadataTableBasePath)
-        .build();
+    final HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
     metadataMetaClient.reloadActiveTimeline();
     final HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient);
@@ -328,10 +325,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     HoodieCommitMetadata commitMetadata2 =
         testTable.doWriteOperation(instant2, BULK_INSERT, emptyList(), asList(partition), 1);
 
-    final HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf)
-        .setBasePath(metadataTableBasePath)
-        .build();
+    final HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
     while (getNumCompactions(metadataMetaClient) == 0) {
       // Write until the compaction happens in the metadata table
       testTable.doWriteOperation(
@@ -389,7 +383,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
   private Set<String> getFilePathsInPartition(String partition) throws IOException {
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(hadoopConf),
+        new HoodieLocalEngineContext(storageConf),
         HoodieMetadataConfig.newBuilder().enable(true).build(),
         basePath);
     return tableMetadata.getAllFilesInPartition(new StoragePath(basePath, partition))
@@ -537,7 +531,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-            table.getConfig(), context.getHadoopConf().get(), new StoragePath(baseFile.getPath()));
+            table.getConfig(), context.getStorageConf(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       assertNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));

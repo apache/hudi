@@ -17,7 +17,6 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
@@ -25,28 +24,28 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
-import org.apache.hudi.storage.{StoragePath, HoodieStorage}
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
-import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions._
-import scala.concurrent.{Await, Future}
+import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 /**
  * Basic tests on the spark datasource for structured streaming sink
@@ -106,7 +105,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   def getClusteringOpts(tableType: HoodieTableType, isInlineClustering: String,
                         isAsyncClustering: String, clusteringNumCommit: String,
                         fileMaxRecordNum: Int): Map[String, String] = {
-    getOptsWithTableType(tableType) + (
+    getOptsWithTableType(tableType) ++ Map(
       HoodieClusteringConfig.INLINE_CLUSTERING.key -> isInlineClustering,
       HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
       DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
@@ -116,7 +115,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   def getCompactionOpts(tableType: HoodieTableType, isAsyncCompaction: Boolean): Map[String, String] = {
-    getOptsWithTableType(tableType) + (
+    getOptsWithTableType(tableType) ++ Map(
       DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key -> isAsyncCompaction.toString,
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1"
     )
@@ -125,11 +124,11 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   def structuredStreamingTestRunner(tableType: HoodieTableType, addCompactionConfigs: Boolean, isAsyncCompaction: Boolean): Unit = {
     val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
     // First chunk of data
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
 
     // Second chunk of data
-    val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
+    val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     val uniqueKeyCnt = inputDF2.select("_row_key").distinct().count()
 
@@ -270,7 +269,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> classOf[InProcessLockProvider].getName
     )
 
-    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).toList
+    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     val schema = inputDF1.schema
 
@@ -288,14 +287,12 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .start(destPath)
 
     query1.processAllAvailable()
-    var metaClient = HoodieTableMetaClient.builder
-      .setConf(storage.getConf.asInstanceOf[Configuration])
-      .setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+    var metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
 
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier1", "0")
 
     // Add another identifier checkpoint info to the commit.
-    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).toList
+    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
     inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
@@ -335,9 +332,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
 
     query3.processAllAvailable()
     query3.stop()
-    metaClient = HoodieTableMetaClient.builder
-      .setConf(storage.getConf.asInstanceOf[Configuration])
-      .setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+    metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
 
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier1", "2")
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier2", "0")
@@ -355,7 +350,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
 
   def testStructuredStreamingInternal(operation : String = "upsert"): Unit = {
     val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
-    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).toList
+    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     val schema = inputDF1.schema
     inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
@@ -372,9 +367,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .start(destPath)
 
     query1.processAllAvailable()
-    val metaClient = HoodieTableMetaClient.builder
-      .setConf(storage.getConf.asInstanceOf[Configuration])
-      .setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+    val metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
 
     assertLatestCheckpointInfoMatched(metaClient, STREAMING_CHECKPOINT_IDENTIFIER.defaultValue(), "0")
     query1.stop()
@@ -393,11 +386,11 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
                                                  isInlineClustering: Boolean, isAsyncClustering: Boolean,
                                                  partitionOfRecords: String, checkClusteringResult: String => Unit): Unit = {
     // First insert of data
-    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, partitionOfRecords)).toList
+    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, partitionOfRecords)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
 
     // Second insert of data
-    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 100, partitionOfRecords)).toList
+    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 100, partitionOfRecords)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
     val hudiOptions = getClusteringOpts(
@@ -416,10 +409,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       currNumCommits = waitTillAtleastNCommits(storage, destPath, currNumCommits + 1, 120, 5)
 
       // Wait for the clustering to finish
-      this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(storage.getConf.asInstanceOf[Configuration])
-        .setBasePath(destPath)
-        .setLoadActiveTimelineOnLoad(true).build()
+      this.metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
       checkClusteringResult(destPath)
 
       assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").size())
@@ -473,9 +463,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   private def latestInstant(storage: HoodieStorage, basePath: String, instantAction: String): String = {
-    val metaClient = HoodieTableMetaClient.builder
-      .setConf(storage.getConf.asInstanceOf[Configuration])
-      .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build
+    val metaClient = HoodieTestUtils.createMetaClient(storage, basePath)
     metaClient.getActiveTimeline
       .getTimelineOfActions(CollectionUtils.createSet(instantAction))
       .filterCompletedInstants
@@ -502,22 +490,19 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   def testStructuredStreamingWithDisabledCompaction(): Unit = {
     val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
     // First chunk of data
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 10)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
     val opts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name()) + (DataSourceWriteOptions.STREAMING_DISABLE_COMPACTION.key -> "true")
     streamingWrite(inputDF1.schema, sourcePath, destPath, opts, "000")
     for (i <- 1 to 24) {
       val id = String.format("%03d", new Integer(i))
-      val records = recordsToStrings(dataGen.generateUpdates(id, 10)).toList
+      val records = recordsToStrings(dataGen.generateUpdates(id, 10)).asScala.toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
       inputDF.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       streamingWrite(inputDF.schema, sourcePath, destPath, opts, id)
     }
-    val metaClient = HoodieTableMetaClient.builder()
-      .setConf(storage.getConf.asInstanceOf[Configuration])
-      .setBasePath(destPath)
-      .setLoadActiveTimelineOnLoad(true).build()
+    val metaClient = HoodieTestUtils.createMetaClient(storage, destPath);
     assertTrue(metaClient.getActiveTimeline.getCommitTimeline.empty())
   }
 }

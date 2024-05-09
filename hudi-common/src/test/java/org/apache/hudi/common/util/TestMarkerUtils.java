@@ -21,9 +21,10 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,7 +43,8 @@ class TestMarkerUtils extends HoodieCommonTestHarness {
   @BeforeEach
   public void setup() {
     initPath();
-    storage = HoodieStorageUtils.getStorage(basePath, new Configuration());
+    storage = HoodieStorageUtils.getStorage(
+        basePath, HadoopFSUtils.getStorageConf(new Configuration()));
   }
 
   @Test

@@ -43,10 +43,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,10 +80,10 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected final boolean urlEncodePartitioningEnabled;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String dataBasePath) {
-    super(engineContext, engineContext.getHadoopConf(), dataBasePath);
+    super(engineContext, engineContext.getStorageConf(), dataBasePath);
 
     this.dataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf.get())
+        .setConf(storageConf.newInstance())
         .setBasePath(dataBasePath)
         .build();
 
@@ -92,7 +92,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     this.metadataConfig = metadataConfig;
     this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableAvailable();
 
-    if (metadataConfig.enableMetrics()) {
+    if (metadataConfig.isMetricsEnabled()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(HoodieMetricsConfig.newBuilder().fromProperties(metadataConfig.getProps()).build()));
     } else {
       this.metrics = Option.empty();
@@ -101,7 +101,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
   protected HoodieEngineContext getEngineContext() {
     if (engineContext == null) {
-      engineContext = new HoodieLocalEngineContext(dataMetaClient.getHadoopConf());
+      engineContext = new HoodieLocalEngineContext(dataMetaClient.getStorageConf());
     }
     return engineContext;
   }
@@ -355,7 +355,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           HoodieMetadataPayload metadataPayload = record.getData();
           checkForSpuriousDeletes(metadataPayload, recordKey);
           try {
-            return metadataPayload.getFileList(getHadoopConf(), partitionPath);
+            return metadataPayload.getFileList(getStorageConf(), partitionPath);
           } catch (IOException e) {
             throw new HoodieIOException("Failed to extract file-pathInfoList from the payload", e);
           }
@@ -386,7 +386,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
     HoodieStorage storage =
-        HoodieStorageUtils.getStorage(partitionPaths.get(0), getHadoopConf());
+        HoodieStorageUtils.getStorage(partitionPaths.get(0), getStorageConf());
 
     Map<String, List<StoragePathInfo>> partitionPathToFilesMap =
         partitionIdRecordPairs.entrySet().stream()
@@ -412,7 +412,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    */
   private void checkForSpuriousDeletes(HoodieMetadataPayload metadataPayload, String partitionName) {
     if (!metadataPayload.getDeletions().isEmpty()) {
-      if (metadataConfig.ignoreSpuriousDeletes()) {
+      if (metadataConfig.shouldIgnoreSpuriousDeletes()) {
         LOG.warn("Metadata record for " + partitionName + " encountered some files to be deleted which was not added before. "
             + "Ignoring the spurious deletes as the `" + HoodieMetadataConfig.IGNORE_SPURIOUS_DELETES.key() + "` config is set to true");
       } else {
@@ -430,8 +430,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     return metadataConfig;
   }
 
-  protected Configuration getHadoopConf() {
-    return dataMetaClient.getHadoopConf();
+  protected StorageConfiguration<?> getStorageConf() {
+    return dataMetaClient.getStorageConf();
   }
 
   protected String getLatestDataInstantTime() {

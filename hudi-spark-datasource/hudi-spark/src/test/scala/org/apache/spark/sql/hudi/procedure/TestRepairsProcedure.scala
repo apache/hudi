@@ -24,13 +24,13 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, SchemaTestUtil}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.{StoragePathInfo, StoragePath}
+import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.spark.api.java.JavaSparkContext
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.IOException
@@ -38,8 +38,7 @@ import java.net.URL
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import scala.collection.JavaConverters.asScalaIteratorConverter
-import scala.jdk.CollectionConverters.{asScalaSetConverter, iterableAsScalaIterableConverter}
+import scala.collection.JavaConverters._
 
 class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
@@ -65,10 +64,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       // create commit instant
       Files.createFile(Paths.get(tablePath, ".hoodie", "100.commit"))
 
-      val metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      val metaClient = createMetaClient(spark, tablePath)
 
       // create partition path
       val partition1 = Paths.get(tablePath, "2016/03/15").toString
@@ -169,7 +165,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       assertEquals(expectedOutput, actual)
 
       spark.sql(s"""call repair_overwrite_hoodie_props(table => '$tableName', new_props_file_path => '${curPropPath}')""")
-      val config = HoodieTableMetaClient.builder().setBasePath(tablePath).setConf(new Configuration()).build().getTableConfig
+      val config = createMetaClient(spark, tablePath).getTableConfig
       val props = config.getProps
       assertEquals(prevProps.size(), props.size())
       props.entrySet().asScala.foreach((entry) => {
@@ -198,16 +194,13 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  preCombineField = 'ts'
            | )
        """.stripMargin)
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       // Create four requested files
       for (i <- 100 until 104) {
         val timestamp = String.valueOf(i)
         // Write corrupted requested Clean File
-        createEmptyCleanRequestedFile(tablePath, timestamp, metaClient.getHadoopConf)
+        createEmptyCleanRequestedFile(tablePath, timestamp, metaClient.getStorageConf.unwrapAs(classOf[Configuration]))
       }
 
       // reload meta client
@@ -253,10 +246,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  type = 'cow'
            | )
        """.stripMargin)
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       generateRecords(tablePath, bashPath, metaClient)
 
@@ -313,10 +303,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  type = 'cow'
            | )
        """.stripMargin)
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       generateRecords(tablePath, bashPath, metaClient)
 
@@ -374,10 +361,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  type = 'cow'
            | )
        """.stripMargin)
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       generateRecords(tablePath, bashPath, metaClient)
 
@@ -435,10 +419,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  type = 'cow'
            | )
        """.stripMargin)
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       generateRecords(tablePath, bashPath, metaClient)
 

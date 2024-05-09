@@ -17,28 +17,45 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
-import org.apache.hudi.storage.StoragePathInfo
+import org.apache.hudi.metadata.HoodieTableMetadataUtil
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.JFunction
-
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, In, Literal}
 
-import scala.collection.{mutable, JavaConverters}
+import scala.collection.{JavaConverters, mutable}
 
-class RecordLevelIndexSupport(spark: SparkSession,
+class RecordLevelIndexSupport (spark: SparkSession,
                               metadataConfig: HoodieMetadataConfig,
-                              metaClient: HoodieTableMetaClient) {
+                              metaClient: HoodieTableMetaClient)
+  extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) {
 
-  @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-  @transient private lazy val metadataTable: HoodieTableMetadata =
-    HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString)
+
+  override def getIndexName: String = RecordLevelIndexSupport.INDEX_NAME
+
+  override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
+                                         queryFilters: Seq[Expression],
+                                         queryReferencedColumns: Seq[String],
+                                         prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                         shouldPushDownFilesFilter: Boolean
+                                        ): Option[Set[String]] = {
+    lazy val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
+    val allFiles = fileIndex.inputFiles.map(strPath => new StoragePath(strPath)).toSeq
+    if (recordKeys.nonEmpty) {
+      Option.apply(getCandidateFiles(allFiles, recordKeys))
+    } else {
+      Option.empty
+    }
+  }
+
+  override def invalidateCaches(): Unit = {
+    // no caches for this index type, do nothing
+  }
 
   /**
    * Returns the list of candidate files which store the provided record keys based on Metadata Table Record Index.
@@ -47,7 +64,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * @param recordKeys - List of record keys.
    * @return Sequence of file names which need to be queried
    */
-  def getCandidateFiles(allFiles: Seq[StoragePathInfo], recordKeys: List[String]): Set[String] = {
+  def getCandidateFiles(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
     val recordKeyLocationsMap = metadataTable.readRecordIndex(JavaConverters.seqAsJavaListConverter(recordKeys).asJava)
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
@@ -57,10 +74,10 @@ class RecordLevelIndexSupport(spark: SparkSession,
       }
     }
     for (file <- allFiles) {
-      val fileId = FSUtils.getFileIdFromFilePath(file.getPath)
+      val fileId = FSUtils.getFileIdFromFilePath(file)
       val partitionOpt = fileIdToPartitionMap.get(fileId)
       if (partitionOpt.isDefined) {
-        candidateFiles += file.getPath.getName
+        candidateFiles += file.getName
       }
     }
     candidateFiles.toSet
@@ -87,7 +104,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * @param queryFilters The queries that need to be filtered.
    * @return Tuple of List of filtered queries and list of record key literals that need to be matched
    */
-  def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
+  private def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
     if (!isIndexAvailable) {
       (List.empty, List.empty)
     } else {
@@ -110,11 +127,12 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * Return true if metadata table is enabled and record index metadata partition is available.
    */
   def isIndexAvailable: Boolean = {
-    metadataConfig.enabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
+    metadataConfig.isEnabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
   }
 }
 
 object RecordLevelIndexSupport {
+  val INDEX_NAME = "RECORD_LEVEL"
   /**
    * If the input query is an EqualTo or IN query on simple record key columns, the function returns a tuple of
    * list of the query and list of record key literals present in the query otherwise returns an empty option.

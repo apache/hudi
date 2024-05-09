@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -99,7 +100,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
   public RunIndexActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
     this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
-    if (config.getMetadataConfig().enableMetrics()) {
+    if (config.getMetadataConfig().isMetricsEnabled()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig()));
     } else {
       this.metrics = Option.empty();
@@ -157,7 +158,9 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
           // reconcile with metadata table timeline
           String metadataBasePath = getMetadataTableBasePath(table.getMetaClient().getBasePathV2().toString());
-          HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataBasePath).build();
+          HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
+              .setBasePath(metadataBasePath).build();
           Set<String> metadataCompletedTimestamps = getCompletedArchivedAndActiveInstantsAfter(indexUptoInstant, metadataMetaClient).stream()
               .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 

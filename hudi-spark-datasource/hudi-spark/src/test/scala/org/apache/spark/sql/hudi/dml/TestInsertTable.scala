@@ -21,14 +21,16 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
+
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -217,10 +219,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | select 20 as price, 2000 as ts, 2 as id, 'a2' as name
               """.stripMargin)
       // should not mess with the original order after write the out-of-order data.
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(tmp.getCanonicalPath)
-        .setConf(spark.sessionState.newHadoopConf())
-        .build()
+      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
       val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
       assert(schema.getFieldIndex("id").contains(0))
       assert(schema.getFieldIndex("price").contains(2))
@@ -265,10 +264,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | select 1 as id, '2021-01-05' as dt, 'a1' as name, 10 as price, 1000 as ts
         """.stripMargin)
       // should not mess with the original order after write the out-of-order data.
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(tmp.getCanonicalPath)
-        .setConf(spark.sessionState.newHadoopConf())
-        .build()
+      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
       val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
       assert(schema.getFieldIndex("id").contains(0))
       assert(schema.getFieldIndex("price").contains(2))
@@ -771,10 +767,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name, price from $tableName")(
         Seq(1, "a1", 10.0)
       )
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(tmp.getCanonicalPath)
-        .setConf(spark.sessionState.newHadoopConf())
-        .build()
+      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
       assertResult(tableName)(metaClient.getTableConfig.getTableName)
     }
   }
@@ -1326,10 +1319,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(tablePath)
-          .setConf(spark.sessionState.newHadoopConf())
-          .build()
+        val metaClient = createMetaClient(spark, tablePath)
 
         assertResult(true)(new TableSchemaResolver(metaClient).hasOperationField)
 

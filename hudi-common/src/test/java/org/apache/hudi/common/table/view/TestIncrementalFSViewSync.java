@@ -80,6 +80,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LOG_COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -404,8 +405,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     // Run 1 ingestion on MOR table (1 delta commits). View1 is now sync up to this point
     instantsToFiles = testMultipleWriteSteps(view1, Collections.singletonList("11"), true, "11");
 
-    SyncableFileSystemView view2 =
-        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePathV2().toString()).build());
+    SyncableFileSystemView view2 = getFileSystemView(createMetaClient(
+        metaClient.getStorageConf().newInstance(), metaClient.getBasePathV2().toString()));
 
     // Run 2 more ingestion on MOR table. View1 is not yet synced but View2 is
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("12", "13"), true, "11"));
@@ -414,8 +415,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     instantsToFiles.putAll(testMultipleWriteSteps(view1, Collections.singletonList("14"), true, "11"));
 
     view2.sync();
-    SyncableFileSystemView view3 =
-        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePathV2().toString()).build());
+    SyncableFileSystemView view3 = getFileSystemView(createMetaClient(
+        metaClient.getStorageConf().newInstance(), metaClient.getBasePathV2().toString()));
     view3.sync();
     areViewsConsistent(view1, view2, PARTITIONS.size() * FILE_IDS_PER_PARTITION.size());
 
@@ -426,8 +427,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     unscheduleCompaction(view2, "15", "14", "11");
     view1.sync();
     areViewsConsistent(view1, view2, PARTITIONS.size() * FILE_IDS_PER_PARTITION.size());
-    SyncableFileSystemView view4 =
-        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePathV2().toString()).build());
+    SyncableFileSystemView view4 = getFileSystemView(createMetaClient(
+        metaClient.getStorageConf().newInstance(), metaClient.getBasePathV2().toString()));
     view4.sync();
 
     /*
@@ -440,8 +441,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "18")));
     view1.sync();
     areViewsConsistent(view1, view2, PARTITIONS.size() * FILE_IDS_PER_PARTITION.size() * 2);
-    SyncableFileSystemView view5 =
-        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePathV2().toString()).build());
+    SyncableFileSystemView view5 = getFileSystemView(createMetaClient(
+        metaClient.getStorageConf().newInstance(), metaClient.getBasePathV2().toString()));
     view5.sync();
 
     /*
@@ -463,8 +464,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("23", "24"), true, "20", 2));
     view1.sync();
     areViewsConsistent(view1, view2, PARTITIONS.size() * FILE_IDS_PER_PARTITION.size() * 2);
-    SyncableFileSystemView view6 =
-        getFileSystemView(HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePathV2().toString()).build());
+    SyncableFileSystemView view6 = getFileSystemView(createMetaClient(
+        metaClient.getStorageConf().newInstance(), metaClient.getBasePathV2().toString()));
     view6.sync();
 
     /*

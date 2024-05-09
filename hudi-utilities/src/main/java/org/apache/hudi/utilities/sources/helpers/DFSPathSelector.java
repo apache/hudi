@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -73,7 +74,7 @@ public class DFSPathSelector implements Serializable {
         props, Collections.singletonList(DFSPathSelectorConfig.ROOT_INPUT_PATH));
     this.props = props;
     this.storage = HoodieStorageUtils.getStorage(
-        getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH), hadoopConf);
+        getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH), HadoopFSUtils.getStorageConf(hadoopConf));
   }
 
   /**

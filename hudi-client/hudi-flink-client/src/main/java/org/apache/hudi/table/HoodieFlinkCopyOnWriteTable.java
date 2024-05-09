@@ -61,6 +61,7 @@ import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteTableCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.FlinkPartitionTTLActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
@@ -398,7 +399,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> managePartitionTTL(HoodieEngineContext context, String instantTime) {
-    throw new HoodieNotSupportedException("Manage partition ttl is not supported yet");
+    return new FlinkPartitionTTLActionExecutor(context, config, this, instantTime).execute();
   }
 
   @Override

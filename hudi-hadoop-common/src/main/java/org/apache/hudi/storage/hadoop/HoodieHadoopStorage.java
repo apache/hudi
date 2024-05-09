@@ -23,10 +23,12 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
@@ -73,6 +75,21 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public OutputStream create(StoragePath path, boolean overwrite) throws IOException {
     return fs.create(convertToHadoopPath(path), overwrite);
+  }
+
+  @Override
+  public OutputStream create(StoragePath path, boolean overwrite, Integer bufferSize, Short replication, Long sizeThreshold) throws IOException {
+    return fs.create(convertToHadoopPath(path), false, bufferSize, replication, sizeThreshold, null);
+  }
+
+  @Override
+  public int getDefaultBufferSize() {
+    return fs.getConf().getInt("io.file.buffer.size", 4096);
+  }
+
+  @Override
+  public short getDefaultReplication(StoragePath path) {
+    return fs.getDefaultReplication(convertToHadoopPath(path));
   }
 
   @Override
@@ -187,7 +204,12 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
-  public Object getConf() {
+  public StorageConfiguration<Configuration> getConf() {
+    return new HadoopStorageConfiguration(fs.getConf());
+  }
+
+  @Override
+  public Configuration unwrapConf() {
     return fs.getConf();
   }
 

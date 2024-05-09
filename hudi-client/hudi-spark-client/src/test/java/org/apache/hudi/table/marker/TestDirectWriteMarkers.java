@@ -47,7 +47,7 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
     this.jsc = new JavaSparkContext(
         HoodieClientTestUtils.getSparkConfForTest(TestDirectWriteMarkers.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
-    this.storage = HoodieStorageUtils.getStorage(metaClient.getBasePathV2(), metaClient.getHadoopConf());
+    this.storage = HoodieStorageUtils.getStorage(metaClient.getBasePathV2(), metaClient.getStorageConf());
     this.markerFolderPath = new StoragePath(Paths.get(metaClient.getMarkerFolderPath("000")).toUri());
     this.writeMarkers = new DirectWriteMarkers(
         storage, metaClient.getBasePathV2().toString(), markerFolderPath.toString(), "000");

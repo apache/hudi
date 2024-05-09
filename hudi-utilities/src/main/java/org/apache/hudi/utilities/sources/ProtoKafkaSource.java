@@ -55,7 +55,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 /**
  * Reads protobuf serialized Kafka data, based on a provided class name.
  */
-public class ProtoKafkaSource extends KafkaSource<Message> {
+public class ProtoKafkaSource extends KafkaSource<JavaRDD<Message>> {
   private final String className;
   private final String deserializerName;
 
@@ -86,7 +86,7 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
   }
 
   @Override
-  JavaRDD<Message> toRDD(OffsetRange[] offsetRanges) {
+  protected JavaRDD<Message> toBatch(OffsetRange[] offsetRanges) {
     if (deserializerName.equals(ByteArrayDeserializer.class.getName())) {
       ProtoDeserializer deserializer = new ProtoDeserializer(className);
       return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
