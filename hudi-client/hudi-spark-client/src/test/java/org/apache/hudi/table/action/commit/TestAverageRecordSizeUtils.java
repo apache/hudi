@@ -42,6 +42,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -91,12 +92,12 @@ public class TestAverageRecordSizeUtils {
 
   private static String getBaseFileName(String instantTime) {
     String fileName = UUID.randomUUID().toString();
-    return FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    return FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, PARQUET.getFileExtension());
   }
 
   private static String getLogFileName(String instantTime) {
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, PARQUET.getFileExtension());
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
     return FSUtils.makeLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
   }

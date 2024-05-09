@@ -50,42 +50,42 @@ public class AverageRecordSizeUtils {
   static long averageBytesPerRecord(HoodieTimeline commitTimeline, HoodieWriteConfig hoodieWriteConfig) {
     long avgSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
     long fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
-      if (!commitTimeline.empty()) {
-        // Go over the reverse ordered commits to get a more recent estimate of average record size.
-        Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
-        while (instants.hasNext()) {
-          HoodieInstant instant = instants.next();
-          try {
-            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-            if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(REPLACE_COMMIT_ACTION)) {
-              long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
-              long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
-              if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
-                avgSize = (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);
-                break;
-              }
-            } else if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
-              // lets consider only base files in case of delta commits
-              AtomicLong totalBytesWritten = new AtomicLong(0L);
-              AtomicLong totalRecordsWritten = new AtomicLong(0L);
-              commitMetadata.getWriteStats().stream()
-                  .filter(hoodieWriteStat -> FSUtils.isBaseFile(new Path(hoodieWriteStat.getPath())))
-                  .forEach(hoodieWriteStat -> {
-                    totalBytesWritten.addAndGet(hoodieWriteStat.getTotalWriteBytes());
-                    totalRecordsWritten.addAndGet(hoodieWriteStat.getNumWrites());
-                  });
-              if (totalBytesWritten.get() > fileSizeThreshold && totalRecordsWritten.get() > 0) {
-                avgSize = (long) Math.ceil((1.0 * totalBytesWritten.get()) / totalRecordsWritten.get());
-                break;
-              }
+    if (!commitTimeline.empty()) {
+      // Go over the reverse ordered commits to get a more recent estimate of average record size.
+      Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
+      while (instants.hasNext()) {
+        HoodieInstant instant = instants.next();
+        try {
+          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+              .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+          if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(REPLACE_COMMIT_ACTION)) {
+            long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
+            long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
+            if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
+              avgSize = (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);
+              break;
             }
-          } catch (IOException ioe) {
-            // make this fail safe.
-            LOG.error("Error trying to compute average bytes/record ", ioe);
+          } else if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
+            // lets consider only base files in case of delta commits
+            AtomicLong totalBytesWritten = new AtomicLong(0L);
+            AtomicLong totalRecordsWritten = new AtomicLong(0L);
+            commitMetadata.getWriteStats().stream()
+                .filter(hoodieWriteStat -> FSUtils.isBaseFile(new Path(hoodieWriteStat.getPath())))
+                .forEach(hoodieWriteStat -> {
+                  totalBytesWritten.addAndGet(hoodieWriteStat.getTotalWriteBytes());
+                  totalRecordsWritten.addAndGet(hoodieWriteStat.getNumWrites());
+                });
+            if (totalBytesWritten.get() > fileSizeThreshold && totalRecordsWritten.get() > 0) {
+              avgSize = (long) Math.ceil((1.0 * totalBytesWritten.get()) / totalRecordsWritten.get());
+              break;
+            }
           }
+        } catch (IOException ioe) {
+          // make this fail safe.
+          LOG.error("Error trying to compute average bytes/record ", ioe);
         }
       }
+    }
     return avgSize;
   }
 }
