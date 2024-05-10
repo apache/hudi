@@ -117,8 +117,6 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.schema.MessageType;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
@@ -1359,14 +1357,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   private void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFile> logFiles, boolean enableMetaFields) throws IOException {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
-      MessageType writerSchemaMsg =
+      Schema writerSchema  =
           TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath());
-      if (writerSchemaMsg == null) {
+      if (writerSchema == null) {
         // not a data block
         continue;
       }
 
-      Schema writerSchema = new AvroSchemaConverter().convert(writerSchemaMsg);
       try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
           new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
@@ -3724,14 +3721,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   private void verifyMetadataColumnStatsRecords(List<HoodieLogFile> logFiles) throws IOException {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
-      MessageType writerSchemaMsg =
+      Schema writerSchema =
           TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath());
-      if (writerSchemaMsg == null) {
+      if (writerSchema == null) {
         // not a data block
         continue;
       }
 
-      Schema writerSchema = new AvroSchemaConverter().convert(writerSchemaMsg);
       try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
           new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {

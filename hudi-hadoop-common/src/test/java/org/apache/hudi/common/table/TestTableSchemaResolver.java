@@ -34,7 +34,6 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -96,10 +95,8 @@ public class TestTableSchemaResolver {
     StoragePath partitionPath = new StoragePath(testDir, "partition1");
     Schema expectedSchema = getSimpleSchema();
     StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema);
-    assertEquals(
-        new AvroSchemaConverter().convert(expectedSchema),
-        TableSchemaResolver.readSchemaFromLogFile(HoodieStorageUtils.getStorage(
-            logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
+    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(HoodieStorageUtils.getStorage(
+        logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
   }
 
   private String initTestDir(String folderName) throws IOException {
