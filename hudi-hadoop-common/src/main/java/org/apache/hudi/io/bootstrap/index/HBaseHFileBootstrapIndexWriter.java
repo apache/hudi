@@ -58,8 +58,8 @@ import static org.apache.hudi.io.bootstrap.index.HFileBootstrapIndex.getPartitio
 import static org.apache.hudi.io.bootstrap.index.HFileBootstrapIndex.partitionIndexPath;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
-public class HFileBootstrapIndexHadoopWriter extends BootstrapIndex.IndexWriter {
-  private static final Logger LOG = LoggerFactory.getLogger(HFileBootstrapIndexHadoopWriter.class);
+public class HBaseHFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
+  private static final Logger LOG = LoggerFactory.getLogger(HBaseHFileBootstrapIndexWriter.class);
 
   private final String bootstrapBasePath;
   private final StoragePath indexByPartitionPath;
@@ -73,7 +73,7 @@ public class HFileBootstrapIndexHadoopWriter extends BootstrapIndex.IndexWriter 
 
   private final Map<String, List<BootstrapFileMapping>> sourceFileMappings = new HashMap<>();
 
-  public HFileBootstrapIndexHadoopWriter(String bootstrapBasePath, HoodieTableMetaClient metaClient) {
+  public HBaseHFileBootstrapIndexWriter(String bootstrapBasePath, HoodieTableMetaClient metaClient) {
     super(metaClient);
     try {
       metaClient.initializeBootstrapDirsIfNotExists();

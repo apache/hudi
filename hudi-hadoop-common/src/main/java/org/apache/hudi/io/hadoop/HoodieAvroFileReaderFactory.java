@@ -58,7 +58,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
       return (HoodieFileReader) ReflectionUtils.loadClass(HBASE_AVRO_HFILE_READER,
           new Class<?>[] {StorageConfiguration.class, StoragePath.class}, conf, path);
     } catch (HoodieException e) {
-      throw (IOException) e.getCause().getCause();
+      throw new IOException("Cannot instantiate HoodieHBaseAvroHFileReader", e);
     }
   }
 
@@ -78,7 +78,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
           new Class<?>[] {StorageConfiguration.class, StoragePath.class, HoodieStorage.class, byte[].class, Option.class},
           conf, path, storage, content, schemaOption);
     } catch (HoodieException e) {
-      throw (IOException) e.getCause().getCause();
+      throw new IOException("Cannot instantiate HoodieHBaseAvroHFileReader", e);
     }
   }
 
