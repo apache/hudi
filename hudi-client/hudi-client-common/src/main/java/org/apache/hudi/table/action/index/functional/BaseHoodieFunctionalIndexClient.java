@@ -53,7 +53,7 @@ public abstract class BaseHoodieFunctionalIndexClient {
     // update table config if necessary
     if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.INDEX_DEFINITION_PATH) || !metaClient.getTableConfig().getIndexDefinitionPath().isPresent()) {
       metaClient.getTableConfig().setValue(HoodieTableConfig.INDEX_DEFINITION_PATH, indexMetaPath);
-      HoodieTableConfig.update(metaClient.getStorage(),metaClient.getMetaPathV2(), metaClient.getTableConfig().getProps());
+      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPathV2(), metaClient.getTableConfig().getProps());
     }
   }
 
