@@ -25,6 +25,9 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StorageConfiguration;
 
+/**
+ * Base class to get HoodieFileReaderFactory and HoodieFileWriterFactory
+ */
 public abstract class HoodieIOFactory {
 
   public static HoodieIOFactory getIOFactory(StorageConfiguration<?> storageConf) {
