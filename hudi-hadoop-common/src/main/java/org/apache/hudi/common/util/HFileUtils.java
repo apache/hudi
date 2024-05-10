@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -109,6 +110,12 @@ public class HFileUtils extends BaseFileUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read schema from HFile", e);
     }
+  }
+
+  @Override
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(StorageConfiguration<?> storageConf, StoragePath filePath, List<String> columnList) {
+    throw new UnsupportedOperationException(
+        "Reading column statistics from metadata is not supported for HFile format yet");
   }
 
   @Override
