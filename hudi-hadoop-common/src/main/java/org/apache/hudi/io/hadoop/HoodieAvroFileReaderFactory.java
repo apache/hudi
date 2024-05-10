@@ -36,6 +36,7 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 
 public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
+  public static final String HBASE_AVRO_HFILE_READER = "org.apache.hudi.io.hadoop.HoodieHBaseAvroHFileReader";
   @Override
   protected HoodieFileReader newParquetFileReader(StorageConfiguration<?> conf, StoragePath path) {
     return new HoodieAvroParquetReader(conf, path);
@@ -51,10 +52,10 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     }
     try {
       if (schemaOption.isPresent()) {
-        return (HoodieFileReader) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieHBaseAvroHFileReader",
+        return (HoodieFileReader) ReflectionUtils.loadClass(HBASE_AVRO_HFILE_READER,
             new Class<?>[] {StorageConfiguration.class, StoragePath.class, Option.class}, conf, path, schemaOption);
       }
-      return (HoodieFileReader) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieHBaseAvroHFileReader",
+      return (HoodieFileReader) ReflectionUtils.loadClass(HBASE_AVRO_HFILE_READER,
           new Class<?>[] {StorageConfiguration.class, StoragePath.class}, conf, path);
     } catch (HoodieException e) {
       throw (IOException) e.getCause().getCause();
@@ -73,7 +74,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
       return new HoodieNativeAvroHFileReader(conf, content, schemaOption);
     }
     try {
-      return (HoodieFileReader) ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieHBaseAvroHFileReader",
+      return (HoodieFileReader) ReflectionUtils.loadClass(HBASE_AVRO_HFILE_READER,
           new Class<?>[] {StorageConfiguration.class, StoragePath.class, HoodieStorage.class, byte[].class, Option.class},
           conf, path, storage, content, schemaOption);
     } catch (HoodieException e) {
