@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.avro.generic.IndexedRecord
 import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -27,9 +28,6 @@ import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordS
 import org.apache.hudi.common.util.{FileIOUtils, ValidationUtils}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieMemoryConfig}
 import org.apache.hudi.storage.StoragePath
-
-import org.apache.avro.generic.IndexedRecord
-import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -62,10 +60,9 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
     ValidationUtils.checkArgument(logFilePaths.nonEmpty, "There is no log file")
-    val converter = new AvroSchemaConverter()
     val allRecords: java.util.List[IndexedRecord] = new java.util.ArrayList[IndexedRecord]
     if (merge) {
-      val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePaths.last))))
+      val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePaths.last)))
       val scanner = HoodieMergedLogRecordScanner.newBuilder
         .withStorage(storage)
         .withBasePath(basePath)
@@ -88,7 +85,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     } else {
       logFilePaths.toStream.takeWhile(_ => allRecords.size() < limit).foreach {
         logFilePath => {
-          val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePath))))
+          val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePath)))
           val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePath), schema)
           while (reader.hasNext) {
             val block = reader.next()
