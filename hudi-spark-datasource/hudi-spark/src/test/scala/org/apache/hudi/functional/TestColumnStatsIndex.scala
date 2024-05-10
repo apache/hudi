@@ -462,7 +462,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val parquetFilePath = new StoragePath(
       fs.listStatus(path).filter(fs => fs.getPath.getName.endsWith(".parquet")).toSeq.head.getPath.toUri)
 
-    val ranges = utils.readRangeFromParquetMetadata(conf, parquetFilePath,
+    val ranges = utils.readColumnStatsFromMetadata(conf, parquetFilePath,
       Seq("c1", "c2", "c3a", "c3b", "c3c", "c4", "c5", "c6", "c7", "c8").asJava)
 
     ranges.asScala.foreach(r => {
