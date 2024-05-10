@@ -310,7 +310,7 @@ public class StreamSync implements Serializable, Closeable {
     this.conf = conf;
 
     HoodieWriteConfig hoodieWriteConfig = getHoodieClientConfig();
-    this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, hoodieWriteConfig.getMetricsConfig());
+    this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, hoodieWriteConfig.getMetricsConfig(), storage.getConf());
     this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig, storage.getConf());
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(
