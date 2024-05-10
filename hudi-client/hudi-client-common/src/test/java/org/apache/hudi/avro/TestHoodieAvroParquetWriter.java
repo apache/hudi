@@ -25,7 +25,7 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
-import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
+import org.apache.hudi.io.hadoop.HoodieAvroParquetWriter;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;

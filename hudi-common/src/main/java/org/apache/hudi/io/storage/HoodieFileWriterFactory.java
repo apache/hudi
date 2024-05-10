@@ -47,17 +47,17 @@ public class HoodieFileWriterFactory {
     switch (recordType) {
       case AVRO:
         try {
-          Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieHadoopAvroFileWriterFactory");
+          Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.hadoop.HoodieAvroFileWriterFactory");
           return (HoodieFileWriterFactory) clazz.newInstance();
         } catch (IllegalAccessException | IllegalArgumentException | InstantiationException e) {
-          throw new HoodieException("Unable to create hoodie avro file writer factory", e);
+          throw new HoodieException("Unable to create HoodieAvroFileWriterFactory", e);
         }
       case SPARK:
         try {
           Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory");
           return (HoodieFileWriterFactory) clazz.newInstance();
         } catch (IllegalAccessException | IllegalArgumentException | InstantiationException e) {
-          throw new HoodieException("Unable to create hoodie spark file writer factory", e);
+          throw new HoodieException("Unable to create HoodieSparkFileWriterFactory", e);
         }
       default:
         throw new UnsupportedOperationException(recordType + " record type not supported yet.");
