@@ -17,18 +17,19 @@
  * under the License.
  */
 
-package org.apache.hudi.io.bootstrap.index;
+package org.apache.hudi.common.bootstrap.index;
 
 import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
+import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
+import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.io.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.permission.FsAction;

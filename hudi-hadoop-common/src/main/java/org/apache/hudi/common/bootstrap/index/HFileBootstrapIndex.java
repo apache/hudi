@@ -27,7 +27,6 @@ import org.apache.hadoop.hbase.CellComparatorImpl;
  * see https://github.com/apache/hudi/pull/5004
  */
 public class HFileBootstrapIndex {
-
   /**
    * This class is explicitly used as Key Comparator to workaround hard coded
    * legacy format class names inside HBase. Otherwise we will face issues with shading.

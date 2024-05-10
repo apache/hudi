@@ -24,7 +24,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.io.bootstrap.index.BootstrapIndex;
+import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -60,7 +60,7 @@ public class BootstrapCommand {
       @ShellOption(value = {"--rowKeyField"}, help = "Record key columns for bootstrap data") final String rowKeyField,
       @ShellOption(value = {"--partitionPathField"}, defaultValue = "",
           help = "Partition fields for bootstrap source data") final String partitionPathField,
-      @ShellOption(value = {"--bootstrapIndexClass"}, defaultValue = "org.apache.hudi.io.bootstrap.index.HFileBootstrapIndex",
+      @ShellOption(value = {"--bootstrapIndexClass"}, defaultValue = "org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex",
           help = "Bootstrap Index Class") final String bootstrapIndexClass,
       @ShellOption(value = {"--selectorClass"}, defaultValue = "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector",
           help = "Selector class for bootstrap") final String selectorClass,

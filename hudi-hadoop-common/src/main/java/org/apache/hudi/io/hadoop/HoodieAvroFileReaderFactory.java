@@ -37,6 +37,7 @@ import java.io.IOException;
 
 public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
   public static final String HBASE_AVRO_HFILE_READER = "org.apache.hudi.io.hadoop.HoodieHBaseAvroHFileReader";
+
   @Override
   protected HoodieFileReader newParquetFileReader(StorageConfiguration<?> conf, StoragePath path) {
     return new HoodieAvroParquetReader(conf, path);

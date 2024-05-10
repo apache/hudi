@@ -19,8 +19,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.io.bootstrap.index.HFileBootstrapIndex;
-import org.apache.hudi.io.bootstrap.index.NoOpBootstrapIndex;
+import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
+import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;

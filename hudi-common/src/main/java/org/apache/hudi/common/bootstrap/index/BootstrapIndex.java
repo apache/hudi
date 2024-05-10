@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.io.bootstrap.index;
+package org.apache.hudi.common.bootstrap.index;
 
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.BootstrapIndexType;

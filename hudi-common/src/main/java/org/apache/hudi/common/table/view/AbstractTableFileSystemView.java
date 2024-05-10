@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hudi.io.bootstrap.index.BootstrapIndex;
+import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.BootstrapFileMapping;

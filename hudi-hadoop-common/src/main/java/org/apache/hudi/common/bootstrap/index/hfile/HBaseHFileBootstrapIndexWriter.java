@@ -17,11 +17,12 @@
  * under the License.
  */
 
-package org.apache.hudi.io.bootstrap.index;
+package org.apache.hudi.common.bootstrap.index.hfile;
 
 import org.apache.hudi.avro.model.HoodieBootstrapFilePartitionInfo;
 import org.apache.hudi.avro.model.HoodieBootstrapIndexInfo;
 import org.apache.hudi.avro.model.HoodieBootstrapPartitionMetadata;
+import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -51,11 +52,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.io.bootstrap.index.HFileBootstrapIndex.INDEX_INFO_KEY;
-import static org.apache.hudi.io.bootstrap.index.HFileBootstrapIndex.fileIdIndexPath;
-import static org.apache.hudi.io.bootstrap.index.HFileBootstrapIndex.getFileGroupKey;
-import static org.apache.hudi.io.bootstrap.index.HFileBootstrapIndex.getPartitionKey;
-import static org.apache.hudi.io.bootstrap.index.HFileBootstrapIndex.partitionIndexPath;
+import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.INDEX_INFO_KEY;
+import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.fileIdIndexPath;
+import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.getFileGroupKey;
+import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.getPartitionKey;
+import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.partitionIndexPath;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class HBaseHFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
