@@ -161,7 +161,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       throw new HoodieIOException("Cannot check if the properties file exist: " + filePath, ioe);
     }
 
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(storage.open(filePath, StandardCharsets.UTF_8 )))) {
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(storage.open(filePath), StandardCharsets.UTF_8))) {
       visitedFilePaths.add(filePath.toString());
       addPropsFromStream(reader, filePath);
     } catch (IOException ioe) {
