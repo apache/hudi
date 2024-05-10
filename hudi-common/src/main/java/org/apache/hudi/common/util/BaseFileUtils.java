@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -49,12 +50,15 @@ import java.util.Set;
 public abstract class BaseFileUtils {
   public static final String PARQUET_UTILS = "org.apache.hudi.common.util.ParquetUtils";
   public static final String ORC_UTILS = "org.apache.hudi.common.util.OrcUtils";
+  public static final String HFILE_UTILS = "org.apache.hudi.common.util.HFileUtils";
 
-  public static BaseFileUtils getInstance(String path) {
-    if (path.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+  public static BaseFileUtils getInstance(StoragePath path) {
+    if (path.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())) {
       return ReflectionUtils.loadClass(PARQUET_UTILS);
-    } else if (path.endsWith(HoodieFileFormat.ORC.getFileExtension())) {
+    } else if (path.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension())) {
       return ReflectionUtils.loadClass(ORC_UTILS);
+    } else if (path.getFileExtension().equals(HoodieFileFormat.HFILE.getFileExtension())) {
+      return ReflectionUtils.loadClass(HFILE_UTILS);
     }
     throw new UnsupportedOperationException("The format for file " + path + " is not supported yet.");
   }
@@ -64,6 +68,8 @@ public abstract class BaseFileUtils {
       return ReflectionUtils.loadClass(PARQUET_UTILS);
     } else if (HoodieFileFormat.ORC.equals(fileFormat)) {
       return ReflectionUtils.loadClass(ORC_UTILS);
+    } else if (HoodieFileFormat.HFILE.equals(fileFormat)) {
+      return ReflectionUtils.loadClass(HFILE_UTILS);
     }
     throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
   }
