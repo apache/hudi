@@ -20,8 +20,8 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.HoodieSchemaNotFoundException;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -469,7 +469,7 @@ public class TableSchemaResolver {
     Schema schema = null;
     while (filePaths.hasNext() && schema == null) {
       StoragePath filePath = new StoragePath(filePaths.next());
-      if (filePath.getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
+      if (FSUtils.isLogFile(filePath)) {
         // this is a log file
         schema = readSchemaFromLogFile(filePath);
       } else {
