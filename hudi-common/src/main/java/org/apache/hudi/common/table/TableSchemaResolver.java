@@ -44,7 +44,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
@@ -344,7 +344,8 @@ public class TableSchemaResolver {
     LOG.info("Reading schema from {}", hFilePath);
 
     try (HoodieFileReader fileReader =
-             HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+             HoodieIOFactory.getIOFactory(metaClient.getStorageConf())
+                 .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
                  .getFileReader(
                      ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
                      metaClient.getRawHoodieStorage().getConf(),
@@ -355,7 +356,8 @@ public class TableSchemaResolver {
 
   private MessageType readSchemaFromORCBaseFile(StoragePath orcFilePath) throws IOException {
     LOG.info("Reading schema from {}", orcFilePath);
-    HoodieFileReader orcReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+    HoodieFileReader orcReader = HoodieIOFactory.getIOFactory(metaClient.getStorageConf())
+        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(metaClient.getTableConfig(), metaClient.getRawHoodieStorage().getConf(), orcFilePath,
             HoodieFileFormat.ORC, Option.empty());
     return convertAvroSchemaToParquet(orcReader.getSchema());

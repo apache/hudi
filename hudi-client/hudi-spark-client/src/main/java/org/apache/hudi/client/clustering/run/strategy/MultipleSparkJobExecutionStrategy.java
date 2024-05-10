@@ -56,7 +56,7 @@ import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieSparkIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -385,7 +385,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
   private HoodieFileReader getBaseOrBootstrapFileReader(StorageConfiguration<?> storageConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp)
       throws IOException {
-    HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType)
+    HoodieFileReader baseFileReader = (new HoodieSparkIOFactory()).getReaderFactory(recordType)
         .getFileReader(writeConfig, storageConf, new StoragePath(clusteringOp.getDataFilePath()));
     // handle bootstrap path
     if (StringUtils.nonEmpty(clusteringOp.getBootstrapFilePath()) && StringUtils.nonEmpty(bootstrapBasePath)) {
@@ -397,9 +397,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         partitionValues = getPartitionFieldVals(partitionFields, partitionFilePath, bootstrapBasePath, baseFileReader.getSchema(),
             storageConf.unwrapAs(Configuration.class));
       }
-      baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
+      baseFileReader = (new HoodieSparkIOFactory()).getReaderFactory(recordType).newBootstrapFileReader(
           baseFileReader,
-          HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(
+          (new HoodieSparkIOFactory()).getReaderFactory(recordType).getFileReader(
               writeConfig, storageConf, new StoragePath(bootstrapFilePath)), partitionFields,
           partitionValues);
     }
