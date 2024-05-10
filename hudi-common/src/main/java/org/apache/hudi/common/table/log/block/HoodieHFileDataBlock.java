@@ -26,13 +26,13 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -76,6 +76,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieHFileDataBlock.class);
   private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
+  private static final String KV_COMPARATOR_CLASS_NAME = "org.apache.hudi.io.storage.HoodieHBaseKVComparator";
 
   private final Option<Compression.Algorithm> compressionAlgorithm;
   // This path is used for constructing HFile reader context, which should not be
@@ -121,7 +122,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     HFileContext context = new HFileContextBuilder()
         .withBlockSize(DEFAULT_BLOCK_SIZE)
         .withCompression(compressionAlgorithm.get())
-        .withCellComparator(new HoodieHBaseKVComparator())
+        .withCellComparator(ReflectionUtils.loadClass(KV_COMPARATOR_CLASS_NAME))
         .build();
 
     Configuration conf = new Configuration();

@@ -30,12 +30,16 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests {@link AvroOrcUtils}.
  */
 public class TestAvroOrcUtils extends HoodieCommonTestHarness {
+  public static final TypeDescription ORC_SCHEMA = AvroOrcUtils.createOrcSchema(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
+  public static final TypeDescription ORC_TRIP_SCHEMA = AvroOrcUtils.createOrcSchema(new Schema.Parser().parse(TRIP_SCHEMA));
 
   public static List<Arguments> testCreateOrcSchemaArgs() {
     // the ORC schema is constructed in the order as AVRO_SCHEMA:

@@ -185,7 +185,7 @@ public class HoodiePartitionMetadata {
   private boolean readBaseFormatMetaFile() {
     for (StoragePath metafilePath : baseFormatMetaFilePaths(partitionPath)) {
       try {
-        BaseFileUtils reader = BaseFileUtils.getInstance(metafilePath.toString());
+        BaseFileUtils reader = BaseFileUtils.getInstance(metafilePath);
         // Data file format
         Map<String, String> metadata = reader.readFooter(
             storage.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
