@@ -22,13 +22,10 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.PositionedReadable;
-import org.apache.hadoop.fs.Seekable;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -118,37 +115,5 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
 
   private static Option<Schema.Field> getKeySchema(Schema schema) {
     return Option.ofNullable(schema.getField(KEY_FIELD_NAME));
-  }
-
-  static class SeekableByteArrayInputStream extends ByteBufferBackedInputStream
-      implements Seekable, PositionedReadable {
-    public SeekableByteArrayInputStream(byte[] buf) {
-      super(buf);
-    }
-
-    @Override
-    public long getPos() throws IOException {
-      return getPosition();
-    }
-
-    @Override
-    public boolean seekToNewSource(long targetPos) throws IOException {
-      return false;
-    }
-
-    @Override
-    public int read(long position, byte[] buffer, int offset, int length) throws IOException {
-      return copyFrom(position, buffer, offset, length);
-    }
-
-    @Override
-    public void readFully(long position, byte[] buffer) throws IOException {
-      read(position, buffer, 0, buffer.length);
-    }
-
-    @Override
-    public void readFully(long position, byte[] buffer, int offset, int length) throws IOException {
-      read(position, buffer, offset, length);
-    }
   }
 }

@@ -23,8 +23,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.io.storage.HoodieHBaseAvroHFileReader;
-import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -38,7 +36,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hbase.CellComparatorImpl;
 import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -71,17 +68,14 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
   @Override
   protected HoodieAvroFileReader createReader(
       StorageConfiguration<?> conf) throws Exception {
-    CacheConfig cacheConfig = new CacheConfig(conf.unwrapAs(Configuration.class));
-    return new HoodieHBaseAvroHFileReader(conf, getFilePath(), cacheConfig,
-        HoodieStorageUtils.getStorage(getFilePath(), conf), Option.empty());
+    return new HoodieHBaseAvroHFileReader(conf, getFilePath(), Option.empty());
   }
 
   @Override
   protected HoodieAvroHFileReaderImplBase createHFileReader(StorageConfiguration<?> conf,
                                                             byte[] content) throws IOException {
     FileSystem fs = HadoopFSUtils.getFs(getFilePath().toString(), new Configuration());
-    return new HoodieHBaseAvroHFileReader(
-        conf, new StoragePath(DUMMY_BASE_PATH), new CacheConfig(conf.unwrapAs(Configuration.class)),
+    return new HoodieHBaseAvroHFileReader(conf, new StoragePath(DUMMY_BASE_PATH),
         HoodieStorageUtils.getStorage(getFilePath(), conf), content, Option.empty());
   }
 
@@ -189,7 +183,6 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
     }
     writer.close();
 
-    Configuration conf = new Configuration();
     try (HoodieAvroHFileReaderImplBase hFileReader = (HoodieAvroHFileReaderImplBase)
         createReader(HadoopFSUtils.getStorageConf(new Configuration()))) {
       List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hFileReader);

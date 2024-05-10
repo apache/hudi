@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.HoodieHFileUtils;
+import org.apache.hudi.io.hadoop.HoodieHFileUtils;
 import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.storage.StoragePath;
 
