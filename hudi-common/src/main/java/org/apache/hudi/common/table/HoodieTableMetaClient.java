@@ -294,9 +294,18 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * @return Meta path
+   * @deprecated please use {@link #getMetaPathV2()}
    */
+  @Deprecated
   public String getMetaPath() {
     return metaPath.toString();  // this invocation is cached
+  }
+
+  /**
+   * @return Meta path
+   */
+  public StoragePath getMetaPathV2() {
+    return metaPath;
   }
 
   /**

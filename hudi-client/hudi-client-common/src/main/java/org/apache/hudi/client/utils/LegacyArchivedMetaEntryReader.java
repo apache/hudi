@@ -140,7 +140,7 @@ public class LegacyArchivedMetaEntryReader {
     try {
       // List all files
       List<StoragePathInfo> pathInfoList = metaClient.getStorage().globEntries(
-          new StoragePath(metaClient.getArchivePath() + "/.commits_.archive*"));
+          new StoragePath(metaClient.getArchivePath(), ".commits_.archive*"));
 
       // Sort files by version suffix in reverse (implies reverse chronological order)
       pathInfoList.sort(new ArchiveLogVersionComparator());

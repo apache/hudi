@@ -605,9 +605,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // If the base file is present then create a reader
     Option<HoodieBaseFile> basefile = slice.getBaseFile();
     if (basefile.isPresent()) {
-      String baseFilePath = basefile.get().getPath();
+      StoragePath baseFilePath = basefile.get().getStoragePath();
       baseFileReader = (HoodieSeekingFileReader<?>) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, getStorageConf(), new StoragePath(baseFilePath));
+          .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, getStorageConf(), baseFilePath);
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", baseFilePath,
           basefile.get().getCommitTime(), baseFileOpenMs));

@@ -90,7 +90,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
       // and the markers from the requests pending processing.
       currentInstantAllMarkers.addAll(markerHandler.getAllMarkers(markerDir));
       currentInstantAllMarkers.addAll(pendingMarkers);
-      StoragePath tempPath = new StoragePath(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
+      StoragePath tempPath = new StoragePath(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
 
       List<StoragePath> instants = MarkerUtils.getAllMarkerDir(tempPath, storage);
 

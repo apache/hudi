@@ -99,7 +99,7 @@ public class FSUtils {
    * @return {@code true} if table exists. {@code false} otherwise.
    */
   public static boolean isTableExists(String path, HoodieStorage storage) throws IOException {
-    return storage.exists(new StoragePath(path + "/" + HoodieTableMetaClient.METAFOLDER_NAME));
+    return storage.exists(new StoragePath(path, HoodieTableMetaClient.METAFOLDER_NAME));
   }
 
   /**

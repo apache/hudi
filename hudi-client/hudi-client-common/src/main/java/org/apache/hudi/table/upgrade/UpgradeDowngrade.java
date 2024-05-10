@@ -158,7 +158,7 @@ public class UpgradeDowngrade {
     metaClient.getTableConfig().setTableVersion(toVersion);
 
     HoodieTableConfig.update(metaClient.getStorage(),
-        new StoragePath(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+        metaClient.getMetaPathV2(), metaClient.getTableConfig().getProps());
   }
 
   protected Map<ConfigProperty, String> upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {

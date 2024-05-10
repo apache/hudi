@@ -110,8 +110,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       ClosableIterator<HoodieRecord> recordIterator;
       Schema recordSchema;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
-        StoragePath bootstrapFilePath =
-            new StoragePath(baseFile.getBootstrapBaseFile().get().getPath());
+        StoragePath bootstrapFilePath = baseFile.getBootstrapBaseFile().get().getStoragePath();
         StorageConfiguration<?> bootstrapFileConfig = table.getStorageConf().newInstance();
         bootstrapFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
             baseFileReader,

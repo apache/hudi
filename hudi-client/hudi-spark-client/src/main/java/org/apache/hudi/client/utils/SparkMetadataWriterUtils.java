@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createBloomFilterMetadataRecord;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createColumnStatsRecords;
 
@@ -156,7 +157,7 @@ public class SparkMetadataWriterUtils {
       long fileSize,
       Path filePath) {
     Dataset<Row> fileDf = readRecordsAsRow(
-        new StoragePath[] {new StoragePath(filePath.toUri())},
+        new StoragePath[] {convertToStoragePath(filePath)},
         sqlContext,
         metaClient,
         readerSchema);
@@ -179,7 +180,7 @@ public class SparkMetadataWriterUtils {
       String partitionName,
       String instantTime) {
     Dataset<Row> fileDf =
-        readRecordsAsRow(new StoragePath[] {new StoragePath(filePath.toUri())},
+        readRecordsAsRow(new StoragePath[] {convertToStoragePath(filePath)},
             sqlContext, metaClient, readerSchema);
     Column indexedColumn = functionalIndex.apply(Arrays.asList(fileDf.col(columnToIndex)));
     fileDf = fileDf.withColumn(columnToIndex, indexedColumn);

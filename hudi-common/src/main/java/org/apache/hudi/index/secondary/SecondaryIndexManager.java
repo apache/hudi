@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieSecondaryIndexException;
-import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -123,7 +122,7 @@ public class SecondaryIndexManager {
     Properties updatedProps = new Properties();
     updatedProps.put(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key(),
         SecondaryIndexUtils.toJsonString(newSecondaryIndexes));
-    HoodieTableConfig.update(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()), updatedProps);
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPathV2(), updatedProps);
 
     LOG.info("Success to add secondary index metadata: {}", secondaryIndexToAdd);
 
@@ -155,9 +154,9 @@ public class SecondaryIndexManager {
       Properties updatedProps = new Properties();
       updatedProps.put(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key(),
           SecondaryIndexUtils.toJsonString(secondaryIndexesToKeep));
-      HoodieTableConfig.update(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()), updatedProps);
+      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPathV2(), updatedProps);
     } else {
-      HoodieTableConfig.delete(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()),
+      HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPathV2(),
           CollectionUtils.createSet(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key()));
     }
 

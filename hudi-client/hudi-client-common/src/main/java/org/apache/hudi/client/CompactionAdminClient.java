@@ -112,7 +112,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
     if (!dryRun) {
       // Overwrite compaction request with empty compaction operations
       HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
-      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), inflight.getFileName());
+      StoragePath inflightPath = new StoragePath(metaClient.getMetaPathV2(), inflight.getFileName());
       if (metaClient.getStorage().exists(inflightPath)) {
         // We need to rollback data-files because of this inflight compaction before unscheduling
         throw new IllegalStateException("Please rollback the inflight compaction before unscheduling");
@@ -121,7 +121,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       // TODO: Add a rollback instant but for compaction
       HoodieInstant instant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
       boolean deleted = metaClient.getStorage().deleteFile(
-          new StoragePath(metaClient.getMetaPath(), instant.getFileName()));
+          new StoragePath(metaClient.getMetaPathV2(), instant.getFileName()));
       ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
     }
     return new ArrayList<>();
@@ -157,7 +157,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
           HoodieCompactionPlan.newBuilder().setOperations(newOps).setExtraMetadata(plan.getExtraMetadata()).build();
       HoodieInstant inflight =
           new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionOperationWithInstant.getLeft());
-      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), inflight.getFileName());
+      StoragePath inflightPath = new StoragePath(metaClient.getMetaPathV2(), inflight.getFileName());
       if (metaClient.getStorage().exists(inflightPath)) {
         // revert if in inflight state
         metaClient.getActiveTimeline().revertInstantFromInflightToRequested(inflight);

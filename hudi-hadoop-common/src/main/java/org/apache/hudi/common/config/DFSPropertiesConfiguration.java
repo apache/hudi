@@ -64,7 +64,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   public static final String CONF_FILE_DIR_ENV_NAME = "HUDI_CONF_DIR";
   public static final String DEFAULT_CONF_FILE_DIR = "file:/etc/hudi/conf";
   public static final StoragePath DEFAULT_PATH = new StoragePath(
-      DEFAULT_CONF_FILE_DIR + "/" + DEFAULT_PROPERTIES_FILE);
+      DEFAULT_CONF_FILE_DIR, DEFAULT_PROPERTIES_FILE);
 
   // props read from hudi-defaults.conf
   private static TypedProperties GLOBAL_PROPS = loadGlobalProps();

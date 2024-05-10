@@ -418,11 +418,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   //-----------------------------------------------------------------
 
   public Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant) {
-    return readDataFromPath(new StoragePath(metaClient.getMetaPath(), getInstantFileName(instant)));
+    return readDataFromPath(new StoragePath(metaClient.getMetaPathV2(), getInstantFileName(instant)));
   }
 
   public Option<byte[]> readIndexPlanAsBytes(HoodieInstant instant) {
-    return readDataFromPath(new StoragePath(metaClient.getMetaPath(), getInstantFileName(instant)));
+    return readDataFromPath(new StoragePath(metaClient.getMetaPathV2(), getInstantFileName(instant)));
   }
 
   /**
@@ -916,7 +916,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void copyInstant(HoodieInstant instant, StoragePath dstDir) {
-    StoragePath srcPath = new StoragePath(metaClient.getMetaPath(), getInstantFileName(instant));
+    StoragePath srcPath = new StoragePath(metaClient.getMetaPathV2(), getInstantFileName(instant));
     StoragePath dstPath = new StoragePath(dstDir, getInstantFileName(instant));
     try {
       HoodieStorage srcStorage = HoodieStorageUtils.getStorage(srcPath, metaClient.getStorageConf());

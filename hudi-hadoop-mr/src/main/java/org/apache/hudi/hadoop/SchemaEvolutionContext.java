@@ -71,6 +71,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+
 /**
  * This class is responsible for calculating names and types of fields that are actual at a certain point in time for hive.
  * If field is renamed in queried schema, its old name will be returned, which is relevant at the provided time.
@@ -114,10 +116,9 @@ public class SchemaEvolutionContext {
   private HoodieTableMetaClient setUpHoodieTableMetaClient() throws IOException {
     try {
       Path inputPath = ((FileSplit) split).getPath();
-      StoragePath path = new StoragePath(inputPath.toString());
       FileSystem fs = inputPath.getFileSystem(job);
       HoodieStorage storage = HoodieStorageUtils.getStorage(fs);
-      Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, path);
+      Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
           .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();
     } catch (Exception e) {
