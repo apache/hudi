@@ -25,6 +25,7 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.MetricUtils;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,8 @@ public class TestPushGateWayReporter {
   HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
+  @Mock
+  StorageConfiguration storageConf;
 
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
@@ -78,7 +81,7 @@ public class TestPushGateWayReporter {
     configureDefaultReporter();
 
     assertDoesNotThrow(() -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig);
+      hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
       metrics = hoodieMetrics.getMetrics();
     });
 
@@ -103,7 +106,7 @@ public class TestPushGateWayReporter {
       when(metricsConfig.getMetricReporterFileBasedConfigs()).thenReturn(propPrometheusPath + "," + propDatadogPath);
     }
 
-    hoodieMetrics = new HoodieMetrics(writeConfig);
+    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
     metrics = hoodieMetrics.getMetrics();
 
     Map<String, Long> metricsMap = new HashMap<>();

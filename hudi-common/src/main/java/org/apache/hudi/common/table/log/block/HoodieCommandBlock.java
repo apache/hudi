@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -61,7 +62,7 @@ public class HoodieCommandBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes() {
+  public byte[] getContentBytes(StorageConfiguration<?> storageConf) {
     return new byte[0];
   }
 }

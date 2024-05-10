@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +45,8 @@ public class TestHoodieJmxMetrics {
   HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
+  @Mock
+  StorageConfiguration storageConf;
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -55,7 +58,7 @@ public class TestHoodieJmxMetrics {
     when(metricsConfig.getJmxHost()).thenReturn("localhost");
     when(metricsConfig.getJmxPort()).thenReturn(String.valueOf(NetworkTestUtils.nextFreePort()));
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(writeConfig);
+    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
     metrics = hoodieMetrics.getMetrics();
   }
 

@@ -86,7 +86,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
-    this.metrics = new HoodieMetrics(config);
+    this.metrics = new HoodieMetrics(config, table.getStorageConf());
   }
 
   public int archiveIfRequired(HoodieEngineContext context) throws IOException {

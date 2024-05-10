@@ -23,6 +23,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,8 @@ public class TestPrometheusReporter {
   HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
+  @Mock
+  StorageConfiguration storageConf;
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -60,8 +63,8 @@ public class TestPrometheusReporter {
     when(metricsConfig.getPrometheusPort()).thenReturn(9090);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     assertDoesNotThrow(() -> {
-      new HoodieMetrics(writeConfig);
-      hoodieMetrics = new HoodieMetrics(writeConfig);
+      new HoodieMetrics(writeConfig, storageConf);
+      hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
       metrics = hoodieMetrics.getMetrics();
     });
   }

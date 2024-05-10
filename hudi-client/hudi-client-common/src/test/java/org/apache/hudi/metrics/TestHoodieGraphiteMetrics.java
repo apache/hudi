@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,8 @@ public class TestHoodieGraphiteMetrics {
   HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
+  @Mock
+  StorageConfiguration storageConf;
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -60,7 +63,7 @@ public class TestHoodieGraphiteMetrics {
     when(metricsConfig.getGraphiteServerPort()).thenReturn(NetworkTestUtils.nextFreePort());
     when(metricsConfig.getGraphiteReportPeriodSeconds()).thenReturn(30);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(writeConfig);
+    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
     metrics = hoodieMetrics.getMetrics();
     metrics.registerGauge("graphite_metric", 123L);
     assertEquals("123", metrics.getRegistry().getGauges()
