@@ -17,8 +17,9 @@
  * under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.io.hadoop;
 
+import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -27,6 +28,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PositionedReadable;
+import org.apache.hadoop.fs.Seekable;
 import org.apache.hadoop.hbase.io.FSDataInputStreamWrapper;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
@@ -98,8 +101,7 @@ public class HoodieHFileUtils {
     // Avoid loading default configs, from the FS, since this configuration is mostly
     // used as a stub to initialize HFile reader
     Configuration conf = new Configuration(false);
-    HoodieHBaseAvroHFileReader.SeekableByteArrayInputStream bis =
-        new HoodieHBaseAvroHFileReader.SeekableByteArrayInputStream(content);
+    SeekableByteArrayInputStream bis = new SeekableByteArrayInputStream(content);
     FSDataInputStream fsdis = new FSDataInputStream(bis);
     FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
     ReaderContext context = new ReaderContextBuilder()
@@ -117,6 +119,38 @@ public class HoodieHFileUtils {
       return reader;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to initialize HFile reader for  " + dummyPath, e);
+    }
+  }
+
+  static class SeekableByteArrayInputStream extends ByteBufferBackedInputStream
+      implements Seekable, PositionedReadable {
+    public SeekableByteArrayInputStream(byte[] buf) {
+      super(buf);
+    }
+
+    @Override
+    public long getPos() throws IOException {
+      return getPosition();
+    }
+
+    @Override
+    public boolean seekToNewSource(long targetPos) throws IOException {
+      return false;
+    }
+
+    @Override
+    public int read(long position, byte[] buffer, int offset, int length) throws IOException {
+      return copyFrom(position, buffer, offset, length);
+    }
+
+    @Override
+    public void readFully(long position, byte[] buffer) throws IOException {
+      read(position, buffer, 0, buffer.length);
+    }
+
+    @Override
+    public void readFully(long position, byte[] buffer, int offset, int length) throws IOException {
+      read(position, buffer, offset, length);
     }
   }
 }

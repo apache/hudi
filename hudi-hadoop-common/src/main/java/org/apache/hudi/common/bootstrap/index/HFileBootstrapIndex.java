@@ -19,34 +19,18 @@
 
 package org.apache.hudi.common.bootstrap.index;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hadoop.hbase.CellComparatorImpl;
 
 /**
- * No Op Bootstrap Index , which is a empty implement and not do anything.
+ * WARNING: DO NOT DO ANYTHING TO THIS CLASS INCLUDING CHANGING THE PACKAGE
+ *          OR YOU COULD BREAK BACKWARDS COMPATIBILITY!!!
+ * see https://github.com/apache/hudi/pull/5004
  */
-public class NoOpBootstrapIndex extends BootstrapIndex {
-
-  public NoOpBootstrapIndex(HoodieTableMetaClient metaClient) {
-    super(metaClient);
-  }
-
-  @Override
-  public IndexReader createReader() {
-    throw new RuntimeException("DefaultBootstrapIndex not support create reader!");
-  }
-
-  @Override
-  public IndexWriter createWriter(String sourceBasePath) {
-    throw new RuntimeException("DefaultBootstrapIndex not support create writer!");
-  }
-
-  @Override
-  public void dropIndex() {
-    throw new RuntimeException("DefaultBootstrapIndex not support drop index!");
-  }
-
-  @Override
-  protected boolean isPresent() {
-    return false;
-  }
+public class HFileBootstrapIndex {
+  /**
+   * This class is explicitly used as Key Comparator to workaround hard coded
+   * legacy format class names inside HBase. Otherwise we will face issues with shading.
+   */
+  public static class HoodieKVComparator extends CellComparatorImpl {}
 }
+

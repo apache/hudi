@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -271,6 +272,12 @@ public class OrcUtils extends BaseFileUtils {
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get Avro schema for ORC file:" + filePath, io);
     }
+  }
+
+  @Override
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(StorageConfiguration<?> storageConf, StoragePath filePath, List<String> columnList) {
+    throw new UnsupportedOperationException(
+        "Reading column statistics from metadata is not supported for ORC format yet");
   }
 
   @Override

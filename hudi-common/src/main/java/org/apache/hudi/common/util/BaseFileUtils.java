@@ -51,12 +51,13 @@ import java.util.stream.Collectors;
  * Utils for Hudi base file.
  */
 public abstract class BaseFileUtils {
+  public static final String PARQUET_UTILS = "org.apache.hudi.common.util.ParquetUtils";
   public static final String ORC_UTILS = "org.apache.hudi.common.util.OrcUtils";
   public static final String HFILE_UTILS = "org.apache.hudi.common.util.HFileUtils";
 
   public static BaseFileUtils getInstance(StoragePath path) {
     if (path.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())) {
-      return new ParquetUtils();
+      return ReflectionUtils.loadClass(PARQUET_UTILS);
     } else if (path.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension())) {
       return ReflectionUtils.loadClass(ORC_UTILS);
     } else if (path.getFileExtension().equals(HoodieFileFormat.HFILE.getFileExtension())) {
@@ -67,7 +68,7 @@ public abstract class BaseFileUtils {
 
   public static BaseFileUtils getInstance(HoodieFileFormat fileFormat) {
     if (HoodieFileFormat.PARQUET.equals(fileFormat)) {
-      return new ParquetUtils();
+      return ReflectionUtils.loadClass(PARQUET_UTILS);
     } else if (HoodieFileFormat.ORC.equals(fileFormat)) {
       return ReflectionUtils.loadClass(ORC_UTILS);
     } else if (HoodieFileFormat.HFILE.equals(fileFormat)) {
@@ -289,6 +290,19 @@ public abstract class BaseFileUtils {
    * @return the Avro schema of the data file.
    */
   public abstract Schema readAvroSchema(StorageConfiguration<?> configuration, StoragePath filePath);
+
+  /**
+   * Reads column statistics stored in the metadata.
+   *
+   * @param storageConf storage configuration.
+   * @param filePath    the data file path.
+   * @param columnList  List of columns to get column statistics.
+   * @return {@link List} of {@link HoodieColumnRangeMetadata}.
+   */
+  @SuppressWarnings("rawtype")
+  public abstract List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(StorageConfiguration<?> storageConf,
+                                                                                          StoragePath filePath,
+                                                                                          List<String> columnList);
 
   /**
    * @return The subclass's {@link HoodieFileFormat}.

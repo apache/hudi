@@ -73,7 +73,6 @@ import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -1214,8 +1213,8 @@ public class HoodieTableMetadataUtil {
     try {
       if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePathV2(), filePath);
-        return
-            new ParquetUtils().readRangeFromParquetMetadata(datasetMetaClient.getStorageConf(), fullFilePath, columnsToIndex);
+        return BaseFileUtils.getInstance(HoodieFileFormat.PARQUET)
+            .readColumnStatsFromMetadata(datasetMetaClient.getStorageConf(), fullFilePath, columnsToIndex);
       }
 
       LOG.warn("Column range index not supported for: {}", filePath);
@@ -1280,7 +1279,7 @@ public class HoodieTableMetadataUtil {
    * it could subsequently be used in column stats
    *
    * NOTE: This method has to stay compatible with the semantic of
-   *      {@link ParquetUtils#readRangeFromParquetMetadata} as they are used in tandem
+   *      {@link ParquetUtils#readColumnStatsFromMetadata} as they are used in tandem
    */
   private static Comparable<?> coerceToComparable(Schema schema, Object val) {
     if (val == null) {
