@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.io.storage.hadoop;
+package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;

@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.io.storage.hadoop;
+package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -78,7 +78,7 @@ import static org.apache.hudi.io.hfile.TestHFileReader.BOOTSTRAP_INDEX_HFILE_SUF
 import static org.apache.hudi.io.hfile.TestHFileReader.COMPLEX_SCHEMA_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.SIMPLE_SCHEMA_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.readHFileFromResources;
-import static org.apache.hudi.io.storage.hadoop.HoodieHFileConfig.HFILE_COMPARATOR;
+import static org.apache.hudi.io.hadoop.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;

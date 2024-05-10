@@ -31,7 +31,7 @@ import java.io.IOException;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
- * Base class for every avro file reader
+ * Base class for every Avro file reader
  */
 public abstract class HoodieAvroFileReader implements HoodieFileReader<IndexedRecord> {
 
