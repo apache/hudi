@@ -42,6 +42,7 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -104,7 +105,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
     // First try loading the external config file from class loader
     URL configFile = Thread.currentThread().getContextClassLoader().getResource(DEFAULT_PROPERTIES_FILE);
     if (configFile != null) {
-      try (BufferedReader br = new BufferedReader(new InputStreamReader(configFile.openStream()))) {
+      try (BufferedReader br = new BufferedReader(new InputStreamReader(configFile.openStream(), StandardCharsets.UTF_8))) {
         conf.addPropsFromStream(br, new StoragePath(configFile.toURI()));
         return conf.getProps();
       } catch (URISyntaxException e) {
@@ -160,7 +161,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       throw new HoodieIOException("Cannot check if the properties file exist: " + filePath, ioe);
     }
 
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(storage.open(filePath)))) {
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(storage.open(filePath), StandardCharsets.UTF_8))) {
       visitedFilePaths.add(filePath.toString());
       addPropsFromStream(reader, filePath);
     } catch (IOException ioe) {

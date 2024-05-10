@@ -55,6 +55,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
@@ -364,7 +365,7 @@ public class TableSizeStats implements Serializable {
         Option.ofNullable(hadoopConf).orElseGet(Configuration::new)
     );
 
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(new Path(propsPath))))) {
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(new Path(propsPath)), StandardCharsets.UTF_8))) {
       String line = reader.readLine();
       while (line != null) {
         filePaths.add(line);
