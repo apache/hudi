@@ -45,7 +45,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     ProcedureParameter.required(4, "rowKey_field", DataTypes.StringType),
     ProcedureParameter.optional(5, "base_file_format", DataTypes.StringType, "PARQUET"),
     ProcedureParameter.optional(6, "partition_path_field", DataTypes.StringType, ""),
-    ProcedureParameter.optional(7, "bootstrap_index_class", DataTypes.StringType, "org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex"),
+    ProcedureParameter.optional(7, "bootstrap_index_class", DataTypes.StringType, "org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex"),
     ProcedureParameter.optional(8, "selector_class", DataTypes.StringType, "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector"),
     ProcedureParameter.optional(9, "key_generator_class", DataTypes.StringType, "org.apache.hudi.keygen.SimpleKeyGenerator"),
     ProcedureParameter.optional(10, "full_bootstrap_input_provider", DataTypes.StringType, "org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider"),
