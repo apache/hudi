@@ -469,7 +469,7 @@ public class TableSchemaResolver {
     Schema schema = null;
     while (filePaths.hasNext() && schema == null) {
       StoragePath filePath = new StoragePath(filePaths.next());
-      if (filePath.getFileExtension().equals(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
+      if (filePath.getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
         // this is a log file
         schema = readSchemaFromLogFile(filePath);
       } else {
