@@ -24,9 +24,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 
-public class HadoopTableSchemaResolver extends TableSchemaResolver {
+public class ParquetTableSchemaResolver extends TableSchemaResolver {
 
-  public HadoopTableSchemaResolver(HoodieTableMetaClient metaClient) {
+  public ParquetTableSchemaResolver(HoodieTableMetaClient metaClient) {
     super(metaClient);
   }
 
