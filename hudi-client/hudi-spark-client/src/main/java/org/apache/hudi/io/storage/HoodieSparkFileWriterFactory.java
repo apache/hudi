@@ -38,6 +38,7 @@ import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
+import java.io.OutputStream;
 
 public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
 
@@ -67,7 +68,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newParquetFileWriter(
-      FSDataOutputStream outputStream, StorageConfiguration<?> conf, HoodieConfig config, Schema schema) throws IOException {
+      OutputStream outputStream, StorageConfiguration<?> conf, HoodieConfig config, Schema schema) throws IOException {
     boolean enableBloomFilter = false;
     HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(conf, schema, config, enableBloomFilter);
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
@@ -83,7 +84,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
         writeSupport.getHadoopConf(), config.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
     parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
-    return new HoodieSparkParquetStreamWriter(outputStream, parquetConfig);
+    return new HoodieSparkParquetStreamWriter(new FSDataOutputStream(outputStream, null), parquetConfig);
   }
 
   @Override

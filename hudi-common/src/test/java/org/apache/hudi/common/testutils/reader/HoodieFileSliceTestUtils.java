@@ -19,14 +19,12 @@
 
 package org.apache.hudi.common.testutils.reader;
 
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
-import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -35,6 +33,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
@@ -44,12 +43,13 @@ import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -57,7 +57,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -78,7 +77,6 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
-import static org.apache.hudi.io.storage.HoodieAvroFileWriterFactory.HOODIE_AVRO_PARQUET_WRITER;
 
 public class HoodieFileSliceTestUtils {
   public static final String FORWARD_SLASH = "/";
@@ -247,36 +245,31 @@ public class HoodieFileSliceTestUtils {
       Schema schema,
       String baseInstantTime
   ) throws IOException {
-    Configuration hadoopConf = new Configuration();
+    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConfWithDefaults();
 
     // TODO: Optimize these hard-coded parameters for test purpose. (HUDI-7214)
-    BloomFilter filter = BloomFilterFactory.createBloomFilter(
-        1000,
-        0.0001,
-        10000,
-        BloomFilterTypeCode.DYNAMIC_V0.name());
-    HoodieAvroWriteSupport<IndexedRecord> writeSupport = new HoodieAvroWriteSupport<>(
-        new AvroSchemaConverter().convert(schema),
-        schema,
-        Option.of(filter),
-        new Properties());
-    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig = new HoodieParquetConfig(
-        writeSupport,
-        CompressionCodecName.GZIP,
-        ParquetWriter.DEFAULT_BLOCK_SIZE,
-        ParquetWriter.DEFAULT_PAGE_SIZE,
-        1024 * 1024 * 1024,
-        hadoopConf,
-        0.1,
-        true);
+    HoodieConfig cfg = new HoodieConfig();
+    //enable bloom filter
+    cfg.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
+    cfg.setValue(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED.key(), "true");
 
-    try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) ReflectionUtils.loadClass(HOODIE_AVRO_PARQUET_WRITER,
-        new Class<?>[] {StoragePath.class, HoodieParquetConfig.class, String.class, TaskContextSupplier.class, boolean.class},
-        new StoragePath(baseFilePath),
-        parquetConfig,
-        baseInstantTime,
-        new LocalTaskContextSupplier(),
-        true)) {
+    //set bloom filter values
+    cfg.setValue(HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE.key(), String.valueOf(1000));
+    cfg.setValue(HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE.key(), String.valueOf(0.00001));
+    cfg.setValue(HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.key(), String.valueOf(10000));
+    cfg.setValue(HoodieStorageConfig.BLOOM_FILTER_TYPE.key(), BloomFilterTypeCode.DYNAMIC_V0.name());
+
+    //set parquet config values
+    cfg.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME.key(), CompressionCodecName.GZIP.name());
+    cfg.setValue(HoodieStorageConfig.PARQUET_BLOCK_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_BLOCK_SIZE));
+    cfg.setValue(HoodieStorageConfig.PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
+    cfg.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
+    cfg.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(0.1));
+    cfg.setValue(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED.key(), "true");
+
+    try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory
+        .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), conf, cfg,
+            schema, new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
       for (IndexedRecord record : records) {
         writer.writeAvro(
             (String) record.get(schema.getField(ROW_KEY).pos()), record);
