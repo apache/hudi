@@ -33,7 +33,6 @@ import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.io.storage.HoodieHBaseAvroHFileReader;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -68,6 +67,7 @@ import java.util.function.Supplier;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME;
 
 /**
  * HoodieHFileDataBlock contains a list of records stored inside an HFile format. It is used with the HFile
@@ -94,7 +94,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               StoragePath pathForReader,
                               boolean useNativeHFileReader) {
     super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema,
-        header, footer, HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME, enablePointLookups);
+        header, footer, KEY_FIELD_NAME, enablePointLookups);
     this.compressionAlgorithm = Option.empty();
     this.pathForReader = pathForReader;
     this.hFileReaderConfig = getHFileReaderConfig(useNativeHFileReader);
@@ -105,7 +105,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Compression.Algorithm compressionAlgorithm,
                               StoragePath pathForReader,
                               boolean useNativeHFileReader) {
-    super(records, header, new HashMap<>(), HoodieHBaseAvroHFileReader.KEY_FIELD_NAME);
+    super(records, header, new HashMap<>(), KEY_FIELD_NAME);
     this.compressionAlgorithm = Option.of(compressionAlgorithm);
     this.pathForReader = pathForReader;
     this.hFileReaderConfig = getHFileReaderConfig(useNativeHFileReader);
