@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -46,16 +47,20 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.METADATA_FIELD_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -196,6 +201,115 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     assertEquals(123, parquetUtils.getRowCount(
         HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath)));
+  }
+
+  @Test
+  public void testReadColumnStatsFromMetadata() throws Exception {
+    List<Pair<Pair<String, String>, Boolean>> valueList = new ArrayList<>();
+    String minKey = "z";
+    String maxKey = "0";
+    String minValue = "z";
+    String maxValue = "0";
+    int nullValueCount = 0;
+    int totalCount = 1000;
+    String partitionPath = "path1";
+    for (int i = 0; i < totalCount; i++) {
+      boolean nullifyData = i % 3 == 0;
+      String rowKey = UUID.randomUUID().toString();
+      String value = String.valueOf(i);
+      valueList.add(Pair.of(Pair.of(rowKey, value), nullifyData));
+      minKey = (minKey.compareTo(rowKey) > 0) ? rowKey : minKey;
+      maxKey = (maxKey.compareTo(rowKey) < 0) ? rowKey : maxKey;
+
+      if (nullifyData) {
+        nullValueCount++;
+      } else {
+        minValue = (minValue.compareTo(value) > 0) ? value : minValue;
+        maxValue = (maxValue.compareTo(value) < 0) ? value : maxValue;
+      }
+    }
+
+    String fileName = "test.parquet";
+    String filePath = new StoragePath(basePath, fileName).toString();
+    String recordKeyField = "id";
+    String partitionPathField = "partition";
+    String dataField = "data";
+    Schema schema = getSchema(recordKeyField, partitionPathField, dataField);
+
+    BloomFilter filter = BloomFilterFactory
+        .createBloomFilter(1000, 0.0001, 10000, BloomFilterTypeCode.SIMPLE.name());
+    HoodieAvroWriteSupport writeSupport =
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, Option.of(filter), new Properties());
+    try (ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
+        120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE)) {
+      valueList.forEach(entry -> {
+        GenericRecord rec = new GenericData.Record(schema);
+        rec.put(recordKeyField, entry.getLeft().getLeft());
+        rec.put(partitionPathField, partitionPath);
+        if (entry.getRight()) {
+          rec.put(dataField, null);
+        } else {
+          rec.put(dataField, entry.getLeft().getRight());
+        }
+        try {
+          writer.write(rec);
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+        writeSupport.add(entry.getLeft().getLeft());
+      });
+    }
+
+    List<String> columnList = new ArrayList<>();
+    columnList.add(recordKeyField);
+    columnList.add(partitionPathField);
+    columnList.add(dataField);
+
+    List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = parquetUtils.readColumnStatsFromMetadata(
+            HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath), columnList)
+        .stream()
+        .sorted(Comparator.comparing(HoodieColumnRangeMetadata::getColumnName))
+        .collect(Collectors.toList());
+    assertEquals(3, columnRangeMetadataList.size(), "Should return column stats of 3 columns");
+    validateColumnRangeMetadata(columnRangeMetadataList.get(0),
+        fileName, dataField, minValue, maxValue, nullValueCount, totalCount);
+    validateColumnRangeMetadata(columnRangeMetadataList.get(1),
+        fileName, recordKeyField, minKey, maxKey, 0, totalCount);
+    validateColumnRangeMetadata(columnRangeMetadataList.get(2),
+        fileName, partitionPathField, partitionPath, partitionPath, 0, totalCount);
+  }
+
+  private Schema getSchema(String recordKeyField, String partitionPathField, String dataField) {
+    List<Schema.Field> toBeAddedFields = new ArrayList<>();
+    Schema recordSchema = Schema.createRecord("HoodieRecord", "", "", false);
+
+    Schema.Field recordKeySchemaField =
+        new Schema.Field(recordKeyField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE);
+    Schema.Field partitionPathSchemaField =
+        new Schema.Field(partitionPathField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE);
+    Schema.Field dataSchemaField =
+        new Schema.Field(dataField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE);
+
+    toBeAddedFields.add(recordKeySchemaField);
+    toBeAddedFields.add(partitionPathSchemaField);
+    toBeAddedFields.add(dataSchemaField);
+    recordSchema.setFields(toBeAddedFields);
+    return recordSchema;
+  }
+
+  private void validateColumnRangeMetadata(HoodieColumnRangeMetadata metadata,
+                                           String filePath,
+                                           String columnName,
+                                           String minValue,
+                                           String maxValue,
+                                           long nullCount,
+                                           long valueCount) {
+    assertEquals(filePath, metadata.getFilePath(), "File path does not match");
+    assertEquals(columnName, metadata.getColumnName(), "Column name does not match");
+    assertEquals(minValue, metadata.getMinValue(), "Min value does not match");
+    assertEquals(maxValue, metadata.getMaxValue(), "Max value does not match");
+    assertEquals(nullCount, metadata.getNullCount(), "Null count does not match");
+    assertEquals(valueCount, metadata.getValueCount(), "Value count does not match");
   }
 
   private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys) throws Exception {

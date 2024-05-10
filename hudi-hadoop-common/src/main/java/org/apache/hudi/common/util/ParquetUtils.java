@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.common.util;
@@ -251,6 +252,55 @@ public class ParquetUtils extends BaseFileUtils {
   }
 
   @Override
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(StorageConfiguration<?> storageConf,
+                                                                                 StoragePath filePath,
+                                                                                 List<String> columnList) {
+    ParquetMetadata metadata = readMetadata(storageConf, filePath);
+
+    // NOTE: This collector has to have fully specialized generic type params since
+    //       Java 1.8 struggles to infer them
+    Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, List<HoodieColumnRangeMetadata<Comparable>>>> groupingByCollector =
+        Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName);
+
+    // Collect stats from all individual Parquet blocks
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
+        (Map<String, List<HoodieColumnRangeMetadata<Comparable>>>) metadata.getBlocks().stream().sequential()
+            .flatMap(blockMetaData ->
+                blockMetaData.getColumns().stream()
+                    .filter(f -> columnList.contains(f.getPath().toDotString()))
+                    .map(columnChunkMetaData -> {
+                      Statistics stats = columnChunkMetaData.getStatistics();
+                      return HoodieColumnRangeMetadata.<Comparable>create(
+                          filePath.getName(),
+                          columnChunkMetaData.getPath().toDotString(),
+                          convertToNativeJavaType(
+                              columnChunkMetaData.getPrimitiveType(),
+                              stats.genericGetMin()),
+                          convertToNativeJavaType(
+                              columnChunkMetaData.getPrimitiveType(),
+                              stats.genericGetMax()),
+                          // NOTE: In case when column contains only nulls Parquet won't be creating
+                          //       stats for it instead returning stubbed (empty) object. In that case
+                          //       we have to equate number of nulls to the value count ourselves
+                          stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
+                          columnChunkMetaData.getValueCount(),
+                          columnChunkMetaData.getTotalSize(),
+                          columnChunkMetaData.getTotalUncompressedSize());
+                    })
+            )
+            .collect(groupingByCollector);
+
+    // Combine those into file-level statistics
+    // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
+    // expression type correctly)
+    Stream<HoodieColumnRangeMetadata<Comparable>> stream = columnToStatsListMap.values()
+        .stream()
+        .map(this::getColumnRangeInFile);
+
+    return stream.collect(Collectors.toList());
+  }
+
+  @Override
   public HoodieFileFormat getFormat() {
     return HoodieFileFormat.PARQUET;
   }
@@ -328,60 +378,6 @@ public class ParquetUtils extends BaseFileUtils {
     public Boolean apply(String recordKey) {
       return candidateKeys.contains(recordKey);
     }
-  }
-
-  /**
-   * Parse min/max statistics stored in parquet footers for all columns.
-   */
-  @SuppressWarnings("rawtype")
-  public List<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(
-      @Nonnull StorageConfiguration<?> conf,
-      @Nonnull StoragePath parquetFilePath,
-      @Nonnull List<String> cols
-  ) {
-    ParquetMetadata metadata = readMetadata(conf, parquetFilePath);
-
-    // NOTE: This collector has to have fully specialized generic type params since
-    //       Java 1.8 struggles to infer them
-    Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, List<HoodieColumnRangeMetadata<Comparable>>>> groupingByCollector =
-        Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName);
-
-    // Collect stats from all individual Parquet blocks
-    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
-        (Map<String, List<HoodieColumnRangeMetadata<Comparable>>>) metadata.getBlocks().stream().sequential()
-          .flatMap(blockMetaData ->
-              blockMetaData.getColumns().stream()
-                .filter(f -> cols.contains(f.getPath().toDotString()))
-                .map(columnChunkMetaData -> {
-                  Statistics stats = columnChunkMetaData.getStatistics();
-                  return HoodieColumnRangeMetadata.<Comparable>create(
-                      parquetFilePath.getName(),
-                      columnChunkMetaData.getPath().toDotString(),
-                      convertToNativeJavaType(
-                          columnChunkMetaData.getPrimitiveType(),
-                          stats.genericGetMin()),
-                      convertToNativeJavaType(
-                          columnChunkMetaData.getPrimitiveType(),
-                          stats.genericGetMax()),
-                      // NOTE: In case when column contains only nulls Parquet won't be creating
-                      //       stats for it instead returning stubbed (empty) object. In that case
-                      //       we have to equate number of nulls to the value count ourselves
-                      stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
-                      columnChunkMetaData.getValueCount(),
-                      columnChunkMetaData.getTotalSize(),
-                      columnChunkMetaData.getTotalUncompressedSize());
-                })
-          )
-          .collect(groupingByCollector);
-
-    // Combine those into file-level statistics
-    // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
-    // expression type correctly)
-    Stream<HoodieColumnRangeMetadata<Comparable>> stream = columnToStatsListMap.values()
-        .stream()
-        .map(this::getColumnRangeInFile);
-
-    return stream.collect(Collectors.toList());
   }
 
   private <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInFile(
