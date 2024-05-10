@@ -178,7 +178,7 @@ public class ColumnStatsIndexHelper {
                 Iterable<String> iterable = () -> paths;
                 return StreamSupport.stream(iterable.spliterator(), false)
                     .flatMap(path ->
-                        utils.readRangeFromParquetMetadata(
+                        utils.readColumnStatsFromMetadata(
                                 storageConf,
                                 new StoragePath(path),
                                 columnNames

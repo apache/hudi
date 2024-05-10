@@ -49,11 +49,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -1405,7 +1405,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             .collect(Collectors.toList());
       } else {
         return baseFileNameList.stream().flatMap(filename ->
-                new ParquetUtils().readRangeFromParquetMetadata(
+                BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).readColumnStatsFromMetadata(
                     metaClient.getStorageConf(),
                     new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath), filename),
                     allColumnNameList).stream())
