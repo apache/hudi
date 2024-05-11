@@ -83,4 +83,10 @@ public class AsyncTimelineServerBasedDetectionStrategy extends TimelineServerBas
       resolveMarkerConflict(basePath, markerDir, markerName);
     }
   }
+
+  public void stop() {
+    if (asyncDetectorExecutor != null) {
+      asyncDetectorExecutor.shutdown();
+    }
+  }
 }

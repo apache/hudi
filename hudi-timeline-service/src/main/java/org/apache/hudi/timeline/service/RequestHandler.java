@@ -88,7 +88,7 @@ public class RequestHandler {
   private final MarkerHandler markerHandler;
   private final InstantStateHandler instantStateHandler;
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
-  private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
+  private final ScheduledExecutorService asyncResultService;
 
   public RequestHandler(Javalin app, StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
                         HoodieEngineContext hoodieEngineContext, HoodieStorage storage,
@@ -111,7 +111,9 @@ public class RequestHandler {
       this.instantStateHandler = null;
     }
     if (timelineServiceConfig.async) {
-      asyncResultService = Executors.newSingleThreadScheduledExecutor();
+      this.asyncResultService = Executors.newSingleThreadScheduledExecutor();
+    } else {
+      this.asyncResultService = null;
     }
   }
 
@@ -201,6 +203,9 @@ public class RequestHandler {
   public void stop() {
     if (markerHandler != null) {
       markerHandler.stop();
+    }
+    if (asyncResultService != null) {
+      asyncResultService.shutdown();
     }
   }
 

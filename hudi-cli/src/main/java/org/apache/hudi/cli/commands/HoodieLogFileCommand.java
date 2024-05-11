@@ -49,8 +49,6 @@ import org.apache.hudi.storage.StoragePath;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.schema.MessageType;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -109,9 +107,7 @@ public class HoodieLogFileCommand {
       } else {
         fileName = path.getName();
       }
-      MessageType schema = TableSchemaResolver.readSchemaFromLogFile(storage, path);
-      Schema writerSchema = schema != null
-          ? new AvroSchemaConverter().convert(Objects.requireNonNull(schema)) : null;
+      Schema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage, path);
       try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), writerSchema)) {
 
         // read the avro blocks
@@ -213,14 +209,13 @@ public class HoodieLogFileCommand {
     checkArgument(logFilePaths.size() > 0, "There is no log file");
 
     // TODO : readerSchema can change across blocks/log files, fix this inside Scanner
-    AvroSchemaConverter converter = new AvroSchemaConverter();
     Schema readerSchema = null;
     // get schema from last log file
     for (int i = logFilePaths.size() - 1; i >= 0; i--) {
-      MessageType schema = TableSchemaResolver.readSchemaFromLogFile(
+      Schema schema = TableSchemaResolver.readSchemaFromLogFile(
           storage, new StoragePath(logFilePaths.get(i)));
       if (schema != null) {
-        readerSchema = converter.convert(schema);
+        readerSchema = schema;
         break;
       }
     }
@@ -257,10 +252,8 @@ public class HoodieLogFileCommand {
       }
     } else {
       for (String logFile : logFilePaths) {
-        MessageType schema = TableSchemaResolver.readSchemaFromLogFile(
+        Schema writerSchema = TableSchemaResolver.readSchemaFromLogFile(
             client.getStorage(), new StoragePath(logFile));
-        Schema writerSchema = schema != null
-            ? new AvroSchemaConverter().convert(Objects.requireNonNull(schema)) : null;
         try (HoodieLogFormat.Reader reader =
                  HoodieLogFormat.newReader(storage, new HoodieLogFile(new StoragePath(logFile)), writerSchema)) {
           // read the avro blocks

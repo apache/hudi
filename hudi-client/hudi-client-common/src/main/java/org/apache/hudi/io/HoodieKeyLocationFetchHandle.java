@@ -50,7 +50,7 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
   }
 
   private List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieBaseFile baseFile) {
-    BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
+    BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getStoragePath());
     if (keyGeneratorOpt.isPresent()) {
       return baseFileUtils.fetchRecordKeysWithPositions(hoodieTable.getStorageConf(), baseFile.getStoragePath(), keyGeneratorOpt);
     } else {
