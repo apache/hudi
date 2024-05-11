@@ -21,7 +21,15 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieRecord;
 
+/**
+ * Creates readers and writers for SPARK and AVRO record payloads
+ */
 public class HoodieSparkIOFactory extends HoodieHadoopIOFactory {
+  private static final HoodieSparkIOFactory HOODIE_SPARK_IO_FACTORY = new HoodieSparkIOFactory();
+
+  public static HoodieSparkIOFactory getHoodieSparkIOFactory() {
+    return HOODIE_SPARK_IO_FACTORY;
+  }
 
   @Override
   public HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {

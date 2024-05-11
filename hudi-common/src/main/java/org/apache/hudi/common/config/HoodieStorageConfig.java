@@ -240,7 +240,8 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue("org.apache.hudi.io.storage.HoodieHadoopIOFactory")
       .markAdvanced()
       .sinceVersion("0.15.0")
-      .withDocumentation("Provided class should implement `org.apache.hudi.io.storage.HoodieIOFactory`");
+      .withDocumentation("The fully-qualified class name of the factory class to return readers and writers of files used "
+          + "by Hudi. The provided `org.apache.hudi.io.storage.HoodieIOFactory`");
 
 
 

@@ -31,7 +31,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieSparkIOFactory;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -58,6 +57,7 @@ import java.io.IOException;
 import java.util.function.Function;
 
 import static org.apache.hudi.io.HoodieBootstrapHandle.METADATA_BOOTSTRAP_RECORD_SCHEMA;
+import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 
 class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
 
@@ -82,7 +82,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
                                   Schema schema) throws Exception {
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
 
-    HoodieFileReader reader = (new HoodieSparkIOFactory()).getReaderFactory(recordType)
+    HoodieFileReader reader = getHoodieSparkIOFactory().getReaderFactory(recordType)
         .getFileReader(table.getConfig(), table.getStorageConf(), sourceFilePath);
 
     HoodieExecutor<Void> executor = null;

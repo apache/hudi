@@ -38,19 +38,14 @@ public abstract class HoodieIOFactory {
 
   private static HoodieIOFactory getIOFactory(String ioFactoryClass) {
     try {
-      Class<?> clazz =
-          ReflectionUtils.getClass(ioFactoryClass);
-      return (HoodieIOFactory) clazz.newInstance();
-    } catch (IllegalArgumentException | IllegalAccessException | InstantiationException e) {
+      return ReflectionUtils.loadClass(ioFactoryClass);
+    } catch (Exception e) {
       throw new HoodieException("Unable to create " + ioFactoryClass, e);
     }
   }
 
-  public HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
-    throw new UnsupportedOperationException(recordType + " record type not supported");
-  }
+  public abstract HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType);
 
-  public HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType) {
-    throw new UnsupportedOperationException(recordType + " record type not supported");
-  }
+  public abstract HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType);
+
 }

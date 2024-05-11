@@ -25,6 +25,11 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.hadoop.HoodieAvroFileReaderFactory;
 import org.apache.hudi.io.hadoop.HoodieAvroFileWriterFactory;
 
+/**
+ * Creates readers and writers for AVRO record payloads.
+ * Currently uses reflection to support SPARK record payloads but
+ * this ability should be removed with [HUDI-7746]
+ */
 public class HoodieHadoopIOFactory extends HoodieIOFactory {
 
   @Override
@@ -35,14 +40,12 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
       case SPARK:
         //TODO: remove this case [HUDI-7746]
         try {
-          Class<?> clazz =
-              ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory");
-          return (HoodieFileReaderFactory) clazz.newInstance();
-        } catch (IllegalArgumentException | IllegalAccessException | InstantiationException e) {
+          return ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory");
+        } catch (Exception e) {
           throw new HoodieException("Unable to create HoodieSparkFileReaderFactory", e);
         }
       default:
-        return super.getReaderFactory(recordType);
+        throw new UnsupportedOperationException(recordType + " record type not supported");
     }
   }
 
@@ -54,13 +57,12 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
       case SPARK:
         //TODO: remove this case [HUDI-7746]
         try {
-          Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory");
-          return (HoodieFileWriterFactory) clazz.newInstance();
-        } catch (IllegalAccessException | IllegalArgumentException | InstantiationException e) {
+          return ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory");
+        } catch (Exception e) {
           throw new HoodieException("Unable to create HoodieSparkFileWriterFactory", e);
         }
       default:
-        return super.getWriterFactory(recordType);
+        throw new UnsupportedOperationException(recordType + " record type not supported");
     }
   }
 }

@@ -20,9 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
-import org.apache.hudi.common.config.{HoodieConfig, HoodieStorageConfig}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
-import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.spark.sql.internal.SQLConf
 
 /**
@@ -49,11 +47,5 @@ object HoodieSparkConfUtils {
     options.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
       .map(HollowCommitHandling.valueOf)
       .getOrElse(HollowCommitHandling.valueOf(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue))
-  }
-
-  def getSparkReaderConfig(): HoodieConfig = {
-    val hoodieConfig = new HoodieConfig();
-    hoodieConfig.setValue(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(), classOf[HoodieSparkIOFactory].getName)
-    hoodieConfig
   }
 }

@@ -65,7 +65,7 @@ class DefaultSource extends RelationProvider
       // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
       spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
     }
-    //always use spark io factory
+    // Always use spark io factory
     spark.sparkContext.hadoopConfiguration.set(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(),
       classOf[HoodieSparkIOFactory].getName)
     // Revisit EMRFS incompatibilities, for now disable
