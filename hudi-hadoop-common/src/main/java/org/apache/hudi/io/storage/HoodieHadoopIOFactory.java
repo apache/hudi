@@ -20,6 +20,8 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.hadoop.HoodieAvroFileReaderFactory;
 import org.apache.hudi.io.hadoop.HoodieAvroFileWriterFactory;
 
@@ -27,17 +29,38 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
 
   @Override
   public HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
-    if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
-      return new HoodieAvroFileReaderFactory();
+    switch (recordType) {
+      case AVRO:
+        return new HoodieAvroFileReaderFactory();
+      case SPARK:
+        //TODO: remove this case [HUDI-7746]
+        try {
+          Class<?> clazz =
+              ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory");
+          return (HoodieFileReaderFactory) clazz.newInstance();
+        } catch (IllegalArgumentException | IllegalAccessException | InstantiationException e) {
+          throw new HoodieException("Unable to create HoodieSparkFileReaderFactory", e);
+        }
+      default:
+        return super.getReaderFactory(recordType);
     }
-    return super.getReaderFactory(recordType);
   }
 
   @Override
   public HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType) {
-    if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
-      return new HoodieAvroFileWriterFactory();
+    switch (recordType) {
+      case AVRO:
+        return new HoodieAvroFileWriterFactory();
+      case SPARK:
+        //TODO: remove this case [HUDI-7746]
+        try {
+          Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory");
+          return (HoodieFileWriterFactory) clazz.newInstance();
+        } catch (IllegalAccessException | IllegalArgumentException | InstantiationException e) {
+          throw new HoodieException("Unable to create HoodieSparkFileWriterFactory", e);
+        }
+      default:
+        return super.getWriterFactory(recordType);
     }
-    return super.getWriterFactory(recordType);
   }
 }
