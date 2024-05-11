@@ -1000,7 +1000,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
                 .build())
             .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table").build();
-    HoodieMetrics metrics = new HoodieMetrics(cfg);
+    HoodieMetrics metrics = new HoodieMetrics(cfg, storageConf);
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
     client.archive();
     assertTrue(metrics.getMetrics().getRegistry().getNames().contains(metrics.getMetricsName(ARCHIVE_ACTION, DURATION_STR)));
