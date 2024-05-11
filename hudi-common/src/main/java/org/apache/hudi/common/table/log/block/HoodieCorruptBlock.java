@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import java.io.IOException;
 import java.util.Map;
@@ -38,7 +39,7 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes() throws IOException {
+  public byte[] getContentBytes(StorageConfiguration<?> storageConf) throws IOException {
     if (!getContent().isPresent() && readBlockLazily) {
       // read content from disk
       inflate();

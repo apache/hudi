@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -37,7 +38,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -67,6 +67,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.utilities.util.BloomFilterData;
 
 import com.beust.jcommander.JCommander;
@@ -77,6 +78,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.Optional;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.functions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,6 +103,10 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
+import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
@@ -540,7 +546,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           }).collectAsList());
 
       try {
-        validateRecordIndex(engineContext, metaClient, metadataTableBasedContext.getTableMetadata());
+        validateRecordIndex(engineContext, metaClient);
         result.add(Pair.of(true, null));
       } catch (HoodieValidationException e) {
         LOG.error(
@@ -638,7 +644,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           if (partitionCreationTimeOpt.isPresent() && !completedTimeline.containsInstant(partitionCreationTimeOpt.get())) {
             Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
             if (lastInstant.isPresent()
-                && HoodieTimeline.compareTimestamps(partitionCreationTimeOpt.get(), HoodieTimeline.GREATER_THAN, lastInstant.get().getTimestamp())) {
+                && HoodieTimeline.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().getTimestamp())) {
               LOG.warn("Ignoring additional partition {}, as it was deduced to be part of a "
                   + "latest completed commit which was inflight when FS based listing was polled.", partitionFromDMT);
               actualAdditionalPartitionsInMDT.remove(partitionFromDMT);
@@ -886,10 +892,12 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   private void validateRecordIndex(HoodieSparkEngineContext sparkEngineContext,
-                                   HoodieTableMetaClient metaClient,
-                                   HoodieTableMetadata tableMetadata) {
+                                   HoodieTableMetaClient metaClient) {
+    if (!metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
+      return;
+    }
     if (cfg.validateRecordIndexContent) {
-      validateRecordIndexContent(sparkEngineContext, metaClient, tableMetadata);
+      validateRecordIndexContent(sparkEngineContext, metaClient);
     } else if (cfg.validateRecordIndexCount) {
       validateRecordIndexCount(sparkEngineContext, metaClient);
     }
@@ -898,11 +906,15 @@ public class HoodieMetadataTableValidator implements Serializable {
   private void validateRecordIndexCount(HoodieSparkEngineContext sparkEngineContext,
                                         HoodieTableMetaClient metaClient) {
     String basePath = metaClient.getBasePathV2().toString();
+    String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
+        .filterCompletedInstants().lastInstant().get().getTimestamp();
     long countKeyFromTable = sparkEngineContext.getSqlContext().read().format("hudi")
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(),latestCompletedCommit)
         .load(basePath)
-        .select(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+        .select(RECORD_KEY_METADATA_FIELD)
         .count();
     long countKeyFromRecordIndex = sparkEngineContext.getSqlContext().read().format("hudi")
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(),latestCompletedCommit)
         .load(getMetadataTableBasePath(basePath))
         .select("key")
         .filter("type = 5")
@@ -919,43 +931,15 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   private void validateRecordIndexContent(HoodieSparkEngineContext sparkEngineContext,
-                                          HoodieTableMetaClient metaClient,
-                                          HoodieTableMetadata tableMetadata) {
+                                          HoodieTableMetaClient metaClient) {
     String basePath = metaClient.getBasePathV2().toString();
+    String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
+        .filterCompletedInstants().lastInstant().get().getTimestamp();
     JavaPairRDD<String, Pair<String, String>> keyToLocationOnFsRdd =
-        sparkEngineContext.getSqlContext().read().format("hudi").load(basePath)
-            .select(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.FILENAME_METADATA_FIELD)
-            .toJavaRDD()
-            .mapToPair(row -> new Tuple2<>(row.getString(row.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)),
-                Pair.of(row.getString(row.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)),
-                    FSUtils.getFileId(row.getString(row.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD))))))
-            .cache();
+        getRecordLocationsFromFSBasedListing(sparkEngineContext, basePath, latestCompletedCommit);
 
     JavaPairRDD<String, Pair<String, String>> keyToLocationFromRecordIndexRdd =
-        sparkEngineContext.getSqlContext().read().format("hudi")
-            .load(getMetadataTableBasePath(basePath))
-            .filter("type = 5")
-            .select(functions.col("key"),
-                functions.col("recordIndexMetadata.partitionName").as("partitionName"),
-                functions.col("recordIndexMetadata.fileIdHighBits").as("fileIdHighBits"),
-                functions.col("recordIndexMetadata.fileIdLowBits").as("fileIdLowBits"),
-                functions.col("recordIndexMetadata.fileIndex").as("fileIndex"),
-                functions.col("recordIndexMetadata.fileId").as("fileId"),
-                functions.col("recordIndexMetadata.instantTime").as("instantTime"),
-                functions.col("recordIndexMetadata.fileIdEncoding").as("fileIdEncoding"))
-            .toJavaRDD()
-            .mapToPair(row -> {
-              HoodieRecordGlobalLocation location = HoodieTableMetadataUtil.getLocationFromRecordIndexInfo(
-                  row.getString(row.fieldIndex("partitionName")),
-                  row.getInt(row.fieldIndex("fileIdEncoding")),
-                  row.getLong(row.fieldIndex("fileIdHighBits")),
-                  row.getLong(row.fieldIndex("fileIdLowBits")),
-                  row.getInt(row.fieldIndex("fileIndex")),
-                  row.getString(row.fieldIndex("fileId")),
-                  row.getLong(row.fieldIndex("instantTime")));
-              return new Tuple2<>(row.getString(row.fieldIndex("key")),
-                  Pair.of(location.getPartitionPath(), location.getFileId()));
-            });
+        getRecordLocationsFromRLI(sparkEngineContext, basePath, latestCompletedCommit);
 
     int numErrorSamples = cfg.numRecordIndexErrorSamples;
     Pair<Long, List<String>> result = keyToLocationOnFsRdd.fullOuterJoin(keyToLocationFromRecordIndexRdd, cfg.recordIndexParallelism)
@@ -1030,6 +1014,60 @@ public class HoodieMetadataTableValidator implements Serializable {
     } else {
       LOG.info("Validation of record index content succeeded: {} entries. Table: {}", countKey, cfg.basePath);
     }
+  }
+
+  @VisibleForTesting
+  JavaPairRDD<String, Pair<String, String>> getRecordLocationsFromFSBasedListing(HoodieSparkEngineContext sparkEngineContext,
+                                                                                                      String basePath,
+                                                                                                      String latestCompletedCommit) {
+    return sparkEngineContext.getSqlContext().read().format("hudi")
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
+        .load(basePath)
+        .select(RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD)
+        .toJavaRDD()
+        .mapToPair(row -> new Tuple2<>(row.getString(row.fieldIndex(RECORD_KEY_METADATA_FIELD)),
+            Pair.of(row.getString(row.fieldIndex(PARTITION_PATH_METADATA_FIELD)),
+                FSUtils.getFileId(row.getString(row.fieldIndex(FILENAME_METADATA_FIELD))))))
+        .cache();
+  }
+
+  @VisibleForTesting
+  JavaPairRDD<String, Pair<String, String>> getRecordLocationsFromRLI(HoodieSparkEngineContext sparkEngineContext,
+                                                                      String basePath,
+                                                                      String latestCompletedCommit) {
+    return sparkEngineContext.getSqlContext().read().format("hudi")
+        .load(getMetadataTableBasePath(basePath))
+        .filter("type = 5")
+        .select(functions.col("key"),
+            functions.col("recordIndexMetadata.partitionName").as("partitionName"),
+            functions.col("recordIndexMetadata.fileIdHighBits").as("fileIdHighBits"),
+            functions.col("recordIndexMetadata.fileIdLowBits").as("fileIdLowBits"),
+            functions.col("recordIndexMetadata.fileIndex").as("fileIndex"),
+            functions.col("recordIndexMetadata.fileId").as("fileId"),
+            functions.col("recordIndexMetadata.instantTime").as("instantTime"),
+            functions.col("recordIndexMetadata.fileIdEncoding").as("fileIdEncoding"))
+        .toJavaRDD()
+        .map(row -> {
+          HoodieRecordGlobalLocation location = HoodieTableMetadataUtil.getLocationFromRecordIndexInfo(
+              row.getString(row.fieldIndex("partitionName")),
+              row.getInt(row.fieldIndex("fileIdEncoding")),
+              row.getLong(row.fieldIndex("fileIdHighBits")),
+              row.getLong(row.fieldIndex("fileIdLowBits")),
+              row.getInt(row.fieldIndex("fileIndex")),
+              row.getString(row.fieldIndex("fileId")),
+              row.getLong(row.fieldIndex("instantTime")));
+          // handle false positive case. a commit was pending when FS based locations were fetched, but committed when MDT was polled.
+          if (HoodieTimeline.compareTimestamps(location.getInstantTime(), GREATER_THAN, latestCompletedCommit)) {
+            return new Tuple2<>(row, Option.empty());
+          } else {
+            return new Tuple2<>(row, Option.of(location));
+          }
+        }).filter(tuple2 -> tuple2._2.isPresent()) // filter the false positives
+        .mapToPair(tuple2 -> {
+          Tuple2<Row, Option<HoodieRecordGlobalLocation>> rowAndLocation = (Tuple2<Row, Option<HoodieRecordGlobalLocation>>) tuple2;
+          return new Tuple2<>(rowAndLocation._1.getString(rowAndLocation._1.fieldIndex("key")),
+              Pair.of(rowAndLocation._2.get().getPartitionPath(), rowAndLocation._2.get().getFileId()));
+        }).cache();
   }
 
   private String constructLocationInfoString(String recordKey, Optional<Pair<String, String>> locationOnFs,

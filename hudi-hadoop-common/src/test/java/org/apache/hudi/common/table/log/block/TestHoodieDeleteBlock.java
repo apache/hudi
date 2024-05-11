@@ -20,6 +20,7 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -124,7 +125,7 @@ public class TestHoodieDeleteBlock {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, new HashMap<>());
-    byte[] contentBytes = deleteBlock.getContentBytes();
+    byte[] contentBytes = deleteBlock.getContentBytes(HoodieTestUtils.getDefaultStorageConf());
     HoodieDeleteBlock deserializeDeleteBlock = new HoodieDeleteBlock(
         Option.of(contentBytes), null, true, Option.empty(), new HashMap<>(), new HashMap<>());
     DeleteRecord[] deserializedDeleteRecords = deserializeDeleteBlock.getRecordsToDelete();
