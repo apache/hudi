@@ -38,7 +38,7 @@ public class HoodieDataTableUtils {
       String basePath) throws IOException {
     List<String> allPartitionPaths = tableMetadata.getAllPartitionPaths()
         .stream().map(partitionPath ->
-            FSUtils.constructAbsolutePathInHadoopPath(basePath, partitionPath).toString())
+            FSUtils.constructAbsolutePath(basePath, partitionPath).toString())
         .collect(Collectors.toList());
     return tableMetadata.getAllFilesInPartitions(allPartitionPaths).values().stream()
         .map(fileStatuses ->

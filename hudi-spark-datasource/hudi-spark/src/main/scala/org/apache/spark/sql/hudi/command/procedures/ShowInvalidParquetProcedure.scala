@@ -54,7 +54,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     val storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())
     val parquetRdd = javaRdd.rdd.map(part => {
         val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
-      FSUtils.getAllDataFilesInPartition(fs, FSUtils.constructAbsolutePathInHadoopPath(srcPath, part))
+        HadoopFSUtils.getAllDataFilesInPartition(fs, HadoopFSUtils.constructAbsolutePathInHadoopPath(srcPath, part))
     }).flatMap(_.toList)
       .filter(status => {
         val filePath = status.getPath

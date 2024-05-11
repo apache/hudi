@@ -135,7 +135,7 @@ public class HoodieSnapshotCopier implements Serializable {
       context.foreach(filesToCopy, tuple -> {
         String partition = tuple._1();
         Path sourceFilePath = new Path(tuple._2());
-        Path toPartitionPath = FSUtils.constructAbsolutePathInHadoopPath(outputDir, partition);
+        Path toPartitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(outputDir, partition);
         FileSystem ifs = HadoopFSUtils.getFs(baseDir, storageConf.unwrapCopyAs(Configuration.class));
 
         if (!ifs.exists(toPartitionPath)) {

@@ -185,7 +185,7 @@ public class HoodieInputFormatUtils {
       return getInputFormat(HoodieFileFormat.HFILE, realtime, conf);
     }
     // now we support read log file, try to find log file
-    if (FSUtils.isLogFile(new Path(path)) && realtime) {
+    if (HadoopFSUtils.isLogFile(new Path(path)) && realtime) {
       return getInputFormat(HoodieFileFormat.PARQUET, realtime, conf);
     }
     throw new HoodieIOException("Hoodie InputFormat not implemented for base file of type " + extension);

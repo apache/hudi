@@ -20,7 +20,6 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -289,7 +288,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
           List<FileSlice> filteredFileSlices = new ArrayList<>();
 
           for (Path p : entry.getValue()) {
-            String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), p);
+            String relativePartitionPath = HadoopFSUtils.getRelativePartitionPath(new Path(basePath), p);
 
             List<FileSlice> fileSlices = queryInstant.map(
                 instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, instant))

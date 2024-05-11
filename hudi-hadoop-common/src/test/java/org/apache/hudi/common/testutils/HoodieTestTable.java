@@ -65,9 +65,10 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -464,7 +465,7 @@ public class HoodieTestTable {
   private Map<String, Long> getWrittenLogFiles(String instant, Map.Entry<String, List<String>> entry) {
     Map<String, Long> writtenLogFiles = new HashMap<>();
     for (String fileName : entry.getValue()) {
-      if (FSUtils.isLogFile(new Path(fileName))) {
+      if (HadoopFSUtils.isLogFile(new Path(fileName))) {
         if (testTableState.getPartitionToLogFileInfoMap(instant) != null
             && testTableState.getPartitionToLogFileInfoMap(instant).containsKey(entry.getKey())) {
           List<Pair<String, Integer[]>> fileInfos = testTableState.getPartitionToLogFileInfoMap(instant).get(entry.getKey());
