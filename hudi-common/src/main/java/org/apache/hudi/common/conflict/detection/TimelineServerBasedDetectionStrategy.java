@@ -60,4 +60,6 @@ public abstract class TimelineServerBasedDetectionStrategy implements EarlyConfl
                                            String basePath, Long maxAllowableHeartbeatIntervalInMs,
                                            HoodieStorage storage, Object markerHandler,
                                            Set<HoodieInstant> completedCommits);
+
+  public abstract void stop();
 }
