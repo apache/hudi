@@ -118,14 +118,14 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords(List<HoodieRecord> records) throws IOException {
+  protected byte[] serializeRecords(List<HoodieRecord> records, StorageConfiguration<?> storageConf) throws IOException {
     HFileContext context = new HFileContextBuilder()
         .withBlockSize(DEFAULT_BLOCK_SIZE)
         .withCompression(compressionAlgorithm.get())
         .withCellComparator(ReflectionUtils.loadClass(KV_COMPARATOR_CLASS_NAME))
         .build();
 
-    Configuration conf = new Configuration();
+    Configuration conf = storageConf.unwrapAs(Configuration.class);
     CacheConfig cacheConfig = new CacheConfig(conf);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     FSDataOutputStream ostream = new FSDataOutputStream(baos, null);

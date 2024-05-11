@@ -73,7 +73,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   @Override
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
-      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig()));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), storageConf));
     } else {
       this.metrics = Option.empty();
     }

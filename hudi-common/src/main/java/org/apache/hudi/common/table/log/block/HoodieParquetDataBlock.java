@@ -28,13 +28,11 @@ import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -98,7 +96,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords(List<HoodieRecord> records) throws IOException {
+  protected byte[] serializeRecords(List<HoodieRecord> records, StorageConfiguration<?> storageConf) throws IOException {
     if (records.size() == 0) {
       return new byte[0];
     }
@@ -116,7 +114,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     HoodieFileWriter parquetWriter = null;
     try {
       parquetWriter = HoodieFileWriterFactory.getFileWriter(
-          HoodieFileFormat.PARQUET, outputStream, HoodieStorageUtils.getStorageConf(new Configuration()),
+          HoodieFileFormat.PARQUET, outputStream, storageConf,
           config, writerSchema, recordType);
       for (HoodieRecord<?> record : records) {
         String recordKey = getRecordKey(record).orElse(null);

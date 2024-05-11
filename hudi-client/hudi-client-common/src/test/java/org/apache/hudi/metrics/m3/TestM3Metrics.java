@@ -29,6 +29,8 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.StorageConfiguration;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +44,8 @@ public class TestM3Metrics {
   HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
+  @Mock
+  StorageConfiguration storageConf;
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -62,7 +66,7 @@ public class TestM3Metrics {
     when(metricsConfig.getM3Service()).thenReturn("hoodie");
     when(metricsConfig.getM3Tags()).thenReturn("tag1=value1,tag2=value2");
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
-    hoodieMetrics = new HoodieMetrics(writeConfig);
+    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
     metrics = hoodieMetrics.getMetrics();
     metrics.registerGauge("metric1", 123L);
     assertEquals("123", metrics.getRegistry().getGauges().get("metric1").getValue().toString());
@@ -80,7 +84,7 @@ public class TestM3Metrics {
     when(metricsConfig.getM3Service()).thenReturn("hoodie");
     when(metricsConfig.getM3Tags()).thenReturn("");
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
-    hoodieMetrics = new HoodieMetrics(writeConfig);
+    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
     metrics = hoodieMetrics.getMetrics();
     metrics.registerGauge("metric1", 123L);
     assertEquals("123", metrics.getRegistry().getGauges().get("metric1").getValue().toString());
@@ -94,7 +98,7 @@ public class TestM3Metrics {
     when(writeConfig.isMetricsOn()).thenReturn(true);
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
     assertThrows(RuntimeException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig);
+      hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
     });
   }
 }

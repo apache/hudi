@@ -24,6 +24,7 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import com.codahale.metrics.MetricRegistry;
 import org.junit.jupiter.api.AfterEach;
@@ -47,6 +48,8 @@ public class TestDatadogMetricsReporter {
   HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
+  @Mock
+  StorageConfiguration storageConf;
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -70,7 +73,7 @@ public class TestDatadogMetricsReporter {
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
 
     Throwable t = assertThrows(IllegalStateException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig);
+      hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
       metrics = hoodieMetrics.getMetrics();
     });
     assertEquals("Datadog cannot be initialized: API key is null or empty.", t.getMessage());
@@ -86,7 +89,7 @@ public class TestDatadogMetricsReporter {
     when(metricsConfig.getDatadogMetricPrefix()).thenReturn("");
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     Throwable t = assertThrows(IllegalStateException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig);
+      hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
       metrics = hoodieMetrics.getMetrics();
     });
     assertEquals("Datadog cannot be initialized: Metric prefix is null or empty.", t.getMessage());
@@ -108,7 +111,7 @@ public class TestDatadogMetricsReporter {
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     assertDoesNotThrow(() -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig);
+      hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
       metrics = hoodieMetrics.getMetrics();
     });
   }

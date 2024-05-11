@@ -20,6 +20,7 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
@@ -117,7 +118,7 @@ public class TestHoodieDeleteBlock {
 
   public void testDeleteBlockWithValidation(DeleteRecord[] deleteRecords) throws IOException {
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecords, new HashMap<>());
-    byte[] contentBytes = deleteBlock.getContentBytes();
+    byte[] contentBytes = deleteBlock.getContentBytes(HoodieTestUtils.getDefaultStorageConf());
     HoodieDeleteBlock deserializeDeleteBlock = new HoodieDeleteBlock(
         Option.of(contentBytes), null, true, Option.empty(), new HashMap<>(), new HashMap<>());
     DeleteRecord[] deserializedDeleteRecords = deserializeDeleteBlock.getRecordsToDelete();

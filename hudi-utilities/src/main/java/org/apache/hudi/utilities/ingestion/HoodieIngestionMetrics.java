@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.ingestion;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import com.codahale.metrics.Timer;
 
@@ -30,14 +31,17 @@ import java.io.Serializable;
  */
 public abstract class HoodieIngestionMetrics implements Serializable {
 
+  protected final StorageConfiguration<?> storageConf;
+
   protected final HoodieMetricsConfig writeConfig;
 
-  public HoodieIngestionMetrics(HoodieWriteConfig writeConfig) {
-    this(writeConfig.getMetricsConfig());
+  public HoodieIngestionMetrics(HoodieWriteConfig writeConfig, StorageConfiguration<?> storageConf) {
+    this(writeConfig.getMetricsConfig(), storageConf);
   }
 
-  public HoodieIngestionMetrics(HoodieMetricsConfig writeConfig) {
+  public HoodieIngestionMetrics(HoodieMetricsConfig writeConfig, StorageConfiguration<?> storageConf) {
     this.writeConfig = writeConfig;
+    this.storageConf = storageConf;
   }
 
   public abstract Timer.Context getOverallTimerContext();

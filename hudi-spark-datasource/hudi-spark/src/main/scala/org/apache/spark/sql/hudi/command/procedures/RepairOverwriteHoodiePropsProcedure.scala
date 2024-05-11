@@ -51,7 +51,7 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
   def outputType: StructType = OUTPUT_TYPE
 
   def loadNewProps(filePath: String, props: Properties):Unit = {
-    val fs = HadoopFSUtils.getFs(filePath, new Configuration())
+    val fs = HadoopFSUtils.getFs(filePath, spark.sessionState.newHadoopConf())
     val fis = fs.open(new Path(filePath))
     props.load(fis)
 
