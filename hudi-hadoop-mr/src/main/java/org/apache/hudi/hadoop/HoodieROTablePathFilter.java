@@ -19,7 +19,6 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -208,7 +207,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
                 metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf));
           }
-          String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
+          String partition = HadoopFSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
           // populate the cache
           if (!hoodiePathCache.containsKey(folder.toString())) {

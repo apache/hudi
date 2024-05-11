@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -108,8 +109,8 @@ public class ConsistentBucketIndexUtils {
    */
   public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable table, String partition) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    Path metadataPath = FSUtils.constructAbsolutePathInHadoopPath(metaClient.getHashingMetadataPath(), partition);
-    Path partitionPath = FSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePathV2().toString(), partition);
+    Path metadataPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(metaClient.getHashingMetadataPath(), partition);
+    Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePathV2().toString(), partition);
     try {
       Predicate<FileStatus> hashingMetaCommitFilePredicate = fileStatus -> {
         String filename = fileStatus.getPath().getName();

@@ -199,10 +199,10 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testGetRelativePartitionPath() {
     Path basePath = new Path("/test/apache");
     Path partitionPath = new Path("/test/apache/hudi/sub");
-    assertEquals("hudi/sub", FSUtils.getRelativePartitionPath(basePath, partitionPath));
+    assertEquals("hudi/sub", HadoopFSUtils.getRelativePartitionPath(basePath, partitionPath));
 
     Path nonPartitionPath = new Path("/test/something/else");
-    assertThrows(IllegalArgumentException.class, () -> FSUtils.getRelativePartitionPath(basePath, nonPartitionPath));
+    assertThrows(IllegalArgumentException.class, () -> HadoopFSUtils.getRelativePartitionPath(basePath, nonPartitionPath));
   }
 
   @ParameterizedTest
@@ -535,7 +535,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     StoragePath hoodieTempDir = getHoodieTempDir();
     HoodieStorage storage = metaClient.getStorage();
     prepareTestDirectory(storage, hoodieTempDir);
-    List<FileStatus> fileStatusList = FSUtils.getFileStatusAtLevel(
+    List<FileStatus> fileStatusList = HadoopFSUtils.getFileStatusAtLevel(
         new HoodieLocalEngineContext(storage.getConf()), (FileSystem) storage.getFileSystem(),
         new Path(baseUri), 3, 2);
     assertEquals(CollectionUtils.createImmutableSet(
