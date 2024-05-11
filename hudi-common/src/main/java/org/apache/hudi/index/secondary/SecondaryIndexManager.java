@@ -122,7 +122,7 @@ public class SecondaryIndexManager {
     Properties updatedProps = new Properties();
     updatedProps.put(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key(),
         SecondaryIndexUtils.toJsonString(newSecondaryIndexes));
-    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPathV2(), updatedProps);
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
 
     LOG.info("Success to add secondary index metadata: {}", secondaryIndexToAdd);
 
@@ -154,9 +154,9 @@ public class SecondaryIndexManager {
       Properties updatedProps = new Properties();
       updatedProps.put(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key(),
           SecondaryIndexUtils.toJsonString(secondaryIndexesToKeep));
-      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPathV2(), updatedProps);
+      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
     } else {
-      HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPathV2(),
+      HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
           CollectionUtils.createSet(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key()));
     }
 

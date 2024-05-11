@@ -99,7 +99,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
     }
     val props: Properties = new Properties
     props.setProperty(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key, "true")
-    HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPathV2, props)
+    HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, props)
 
     rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
   }

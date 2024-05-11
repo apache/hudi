@@ -68,7 +68,7 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
     var newProps = new Properties
     loadNewProps(overwriteFilePath, newProps)
     val oldProps = metaClient.getTableConfig.propsMap
-    HoodieTableConfig.create(metaClient.getStorage, metaClient.getMetaPathV2, newProps)
+    HoodieTableConfig.create(metaClient.getStorage, metaClient.getMetaPath, newProps)
     // reload new props as checksum would have been added
     newProps = HoodieTableMetaClient.reload(metaClient).getTableConfig.getProps
 

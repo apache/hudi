@@ -202,7 +202,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     // Now create a scenario where archiving deleted replace commits (requested,inflight and replacecommit)
     StoragePath completeInstantPath = HoodieTestUtils.getCompleteInstantPath(
-        metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()),
+        metaClient.getStorage(), metaClient.getMetaPath(),
         clusteringInstantTime3,
         HoodieTimeline.REPLACE_COMMIT_ACTION);
 
@@ -2291,13 +2291,13 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieStorage storage = metaClient.getStorage();
     StoragePath instantPath1 = HoodieTestUtils
-        .getCompleteInstantPath(storage, new StoragePath(metaClient.getMetaPath()), "1",
+        .getCompleteInstantPath(storage, metaClient.getMetaPath(), "1",
             HoodieTimeline.COMMIT_ACTION);
     storage.deleteFile(instantPath1);
     storage.deleteFile(new StoragePath(basePath + "/.hoodie", "1.inflight"));
     storage.deleteFile(new StoragePath(basePath + "/.hoodie", "1.commit.requested"));
     StoragePath instantPath2 = HoodieTestUtils
-        .getCompleteInstantPath(storage, new StoragePath(metaClient.getMetaPath()), "2",
+        .getCompleteInstantPath(storage, metaClient.getMetaPath(), "2",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
     storage.deleteFile(instantPath2);
 

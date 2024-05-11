@@ -318,7 +318,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     StoragePath backupDir = new StoragePath(config.getRollbackBackupDirectory());
     if (!backupDir.isAbsolute()) {
       // Path specified is relative to the meta directory
-      backupDir = new StoragePath(table.getMetaClient().getMetaPathV2(), config.getRollbackBackupDirectory());
+      backupDir = new StoragePath(table.getMetaClient().getMetaPath(), config.getRollbackBackupDirectory());
     }
 
     // Determine the instants to back up

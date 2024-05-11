@@ -99,7 +99,7 @@ public class ManifestFileWriter {
   }
 
   public StoragePath getManifestFolder(boolean useAbsolutePath) {
-    return new StoragePath(metaClient.getMetaPathV2(), useAbsolutePath ? ABSOLUTE_PATH_MANIFEST_FOLDER_NAME : MANIFEST_FOLDER_NAME);
+    return new StoragePath(metaClient.getMetaPath(), useAbsolutePath ? ABSOLUTE_PATH_MANIFEST_FOLDER_NAME : MANIFEST_FOLDER_NAME);
   }
 
   @VisibleForTesting

@@ -210,7 +210,7 @@ public class TableCommand {
   public String recoverTableConfig() throws IOException {
     HoodieCLI.refreshTableMetadata();
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    HoodieTableConfig.recover(client.getStorage(), client.getMetaPathV2());
+    HoodieTableConfig.recover(client.getStorage(), client.getMetaPath());
     return descTable();
   }
 
@@ -225,7 +225,7 @@ public class TableCommand {
     try (FileInputStream fileInputStream = new FileInputStream(updatePropsFilePath)) {
       updatedProps.load(fileInputStream);
     }
-    HoodieTableConfig.update(client.getStorage(), client.getMetaPathV2(), updatedProps);
+    HoodieTableConfig.update(client.getStorage(), client.getMetaPath(), updatedProps);
 
     HoodieCLI.refreshTableMetadata();
     Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
@@ -240,7 +240,7 @@ public class TableCommand {
     Map<String, String> oldProps = client.getTableConfig().propsMap();
 
     Set<String> deleteConfigs = Arrays.stream(csConfigs.split(",")).collect(Collectors.toSet());
-    HoodieTableConfig.delete(client.getStorage(), client.getMetaPathV2(), deleteConfigs);
+    HoodieTableConfig.delete(client.getStorage(), client.getMetaPath(), deleteConfigs);
 
     HoodieCLI.refreshTableMetadata();
     Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
@@ -361,7 +361,7 @@ public class TableCommand {
     updatedProps.putAll(oldProps);
     // change the table type to target type
     updatedProps.put(HoodieTableConfig.TYPE.key(), targetType);
-    HoodieTableConfig.update(client.getStorage(), client.getMetaPathV2(), updatedProps);
+    HoodieTableConfig.update(client.getStorage(), client.getMetaPath(), updatedProps);
 
     HoodieCLI.refreshTableMetadata();
     Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();

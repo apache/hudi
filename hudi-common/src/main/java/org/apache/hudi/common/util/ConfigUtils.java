@@ -554,7 +554,7 @@ public class ConfigUtils {
 
   public static TypedProperties fetchConfigs(
       HoodieStorage storage,
-      String metaPath,
+      StoragePath metaPath,
       String propertiesFile,
       String propertiesBackupFile,
       int maxReadRetries,

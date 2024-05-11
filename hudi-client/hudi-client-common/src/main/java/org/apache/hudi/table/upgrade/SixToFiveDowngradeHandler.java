@@ -115,7 +115,7 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
     compactionTimeline.getInstantsAsStream().forEach(instant -> {
       String fileName = instant.getFileName();
       FileIOUtils.copy(metaClient.getStorage(),
-          new StoragePath(metaClient.getMetaPathV2(), fileName),
+          new StoragePath(metaClient.getMetaPath(), fileName),
           new StoragePath(metaClient.getMetaAuxiliaryPath(), fileName));
     });
   }

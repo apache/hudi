@@ -303,7 +303,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
-  public HoodieTableConfig(HoodieStorage storage, String metaPath, String payloadClassName, String recordMergerStrategyId) {
+  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
@@ -389,7 +389,7 @@ public class HoodieTableConfig extends HoodieConfig {
       recoverIfNeeded(storage, cfgPath, backupCfgPath);
 
       // 1. Read the existing config
-      TypedProperties props = fetchConfigs(storage, metadataFolder.toString(), HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
+      TypedProperties props = fetchConfigs(storage, metadataFolder, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
 
       // 2. backup the existing properties.
       try (OutputStream out = storage.create(backupCfgPath, false)) {
@@ -775,7 +775,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
-    update(metaClient.getStorage(), metaClient.getMetaPathV2(), getProps());
+    update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
     LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePathV2(), partitionPath, enabled ? "enabled" : "disabled"));
   }
 
@@ -793,7 +793,7 @@ public class HoodieTableConfig extends HoodieConfig {
     });
 
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
-    update(metaClient.getStorage(), metaClient.getMetaPathV2(), getProps());
+    update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
     LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionPaths));
   }
 

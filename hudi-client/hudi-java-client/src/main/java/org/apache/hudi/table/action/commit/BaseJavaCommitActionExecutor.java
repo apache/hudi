@@ -100,7 +100,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
       try {
         if (!metaClient.getStorage().exists(
-            new StoragePath(metaClient.getMetaPathV2(), inflightInstant.getFileName()))) {
+            new StoragePath(metaClient.getMetaPath(), inflightInstant.getFileName()))) {
           throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", e);
         }
       } catch (IOException ex) {

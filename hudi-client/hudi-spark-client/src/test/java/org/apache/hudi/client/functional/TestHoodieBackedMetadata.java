@@ -2040,7 +2040,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // collect all commit meta files from metadata table.
     List<StoragePathInfo> metaFiles = metaClient.getStorage()
-        .listDirectEntries(new StoragePath(metaClient.getMetaPath() + "/metadata/.hoodie"));
+        .listDirectEntries(new StoragePath(metaClient.getMetaPath(), "/metadata/.hoodie"));
     List<StoragePathInfo> commit3Files = metaFiles.stream()
         .filter(pathInfo ->
             pathInfo.getPath().getName().contains(commit3)
@@ -3787,7 +3787,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     metaClient.getTableConfig().setTableVersion(version);
     StoragePath propertyFile = new StoragePath(
-        metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+        metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     try (OutputStream os = metaClient.getStorage().create(propertyFile)) {
       metaClient.getTableConfig().getProps().store(os, "");
     }

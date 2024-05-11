@@ -161,7 +161,7 @@ public class RepairsCommand {
       newProps.load(fileInputStream);
     }
     Map<String, String> oldProps = client.getTableConfig().propsMap();
-    HoodieTableConfig.create(client.getStorage(), client.getMetaPathV2(), newProps);
+    HoodieTableConfig.create(client.getStorage(), client.getMetaPath(), newProps);
     // reload new props as checksum would have been added
     newProps =
         HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig().getProps();
@@ -274,7 +274,7 @@ public class RepairsCommand {
 
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(), "true");
-    HoodieTableConfig.update(HoodieCLI.storage, client.getMetaPathV2(), props);
+    HoodieTableConfig.update(HoodieCLI.storage, client.getMetaPath(), props);
 
     return HoodiePrintHelper.print(new String[] {
         HoodieTableHeaderFields.HEADER_PARTITION_PATH,

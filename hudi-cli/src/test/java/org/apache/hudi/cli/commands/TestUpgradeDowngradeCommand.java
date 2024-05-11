@@ -117,7 +117,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
     metaClient.getTableConfig().setTableVersion(HoodieTableVersion.FIVE);
     try (OutputStream os = metaClient.getStorage().create(
         new StoragePath(
-            metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE),
+            metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE),
         true)) {
       metaClient.getTableConfig().getProps().store(os, "");
     }
@@ -167,7 +167,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
   private void assertTableVersionFromPropertyFile(HoodieTableVersion expectedVersion) throws IOException {
     StoragePath propertyFile =
         new StoragePath(
-            metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+            metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     // Load the properties and verify
     InputStream inputStream = metaClient.getStorage().open(propertyFile);
     HoodieConfig config = new HoodieConfig();
