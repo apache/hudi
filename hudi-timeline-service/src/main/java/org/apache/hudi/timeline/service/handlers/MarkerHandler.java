@@ -128,6 +128,9 @@ public class MarkerHandler extends Handler {
     }
     dispatchingExecutorService.shutdownNow();
     batchingExecutorService.shutdownNow();
+    if (earlyConflictDetectionStrategy != null) {
+      earlyConflictDetectionStrategy.stop();
+    }
   }
 
   /**
