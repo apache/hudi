@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -79,6 +80,8 @@ public class HoodieStreamerUtils {
                                                                   String instantTime, Option<BaseErrorTableWriter> errorTableWriter) {
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
     boolean shouldErrorTable = errorTableWriter.isPresent() && props.getBoolean(ERROR_ENABLE_VALIDATE_RECORD_CREATION.key(), ERROR_ENABLE_VALIDATE_RECORD_CREATION.defaultValue());
+    boolean useConsistentLogicalTimestamp = ConfigUtils.getBooleanWithAltKeys(
+        props, KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
     Set<String> partitionColumns = getPartitionColumns(props);
     return avroRDDOptional.map(avroRDD -> {
       SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
@@ -92,9 +95,6 @@ public class HoodieStreamerUtils {
                 props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
               }
               BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-              boolean useConsistentLogicalTimestamp = props.getBoolean(
-                  KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-                  Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
               return new CloseableMappingIterator<>(ClosableIterator.wrap(genericRecordIterator), genRec -> {
                 try {
                   HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));

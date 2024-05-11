@@ -57,8 +57,6 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
  */
 public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
 
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
   public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
                          SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
     this(properties, sparkContext, sparkSession, metrics, new DefaultStreamContext(schemaProvider, Option.empty()));
@@ -85,18 +83,19 @@ public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
   protected JavaRDD<String> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
     if (this.shouldAddOffsets) {
       return kafkaRDD.mapPartitions(partitionIterator -> {
+        ObjectMapper objectMapper = new ObjectMapper();
         return new CloseableMappingIterator<>(ClosableIterator.wrap(partitionIterator), consumerRecord -> {
           String recordValue = consumerRecord.value().toString();
           String recordKey = StringUtils.objToString(consumerRecord.key());
           try {
-            ObjectNode jsonNode = (ObjectNode) OBJECT_MAPPER.readTree(recordValue);
+            ObjectNode jsonNode = (ObjectNode) objectMapper.readTree(recordValue);
             jsonNode.put(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
             jsonNode.put(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
             jsonNode.put(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
             if (recordKey != null) {
               jsonNode.put(KAFKA_SOURCE_KEY_COLUMN, recordKey);
             }
-            return OBJECT_MAPPER.writeValueAsString(jsonNode);
+            return objectMapper.writeValueAsString(jsonNode);
           } catch (Throwable e) {
             return recordValue;
           }
