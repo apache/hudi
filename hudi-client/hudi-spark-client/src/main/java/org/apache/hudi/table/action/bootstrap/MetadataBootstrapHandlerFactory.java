@@ -18,13 +18,14 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.bootstrap.FileStatusUtils;
+import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.avro.model.HoodieFileStatus;
+
+import org.apache.hadoop.fs.Path;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
@@ -32,7 +33,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 public class MetadataBootstrapHandlerFactory {
 
   public static BootstrapMetadataHandler getMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
-    Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
+    Path sourceFilePath = HadoopFSUtils.toPath(srcFileStatus.getPath());
 
     String extension = FSUtils.getFileExtension(sourceFilePath.toString());
     if (ORC.getFileExtension().equals(extension)) {

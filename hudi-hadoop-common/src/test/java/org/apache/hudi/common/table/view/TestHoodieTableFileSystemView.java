@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
-import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
@@ -60,6 +59,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -746,10 +746,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
                                  Option<BaseFile> bootstrapBaseFile, boolean testBootstrap) {
     if (testBootstrap) {
       assertTrue(bootstrapBaseFile.isPresent());
-      assertEquals(FileStatusUtils.toPath(srcFileStatus.getPath()),
+      assertEquals(HadoopFSUtils.toPath(srcFileStatus.getPath()),
           new Path(bootstrapBaseFile.get().getPath()));
       assertEquals(srcFileStatus.getPath(),
-          FileStatusUtils.fromPath(new Path(bootstrapBaseFile.get().getPath())));
+          HadoopFSUtils.fromPath(new Path(bootstrapBaseFile.get().getPath())));
       assertEquals(srcFileStatus.getModificationTime(),
           new Long(bootstrapBaseFile.get().getPathInfo().getModificationTime()));
       assertEquals(srcFileStatus.getBlockSize(), new Long(bootstrapBaseFile.get().getPathInfo().getBlockSize()));

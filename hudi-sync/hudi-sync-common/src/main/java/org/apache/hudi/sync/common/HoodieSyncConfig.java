@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HadoopConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -201,7 +201,7 @@ public class HoodieSyncConfig extends HoodieConfig {
   private Configuration hadoopConf;
 
   public HoodieSyncConfig(Properties props) {
-    this(props, ConfigUtils.createHadoopConf(props));
+    this(props, HadoopConfigUtils.createHadoopConf(props));
   }
 
   public HoodieSyncConfig(Properties props, Configuration hadoopConf) {
