@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
@@ -98,7 +99,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords(List<HoodieRecord> records) throws IOException {
+  protected byte[] serializeRecords(List<HoodieRecord> records, StorageConfiguration<?> storageConf) throws IOException {
     Schema schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
     GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
