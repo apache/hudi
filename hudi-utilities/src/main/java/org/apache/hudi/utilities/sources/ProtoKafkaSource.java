@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
@@ -56,7 +57,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  * Reads protobuf serialized Kafka data, based on a provided class name.
  */
 public class ProtoKafkaSource extends KafkaSource<JavaRDD<Message>> {
-  private final String className;
+  private final Option<String> className;
   private final String deserializerName;
 
   public ProtoKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -73,9 +74,9 @@ public class ProtoKafkaSource extends KafkaSource<JavaRDD<Message>> {
     }
     if (deserializerName.equals(ByteArrayDeserializer.class.getName())) {
       checkRequiredConfigProperties(props, Collections.singletonList(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME));
-      className = getStringWithAltKeys(props, ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME);
+      className = Option.of(getStringWithAltKeys(props, ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME));
     } else {
-      className = null;
+      className = Option.empty();
     }
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
     props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, deserializerName);
@@ -88,7 +89,10 @@ public class ProtoKafkaSource extends KafkaSource<JavaRDD<Message>> {
   @Override
   protected JavaRDD<Message> toBatch(OffsetRange[] offsetRanges) {
     if (deserializerName.equals(ByteArrayDeserializer.class.getName())) {
-      ProtoDeserializer deserializer = new ProtoDeserializer(className);
+      ValidationUtils.checkArgument(
+          className.isPresent(),
+          ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key() + " config must be present.");
+      ProtoDeserializer deserializer = new ProtoDeserializer(className.get());
       return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
           LocationStrategies.PreferConsistent()).map(obj -> deserializer.parse(obj.value()));
     } else {

@@ -82,11 +82,11 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
 
   protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.kafka.topic", topic);
+    props.setProperty("hoodie.streamer.source.kafka.topic", topic);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.setProperty("auto.offset.reset", resetStrategy);
     props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
+    props.setProperty("hoodie.streamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
             String.valueOf(KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE.defaultValue()));
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
@@ -187,7 +187,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
           .setPrimitiveFixedSignedLong(RANDOM.nextLong())
           .setPrimitiveBoolean(RANDOM.nextBoolean())
           .setPrimitiveString(UUID.randomUUID().toString())
-          .setPrimitiveBytes(ByteString.copyFrom(UUID.randomUUID().toString().getBytes()));
+          .setPrimitiveBytes(ByteString.copyFrom(getUTF8Bytes(UUID.randomUUID().toString())));
 
       // randomly set nested messages, lists, and maps to test edge cases
       if (RANDOM.nextBoolean()) {
