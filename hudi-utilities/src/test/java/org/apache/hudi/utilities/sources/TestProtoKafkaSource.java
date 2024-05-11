@@ -24,6 +24,7 @@ import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.schema.ProtoClassBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.test.proto.Nested;
@@ -109,10 +110,11 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     props.put(KAFKA_PROTO_VALUE_DESERIALIZER_CLASS.key(),
         "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer");
     props.put("schema.registry.url", MOCK_REGISTRY_URL);
+    props.put("hoodie.streamer.schemaprovider.registry.url", MOCK_REGISTRY_URL);
     props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
     // class name is not required so we'll remove it
     props.remove(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key());
-    SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
+    SchemaProvider schemaProvider = new SchemaRegistryProvider(props, jsc());
     ProtoKafkaSource protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     List<Sample> messages = createSampleMessages(1000);
     sendMessagesToKafkaWithConfluentSerializer(topic, 2, messages);
