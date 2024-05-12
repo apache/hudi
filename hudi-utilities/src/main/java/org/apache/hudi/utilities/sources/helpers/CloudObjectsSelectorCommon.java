@@ -226,12 +226,12 @@ public class CloudObjectsSelectorCommon {
       boolean checkIfExists,
       TypedProperties props
   ) {
-    SerializableConfiguration serializableHadoopConf = new SerializableConfiguration(jsc.hadoopConfiguration());
+    StorageConfiguration<Configuration> storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     if (type == Type.GCS) {
       return cloudObjectMetadataDF
           .select("bucket", "name", "size")
           .distinct()
-          .mapPartitions(getCloudObjectMetadataPerPartition(GCS_PREFIX, serializableHadoopConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
+          .mapPartitions(getCloudObjectMetadataPerPartition(GCS_PREFIX, storageConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
           .collectAsList();
     } else if (type == Type.S3) {
       String s3FS = getStringWithAltKeys(props, S3_FS_PREFIX, true).toLowerCase();
@@ -239,7 +239,7 @@ public class CloudObjectsSelectorCommon {
       return cloudObjectMetadataDF
           .select(CloudObjectsSelectorCommon.S3_BUCKET_NAME, CloudObjectsSelectorCommon.S3_OBJECT_KEY, CloudObjectsSelectorCommon.S3_OBJECT_SIZE)
           .distinct()
-          .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, serializableHadoopConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
+          .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, storageConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
           .collectAsList();
     }
     throw new UnsupportedOperationException("Invalid cloud type " + type);
