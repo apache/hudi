@@ -29,6 +29,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -39,6 +41,7 @@ import java.util.function.Supplier;
  * if that column is not dropped in any of the transformations.
  */
 public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
+  private static final Logger LOG = LoggerFactory.getLogger(ErrorTableAwareChainedTransformer.class);
   public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, Supplier<Option<Schema>> sourceSchemaSupplier) {
     super(configuredTransformers, sourceSchemaSupplier);
   }
@@ -54,7 +57,14 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
     dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
+      LOG.warn("schema before transformation: " + dataset.schema().toString());
+      LOG.warn("transformer class name: " + transformerInfo.getTransformer().getClass().getCanonicalName());
+      if (transformerInfo.getTransformer().getClass().getCanonicalName().contains("MongoDbArchival")) {
+        dataset = dataset.drop("_hoodie_is_deleted");
+        LOG.warn("Dropping field _hoodie_is_deleted: " + dataset.schema().toString());
+      }
       dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
+      LOG.warn("schema after transformation: " + dataset.schema().toString());
       // validate in every stage to ensure ErrorRecordColumn not dropped by one of the transformer and added by next transformer.
       ErrorTableUtils.validate(dataset);
     }
