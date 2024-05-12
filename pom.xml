@@ -107,7 +107,7 @@
     <pulsar.spark.scala11.version>2.4.5</pulsar.spark.scala11.version>
     <pulsar.spark.scala12.version>3.1.1.4</pulsar.spark.scala12.version>
     <pulsar.spark.scala13.version>3.4.1.1</pulsar.spark.scala13.version>
-    <confluent.version>5.3.4</confluent.version>
+    <confluent.version>5.5.0</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
     <parquet.version>1.10.1</parquet.version>
@@ -933,6 +933,11 @@
         <artifactId>javax.el</artifactId>
         <version>${glassfish.el.version}</version>
         <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.glassfish.jersey.ext</groupId>
+        <artifactId>jersey-bean-validation</artifactId>
+        <version>${glassfish.version}</version>
       </dependency>
 
       <!-- Avro -->
@@ -1771,6 +1776,33 @@
             <artifactId>guava</artifactId>
           </exclusion>
         </exclusions>
+      </dependency>
+
+      <!-- Confluent -->
+      <dependency>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-avro-serializer</artifactId>
+        <version>${confluent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.confluent</groupId>
+        <artifactId>common-config</artifactId>
+        <version>${confluent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.confluent</groupId>
+        <artifactId>common-utils</artifactId>
+        <version>${confluent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-schema-registry-client</artifactId>
+        <version>${confluent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-protobuf-serializer</artifactId>
+        <version>${confluent.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

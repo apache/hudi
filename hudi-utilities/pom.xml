@@ -361,12 +361,10 @@
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>kafka-avro-serializer</artifactId>
-      <version>${confluent.version}</version>
     </dependency>
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>common-config</artifactId>
-      <version>${confluent.version}</version>
     </dependency>
     <dependency>
       <groupId>io.confluent</groupId>
@@ -376,7 +374,10 @@
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>kafka-schema-registry-client</artifactId>
-      <version>${confluent.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.confluent</groupId>
+      <artifactId>kafka-protobuf-serializer</artifactId>
     </dependency>
 
     <!-- Httpcomponents -->
