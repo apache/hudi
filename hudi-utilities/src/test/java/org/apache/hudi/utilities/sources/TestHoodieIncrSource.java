@@ -338,7 +338,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   @EnumSource(HoodieTableType.class)
   public void testHoodieIncrSourceWithDataSourceOptions(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(10, 12).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(9).build())
@@ -354,7 +354,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .build();
 
     TypedProperties extraProps = new TypedProperties();
-    extraProps.setProperty(HoodieIncrSourceConfig.HOODIE_SPARK_DATASOURCE_OPTIONS.key(), "hoodie.metadata.enable=true,hoodie.enable.data.skipping=true");
+    extraProps.setProperty(HoodieIncrSourceConfig.HOODIE_INCREMENTAL_SPARK_DATASOURCE_OPTIONS.key(), "hoodie.metadata.enable=true,hoodie.enable.data.skipping=true");
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
       Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, "100");
       Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, INSERT, null, "200");

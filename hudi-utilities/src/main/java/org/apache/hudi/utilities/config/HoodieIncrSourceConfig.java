@@ -102,7 +102,7 @@ public class HoodieIncrSourceConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("PartitionValueExtractor class to extract partition fields from _hoodie_partition_path");
 
-  public static final ConfigProperty<String> HOODIE_SPARK_DATASOURCE_OPTIONS = ConfigProperty
+  public static final ConfigProperty<String> HOODIE_INCREMENTAL_SPARK_DATASOURCE_OPTIONS = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.hoodieincr.data.datasource.options")
       .noDefaultValue()
       .markAdvanced()
