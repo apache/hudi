@@ -106,6 +106,6 @@ public class HoodieIncrSourceConfig extends HoodieConfig {
       .key(STREAMER_CONFIG_PREFIX + "source.hoodieincr.data.datasource.options")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("A comma separate list of options that can be passed to the spark dataframe reader of a hudi table, "
-          + "eg: hoodie.metadata.enable=true,hoodie.enable.data.skipping=true");
+      .withDocumentation("A comma-separated list of Hudi options that can be passed to the spark dataframe reader of a hudi table, "
+          + "eg: `hoodie.metadata.enable=true,hoodie.enable.data.skipping=true`. Used only for incremental source.");
 }
