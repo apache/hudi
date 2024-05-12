@@ -193,7 +193,7 @@ public class HoodieIncrSource extends RowSource {
       return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
 
-    DataFrameReader reader = sparkSession.read().format("org.apache.hudi");
+    DataFrameReader reader = sparkSession.read().format("hudi");
     String datasourceOpts = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SPARK_DATASOURCE_OPTIONS, true);
     if (!StringUtils.isNullOrEmpty(datasourceOpts)) {
       Map<String, String> optionsMap = Arrays.stream(datasourceOpts.split(","))
