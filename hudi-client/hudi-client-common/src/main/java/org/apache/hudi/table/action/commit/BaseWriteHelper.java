@@ -47,8 +47,19 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                       int configuredShuffleParallelism,
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       WriteOperationType operationType) {
+    return this.write(instantTime, inputRecords, context, table, shouldCombine, configuredShuffleParallelism, executor, operationType, Option.empty());
+  }
+
+  public HoodieWriteMetadata<O> write(String instantTime,
+                                      I inputRecords,
+                                      HoodieEngineContext context,
+                                      HoodieTable<T, I, K, O> table,
+                                      boolean shouldCombine,
+                                      int configuredShuffleParallelism,
+                                      BaseCommitActionExecutor<T, I, K, O, R> executor,
+                                      WriteOperationType operationType,
+                                      Option<HoodieTimer> sourceReadAndIndexTimer) {
     try {
-      sourceReadAndIndexTimer = HoodieTimer.start();
       // De-dupe/merge if needed
       I dedupedRecords =
           combineOnCondition(shouldCombine, inputRecords, configuredShuffleParallelism, table);
@@ -60,7 +71,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         taggedRecords = tag(dedupedRecords, context, table);
       }
 
-      HoodieWriteMetadata<O> result = executor.execute(taggedRecords, Option.of(sourceReadAndIndexTimer));
+      HoodieWriteMetadata<O> result = executor.execute(taggedRecords, sourceReadAndIndexTimer);
       return result;
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {
