@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -70,7 +71,7 @@ public class AverageRecordSizeUtils {
             AtomicLong totalBytesWritten = new AtomicLong(0L);
             AtomicLong totalRecordsWritten = new AtomicLong(0L);
             commitMetadata.getWriteStats().stream()
-                .filter(hoodieWriteStat -> FSUtils.isBaseFile(new Path(hoodieWriteStat.getPath())))
+                .filter(hoodieWriteStat -> FSUtils.isBaseFile(new StoragePath(hoodieWriteStat.getPath())))
                 .forEach(hoodieWriteStat -> {
                   totalBytesWritten.addAndGet(hoodieWriteStat.getTotalWriteBytes());
                   totalRecordsWritten.addAndGet(hoodieWriteStat.getNumWrites());
