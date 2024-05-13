@@ -27,9 +27,9 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
-import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
+import org.apache.hudi.utilities.streamer.StreamContext;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -136,8 +136,8 @@ public class HoodieIncrSource extends RowSource {
   private final Map<String, String> readOpts = new HashMap<>();
 
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-                          SchemaProvider schemaProvider) {
-    super(props, sparkContext, sparkSession, schemaProvider);
+                          StreamContext streamContext) {
+    super(props, sparkContext, sparkSession, streamContext);
 
     for (Object key : props.keySet()) {
       String keyString = key.toString();
