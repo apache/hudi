@@ -59,7 +59,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals(HoodieTestUtils.RAW_TRIPS_TEST_NAME, metaClient.getTableConfig().getTableName(),
         "Table name should be raw_trips");
     assertEquals(basePath, metaClient.getBasePath(), "Basepath should be the one assigned");
-    assertEquals(basePath + "/.hoodie", metaClient.getMetaPath(),
+    assertEquals(basePath + "/.hoodie", metaClient.getMetaPath().toString(),
         "Metapath should be ${basepath}/.hoodie");
     assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
     assertTrue(HoodieTableConfig.validateChecksum(metaClient.getTableConfig().getProps()));

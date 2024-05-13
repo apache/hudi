@@ -643,8 +643,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     StorageConfiguration<?> storageConf = dataMetaClient.getStorageConf();
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
-    final String datasetBasePath = dataMetaClient.getBasePathV2().toString();
-    StoragePath storageBasePath = new StoragePath(datasetBasePath);
+    StoragePath storageBasePath = dataMetaClient.getBasePathV2();
 
     while (!pathsToList.isEmpty()) {
       // In each round we will list a section of directories

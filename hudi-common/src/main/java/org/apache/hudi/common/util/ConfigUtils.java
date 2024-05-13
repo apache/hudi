@@ -100,7 +100,7 @@ public class ConfigUtils {
   }
 
   /**
-   * Convert the key-value config to a map.The format of the config
+   * Convert the key-value config to a map.  The format of the config
    * is a key-value pair just like "k1=v1\nk2=v2\nk3=v3".
    *
    * @param keyValueConfig Key-value configs in properties format, i.e., multiple lines of
@@ -108,10 +108,23 @@ public class ConfigUtils {
    * @return A {@link Map} of key-value configs.
    */
   public static Map<String, String> toMap(String keyValueConfig) {
+    return toMap(keyValueConfig, "\n");
+  }
+
+  /**
+   * Convert the key-value config to a map. The format of the config is a key-value pair
+   * with defined separator.  For example, if the separator is a comma, the input is
+   * "k1=v1,k2=v2,k3=v3".
+   *
+   * @param keyValueConfig key-value configs in properties format, with defined separator.
+   * @param separator      the separator.
+   * @return A {@link Map} of key-value configs.
+   */
+  public static Map<String, String> toMap(String keyValueConfig, String separator) {
     if (StringUtils.isNullOrEmpty(keyValueConfig)) {
       return new HashMap<>();
     }
-    String[] keyvalues = keyValueConfig.split("\n");
+    String[] keyvalues = keyValueConfig.split(separator);
     Map<String, String> tableProperties = new HashMap<>();
     for (String keyValue : keyvalues) {
       // Handle multiple new lines and lines that contain only spaces after splitting
@@ -497,7 +510,7 @@ public class ConfigUtils {
 
   public static TypedProperties fetchConfigs(
       HoodieStorage storage,
-      String metaPath,
+      StoragePath metaPath,
       String propertiesFile,
       String propertiesBackupFile,
       int maxReadRetries,

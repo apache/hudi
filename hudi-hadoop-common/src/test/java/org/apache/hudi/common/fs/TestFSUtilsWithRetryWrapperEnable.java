@@ -70,7 +70,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     initialRetryIntervalMs = fileSystemRetryConfig.getInitialRetryIntervalMs();
 
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(
-        HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getStorageConf()), 2);
+        HadoopFSUtils.getFs(metaClient.getMetaPath().toString(), metaClient.getStorageConf()), 2);
     FileSystem fileSystem =
         new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers,
             initialRetryIntervalMs, "");
@@ -85,7 +85,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
   @Test
   public void testProcessFilesWithExceptions() throws Exception {
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(
-        HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getStorageConf()), 100);
+        HadoopFSUtils.getFs(metaClient.getMetaPath().toString(), metaClient.getStorageConf()), 100);
     FileSystem fileSystem =
         new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers,
             initialRetryIntervalMs, "");
@@ -102,7 +102,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
   @Test
   public void testGetSchema() {
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(
-        HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getStorageConf()), 100);
+        HadoopFSUtils.getFs(metaClient.getMetaPath().toString(), metaClient.getStorageConf()), 100);
     FileSystem fileSystem =
         new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers,
             initialRetryIntervalMs, "");
@@ -114,7 +114,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
   @Test
   public void testGetDefaultReplication() {
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(
-        HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getStorageConf()), 100);
+        HadoopFSUtils.getFs(metaClient.getMetaPath().toString(), metaClient.getStorageConf()), 100);
     FileSystem fileSystem =
         new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers,
             initialRetryIntervalMs, "");

@@ -35,7 +35,6 @@ import org.apache.hudi.index.JavaHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.io.IOException;
@@ -94,8 +93,8 @@ public abstract class HoodieJavaTable<T>
       // delete metadata partitions corresponding to such indexes
       deleteMetadataIndexIfNecessary();
       try {
-        if (isMetadataTableExists || metaClient.getStorage().exists(new StoragePath(
-            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
+        if (isMetadataTableExists || metaClient.getStorage().exists(
+            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePathV2()))) {
           isMetadataTableExists = true;
           return Option.of(metadataWriter);
         }

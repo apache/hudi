@@ -280,7 +280,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
           .getFileReader(
               DEFAULT_HUDI_CONFIG_FOR_READER,
               metaClient.getStorageConf(),
-              new StoragePath(fileSlice.getBaseFile().get().getPath())));
+              fileSlice.getBaseFile().get().getStoragePath()));
       return new CloseableMappingIterator<>(reader.getRecordIterator(schema), HoodieRecord::getData);
     } else {
       // If there is no data file, fall back to reading log files

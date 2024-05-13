@@ -69,6 +69,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 public class HoodieRealtimeRecordReaderUtils {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReaderUtils.class);
@@ -313,7 +314,7 @@ public class HoodieRealtimeRecordReaderUtils {
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
     HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
     return HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-        .getFileReader(hoodieConfig, HadoopFSUtils.getStorageConf(conf), new StoragePath(path.toUri()));
+        .getFileReader(hoodieConfig, HadoopFSUtils.getStorageConf(conf), convertToStoragePath(path));
   }
 
   private static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {

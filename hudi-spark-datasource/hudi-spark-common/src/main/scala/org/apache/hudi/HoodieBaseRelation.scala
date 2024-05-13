@@ -51,6 +51,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -428,7 +429,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
             .asJava)
 
         fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
-          val relativePath = getRelativePartitionPath(new StoragePath(basePath.toUri), partitionPath)
+          val relativePath = getRelativePartitionPath(convertToStoragePath(basePath), partitionPath)
           fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, ts).iterator().asScala
         }.toSeq
 
@@ -490,14 +491,15 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def getPartitionColumnsAsInternalRowInternal(file: StoragePathInfo, basePath: Path,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     if (extractPartitionValuesFromPartitionPath) {
-      val tablePathWithoutScheme = new StoragePath(basePath.toUri).getPathWithoutSchemeAndAuthority
-      val partitionPathWithoutScheme = new StoragePath(file.getPath.getParent.toUri).getPathWithoutSchemeAndAuthority
+      val baseStoragePath = convertToStoragePath(basePath)
+      val tablePathWithoutScheme = baseStoragePath.getPathWithoutSchemeAndAuthority
+      val partitionPathWithoutScheme = file.getPath.getParent.getPathWithoutSchemeAndAuthority
       val relativePath = tablePathWithoutScheme.toUri.relativize(partitionPathWithoutScheme.toUri).toString
       val timeZoneId = conf.get("timeZone", sparkSession.sessionState.conf.sessionLocalTimeZone)
       val rowValues = HoodieSparkUtils.parsePartitionColumnValues(
         partitionColumns,
         relativePath,
-        new StoragePath(basePath.toUri),
+        baseStoragePath,
         tableStructSchema,
         timeZoneId,
         sparkAdapter.getSparkParsePartitionUtil,
