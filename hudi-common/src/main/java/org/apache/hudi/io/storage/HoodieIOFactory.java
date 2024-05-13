@@ -32,6 +32,11 @@ import org.apache.hudi.storage.StoragePath;
  * Base class to get HoodieFileReaderFactory and HoodieFileWriterFactory
  */
 public abstract class HoodieIOFactory {
+  protected final StorageConfiguration<?> storageConf;
+
+  public HoodieIOFactory(StorageConfiguration<?> storageConf) {
+    this.storageConf = storageConf;
+  }
 
   public static HoodieIOFactory getIOFactory(StorageConfiguration<?> storageConf) {
     String ioFactoryClass = storageConf.getString(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key())

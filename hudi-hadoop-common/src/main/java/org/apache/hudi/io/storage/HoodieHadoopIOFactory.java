@@ -36,10 +36,9 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
  * this ability should be removed with [HUDI-7746]
  */
 public class HoodieHadoopIOFactory extends HoodieIOFactory {
-  protected final StorageConfiguration<?> storageConf;
 
   public HoodieHadoopIOFactory(StorageConfiguration<?> storageConf) {
-    this.storageConf = storageConf;
+    super(storageConf);
   }
 
   @Override
