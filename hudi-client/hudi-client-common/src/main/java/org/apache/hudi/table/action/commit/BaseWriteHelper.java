@@ -33,7 +33,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
 
-  protected HoodieTimer preWriteTimer = null; // time taken from dedup -> tag location -> building workload profile
+  protected HoodieTimer sourceReadAndIndexTimer = null; // time taken from dedup -> tag location -> building workload profile
 
   protected BaseWriteHelper(SerializableFunctionUnchecked<I, Integer> partitionNumberExtractor) {
     super(partitionNumberExtractor);
@@ -48,7 +48,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       WriteOperationType operationType) {
     try {
-      preWriteTimer = HoodieTimer.start();
+      sourceReadAndIndexTimer = HoodieTimer.start();
       // De-dupe/merge if needed
       I dedupedRecords =
           combineOnCondition(shouldCombine, inputRecords, configuredShuffleParallelism, table);
@@ -60,7 +60,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         taggedRecords = tag(dedupedRecords, context, table);
       }
 
-      HoodieWriteMetadata<O> result = executor.execute(taggedRecords, Option.of(preWriteTimer));
+      HoodieWriteMetadata<O> result = executor.execute(taggedRecords, Option.of(sourceReadAndIndexTimer));
       return result;
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {

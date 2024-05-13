@@ -150,7 +150,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   @Override
-  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> preWriteTimer) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     // Cache the tagged records, so we don't end up computing both
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
     if (inputRDD.getStorageLevel() == StorageLevel.NONE()) {
@@ -167,10 +167,10 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
     LOG.debug("Input workload profile :" + workloadProfile);
-    Long preWriteDurationMs = null;
-    if (preWriteTimer.isPresent()) {
-      preWriteDurationMs = preWriteTimer.get().endTimer();
-      LOG.info("Pre write timer " + preWriteDurationMs);
+    Long sourceReadAndIndexDurationMs = null;
+    if (sourceReadAndIndexTimer.isPresent()) {
+      sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
+      LOG.info("Pre write timer " + sourceReadAndIndexDurationMs);
     }
 
     // partition using the insert partitioner
@@ -181,8 +181,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     updateIndexAndCommitIfNeeded(writeStatuses, result);
-    if (preWriteTimer.isPresent()) {
-      result.setPreWriteDurationMs(preWriteDurationMs);
+    if (sourceReadAndIndexTimer.isPresent()) {
+      result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
     }
     return result;
   }
