@@ -32,6 +32,8 @@ import org.apache.hadoop.fs.Path;
 import java.util.Iterator;
 import java.util.Map;
 
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+
 /**
  * Factory clazz for flink write handles.
  */
@@ -108,7 +110,7 @@ public class FlinkWriteHandleFactory {
       Path writePath = bucketToHandles.get(fileID);
       if (writePath != null) {
         HoodieWriteHandle<?, ?, ?, ?> writeHandle =
-            createReplaceHandle(config, instantTime, table, recordItr, partitionPath, fileID, new StoragePath(writePath.toUri()));
+            createReplaceHandle(config, instantTime, table, recordItr, partitionPath, fileID, convertToStoragePath(writePath));
         bucketToHandles.put(fileID, new Path(((MiniBatchHandle) writeHandle).getWritePath().toUri())); // override with new replace handle
         return writeHandle;
       }

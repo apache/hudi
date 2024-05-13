@@ -22,10 +22,8 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.storage.HoodieStorageUtils
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
-import org.apache.hadoop.conf.Configuration
 import org.scalatest.BeforeAndAfter
 
 import java.io.File
@@ -83,7 +81,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       assertResult(true)(Files.exists(Paths.get(s"$tablePath/$partitionVal")))
       assertResult(HoodieTableType.MERGE_ON_READ)(new HoodieTableConfig(
         HoodieStorageUtils.getStorage(tablePath, HoodieTestUtils.getDefaultStorageConf),
-        s"$tablePath/" + HoodieTableMetaClient.METAFOLDER_NAME,
+        new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME),
         HoodieTableConfig.PAYLOAD_CLASS_NAME.defaultValue,
         HoodieTableConfig.RECORD_MERGER_STRATEGY.defaultValue).getTableType)
 

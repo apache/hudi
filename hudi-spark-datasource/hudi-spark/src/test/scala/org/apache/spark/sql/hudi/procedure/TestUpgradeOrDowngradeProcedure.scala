@@ -113,7 +113,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       // delete checksum from hoodie.properties
       val props = ConfigUtils.fetchConfigs(
         storage,
-        metaPathDir.toString,
+        metaPathDir,
         HoodieTableConfig.HOODIE_PROPERTIES_FILE,
         HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP,
         1,
