@@ -35,13 +35,13 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompac
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
-import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.CachingIterator
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
@@ -49,7 +49,6 @@ import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -343,7 +342,7 @@ object LogFileIterator extends SparkAdapterSupport {
               hadoopConf: Configuration,
               internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): mutable.Map[String, HoodieRecord[_]] = {
     val tablePath = tableState.tablePath
-    val storage = HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(hadoopConf))
+    val storage = getIOFactory(HadoopFSUtils.getStorageConf(hadoopConf)).getStorage(tablePath)
 
     if (HoodieTableMetadata.isMetadataTable(tablePath)) {
       val metadataConfig = HoodieMetadataConfig.newBuilder()

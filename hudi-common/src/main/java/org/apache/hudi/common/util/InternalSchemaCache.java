@@ -31,7 +31,6 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -48,6 +47,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * An internal cache implementation for managing different version of schemas.
@@ -186,7 +187,7 @@ public class InternalSchemaCache {
     List<String> validateCommitList =
         commitSet.stream().map(HoodieInstant::extractTimestamp).collect(Collectors.toList());
 
-    HoodieStorage storage = HoodieStorageUtils.getStorage(tablePath, storageConf);
+    HoodieStorage storage = getIOFactory(storageConf).getStorage(tablePath);
     StoragePath hoodieMetaPath = new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
     //step1:
     StoragePath candidateCommitFile = commitSet.stream()

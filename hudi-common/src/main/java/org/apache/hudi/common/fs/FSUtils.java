@@ -36,7 +36,6 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
@@ -66,6 +65,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Utility functions related to accessing the file storage.
@@ -631,7 +632,7 @@ public class FSUtils {
   public static boolean deleteSubPath(String subPathStr, StorageConfiguration<?> conf, boolean recursive) {
     try {
       StoragePath subPath = new StoragePath(subPathStr);
-      HoodieStorage storage = HoodieStorageUtils.getStorage(subPath, conf);
+      HoodieStorage storage = getIOFactory(conf).getStorage(subPath);
       if (recursive) {
         return storage.deleteDirectory(subPath);
       }

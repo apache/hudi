@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
@@ -52,6 +51,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_PAGE_SIZE;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * HoodieParquetDataBlock contains a list of records serialized using Parquet.
@@ -145,8 +145,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
     Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
-    ClosableIterator<HoodieRecord<T>> iterator = HoodieIOFactory.getIOFactory(inlineConf).getReaderFactory(type)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineConf, inlineLogFilePath, PARQUET, Option.empty())
+    ClosableIterator<HoodieRecord<T>> iterator = getIOFactory(inlineConf).getReaderFactory(type)
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineLogFilePath, PARQUET, Option.empty())
         .getRecordIterator(writerSchema, readerSchema);
     return iterator;
   }

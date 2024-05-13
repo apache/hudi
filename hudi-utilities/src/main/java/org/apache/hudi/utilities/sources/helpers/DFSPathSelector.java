@@ -27,7 +27,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
@@ -48,6 +47,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 public class DFSPathSelector implements Serializable {
 
@@ -73,8 +73,8 @@ public class DFSPathSelector implements Serializable {
     checkRequiredConfigProperties(
         props, Collections.singletonList(DFSPathSelectorConfig.ROOT_INPUT_PATH));
     this.props = props;
-    this.storage = HoodieStorageUtils.getStorage(
-        getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH), HadoopFSUtils.getStorageConf(hadoopConf));
+    this.storage = getIOFactory(HadoopFSUtils.getStorageConf(hadoopConf)).getStorage(
+        getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH));
   }
 
   /**

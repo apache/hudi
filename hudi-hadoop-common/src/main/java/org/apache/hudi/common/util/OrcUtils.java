@@ -32,7 +32,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hadoop.OrcReaderIterator;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -65,6 +64,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Utility functions for ORC files.
@@ -120,7 +120,7 @@ public class OrcUtils extends BaseFileUtils {
   @Override
   public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(StorageConfiguration<?> configuration, StoragePath filePath) {
     try {
-      if (!HoodieStorageUtils.getStorage(filePath, configuration).exists(filePath)) {
+      if (!getIOFactory(configuration).getStorage(filePath).exists(filePath)) {
         return Collections.emptyList();
       }
     } catch (IOException e) {

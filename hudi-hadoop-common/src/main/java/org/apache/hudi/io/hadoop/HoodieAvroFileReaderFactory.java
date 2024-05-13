@@ -38,26 +38,29 @@ import java.io.IOException;
 public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
   public static final String HBASE_AVRO_HFILE_READER = "org.apache.hudi.io.hadoop.HoodieHBaseAvroHFileReader";
 
+  public HoodieAvroFileReaderFactory(StorageConfiguration<?> storageConf) {
+    super(storageConf);
+  }
+
   @Override
-  protected HoodieFileReader newParquetFileReader(StorageConfiguration<?> conf, StoragePath path) {
-    return new HoodieAvroParquetReader(conf, path);
+  protected HoodieFileReader newParquetFileReader(StoragePath path) {
+    return new HoodieAvroParquetReader(storageConf, path);
   }
 
   @Override
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
-                                                StorageConfiguration<?> conf,
                                                 StoragePath path,
                                                 Option<Schema> schemaOption) throws IOException {
     if (isUseNativeHFileReaderEnabled(hoodieConfig)) {
-      return new HoodieNativeAvroHFileReader(conf, path, schemaOption);
+      return new HoodieNativeAvroHFileReader(storageConf, path, schemaOption);
     }
     try {
       if (schemaOption.isPresent()) {
         return (HoodieFileReader) ReflectionUtils.loadClass(HBASE_AVRO_HFILE_READER,
-            new Class<?>[] {StorageConfiguration.class, StoragePath.class, Option.class}, conf, path, schemaOption);
+            new Class<?>[] {StorageConfiguration.class, StoragePath.class, Option.class}, storageConf, path, schemaOption);
       }
       return (HoodieFileReader) ReflectionUtils.loadClass(HBASE_AVRO_HFILE_READER,
-          new Class<?>[] {StorageConfiguration.class, StoragePath.class}, conf, path);
+          new Class<?>[] {StorageConfiguration.class, StoragePath.class}, storageConf, path);
     } catch (HoodieException e) {
       throw new IOException("Cannot instantiate HoodieHBaseAvroHFileReader", e);
     }
@@ -65,27 +68,26 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
 
   @Override
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
-                                                StorageConfiguration<?> conf,
                                                 StoragePath path,
                                                 HoodieStorage storage,
                                                 byte[] content,
                                                 Option<Schema> schemaOption)
       throws IOException {
     if (isUseNativeHFileReaderEnabled(hoodieConfig)) {
-      return new HoodieNativeAvroHFileReader(conf, content, schemaOption);
+      return new HoodieNativeAvroHFileReader(storageConf, content, schemaOption);
     }
     try {
       return (HoodieFileReader) ReflectionUtils.loadClass(HBASE_AVRO_HFILE_READER,
           new Class<?>[] {StorageConfiguration.class, StoragePath.class, HoodieStorage.class, byte[].class, Option.class},
-          conf, path, storage, content, schemaOption);
+          storageConf, path, storage, content, schemaOption);
     } catch (HoodieException e) {
       throw new IOException("Cannot instantiate HoodieHBaseAvroHFileReader", e);
     }
   }
 
   @Override
-  protected HoodieFileReader newOrcFileReader(StorageConfiguration<?> conf, StoragePath path) {
-    return new HoodieAvroOrcReader(conf, path);
+  protected HoodieFileReader newOrcFileReader(StoragePath path) {
+    return new HoodieAvroOrcReader(storageConf, path);
   }
 
   @Override

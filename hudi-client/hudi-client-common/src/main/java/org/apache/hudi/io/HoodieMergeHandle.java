@@ -46,7 +46,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -68,6 +67,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Set;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 @SuppressWarnings("Duplicates")
 /**
@@ -470,9 +471,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
 
     long oldNumWrites = 0;
-    try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(storage.getConf())
+    try (HoodieFileReader reader = getIOFactory(hoodieTable.getStorageConf())
         .getReaderFactory(this.recordMerger.getRecordType())
-        .getFileReader(config, hoodieTable.getStorageConf(), oldFilePath)) {
+        .getFileReader(config, oldFilePath)) {
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);

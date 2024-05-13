@@ -45,7 +45,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
 import org.apache.hudi.metrics.HoodieMetrics;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -61,6 +60,7 @@ import java.util.List;
 import java.util.SortedMap;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -78,7 +78,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
     // Create a temp folder as the base path
     initPath();
-    storage = HoodieStorageUtils.getStorage(basePath, storageConf);
+    storage = getIOFactory(storageConf).getStorage(basePath);
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
     initTestDataGenerator();
   }

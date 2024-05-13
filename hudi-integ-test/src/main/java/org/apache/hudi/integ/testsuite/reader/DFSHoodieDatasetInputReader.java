@@ -278,7 +278,6 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
           .getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(
               DEFAULT_HUDI_CONFIG_FOR_READER,
-              metaClient.getStorageConf(),
               fileSlice.getBaseFile().get().getStoragePath()));
       return new CloseableMappingIterator<>(reader.getRecordIterator(schema), HoodieRecord::getData);
     } else {

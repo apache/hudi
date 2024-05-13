@@ -21,7 +21,6 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
@@ -35,6 +34,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
@@ -47,7 +47,7 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
     this.jsc = new JavaSparkContext(
         HoodieClientTestUtils.getSparkConfForTest(TestDirectWriteMarkers.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
-    this.storage = HoodieStorageUtils.getStorage(metaClient.getBasePathV2(), metaClient.getStorageConf());
+    this.storage = getIOFactory(metaClient.getStorageConf()).getStorage(metaClient.getBasePathV2());
     this.markerFolderPath = new StoragePath(Paths.get(metaClient.getMarkerFolderPath("000")).toUri());
     this.writeMarkers = new DirectWriteMarkers(
         storage, metaClient.getBasePathV2().toString(), markerFolderPath.toString(), "000");

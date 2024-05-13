@@ -45,7 +45,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -67,6 +66,7 @@ import java.util.stream.Collectors;
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDeleteRecord;
 
 /**
@@ -183,9 +183,9 @@ public class HoodieIndexUtils {
                                                             StorageConfiguration<?> configuration) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
     List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
-    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(configuration)
+    try (HoodieFileReader fileReader = getIOFactory(configuration)
         .getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, configuration, filePath)) {
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();

@@ -28,12 +28,12 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
-
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.specific.SpecificData
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
+import org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -116,7 +116,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
   private def copyArchivedInstants(basePath: String, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
     import scala.collection.JavaConverters._
     var copyCount = 0
-    val storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
+    val storage = getIOFactory(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration())).getStorage(basePath)
     for (fs <- statuses.asScala) {
       // read the archived file
       val reader = HoodieLogFormat.newReader(
@@ -181,7 +181,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
     var copyCount = 0
     if (!instants.isEmpty) {
       val timeline = metaClient.getActiveTimeline
-      val storage = HoodieStorageUtils.getStorage(metaClient.getBasePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
+      val storage = getIOFactory(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration())).getStorage(metaClient.getBasePathV2)
       for (instant <- instants.asScala) {
         val localPath = localFolder + StoragePath.SEPARATOR + instant.getFileName
         val data: Array[Byte] = instant.getAction match {

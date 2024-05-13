@@ -32,7 +32,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
@@ -393,7 +392,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     Files.createFile(partitionPath.resolve(log3));
 
     assertEquals(3, (int) FSUtils.getLatestLogVersion(
-            HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(new Configuration())),
+            HoodieTestUtils.getStorageWithDefaults(new StoragePath(basePath)),
             new StoragePath(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime).get()
         .getLeft());
   }

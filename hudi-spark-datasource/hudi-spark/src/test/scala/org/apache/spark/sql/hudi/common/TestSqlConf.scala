@@ -80,7 +80,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       // if Hudi DML can load these configs correctly
       assertResult(true)(Files.exists(Paths.get(s"$tablePath/$partitionVal")))
       assertResult(HoodieTableType.MERGE_ON_READ)(new HoodieTableConfig(
-        HoodieStorageUtils.getStorage(tablePath, HoodieTestUtils.getDefaultStorageConf),
+        HoodieTestUtils.getStorage(tablePath),
         new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME),
         HoodieTableConfig.PAYLOAD_CLASS_NAME.defaultValue,
         HoodieTableConfig.RECORD_MERGER_STRATEGY.defaultValue).getTableType)

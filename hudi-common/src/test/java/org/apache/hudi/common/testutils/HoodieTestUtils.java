@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -56,6 +55,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.storage.HoodieStorageUtils.HADOOP_STORAGE_CONF;
 
 /**
@@ -80,11 +80,15 @@ public class HoodieTestUtils {
   }
 
   public static HoodieStorage getStorage(String path) {
-    return HoodieStorageUtils.getStorage(path, getDefaultStorageConf());
+    return getIOFactory(getDefaultStorageConf()).getStorage(new StoragePath(path));
   }
 
   public static HoodieStorage getStorage(StoragePath path) {
-    return HoodieStorageUtils.getStorage(path, getDefaultStorageConf());
+    return getIOFactory(getDefaultStorageConf()).getStorage(path);
+  }
+
+  public static HoodieStorage getStorageWithDefaults(StoragePath path) {
+    return getIOFactory(getDefaultStorageConfWithDefaults()).getStorage(path);
   }
 
   public static HoodieTableMetaClient init(String basePath) throws IOException {
@@ -223,7 +227,8 @@ public class HoodieTestUtils {
    */
   public static HoodieTableMetaClient createMetaClient(Configuration conf,
                                                        String basePath) {
-    return createMetaClient(HoodieStorageUtils.getStorageConfWithCopy(conf), basePath);
+    return createMetaClient((StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
+        new Class<?>[] {Configuration.class, boolean.class}, conf, true), basePath);
   }
 
   /**

@@ -38,7 +38,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -60,6 +59,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * CLI commands to export various information from a HUDI dataset.
@@ -99,7 +100,7 @@ public class ExportCommand {
 
     // Archived instants are in the commit archive files
     List<StoragePathInfo> pathInfoList =
-        HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
+        getIOFactory(HoodieCLI.conf).getStorage(basePath).globEntries(archivePath);
     List<StoragePathInfo> archivedPathInfoList = pathInfoList.stream()
         .sorted((f1, f2) -> (int) (f1.getModificationTime() - f2.getModificationTime()))
         .collect(Collectors.toList());
@@ -126,8 +127,8 @@ public class ExportCommand {
                                    int limit,
                                    String localFolder) throws Exception {
     int copyCount = 0;
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
-        HoodieCLI.getTableMetaClient().getBasePath(), HoodieCLI.conf);
+    HoodieStorage storage = getIOFactory(HoodieCLI.conf).getStorage(
+        HoodieCLI.getTableMetaClient().getBasePathV2());
 
     for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file

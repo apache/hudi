@@ -34,7 +34,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.repair.RepairUtils;
@@ -54,6 +53,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * A tool with spark-submit to repair Hudi table by finding and deleting dangling
@@ -251,7 +252,7 @@ public class HoodieRepairTool {
     List<Boolean> allResults = context.parallelize(relativeFilePaths)
         .mapPartitions(iterator -> {
           List<Boolean> results = new ArrayList<>();
-          HoodieStorage storage = HoodieStorageUtils.getStorage(destBasePath, conf);
+          HoodieStorage storage = getIOFactory(conf).getStorage(destBasePath);
           iterator.forEachRemaining(filePath -> {
             boolean success = false;
             StoragePath sourcePath = new StoragePath(sourceBasePath, filePath);

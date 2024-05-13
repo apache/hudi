@@ -42,7 +42,6 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -63,6 +62,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Abstract class for implementing common table metadata operations.
@@ -387,7 +388,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
     HoodieStorage storage =
-        HoodieStorageUtils.getStorage(partitionPaths.get(0), getStorageConf());
+        getIOFactory(getStorageConf()).getStorage(partitionPaths.get(0));
 
     Map<String, List<StoragePathInfo>> partitionPathToFilesMap =
         partitionIdRecordPairs.entrySet().stream()

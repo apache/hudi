@@ -24,11 +24,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
@@ -188,8 +185,7 @@ public class TestDFSPropertiesConfiguration {
     ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
     DFSPropertiesConfiguration.refreshGlobalProps();
     try {
-      if (!HoodieStorageUtils.getStorage(
-              DFSPropertiesConfiguration.DEFAULT_PATH, HadoopFSUtils.getStorageConf(new Configuration()))
+      if (!HoodieTestUtils.getStorageWithDefaults(DFSPropertiesConfiguration.DEFAULT_PATH)
           .exists(DFSPropertiesConfiguration.DEFAULT_PATH)) {
         assertEquals(0, DFSPropertiesConfiguration.getGlobalProps().size());
       }

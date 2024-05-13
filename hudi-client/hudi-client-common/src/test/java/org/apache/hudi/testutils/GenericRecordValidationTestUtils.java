@@ -30,7 +30,6 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -59,6 +58,7 @@ import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.HOODIE_CONSUME_COMMIT;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -146,9 +146,9 @@ public class GenericRecordValidationTestUtils {
     List<GenericRecord> valuesAsList = new LinkedList<>();
     for (String path : paths) {
       StorageConfiguration storageConf = HadoopFSUtils.getStorageConf(conf);
-      try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
-          HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-              .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, storageConf, new StoragePath(path), HoodieFileFormat.HFILE)) {
+      try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) getIOFactory(storageConf)
+          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+          .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(path), HoodieFileFormat.HFILE)) {
         valuesAsList.addAll(HoodieAvroHFileReaderImplBase.readAllRecords(reader)
             .stream().map(e -> (GenericRecord) e).collect(Collectors.toList()));
       } catch (IOException e) {

@@ -27,7 +27,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
@@ -42,6 +41,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Timeline Service that runs as part of write client.
@@ -182,7 +183,7 @@ public class EmbeddedTimelineService {
     this.serviceConfig = timelineServiceConfBuilder.build();
 
     server = timelineServiceCreator.create(context, storageConf.unwrapCopyAs(Configuration.class), serviceConfig,
-        HoodieStorageUtils.getStorage(writeConfig.getBasePath(), storageConf.newInstance()), viewManager);
+        getIOFactory(storageConf.newInstance()).getStorage(writeConfig.getBasePath()), viewManager);
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
   }

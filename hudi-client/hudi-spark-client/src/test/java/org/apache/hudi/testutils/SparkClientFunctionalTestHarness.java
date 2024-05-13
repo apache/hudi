@@ -49,7 +49,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -88,6 +87,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.testutils.Assertions.assertFileSizesEqual;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -149,7 +149,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
   public HoodieStorage hoodieStorage() {
     if (storage == null) {
-      storage = HoodieStorageUtils.getStorage(basePath(), storageConf());
+      storage = getIOFactory(storageConf()).getStorage(basePath());
     }
     return storage;
   }

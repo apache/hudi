@@ -29,7 +29,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -46,6 +45,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Factory for {@link WriteProfile}.
@@ -120,7 +121,7 @@ public class WriteProfiles {
       List<HoodieCommitMetadata> metadataList,
       HoodieTableType tableType,
       boolean ignoreMissingFiles) {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath.toString(), HadoopFSUtils.getStorageConf(hadoopConf));
+    HoodieStorage storage = getIOFactory(HadoopFSUtils.getStorageConf(hadoopConf)).getStorage(basePath.toString());
     Map<String, StoragePathInfo> uniqueIdToInfoMap = new HashMap<>();
     // If a file has been touched multiple times in the given commits, the return value should keep the one
     // from the latest commit, so here we traverse in reverse order

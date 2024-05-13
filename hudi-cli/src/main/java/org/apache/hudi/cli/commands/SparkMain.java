@@ -43,7 +43,6 @@ import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
@@ -81,6 +80,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
@@ -385,7 +385,7 @@ public class SparkMain {
                                               String repairedOutputPath, String basePath, boolean dryRun, String dedupeType) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath,
         new SQLContext(jsc),
-        HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration())),
+        getIOFactory(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration())).getStorage(basePath),
         DeDupeType.withName(dedupeType));
     job.fixDuplicates(dryRun);
     return 0;

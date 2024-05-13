@@ -82,9 +82,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -138,6 +136,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
@@ -324,7 +323,7 @@ public class HoodieTableMetadataUtil {
    */
   public static boolean metadataPartitionExists(String basePath, HoodieEngineContext context, String partitionPath) {
     final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(metadataTablePath, context.getStorageConf());
+    HoodieStorage storage = getIOFactory(context.getStorageConf()).getStorage(metadataTablePath);
     try {
       return storage.exists(new StoragePath(metadataTablePath, partitionPath));
     } catch (Exception e) {
@@ -516,9 +515,8 @@ public class HoodieTableMetadataUtil {
       }
 
       final StoragePath writeFilePath = new StoragePath(dataMetaClient.getBasePathV2(), pathWithPartition);
-      try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(dataMetaClient.getStorageConf())
-          .getReaderFactory(HoodieRecordType.AVRO).getFileReader(hoodieConfig,
-              dataMetaClient.getStorageConf(), writeFilePath)) {
+      try (HoodieFileReader fileReader = getIOFactory(dataMetaClient.getStorageConf())
+          .getReaderFactory(HoodieRecordType.AVRO).getFileReader(hoodieConfig, writeFilePath)) {
         try {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
@@ -961,8 +959,8 @@ public class HoodieTableMetadataUtil {
 
   private static ByteBuffer readBloomFilter(StorageConfiguration<?> conf, StoragePath filePath) throws IOException {
     HoodieConfig hoodieConfig = getReaderConfigs(conf);
-    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(conf).getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(hoodieConfig, conf, filePath)) {
+    try (HoodieFileReader fileReader = getIOFactory(conf).getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(hoodieConfig, filePath)) {
       final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
       if (fileBloomFilter == null) {
         return null;
@@ -1476,8 +1474,7 @@ public class HoodieTableMetadataUtil {
   public static String deleteMetadataTable(HoodieTableMetaClient dataMetaClient, HoodieEngineContext context, boolean backup) {
     final StoragePath metadataTablePath =
         HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2());
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
-        metadataTablePath.toString(), context.getStorageConf());
+    HoodieStorage storage = getIOFactory(context.getStorageConf()).getStorage(metadataTablePath);
     dataMetaClient.getTableConfig().clearMetadataPartitions(dataMetaClient);
     try {
       if (!storage.exists(metadataTablePath)) {
@@ -1532,7 +1529,7 @@ public class HoodieTableMetadataUtil {
     }
 
     final StoragePath metadataTablePartitionPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2()), partitionPath);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(metadataTablePartitionPath, context.getStorageConf());
+    HoodieStorage storage = getIOFactory(context.getStorageConf()).getStorage(metadataTablePartitionPath);
     dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, false);
     try {
       if (!storage.exists(metadataTablePartitionPath)) {
@@ -1764,8 +1761,8 @@ public class HoodieTableMetadataUtil {
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
-      HoodieFileReader reader = HoodieIOFactory.getIOFactory(configuration).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-          .getFileReader(config, configuration, dataFilePath);
+      HoodieFileReader reader = getIOFactory(configuration).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+          .getFileReader(config, dataFilePath);
       return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime);
     });
   }
@@ -1825,8 +1822,8 @@ public class HoodieTableMetadataUtil {
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
       HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
-      HoodieFileReader reader = HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-          .getFileReader(hoodieConfig, storageConf, dataFilePath);
+      HoodieFileReader reader = getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+          .getFileReader(hoodieConfig, dataFilePath);
       return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime);
     });
   }

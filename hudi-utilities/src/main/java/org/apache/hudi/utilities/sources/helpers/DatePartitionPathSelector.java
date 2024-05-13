@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -49,6 +48,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_FORMAT;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_PARTITION_DEPTH;
@@ -143,7 +143,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
 
     List<StoragePathInfo> eligibleFiles = context.flatMap(prunedPartitionPaths,
         path -> {
-          HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
+          HoodieStorage storage = getIOFactory(storageConf).getStorage(path);
           return listEligibleFiles(storage, new StoragePath(path), lastCheckpointTime).stream();
         }, partitionsListParallelism);
     // sort them by modification time ascending.

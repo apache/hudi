@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -45,6 +44,7 @@ import java.io.IOException;
 
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 public class HoodieHFileRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
@@ -59,8 +59,8 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
     StoragePath path = convertToStoragePath(fileSplit.getPath());
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
     HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
-    reader = HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-        .getFileReader(hoodieConfig, HadoopFSUtils.getStorageConf(conf), path, HoodieFileFormat.HFILE, Option.empty());
+    reader = getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+        .getFileReader(hoodieConfig, path, HoodieFileFormat.HFILE, Option.empty());
 
     schema = reader.getSchema();
     valueObj = new ArrayWritable(Writable.class, new Writable[schema.getFields().size()]);

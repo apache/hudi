@@ -24,9 +24,9 @@ import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils
-
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory
 import org.apache.parquet.avro.AvroParquetWriter
 import org.apache.parquet.hadoop.ParquetWriter
 import org.apache.spark.api.java.JavaSparkContext
@@ -38,15 +38,14 @@ import java.io.IOException
 import java.util
 import java.util.Objects
 import java.util.concurrent.TimeUnit
-
 import scala.collection.JavaConverters._
 
 class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call hdfs_parquet_import Procedure with insert operation") {
     withTempDir { tmp =>
-      val storage: HoodieStorage = HoodieStorageUtils.getStorage(
-        tmp.getCanonicalPath, HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+      val storage: HoodieStorage = getIOFactory(HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+        .getStorage(tmp.getCanonicalPath)
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + StoragePath.SEPARATOR + tableName
       val sourcePath = new Path(tmp.getCanonicalPath, "source")
@@ -79,8 +78,8 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call hdfs_parquet_import Procedure with upsert operation") {
     withTempDir { tmp =>
-      val storage: HoodieStorage = HoodieStorageUtils.getStorage(
-        tmp.getCanonicalPath, HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+      val storage: HoodieStorage = getIOFactory(HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+        .getStorage(tmp.getCanonicalPath)
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + StoragePath.SEPARATOR + tableName
       val sourcePath = new Path(tmp.getCanonicalPath, "source")

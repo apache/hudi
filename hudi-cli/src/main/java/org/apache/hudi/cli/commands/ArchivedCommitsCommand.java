@@ -40,7 +40,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -58,6 +57,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * CLI command to display archived commits and stats if available.
@@ -110,7 +111,7 @@ public class ArchivedCommitsCommand {
     StoragePath archivePath = folder != null && !folder.isEmpty()
         ? new StoragePath(metaClient.getMetaPath(), folder)
         : new StoragePath(metaClient.getArchivePath(), ".commits_.archive*");
-    HoodieStorage storage = HoodieStorageUtils.getStorage(metaClient.getBasePathV2(), HoodieCLI.conf);
+    HoodieStorage storage = getIOFactory(HoodieCLI.conf).getStorage(metaClient.getBasePathV2());
     List<StoragePathInfo> pathInfoList = storage.globEntries(archivePath);
     List<Comparable[]> allStats = new ArrayList<>();
     for (StoragePathInfo pathInfo : pathInfoList) {
@@ -185,11 +186,11 @@ public class ArchivedCommitsCommand {
     StoragePath archivePath =
         new StoragePath(metaClient.getArchivePath() + "/.commits_.archive*");
     List<StoragePathInfo> pathInfoList =
-        HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
+        getIOFactory(HoodieCLI.conf).getStorage(basePath).globEntries(archivePath);
     List<Comparable[]> allCommits = new ArrayList<>();
     for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file
-      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf),
+      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(getIOFactory(HoodieCLI.conf).getStorage(basePath),
           new HoodieLogFile(pathInfo.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
         List<IndexedRecord> readRecords = new ArrayList<>();
         // read the avro blocks

@@ -45,7 +45,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import com.codahale.metrics.Timer;
@@ -58,6 +57,8 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
@@ -93,7 +94,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
     this.hadoopConf = context.getStorageConf().unwrapAs((Configuration.class));
-    this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), HadoopFSUtils.getStorageConf(hadoopConf));
+    this.storage = getIOFactory(HadoopFSUtils.getStorageConf(hadoopConf)).getStorage(clientConfig.getBasePath());
     this.context = context;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;

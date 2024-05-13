@@ -27,13 +27,13 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -226,7 +226,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   @Test
   public void testReadHFileFormatRecords() throws Exception {
     writeFileWithSimpleSchema();
-    HoodieStorage storage = HoodieStorageUtils.getStorage(getFilePath(), HadoopFSUtils.getStorageConf(new Configuration()));
+    HoodieStorage storage = HoodieTestUtils.getStorageWithDefaults(getFilePath());
     byte[] content = FileIOUtils.readAsByteArray(
         storage.open(getFilePath()), (int) storage.getPathInfo(getFilePath()).getLength());
     // Reading byte array in HFile format, without actual file path

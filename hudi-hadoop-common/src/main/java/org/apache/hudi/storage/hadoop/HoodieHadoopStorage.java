@@ -58,15 +58,6 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
 public class HoodieHadoopStorage extends HoodieStorage {
   private final FileSystem fs;
 
-  public HoodieHadoopStorage(HoodieStorage storage) {
-    FileSystem fs = (FileSystem) storage.getFileSystem();
-    if (fs instanceof HoodieWrapperFileSystem) {
-      this.fs = ((HoodieWrapperFileSystem) fs).getFileSystem();
-    } else {
-      this.fs = fs;
-    }
-  }
-
   public HoodieHadoopStorage(String basePath, Configuration conf) {
     this(HadoopFSUtils.getFs(basePath, conf));
   }
@@ -256,6 +247,15 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public Configuration unwrapConf() {
     return fs.getConf();
+  }
+
+  @Override
+  public HoodieStorage getRawStorage() {
+    if (fs instanceof HoodieWrapperFileSystem) {
+      return new HoodieHadoopStorage(((HoodieWrapperFileSystem) fs).getFileSystem());
+    } else {
+      return this;
+    }
   }
 
   @Override

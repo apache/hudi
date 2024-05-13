@@ -28,7 +28,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.HoodieOrcConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -46,6 +45,7 @@ import java.util.function.Supplier;
 
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.io.storage.HoodieOrcConfig.AVRO_SCHEMA_METADATA_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -78,8 +78,8 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
   @Override
   protected HoodieAvroFileReader createReader(
       StorageConfiguration<?> conf) throws Exception {
-    return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(conf).getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, conf, getFilePath());
+    return (HoodieAvroFileReader) getIOFactory(conf).getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, getFilePath());
   }
 
   @Override

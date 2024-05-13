@@ -69,7 +69,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -104,6 +103,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -192,7 +192,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       throw new IllegalStateException("The base path has not been initialized.");
     }
 
-    storage = HoodieStorageUtils.getStorage(basePath, hadoopConf);
+    storage = getIOFactory(hadoopConf).getStorage(basePath);
     if (storage.getFileSystem() instanceof LocalFileSystem) {
       LocalFileSystem lfs = (LocalFileSystem) storage.getFileSystem();
       // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream

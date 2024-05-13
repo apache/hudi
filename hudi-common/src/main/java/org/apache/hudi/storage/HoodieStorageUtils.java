@@ -22,8 +22,7 @@ package org.apache.hudi.storage;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.util.ReflectionUtils;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 public class HoodieStorageUtils {
   public static final String HUDI_HADOOP_STORAGE = "org.apache.hudi.storage.hadoop.HoodieHadoopStorage";
@@ -31,23 +30,7 @@ public class HoodieStorageUtils {
   public static final String DEFAULT_URI = "file:///";
 
   public static HoodieStorage getStorage(StorageConfiguration<?> conf) {
-    return getStorage(DEFAULT_URI, conf);
-  }
-
-  public static HoodieStorage getStorage(FileSystem fs) {
-    return (HoodieStorage) ReflectionUtils.loadClass(HUDI_HADOOP_STORAGE, new Class<?>[] {FileSystem.class}, fs);
-  }
-
-  public static HoodieStorage getStorage(String basePath, StorageConfiguration<?> conf) {
-    return (HoodieStorage) ReflectionUtils.loadClass(HUDI_HADOOP_STORAGE, new Class<?>[] {String.class, StorageConfiguration.class}, basePath, conf);
-  }
-
-  public static HoodieStorage getStorage(String basePath, Configuration conf) {
-    return (HoodieStorage) ReflectionUtils.loadClass(HUDI_HADOOP_STORAGE, new Class<?>[] {String.class, Configuration.class}, basePath, conf);
-  }
-
-  public static HoodieStorage getStorage(StoragePath path, StorageConfiguration<?> conf) {
-    return (HoodieStorage) ReflectionUtils.loadClass(HUDI_HADOOP_STORAGE, new Class<?>[] {StoragePath.class, StorageConfiguration.class}, path, conf);
+    return getIOFactory(conf).getStorage(DEFAULT_URI);
   }
 
   public static HoodieStorage getStorage(StoragePath path,
@@ -63,19 +46,5 @@ public class HoodieStorageUtils {
             String.class, ConsistencyGuard.class},
         path, conf, enableRetry, maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptions,
         consistencyGuard);
-  }
-
-  public static HoodieStorage getRawStorage(HoodieStorage storage) {
-    return (HoodieStorage) ReflectionUtils.loadClass(HUDI_HADOOP_STORAGE, new Class<?>[] {HoodieStorage.class}, storage);
-  }
-
-  public static StorageConfiguration<?> getStorageConf(Configuration conf) {
-    return (StorageConfiguration<?>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
-        new Class<?>[] {Configuration.class}, conf);
-  }
-
-  public static StorageConfiguration<Configuration> getStorageConfWithCopy(Configuration conf) {
-    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
-        new Class<?>[] {Configuration.class, boolean.class}, conf, true);
   }
 }

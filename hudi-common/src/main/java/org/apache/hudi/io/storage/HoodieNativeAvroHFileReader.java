@@ -38,7 +38,6 @@ import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.hfile.KeyValue;
 import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
@@ -261,7 +260,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     SeekableDataInputStream inputStream;
     long fileSize;
     if (path.isPresent()) {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(path.get(), conf);
+      HoodieStorage storage = HoodieIOFactory.getIOFactory(conf).getStorage(path.get());
       fileSize = storage.getPathInfo(path.get()).getLength();
       inputStream = storage.openSeekable(path.get(), false);
     } else {

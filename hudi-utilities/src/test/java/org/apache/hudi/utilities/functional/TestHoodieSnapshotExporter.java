@@ -31,7 +31,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -61,6 +60,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -82,7 +82,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     // Initialize test data dirs
     sourcePath = Paths.get(basePath(), "source").toString();
     targetPath = Paths.get(basePath(), "target").toString();
-    storage = HoodieStorageUtils.getStorage(basePath(), HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()));
+    storage = getIOFactory(HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())).getStorage(basePath());
 
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)

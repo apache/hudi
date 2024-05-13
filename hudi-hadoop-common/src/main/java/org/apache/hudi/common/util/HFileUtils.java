@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -43,6 +42,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Utility functions for HFile files.
@@ -101,11 +102,10 @@ public class HFileUtils extends BaseFileUtils {
     LOG.info("Reading schema from {}", filePath);
 
     try (HoodieFileReader fileReader =
-             HoodieIOFactory.getIOFactory(configuration)
+             getIOFactory(configuration)
                  .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
                  .getFileReader(
                      ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
-                     configuration,
                      filePath)) {
       return fileReader.getSchema();
     } catch (IOException e) {

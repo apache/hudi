@@ -22,8 +22,8 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
@@ -89,8 +89,8 @@ case class DropHoodieTableCommand(
       logInfo("Clean up " + basePath)
       val targetPath = new StoragePath(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
-      val storage = HoodieStorageUtils.getStorage(basePath,
-        HadoopFSUtils.getStorageConf(sparkSession.sparkContext.hadoopConfiguration))
+      val storage = getIOFactory(HadoopFSUtils
+        .getStorageConf(sparkSession.sparkContext.hadoopConfiguration)).getStorage(basePath)
       FSUtils.deleteDir(engineContext, storage, targetPath, sparkSession.sparkContext.defaultParallelism)
     }
   }

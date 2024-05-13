@@ -43,7 +43,6 @@ import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFac
 import org.apache.hudi.execution.bulkinsert.JavaCustomColumnsSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -63,6 +62,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Clustering strategy for Java engine.
@@ -192,8 +192,8 @@ public abstract class JavaExecutionStrategy<T>
 
         baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
-            : Option.of(HoodieIOFactory.getIOFactory(table.getStorageConf()).getReaderFactory(recordType)
-            .getFileReader(config, table.getStorageConf(), new StoragePath(clusteringOp.getDataFilePath())));
+            : Option.of(getIOFactory(table.getStorageConf()).getReaderFactory(recordType)
+            .getFileReader(config, new StoragePath(clusteringOp.getDataFilePath())));
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
         Iterator<HoodieRecord<T>> fileSliceReader = new HoodieFileSliceReader(baseFileReader, scanner, readerSchema, tableConfig.getPreCombineField(), writeConfig.getRecordMerger(),
             tableConfig.getProps(),
@@ -221,8 +221,8 @@ public abstract class JavaExecutionStrategy<T>
   private List<HoodieRecord<T>> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
     List<HoodieRecord<T>> records = new ArrayList<>();
     clusteringOps.forEach(clusteringOp -> {
-      try (HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(getHoodieTable().getStorageConf()).getReaderFactory(recordType)
-          .getFileReader(getHoodieTable().getConfig(), getHoodieTable().getStorageConf(), new StoragePath(clusteringOp.getDataFilePath()))) {
+      try (HoodieFileReader baseFileReader = getIOFactory(getHoodieTable().getStorageConf()).getReaderFactory(recordType)
+          .getFileReader(getHoodieTable().getConfig(), new StoragePath(clusteringOp.getDataFilePath()))) {
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
         Iterator<HoodieRecord> recordIterator = baseFileReader.getRecordIterator(readerSchema);
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific

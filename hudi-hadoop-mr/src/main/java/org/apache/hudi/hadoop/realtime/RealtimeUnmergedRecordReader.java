@@ -31,7 +31,6 @@ import org.apache.hudi.hadoop.RecordReaderValueIterator;
 import org.apache.hudi.hadoop.SafeParquetRecordReaderWrapper;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.io.ArrayWritable;
@@ -44,6 +43,8 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
     implements RecordReader<NullWritable, ArrayWritable> {
@@ -77,8 +78,8 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
 
     HoodieUnMergedLogRecordScanner.Builder scannerBuilder =
         HoodieUnMergedLogRecordScanner.newBuilder()
-            .withStorage(HoodieStorageUtils.getStorage(
-                split.getPath().toString(), HadoopFSUtils.getStorageConf(this.jobConf)))
+            .withStorage(getIOFactory(HadoopFSUtils.getStorageConf(this.jobConf))
+                .getStorage(split.getPath().toString()))
             .withBasePath(split.getBasePath())
             .withLogFilePaths(split.getDeltaLogPaths())
             .withReaderSchema(getReaderSchema())

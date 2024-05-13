@@ -37,7 +37,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.JavaScalaConverters;
@@ -70,6 +69,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
 /**
@@ -216,7 +216,7 @@ public class HoodieSnapshotExporter {
           .map(f -> Pair.of(partition, f.getPath()))
           .collect(Collectors.toList());
       // also need to copy over partition metadata
-      HoodieStorage storage = HoodieStorageUtils.getStorage(cfg.sourceBasePath, storageConf);
+      HoodieStorage storage = getIOFactory(storageConf).getStorage(cfg.sourceBasePath);
       StoragePath partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(storage,
           FSUtils.constructAbsolutePath(cfg.sourceBasePath, partition)).get();
       if (storage.exists(partitionMetaFile)) {

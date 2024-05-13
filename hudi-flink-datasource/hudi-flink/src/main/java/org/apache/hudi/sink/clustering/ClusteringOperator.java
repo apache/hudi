@@ -44,7 +44,6 @@ import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metrics.FlinkClusteringMetrics;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
@@ -93,6 +92,8 @@ import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Operator to execute the actual clustering task assigned by the clustering plan task.
@@ -274,9 +275,9 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       try {
         Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
-            : Option.of(HoodieIOFactory.getIOFactory(table.getStorageConf())
+            : Option.of(getIOFactory(table.getStorageConf())
             .getReaderFactory(table.getConfig().getRecordMerger().getRecordType())
-            .getFileReader(table.getConfig(), table.getStorageConf(), new StoragePath(clusteringOp.getDataFilePath())));
+            .getFileReader(table.getConfig(), new StoragePath(clusteringOp.getDataFilePath())));
         HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
             .withStorage(table.getMetaClient().getStorage())
             .withBasePath(table.getMetaClient().getBasePath())
@@ -322,10 +323,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     List<Iterator<RowData>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
       Iterable<IndexedRecord> indexedRecords = () -> {
         try {
-          HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getStorageConf())
+          HoodieFileReaderFactory fileReaderFactory = getIOFactory(table.getStorageConf())
               .getReaderFactory(table.getConfig().getRecordMerger().getRecordType());
           HoodieAvroFileReader fileReader = (HoodieAvroFileReader) fileReaderFactory.getFileReader(
-              table.getConfig(), table.getStorageConf(), new StoragePath(clusteringOp.getDataFilePath()));
+              table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()));
 
           return new CloseableMappingIterator<>(fileReader.getRecordIterator(readerSchema), HoodieRecord::getData);
         } catch (IOException e) {

@@ -31,7 +31,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -75,6 +74,8 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+
 /**
  * Utility functions involving with parquet.
  */
@@ -101,8 +102,8 @@ public class ParquetUtils extends BaseFileUtils {
     ParquetMetadata footer;
     try {
       // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader.readFooter(HoodieStorageUtils.getStorage(
-          parquetFileHadoopPath.toString(), conf).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath);
+      footer = ParquetFileReader.readFooter(getIOFactory(conf).getStorage(
+          parquetFileHadoopPath.toString()).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFileHadoopPath, e);
     }
@@ -127,7 +128,7 @@ public class ParquetUtils extends BaseFileUtils {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
     Configuration conf = configuration.unwrapCopyAs(Configuration.class);
-    conf.addResource(HoodieStorageUtils.getStorage(filePath.toString(), configuration).getConf().unwrapAs(Configuration.class));
+    conf.addResource(getIOFactory(configuration).getStorage(filePath.toString()).getConf().unwrapAs(Configuration.class));
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
     Set<Pair<String, Long>> rowKeys = new HashSet<>();
@@ -181,7 +182,7 @@ public class ParquetUtils extends BaseFileUtils {
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       Configuration conf = configuration.unwrapCopyAs(Configuration.class);
-      conf.addResource(HoodieStorageUtils.getStorage(filePath.toString(), configuration).getConf().unwrapAs(Configuration.class));
+      conf.addResource(getIOFactory(configuration).getStorage(filePath.toString()).getConf().unwrapAs(Configuration.class));
       Schema readSchema = keyGeneratorOpt
           .map(keyGenerator -> {
             List<String> fields = new ArrayList<>();

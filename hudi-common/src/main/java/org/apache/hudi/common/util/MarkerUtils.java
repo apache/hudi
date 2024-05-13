@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -54,6 +53,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.isHeartbeatExpired;
 import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * A utility class for marker related operations.
@@ -232,7 +232,7 @@ public class MarkerUtils {
     Set<String> markers = new HashSet<>();
     try {
       LOG.debug("Read marker file: " + markersFilePath);
-      HoodieStorage storage = HoodieStorageUtils.getStorage(markersFilePath, conf);
+      HoodieStorage storage = getIOFactory(conf).getStorage(markersFilePath);
       inputStream = storage.open(markersFilePath);
       markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(inputStream));
     } catch (IOException e) {

@@ -38,7 +38,6 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +58,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -92,7 +92,7 @@ public class TestDiffCommand extends CLIFunctionalTestHarness {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     String fileId1 = UUID.randomUUID().toString();
     String fileId2 = UUID.randomUUID().toString();
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath(), storageConf());
+    HoodieStorage storage = getIOFactory(storageConf()).getStorage(basePath());
     HoodieTestDataGenerator.writePartitionMetadataDeprecated(storage,
         HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, tablePath);
 

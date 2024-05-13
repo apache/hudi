@@ -45,7 +45,6 @@ import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -83,6 +82,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 public class HoodieInputFormatUtils {
 
@@ -359,8 +359,8 @@ public class HoodieInputFormatUtils {
    */
   public static HoodieTableMetaClient getTableMetaClientForBasePathUnchecked(Configuration conf, Path partitionPath) throws IOException {
     Path baseDir = partitionPath;
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
-        partitionPath.toString(), HadoopFSUtils.getStorageConf(conf));
+    HoodieStorage storage = getIOFactory(HadoopFSUtils.getStorageConf(conf))
+        .getStorage(partitionPath.toString());
     StoragePath partitionStoragePath = convertToStoragePath(partitionPath);
     if (HoodiePartitionMetadata.hasPartitionMetadata(storage,  partitionStoragePath)) {
       HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, partitionStoragePath);
@@ -498,7 +498,7 @@ public class HoodieInputFormatUtils {
     StoragePath dataPath = dataFile.getPathInfo().getPath();
     try {
       if (dataFile.getFileSize() == 0) {
-        HoodieStorage storage = HoodieStorageUtils.getStorage(dataPath, HadoopFSUtils.getStorageConf(conf));
+        HoodieStorage storage = getIOFactory(HadoopFSUtils.getStorageConf(conf)).getStorage(dataPath);
         LOG.info("Refreshing file status " + dataFile.getPath());
         return new HoodieBaseFile(storage.getPathInfo(dataPath),
             dataFile.getBootstrapBaseFile().orElse(null));

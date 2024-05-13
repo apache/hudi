@@ -30,7 +30,6 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -48,6 +47,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SCHEMA_COMMIT_ACTION;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * {@link AbstractInternalSchemaStorageManager} implementation based on the schema files.
@@ -100,7 +100,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   private void cleanResidualFiles() {
     List<String> validateCommits = getValidInstants();
     try {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(baseSchemaPath, conf);
+      HoodieStorage storage = getIOFactory(conf).getStorage(baseSchemaPath);
       if (storage.exists(baseSchemaPath)) {
         List<String> candidateSchemaFiles = storage.listDirectEntries(baseSchemaPath).stream()
             .filter(f -> f.isFile())
@@ -124,7 +124,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   public void cleanOldFiles(List<String> validateCommits) {
     try {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(baseSchemaPath, conf);
+      HoodieStorage storage = getIOFactory(conf).getStorage(baseSchemaPath);
       if (storage.exists(baseSchemaPath)) {
         List<String> candidateSchemaFiles = storage.listDirectEntries(baseSchemaPath).stream()
             .filter(f -> f.isFile())
@@ -155,7 +155,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public String getHistorySchemaStrByGivenValidCommits(List<String> validCommits) {
     List<String> commitList = validCommits == null || validCommits.isEmpty() ? getValidInstants() : validCommits;
     try {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(baseSchemaPath, conf);
+      HoodieStorage storage = getIOFactory(conf).getStorage(baseSchemaPath);
       if (storage.exists(baseSchemaPath)) {
         List<String> validaSchemaFiles = storage.listDirectEntries(baseSchemaPath).stream()
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))

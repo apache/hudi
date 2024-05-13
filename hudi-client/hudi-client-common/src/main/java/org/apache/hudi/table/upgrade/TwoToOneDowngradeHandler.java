@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
@@ -46,6 +45,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+
 /**
  * Downgrade handler to assist in downgrading hoodie table from version 2 to 1.
  */
@@ -92,7 +93,7 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
                                       HoodieEngineContext context,
                                       int parallelism) throws IOException {
     String markerDir = table.getMetaClient().getMarkerFolderPath(commitInstantTime);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(markerDir, context.getStorageConf().newInstance());
+    HoodieStorage storage = getIOFactory(context.getStorageConf().newInstance()).getStorage(markerDir);
     Option<MarkerType> markerTypeOption = MarkerUtils.readMarkerType(storage, markerDir);
     if (markerTypeOption.isPresent()) {
       switch (markerTypeOption.get()) {

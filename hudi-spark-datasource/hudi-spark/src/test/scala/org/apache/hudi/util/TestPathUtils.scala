@@ -52,7 +52,7 @@ class TestPathUtils {
     folders.foreach(folder => new File(folder.toUri).mkdir())
     files.foreach(file => new File(file.toUri).createNewFile())
 
-    val storage = HoodieStorageUtils.getStorage(tempDir.getAbsolutePath, HoodieTestUtils.getDefaultStorageConf)
+    val storage = HoodieTestUtils.getStorage(tempDir.getAbsolutePath)
     var paths = Seq(tempDir.getAbsolutePath + "/*")
     var globbedPaths = PathUtils.checkAndGlobPathIfNecessary(paths, storage)
     assertEquals(folders.filterNot(entry => entry.toString.contains(".hoodie"))

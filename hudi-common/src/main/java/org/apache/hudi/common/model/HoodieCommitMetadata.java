@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -48,6 +47,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -189,7 +189,7 @@ public class HoodieCommitMetadata implements Serializable {
             ? FSUtils.constructAbsolutePath(basePath, relativeFilePath) : null;
         if (fullPath != null) {
           long blockSize =
-              HoodieStorageUtils.getStorage(fullPath.toString(), storageConf).getDefaultBlockSize(fullPath);
+              getIOFactory(storageConf).getStorage(fullPath.toString()).getDefaultBlockSize(fullPath);
           StoragePathInfo pathInfo = new StoragePathInfo(
               fullPath, stat.getFileSizeInBytes(), false, (short) 0, blockSize, 0);
           fullPathToInfoMap.put(fullPath.getName(), pathInfo);

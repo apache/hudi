@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -45,6 +44,7 @@ import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 /**
@@ -54,7 +54,7 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
   @Override
   public HoodieStorage getStorage(String path, StorageConfiguration<?> conf) {
-    return HoodieStorageUtils.getStorage(path, conf);
+    return getIOFactory(conf).getStorage(path);
   }
 
   @Override

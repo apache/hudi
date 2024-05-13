@@ -41,7 +41,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -60,6 +59,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * A timeline writer which organizes the files as an LSM tree.
@@ -269,9 +269,9 @@ public class LSMTimelineWriter {
     try (HoodieFileWriter writer = openWriter(new StoragePath(metaClient.getArchivePath(), compactedFileName))) {
       for (String fileName : candidateFiles) {
         // Read the input source file
-        try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieIOFactory.getIOFactory(metaClient.getStorageConf())
+        try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) getIOFactory(metaClient.getStorageConf())
             .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-            .getFileReader(config, metaClient.getStorageConf(), new StoragePath(metaClient.getArchivePath(), fileName))) {
+            .getFileReader(config, new StoragePath(metaClient.getArchivePath(), fileName))) {
           // Read the meta entry
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), HoodieLSMTimelineInstant.getClassSchema())) {
             while (iterator.hasNext()) {

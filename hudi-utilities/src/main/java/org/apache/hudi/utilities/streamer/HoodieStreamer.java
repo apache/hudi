@@ -58,7 +58,6 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
@@ -95,6 +94,7 @@ import java.util.concurrent.Executors;
 
 import static java.lang.String.format;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.utilities.UtilHelpers.buildProperties;
 import static org.apache.hudi.utilities.UtilHelpers.readConfig;
 
@@ -133,13 +133,13 @@ public class HoodieStreamer implements Serializable {
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc,
-        HoodieStorageUtils.getStorage(cfg.targetBasePath, HadoopFSUtils.getStorageConf(jssc.hadoopConfiguration())),
+        getIOFactory(HadoopFSUtils.getStorageConf(jssc.hadoopConfiguration())).getStorage(cfg.targetBasePath),
         jssc.hadoopConfiguration(), Option.empty());
   }
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, Option<TypedProperties> props) throws IOException {
     this(cfg, jssc,
-        HoodieStorageUtils.getStorage(cfg.targetBasePath, HadoopFSUtils.getStorageConf(jssc.hadoopConfiguration())),
+        getIOFactory(HadoopFSUtils.getStorageConf(jssc.hadoopConfiguration())).getStorage(cfg.targetBasePath),
         jssc.hadoopConfiguration(), props);
   }
 

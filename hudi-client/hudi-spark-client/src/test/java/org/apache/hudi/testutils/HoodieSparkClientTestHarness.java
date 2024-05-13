@@ -59,7 +59,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -107,6 +106,7 @@ import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
@@ -383,7 +383,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       throw new IllegalStateException("The base path has not been initialized.");
     }
 
-    storage = HoodieStorageUtils.getStorage(basePath, configuration);
+    storage = getIOFactory(configuration).getStorage(basePath);
     FileSystem fs = (FileSystem) storage.getFileSystem();
     if (fs instanceof LocalFileSystem) {
       // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream

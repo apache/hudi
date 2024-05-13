@@ -30,12 +30,13 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
-import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BufferedFSInputStream;
@@ -476,7 +477,7 @@ public class HadoopFSUtils {
       List<String> subPaths) {
     Map<String, T> result = new HashMap<>();
     if (subPaths.size() > 0) {
-      StorageConfiguration<Configuration> conf = HoodieStorageUtils.getStorageConfWithCopy(fs.getConf());
+      StorageConfiguration<Configuration> conf =  new HadoopStorageConfiguration(fs.getConf(), true);
       int actualParallelism = Math.min(subPaths.size(), parallelism);
 
       hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),
@@ -563,5 +564,9 @@ public class HadoopFSUtils {
           }
         },
         paths);
+  }
+
+  public static HoodieStorage getStorage(FileSystem fs) {
+    return new HoodieHadoopStorage(fs);
   }
 }

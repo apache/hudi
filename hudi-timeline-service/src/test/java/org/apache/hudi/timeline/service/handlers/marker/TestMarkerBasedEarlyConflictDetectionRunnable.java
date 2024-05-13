@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
@@ -48,7 +47,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -86,7 +84,7 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
   public void testMarkerConflictDetectionRunnable() throws IOException, InterruptedException {
 
     AtomicBoolean hasConflict = new AtomicBoolean(false);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, getDefaultStorageConf());
+    HoodieStorage storage = HoodieTestUtils.getStorage(basePath);
     MarkerHandler markerHandler = mock(MarkerHandler.class);
     String rootBaseMarkerDir = basePath + "/.hoodie/.temp";
     String partition = "2016";

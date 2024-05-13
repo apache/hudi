@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -58,6 +57,7 @@ import java.util.stream.Stream;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
 /**
@@ -117,7 +117,7 @@ public class HoodieSnapshotCopier implements Serializable {
 
       List<Tuple2<String, String>> filesToCopy = context.flatMap(partitions, partition -> {
         // Only take latest version files <= latestCommit.
-        HoodieStorage storage1 = HoodieStorageUtils.getStorage(baseDir, storageConf);
+        HoodieStorage storage1 = getIOFactory(storageConf).getStorage(baseDir);
         List<Tuple2<String, String>> filePaths = new ArrayList<>();
         Stream<HoodieBaseFile> dataFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
         dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));

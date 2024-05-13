@@ -39,7 +39,6 @@ import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -72,6 +71,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 
 /**
@@ -498,7 +498,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public List<StoragePathInfo> getFileList(StorageConfiguration<?> storageConf, StoragePath partitionPath)
       throws IOException {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(partitionPath, storageConf);
+    HoodieStorage storage = getIOFactory(storageConf).getStorage(partitionPath);
     return getFileList(storage, partitionPath);
   }
 

@@ -79,6 +79,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -385,7 +386,7 @@ public class HoodieTableMetaClient implements Serializable {
     if (storage == null) {
       ConsistencyGuard consistencyGuard = consistencyGuardConfig.isConsistencyCheckEnabled()
           ? new FailSafeConsistencyGuard(
-          HoodieStorageUtils.getStorage(metaPath, getStorageConf()),
+          getIOFactory(getStorageConf()).getStorage(metaPath),
           consistencyGuardConfig)
           : new NoOpConsistencyGuard();
 
@@ -407,7 +408,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public HoodieStorage getRawHoodieStorage() {
-    return HoodieStorageUtils.getRawStorage(getStorage());
+    return getStorage().getRawStorage();
   }
 
   public StorageConfiguration<?> getStorageConf() {
@@ -582,7 +583,7 @@ public class HoodieTableMetaClient implements Serializable {
                                           Properties props) throws IOException {
     LOG.info("Initializing " + basePath + " as hoodie table " + basePath);
     StoragePath basePathDir = new StoragePath(basePath);
-    final HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, storageConf);
+    final HoodieStorage storage = getIOFactory(storageConf).getStorage(basePath);
     if (!storage.exists(basePathDir)) {
       storage.createDirectory(basePathDir);
     }

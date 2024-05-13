@@ -25,7 +25,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
@@ -45,6 +44,8 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * A simplified versions of Apache commons - PropertiesConfiguration, that supports limited field types and hierarchical
@@ -147,10 +148,8 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
 
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
-        filePath,
-        HadoopFSUtils.getStorageConf(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new))
-    );
+    HoodieStorage storage = getIOFactory(HadoopFSUtils.getStorageConf(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
+        )).getStorage(filePath);
 
     try {
       if (filePath.equals(DEFAULT_PATH) && !storage.exists(filePath)) {
@@ -185,8 +184,8 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
         String[] split = splitProperty(line);
         if (line.startsWith("include=") || line.startsWith("include =")) {
           StoragePath providedPath = new StoragePath(split[1]);
-          HoodieStorage providedStorage = HoodieStorageUtils.getStorage(
-              split[1], HadoopFSUtils.getStorageConf(hadoopConfig));
+          HoodieStorage providedStorage = getIOFactory(HadoopFSUtils.getStorageConf(hadoopConfig))
+              .getStorage(split[1]);
           // In the case that only filename is provided, assume it's in the same directory.
           if ((!providedPath.isAbsolute() || StringUtils.isNullOrEmpty(providedStorage.getScheme()))
               && cfgFilePath != null) {

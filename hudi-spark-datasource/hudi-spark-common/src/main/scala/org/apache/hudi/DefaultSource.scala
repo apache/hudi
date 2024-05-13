@@ -31,10 +31,10 @@ import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.PathUtils
-
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
@@ -102,8 +102,8 @@ class DefaultSource extends RelationProvider
     val readPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
     val allPaths = path.map(p => Seq(p)).getOrElse(Seq()) ++ readPaths
 
-    val storage = HoodieStorageUtils.getStorage(
-      allPaths.head, HadoopFSUtils.getStorageConf(sqlContext.sparkContext.hadoopConfiguration))
+    val storage = getIOFactory(HadoopFSUtils.getStorageConf(sqlContext.sparkContext.hadoopConfiguration))
+      .getStorage(allPaths.head)
 
     val globPaths = if (path.exists(_.contains("*")) || readPaths.nonEmpty) {
       PathUtils.checkAndGlobPathIfNecessary(allPaths, storage)

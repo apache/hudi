@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
@@ -57,6 +56,7 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_
 import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getBaseFileReader;
 import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes;
 import static org.apache.hudi.internal.schema.InternalSchema.getEmptyInternalSchema;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * An implementation of {@link AbstractRealtimeRecordReader} that reads from base parquet files and log files,
@@ -179,8 +179,8 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
 
   private HoodieMergedLogRecordScanner getMergedLogRecordScanner() {
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(HoodieStorageUtils.getStorage(
-            split.getPath().toString(), HadoopFSUtils.getStorageConf(jobConf)))
+        .withStorage(getIOFactory(HadoopFSUtils.getStorageConf(jobConf)).getStorage(
+            split.getPath().toString()))
         .withBasePath(tableBasePath)
         .withLogFilePaths(logFilePaths.stream().map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
         .withReaderSchema(readerSchema)

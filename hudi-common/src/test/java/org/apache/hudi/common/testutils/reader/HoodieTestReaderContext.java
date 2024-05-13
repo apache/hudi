@@ -35,9 +35,7 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -55,6 +53,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> {
   private Option<HoodieRecordMerger> customMerger;
@@ -69,7 +68,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public HoodieStorage getStorage(String path, StorageConfiguration<?> conf) {
-    return HoodieStorageUtils.getStorage(path, conf);
+    return getIOFactory(conf).getStorage(path);
   }
 
   @Override
@@ -81,9 +80,9 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema requiredSchema,
       StorageConfiguration<?> conf
   ) throws IOException {
-    HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(conf)
+    HoodieAvroFileReader reader = (HoodieAvroFileReader) getIOFactory(conf)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            conf, filePath, HoodieFileFormat.PARQUET, Option.empty());
+            filePath, HoodieFileFormat.PARQUET, Option.empty());
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }
 

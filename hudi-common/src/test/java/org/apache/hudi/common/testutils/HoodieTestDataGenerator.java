@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -81,6 +80,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
@@ -572,7 +572,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
     OutputStream os = null;
     try {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
+      HoodieStorage storage = getIOFactory(configuration).getStorage(basePath);
       os = storage.create(new StoragePath(commitFile.toUri()), true);
       // Write empty commit metadata
       os.write(content);
@@ -622,7 +622,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private static void createEmptyFile(String basePath, Path filePath, StorageConfiguration<?> configuration) throws IOException {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
+    HoodieStorage storage = getIOFactory(configuration).getStorage(basePath);
     OutputStream os = storage.create(new StoragePath(filePath.toUri()), true);
     os.close();
   }
@@ -638,7 +638,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
                                                        StorageConfiguration<?> configuration) throws IOException {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
+    HoodieStorage storage = getIOFactory(configuration).getStorage(basePath);
     try (OutputStream os = storage.create(new StoragePath(commitFile.toUri()), true)) {
       HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
       // Write empty commit metadata
@@ -650,7 +650,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeSavePointFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
+    HoodieStorage storage = getIOFactory(configuration).getStorage(basePath);
     try (OutputStream os = storage.create(new StoragePath(commitFile.toUri()), true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
       // Write empty commit metadata

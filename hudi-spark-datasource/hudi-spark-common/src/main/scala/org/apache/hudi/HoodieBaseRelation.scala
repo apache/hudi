@@ -854,8 +854,8 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       val hoodieConfig = new HoodieConfig()
       hoodieConfig.setValue(USE_NATIVE_HFILE_READER,
         options.getOrElse(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue().toString))
-      val reader = (new HoodieSparkIOFactory).getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(hoodieConfig, storageConf, filePath, HFILE)
+      val reader = (new HoodieSparkIOFactory(storageConf)).getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(hoodieConfig, filePath, HFILE)
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema
       // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable

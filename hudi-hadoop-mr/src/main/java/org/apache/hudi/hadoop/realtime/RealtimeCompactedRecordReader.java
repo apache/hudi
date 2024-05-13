@@ -34,7 +34,6 @@ import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -51,6 +50,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     implements RecordReader<NullWritable, ArrayWritable> {
@@ -86,8 +87,8 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(HoodieStorageUtils.getStorage(
-            split.getPath().toString(), HadoopFSUtils.getStorageConf(jobConf)))
+        .withStorage(getIOFactory(HadoopFSUtils.getStorageConf(jobConf))
+            .getStorage(split.getPath().toString()))
         .withBasePath(split.getBasePath())
         .withLogFilePaths(split.getDeltaLogPaths())
         .withReaderSchema(getLogScannerReaderSchema())

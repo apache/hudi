@@ -37,7 +37,6 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -483,7 +482,7 @@ public class TestWriteBase {
     }
 
     private void checkWrittenDataMor(File baseFile, Map<String, String> expected, int partitions) throws Exception {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, HoodieTestUtils.getDefaultStorageConf());
+      HoodieStorage storage = HoodieTestUtils.getStorage(new StoragePath(basePath));
       TestData.checkWrittenDataMOR(storage, baseFile, expected, partitions);
     }
 

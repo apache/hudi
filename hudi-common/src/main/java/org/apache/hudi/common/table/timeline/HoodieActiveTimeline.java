@@ -29,8 +29,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;
@@ -49,6 +49,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * Represents the Active Timeline for the Hoodie table. Instants for the last 12 hours (configurable) is in the
@@ -919,8 +921,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     StoragePath srcPath = new StoragePath(metaClient.getMetaPath(), getInstantFileName(instant));
     StoragePath dstPath = new StoragePath(dstDir, getInstantFileName(instant));
     try {
-      HoodieStorage srcStorage = HoodieStorageUtils.getStorage(srcPath, metaClient.getStorageConf());
-      HoodieStorage dstStorage = HoodieStorageUtils.getStorage(dstPath, metaClient.getStorageConf());
+      HoodieIOFactory ioFactory = getIOFactory(metaClient.getStorageConf());
+      HoodieStorage srcStorage = ioFactory.getStorage(srcPath);
+      HoodieStorage dstStorage = ioFactory.getStorage(dstPath);
       dstStorage.createDirectory(dstDir);
       FileIOUtils.copy(srcStorage, srcPath, dstStorage, dstPath, false, true);
     } catch (IOException e) {

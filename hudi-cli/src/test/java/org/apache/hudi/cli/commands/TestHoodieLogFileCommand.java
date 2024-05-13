@@ -44,7 +44,6 @@ import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -72,6 +71,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -107,7 +107,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
     Files.createDirectories(Paths.get(partitionPath));
-    storage = HoodieStorageUtils.getStorage(tablePath, storageConf());
+    storage = getIOFactory(storageConf()).getStorage(tablePath);
 
     try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
         .onParentPath(new StoragePath(partitionPath))
