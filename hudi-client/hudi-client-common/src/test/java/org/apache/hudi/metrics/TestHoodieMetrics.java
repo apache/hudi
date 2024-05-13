@@ -87,11 +87,11 @@ public class TestHoodieMetrics {
     long msec = (Long)metrics.getRegistry().getGauges().get(metricName).getValue();
     assertTrue(msec > 0);
 
-    // PreWrite metrics
+    // Source read and index metrics
     timer = hoodieMetrics.getSourceReadAndIndexTimerCtx();
     Thread.sleep(5); // Ensure timer duration is > 0
     hoodieMetrics.updateSourceReadAndIndexMetrics("some_action", hoodieMetrics.getDurationInMs(timer.stop()));
-    metricName = hoodieMetrics.getMetricsName("pre_write", "some_action.duration");
+    metricName = hoodieMetrics.getMetricsName("source_read_and_index", "some_action.duration");
     msec = (Long)metrics.getRegistry().getGauges().get(metricName).getValue();
     assertTrue(msec > 0);
 

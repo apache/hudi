@@ -170,7 +170,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     Long sourceReadAndIndexDurationMs = null;
     if (sourceReadAndIndexTimer.isPresent()) {
       sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
-      LOG.info("Pre write timer " + sourceReadAndIndexDurationMs);
+      LOG.info("Source read and index timer " + sourceReadAndIndexDurationMs);
     }
 
     // partition using the insert partitioner
