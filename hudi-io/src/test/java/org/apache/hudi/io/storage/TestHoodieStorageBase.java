@@ -163,11 +163,11 @@ public abstract class TestHoodieStorageBase {
       stream.flush();
     }
 
-    try (SeekableDataInputStream seekableStream = storage.openSeekable(path)) {
+    try (SeekableDataInputStream seekableStream = storage.openSeekable(path, true)) {
       validateSeekableDataInputStream(seekableStream, data);
     }
 
-    try (SeekableDataInputStream seekableStream = storage.openSeekable(path, 2)) {
+    try (SeekableDataInputStream seekableStream = storage.openSeekable(path, 2, true)) {
       validateSeekableDataInputStream(seekableStream, data);
     }
   }

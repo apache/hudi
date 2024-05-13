@@ -73,7 +73,6 @@ import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -166,9 +165,6 @@ public class HoodieTableMetadataUtil {
       DoubleWrapper.class, FloatWrapper.class, LongWrapper.class,
       StringWrapper.class, TimeMicrosWrapper.class, TimestampMicrosWrapper.class));
 
-  // This suffix and all after that are used for initialization of the various partitions. The unused suffixes lower than this value
-  // are reserved for future operations on the MDT.
-  private static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10; // corresponds to "010";
   // we have max of 4 partitions (FILES, COL_STATS, BLOOM, RLI)
   private static final List<String> VALID_PARTITION_INITIALIZATION_TIME_SUFFIXES = Arrays.asList("010", "011", "012", "013");
 
@@ -1217,8 +1213,8 @@ public class HoodieTableMetadataUtil {
     try {
       if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePathV2(), filePath);
-        return
-            new ParquetUtils().readRangeFromParquetMetadata(datasetMetaClient.getStorageConf(), fullFilePath, columnsToIndex);
+        return BaseFileUtils.getInstance(HoodieFileFormat.PARQUET)
+            .readColumnStatsFromMetadata(datasetMetaClient.getStorageConf(), fullFilePath, columnsToIndex);
       }
 
       LOG.warn("Column range index not supported for: {}", filePath);
@@ -1283,7 +1279,7 @@ public class HoodieTableMetadataUtil {
    * it could subsequently be used in column stats
    *
    * NOTE: This method has to stay compatible with the semantic of
-   *      {@link ParquetUtils#readRangeFromParquetMetadata} as they are used in tandem
+   *      {@link ParquetUtils#readColumnStatsFromMetadata} as they are used in tandem
    */
   private static Comparable<?> coerceToComparable(Schema schema, Object val) {
     if (val == null) {
@@ -1623,16 +1619,6 @@ public class HoodieTableMetadataUtil {
    */
   private static int getFileIdLengthWithoutFileIndex(String fileId) {
     return fileId.endsWith("-0") ? fileId.length() - 2 : fileId.length();
-  }
-
-  /**
-   * Create the timestamp for an index initialization operation on the metadata table.
-   * <p>
-   * Since many MDT partitions can be initialized one after other the offset parameter controls generating a
-   * unique timestamp.
-   */
-  public static String createIndexInitTimestamp(String timestamp, int offset) {
-    return String.format("%s%03d", timestamp, PARTITION_INITIALIZATION_TIME_SUFFIX + offset);
   }
 
   /**
@@ -2008,7 +1994,7 @@ public class HoodieTableMetadataUtil {
     // Is this a hoodie partition
     private boolean isHoodiePartition = false;
 
-    public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime) {
+    public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants) {
       this.relativePath = relativePath;
 
       // Pre-allocate with the maximum length possible
@@ -2026,8 +2012,8 @@ public class HoodieTableMetadataUtil {
         } else if (FSUtils.isDataFile(pathInfo.getPath())) {
           // Regular HUDI data file (base file or log file)
           String dataFileCommitTime = FSUtils.getCommitTime(pathInfo.getPath().getName());
-          // Limit the file listings to files which were created before the maxInstant time.
-          if (HoodieTimeline.compareTimestamps(dataFileCommitTime, LESSER_THAN_OR_EQUALS, maxInstantTime)) {
+          // Limit the file listings to files which were created by successful commits before the maxInstant time.
+          if (!pendingDataInstants.contains(dataFileCommitTime) && HoodieTimeline.compareTimestamps(dataFileCommitTime, LESSER_THAN_OR_EQUALS, maxInstantTime)) {
             filenameToSizeMap.put(pathInfo.getPath().getName(), pathInfo.getLength());
           }
         }

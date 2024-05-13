@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.Metrics;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 
 import com.codahale.metrics.Timer;
@@ -37,14 +38,14 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   private transient Timer hiveSyncTimer;
   private transient Timer metaSyncTimer;
 
-  public HoodieStreamerMetrics(HoodieWriteConfig writeConfig) {
-    this(writeConfig.getMetricsConfig());
+  public HoodieStreamerMetrics(HoodieWriteConfig writeConfig, StorageConfiguration<?> storageConf) {
+    this(writeConfig.getMetricsConfig(), storageConf);
   }
 
-  public HoodieStreamerMetrics(HoodieMetricsConfig writeConfig) {
-    super(writeConfig);
+  public HoodieStreamerMetrics(HoodieMetricsConfig writeConfig, StorageConfiguration<?> storageConf) {
+    super(writeConfig, storageConf);
     if (writeConfig.isMetricsOn()) {
-      metrics = Metrics.getInstance(writeConfig);
+      metrics = Metrics.getInstance(writeConfig, storageConf);
       this.overallTimerName = getMetricsName("timer", "deltastreamer");
       this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
       this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");

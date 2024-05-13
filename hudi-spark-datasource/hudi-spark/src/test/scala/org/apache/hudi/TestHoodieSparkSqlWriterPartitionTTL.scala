@@ -43,7 +43,7 @@ import org.apache.hudi.table.HoodieTable
 class HoodieSparkSqlWriterTestStrategy(hoodieTable: HoodieTable[_, _, _, _], instantTime: String)
   extends KeepByTimeStrategy(hoodieTable, instantTime) {
   override def isPartitionExpired(referenceTime: String): Boolean = {
-    val expiredTime = instantTimePlusMillis(referenceTime, ttlInMilis / 24 / 60)
+    val expiredTime = instantTimePlusMillis(referenceTime, ttlInMilis / 24 / 3600)
     fixInstantTimeCompatibility(instantTime).compareTo(expiredTime) > 0
   }
 }
@@ -77,8 +77,6 @@ class TestHoodieSparkSqlWriterPartitionTTL extends HoodieSparkWriterTestBase {
     val part1DF = spark.createDataFrame(sc.parallelize(recordsSeqForPart1), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, part1DF)
 
-    // Wait for part1 expires.
-    Thread.sleep(60 * 1000)
     val recordsForPart2 = DataSourceTestUtils.generateRandomRowsByPartition(100, "part2")
     val recordsSeqForPart2 = convertRowListToSeq(recordsForPart2)
     val part2DF = spark.createDataFrame(sc.parallelize(recordsSeqForPart2), structType)

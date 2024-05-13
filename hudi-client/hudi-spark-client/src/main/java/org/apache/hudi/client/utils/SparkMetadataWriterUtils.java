@@ -198,11 +198,12 @@ public class SparkMetadataWriterUtils {
                                                HoodieTableMetaClient metaClient, Schema schema) {
     String readPathString =
         String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
+    String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).distinct().toArray(String[]::new));
     HashMap<String, String> params = new HashMap<>();
     params.put(QUERY_TYPE_CONFIG, QUERY_TYPE_SNAPSHOT);
     params.put(READ_PATHS_CONFIG, readPathString);
     // Building HoodieFileIndex needs this param to decide query path
-    params.put(GLOB_PATHS_CONFIG, readPathString);
+    params.put(GLOB_PATHS_CONFIG, globPathString);
     // Let Hudi relations to fetch the schema from the table itself
     BaseRelation relation = SparkAdapterSupport$.MODULE$.sparkAdapter()
         .createRelation(sqlContext, metaClient, schema, paths, params);

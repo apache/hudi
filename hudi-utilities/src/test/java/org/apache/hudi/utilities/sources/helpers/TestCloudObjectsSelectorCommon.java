@@ -50,14 +50,16 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
 
   @Test
   public void emptyMetadataReturnsEmptyOption() {
-    Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, Collections.emptyList(), new TypedProperties(), "json");
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(new TypedProperties());
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, Collections.emptyList(), "json", Option.empty(), 1);
     Assertions.assertFalse(result.isPresent());
   }
 
   @Test
   public void filesFromMetadataRead() {
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(new TypedProperties());
     List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
-    Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, new TypedProperties(), "json");
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.empty(), 1);
     Assertions.assertTrue(result.isPresent());
     Assertions.assertEquals(1, result.get().count());
     Row expected = RowFactory.create("some data");
@@ -70,7 +72,8 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
 
     TypedProperties properties = new TypedProperties();
     properties.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "country,state");
-    Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, properties, "json");
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(properties);
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.empty(), 1);
     Assertions.assertTrue(result.isPresent());
     Assertions.assertEquals(1, result.get().count());
     Row expected = RowFactory.create("some data", "US", "CA");
@@ -85,24 +88,12 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     props.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
     props.put("hoodie.streamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
     props.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "country,state");
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(props);
     List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
-    Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, props, "json", Option.of(new FilebasedSchemaProvider(props, jsc)));
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.of(new FilebasedSchemaProvider(props, jsc)), 1);
     Assertions.assertTrue(result.isPresent());
     Assertions.assertEquals(1, result.get().count());
     Row expected = RowFactory.create("some data", "US", "CA");
-    Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
-  }
-
-  @Test
-  public void partitionKeyNotPresentInPath() {
-    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
-    TypedProperties properties = new TypedProperties();
-    properties.put("hoodie.streamer.source.cloud.data.reader.comma.separated.path.format", "false");
-    properties.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "unknown");
-    Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, properties, "json");
-    Assertions.assertTrue(result.isPresent());
-    Assertions.assertEquals(1, result.get().count());
-    Row expected = RowFactory.create("some data", null);
     Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 
@@ -121,10 +112,25 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
         new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=TX/data.json", 1000),
         new CloudObjectMetadata("src/test/resources/data/partitioned/country=IND/state=TS/data.json", 1000)
     );
-    Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, props, "json", Option.of(new FilebasedSchemaProvider(props, jsc)));
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(props);
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.of(new FilebasedSchemaProvider(props, jsc)), 30);
     Assertions.assertTrue(result.isPresent());
     List<Row> expected = Arrays.asList(RowFactory.create("some data", "US", "CA"), RowFactory.create("some data", "US", "TX"), RowFactory.create("some data", "IND", "TS"));
     List<Row> actual = result.get().collectAsList();
     Assertions.assertEquals(new HashSet<>(expected), new HashSet<>(actual));
+  }
+
+  @Test
+  public void partitionKeyNotPresentInPath() {
+    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
+    TypedProperties properties = new TypedProperties();
+    properties.put("hoodie.deltastreamer.source.cloud.data.reader.comma.separated.path.format", "false");
+    properties.put("hoodie.deltastreamer.source.cloud.data.partition.fields.from.path", "unknown");
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(properties);
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.empty(), 1);
+    Assertions.assertTrue(result.isPresent());
+    Assertions.assertEquals(1, result.get().count());
+    Row expected = RowFactory.create("some data", null);
+    Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 }

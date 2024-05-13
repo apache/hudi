@@ -53,7 +53,6 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -426,7 +425,7 @@ public class ITTestHoodieFlinkCompactor {
           try {
             storage.listDirectEntries(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partition))
                 .stream()
-                .filter(f -> FSUtils.isBaseFile(new Path(f.getPath().toUri())))
+                .filter(f -> FSUtils.isBaseFile(f.getPath()))
                 .forEach(f -> {
                   HoodieBaseFile baseFile = new HoodieBaseFile(f);
                   assertFalse(fileIdCommitTimeSet.contains(

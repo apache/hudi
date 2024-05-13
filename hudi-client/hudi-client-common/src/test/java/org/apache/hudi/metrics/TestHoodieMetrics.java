@@ -19,10 +19,13 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import com.codahale.metrics.Timer;
 import org.junit.jupiter.api.AfterEach;
@@ -48,6 +51,7 @@ public class TestHoodieMetrics {
   HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
+  StorageConfiguration storageConf = HoodieTestUtils.getDefaultStorageConf();
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -57,7 +61,7 @@ public class TestHoodieMetrics {
     when(writeConfig.isMetricsOn()).thenReturn(true);
     when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(writeConfig);
+    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
     metrics = hoodieMetrics.getMetrics();
   }
 
@@ -73,7 +77,7 @@ public class TestHoodieMetrics {
   }
 
   @Test
-  public void testTimerCtx() throws InterruptedException {
+  public void testTimerCtxandGauges() throws InterruptedException {
     Random rand = new Random();
     // Index metrics
     Timer.Context timer = hoodieMetrics.getIndexCtx();
@@ -82,6 +86,34 @@ public class TestHoodieMetrics {
     String metricName = hoodieMetrics.getMetricsName("index", "some_action.duration");
     long msec = (Long)metrics.getRegistry().getGauges().get(metricName).getValue();
     assertTrue(msec > 0);
+
+    // test index type
+    metricName = hoodieMetrics.getMetricsName("index", "type");
+    for (HoodieIndex.IndexType indexType: HoodieIndex.IndexType.values()) {
+      hoodieMetrics.emitIndexTypeMetrics(indexType.ordinal());
+      long indexTypeOrdinal = (Long)metrics.getRegistry().getGauges().get(metricName).getValue();
+      assertEquals(indexTypeOrdinal, indexType.ordinal());
+    }
+
+    // test metadata enablement metrics
+    metricName = hoodieMetrics.getMetricsName("metadata", "isEnabled");
+    String colStatsMetricName = hoodieMetrics.getMetricsName("metadata", "isColSatsEnabled");
+    String bloomFilterMetricName = hoodieMetrics.getMetricsName("metadata", "isBloomFilterEnabled");
+    String rliMetricName = hoodieMetrics.getMetricsName("metadata", "isRliEnabled");
+    Boolean[] boolValues = new Boolean[]{true, false};
+    for (Boolean mdt: boolValues) {
+      for (Boolean colStats : boolValues) {
+        for (Boolean bloomFilter : boolValues) {
+          for (Boolean rli : boolValues) {
+            hoodieMetrics.emitMetadataEnablementMetrics(mdt, colStats, bloomFilter, rli);
+            assertEquals(mdt ? 1L : 0L, metrics.getRegistry().getGauges().get(metricName).getValue());
+            assertEquals(colStats ? 1L : 0L, metrics.getRegistry().getGauges().get(colStatsMetricName).getValue());
+            assertEquals(bloomFilter ? 1L : 0L, metrics.getRegistry().getGauges().get(bloomFilterMetricName).getValue());
+            assertEquals(rli ? 1L : 0L, metrics.getRegistry().getGauges().get(rliMetricName).getValue());
+          }
+        }
+      }
+    }
 
     // Rollback metrics
     timer = hoodieMetrics.getRollbackCtx();
