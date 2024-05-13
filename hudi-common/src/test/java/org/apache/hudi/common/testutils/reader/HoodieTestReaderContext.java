@@ -83,7 +83,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   ) throws IOException {
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(conf)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            conf, filePath, HoodieFileFormat.PARQUET, Option.empty());
+            filePath, HoodieFileFormat.PARQUET, Option.empty());
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }
 

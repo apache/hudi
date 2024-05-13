@@ -31,29 +31,32 @@ import java.io.IOException;
 
 public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
 
+  public HoodieSparkFileReaderFactory(StorageConfiguration<?> storageConf) {
+    super(storageConf);
+  }
+
   @Override
-  public HoodieFileReader newParquetFileReader(StorageConfiguration<?> conf, StoragePath path) {
-    conf.setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
-    conf.setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
-    conf.setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
+  public HoodieFileReader newParquetFileReader(StoragePath path) {
+    storageConf.setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
+    storageConf.setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
+    storageConf.setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
     // Using string value of this conf to preserve compatibility across spark versions.
-    conf.setIfUnset("spark.sql.legacy.parquet.nanosAsLong", "false");
+    storageConf.setIfUnset("spark.sql.legacy.parquet.nanosAsLong", "false");
     // This is a required config since Spark 3.4.0: SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED
     // Using string value of this conf to preserve compatibility across spark versions.
-    conf.setIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", "true");
-    return new HoodieSparkParquetReader(conf, path);
+    storageConf.setIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", "true");
+    return new HoodieSparkParquetReader(storageConf, path);
   }
 
   @Override
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
-                                                StorageConfiguration<?> conf,
                                                 StoragePath path,
                                                 Option<Schema> schemaOption) throws IOException {
     throw new HoodieIOException("Not support read HFile");
   }
 
   @Override
-  protected HoodieFileReader newOrcFileReader(StorageConfiguration<?> conf, StoragePath path) {
+  protected HoodieFileReader newOrcFileReader(StoragePath path) {
     throw new HoodieIOException("Not support read orc file");
   }
 

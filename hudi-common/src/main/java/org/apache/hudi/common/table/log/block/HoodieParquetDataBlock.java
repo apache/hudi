@@ -146,7 +146,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     ClosableIterator<HoodieRecord<T>> iterator = HoodieIOFactory.getIOFactory(inlineConf).getReaderFactory(type)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineConf, inlineLogFilePath, PARQUET, Option.empty())
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineLogFilePath, PARQUET, Option.empty())
         .getRecordIterator(writerSchema, readerSchema);
     return iterator;
   }

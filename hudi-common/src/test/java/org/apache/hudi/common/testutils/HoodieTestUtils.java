@@ -56,8 +56,6 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.storage.HoodieStorageUtils.HADOOP_STORAGE_CONF;
-
 /**
  * A utility class for testing.
  */
@@ -68,6 +66,7 @@ public class HoodieTestUtils {
   public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
   public static final int DEFAULT_LOG_VERSION = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
+  public static final String HADOOP_STORAGE_CONF = "org.apache.hudi.storage.hadoop.HadoopStorageConfiguration";
 
   public static StorageConfiguration<Configuration> getDefaultStorageConf() {
     return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
@@ -223,7 +222,8 @@ public class HoodieTestUtils {
    */
   public static HoodieTableMetaClient createMetaClient(Configuration conf,
                                                        String basePath) {
-    return createMetaClient(HoodieStorageUtils.getStorageConfWithCopy(conf), basePath);
+    return createMetaClient((StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
+        new Class<?>[] {Configuration.class, boolean.class}, conf, true), basePath);
   }
 
   /**

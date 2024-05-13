@@ -1487,8 +1487,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieConfig hoodieConfig = new HoodieConfig();
       hoodieConfig.setValue(HoodieReaderConfig.USE_NATIVE_HFILE_READER,
           Boolean.toString(ConfigUtils.getBooleanWithAltKeys(props, HoodieReaderConfig.USE_NATIVE_HFILE_READER)));
-      try (HoodieFileReader fileReader = getHoodieSparkIOFactory().getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(hoodieConfig, metaClient.getStorageConf(), path)) {
+      try (HoodieFileReader fileReader = getHoodieSparkIOFactory(metaClient.getStorageConf())
+          .getReaderFactory(HoodieRecordType.AVRO)
+          .getFileReader(hoodieConfig, path)) {
         bloomFilter = fileReader.readBloomFilter();
         if (bloomFilter == null) {
           LOG.error("Failed to read bloom filter for {}", path);
