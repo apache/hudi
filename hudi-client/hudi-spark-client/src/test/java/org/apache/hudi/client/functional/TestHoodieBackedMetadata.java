@@ -2040,7 +2040,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // collect all commit meta files from metadata table.
     List<StoragePathInfo> metaFiles = metaClient.getStorage()
-        .listDirectEntries(new StoragePath(metaClient.getMetaPath(), "/metadata/.hoodie"));
+        .listDirectEntries(new StoragePath(metaClient.getMetaPath(), "metadata/.hoodie"));
     List<StoragePathInfo> commit3Files = metaFiles.stream()
         .filter(pathInfo ->
             pathInfo.getPath().getName().contains(commit3)
