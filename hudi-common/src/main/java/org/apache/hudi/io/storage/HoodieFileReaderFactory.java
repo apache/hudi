@@ -22,10 +22,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -42,30 +39,6 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
  * Factory methods to create Hudi file reader.
  */
 public class HoodieFileReaderFactory {
-
-  public static HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
-    switch (recordType) {
-      case AVRO:
-
-        try {
-          Class<?> clazz =
-              ReflectionUtils.getClass("org.apache.hudi.io.hadoop.HoodieAvroFileReaderFactory");
-          return (HoodieFileReaderFactory) clazz.newInstance();
-        } catch (IllegalArgumentException | IllegalAccessException | InstantiationException e) {
-          throw new HoodieException("Unable to create HoodieAvroFileReaderFactory", e);
-        }
-      case SPARK:
-        try {
-          Class<?> clazz =
-              ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory");
-          return (HoodieFileReaderFactory) clazz.newInstance();
-        } catch (IllegalArgumentException | IllegalAccessException | InstantiationException e) {
-          throw new HoodieException("Unable to create HoodieSparkFileReaderFactory", e);
-        }
-      default:
-        throw new UnsupportedOperationException(recordType + " record type not supported yet.");
-    }
-  }
 
   public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StorageConfiguration<?> conf, StoragePath path) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
