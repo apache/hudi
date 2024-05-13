@@ -56,13 +56,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
@@ -123,18 +122,14 @@ public class HoodieIndexUtils {
    * @param hoodieTable instance of {@link HoodieTable} of interest
    * @return the list of Pairs of partition path and fileId
    */
-  public static List<Pair<String, HoodieBaseFile>> getLatestBaseFilesForAllPartitions(final List<String> partitions,
-                                                                                      final HoodieEngineContext context,
-                                                                                      final HoodieTable hoodieTable) {
+  public static HoodieData<Pair<String, HoodieBaseFile>> getLatestBaseFilesForAllPartitions(final HoodieData<String> partitions,
+                                                                                            final HoodieEngineContext context,
+                                                                                            final HoodieTable hoodieTable) {
     context.setJobStatus(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions: " + hoodieTable.getConfig().getTableName());
-    return context.flatMap(partitions, partitionPath -> {
-      List<Pair<String, HoodieBaseFile>> filteredFiles =
+    return partitions.flatMap(partitionPath ->
           getLatestBaseFilesForPartition(partitionPath, hoodieTable).stream()
               .map(baseFile -> Pair.of(partitionPath, baseFile))
-              .collect(toList());
-
-      return filteredFiles.stream();
-    }, Math.max(partitions.size(), 1));
+              .iterator());
   }
 
   /**
@@ -178,28 +173,27 @@ public class HoodieIndexUtils {
    * @param candidateRecordKeys - Candidate keys to filter
    * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static List<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
-                                                            List<String> candidateRecordKeys,
-                                                            StorageConfiguration<?> configuration) throws HoodieIndexException {
+  public static Collection<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
+                                                            Set<String> candidateRecordKeys,
+                                                                  StorageConfiguration<?> configuration) throws HoodieIndexException {
+    if (candidateRecordKeys.isEmpty()) {
+      return Collections.emptyList();
+    }
     checkArgument(FSUtils.isBaseFile(filePath));
-    List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
     try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, configuration, filePath)) {
       // Load all rowKeys from the file, to double-confirm
-      if (!candidateRecordKeys.isEmpty()) {
-        HoodieTimer timer = HoodieTimer.start();
-        Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys.stream().collect(Collectors.toSet()));
-        foundRecordKeys.addAll(fileRowKeys);
-        LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
-            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
-        }
+      HoodieTimer timer = HoodieTimer.start();
+      Set<Pair<String, Long>> foundRecordKeys = fileReader.filterRowKeys(candidateRecordKeys);
+      LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
+          timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
       }
+      return foundRecordKeys;
     } catch (Exception e) {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
     }
-    return foundRecordKeys;
   }
 
   /**

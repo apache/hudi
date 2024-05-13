@@ -49,9 +49,13 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -133,7 +137,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     List<String> partitions = asList("2016/01/21", "2016/04/01", "2015/03/12");
-    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
+    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(context.parallelize(partitions, partitions.size()), context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -143,7 +147,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         .withInserts("2015/03/12", "4", record2, record3, record4);
     metaClient.reloadActiveTimeline();
 
-    filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
+    filesList = index.loadColumnRangesFromFiles(context.parallelize(partitions, partitions.size()), context, hoodieTable);
     assertEquals(4, filesList.size());
 
     if (rangePruning) {
@@ -243,16 +247,17 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     assertFalse(filter.mightContain(record4.getRecordKey()));
 
     // Compare with file
-    List<String> uuids = asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
+    Set<String> uuids = new HashSet<>(asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey()));
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    List<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
+    Collection<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
         new StoragePath(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, storageConf);
     assertEquals(results.size(), 2);
-    assertTrue(results.get(0).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
-        || results.get(1).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
-    assertTrue(results.get(0).getLeft().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")
-        || results.get(1).getLeft().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0"));
+    Set<String> actualFileIds = results.stream().map(Pair::getLeft).collect(Collectors.toSet());
+    Set<String> expectedFileIds = new HashSet<>();
+    expectedFileIds.add("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0");
+    expectedFileIds.add("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0");
+    assertEquals(expectedFileIds, actualFileIds);
     // TODO(vc): Need more coverage on actual filenames
     // assertTrue(results.get(0)._2().equals(filename));
     // assertTrue(results.get(1)._2().equals(filename));

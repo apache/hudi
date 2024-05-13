@@ -36,11 +36,13 @@ import org.apache.spark.broadcast.Broadcast;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -122,12 +124,12 @@ public class HoodieFileProbingFunction implements
             final String fileId = partitionPathFileNamePair.getRight().getFileId();
             ValidationUtils.checkState(!fileId.isEmpty());
 
-            List<String> candidateRecordKeys = bloomFilterKeyLookupResult.getCandidateKeys();
+            Set<String> candidateRecordKeys = bloomFilterKeyLookupResult.getCandidateKeys();
 
             // TODO add assertion that file is checked only once
 
             final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
-            List<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
+            Collection<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
                 new StoragePath(dataFile.getPath()), candidateRecordKeys, storageConf);
 
             LOG.debug(

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
@@ -159,7 +161,8 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
   private static List<Tuple2<String, HoodieBaseFile>> loadAllFilesForPartitions(List<String> partitions, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     // Obtain the latest data files from all the partitions.
-    List<Pair<String, HoodieBaseFile>> partitionPathFileIDList = HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable);
+    List<Pair<String, HoodieBaseFile>> partitionPathFileIDList =
+        HoodieIndexUtils.getLatestBaseFilesForAllPartitions(HoodieJavaRDD.of(partitions, (HoodieSparkEngineContext) context, 1), context, hoodieTable).collectAsList();
     return partitionPathFileIDList.stream()
         .map(pf -> new Tuple2<>(pf.getKey(), pf.getValue())).collect(toList());
   }

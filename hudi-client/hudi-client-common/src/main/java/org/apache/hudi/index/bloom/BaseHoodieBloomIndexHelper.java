@@ -52,5 +52,5 @@ public abstract class BaseHoodieBloomIndexHelper implements Serializable {
       HoodiePairData<String, String> partitionRecordKeyPairs,
       HoodiePairData<HoodieFileGroupId, String> fileComparisonPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
-      Map<String, Long> recordsPerPartition);
+      HoodiePairData<String, Long> recordsPerPartition);
 }

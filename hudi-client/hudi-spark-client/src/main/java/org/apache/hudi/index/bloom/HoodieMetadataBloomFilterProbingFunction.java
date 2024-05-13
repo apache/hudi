@@ -40,9 +40,11 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -140,7 +142,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
             }
             final BloomFilter fileBloomFilter = fileToBloomFilterMap.get(partitionPathFileNamePair);
 
-            List<String> candidateRecordKeys = new ArrayList<>();
+            Set<String> candidateRecordKeys = new HashSet<>();
             hoodieKeyList.forEach(hoodieKey -> {
               if (fileBloomFilter.mightContain(hoodieKey.getRecordKey())) {
                 candidateRecordKeys.add(hoodieKey.getRecordKey());
