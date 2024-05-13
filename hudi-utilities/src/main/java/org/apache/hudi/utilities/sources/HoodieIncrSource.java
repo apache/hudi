@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
@@ -32,16 +33,19 @@ import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.DataSourceReadOptions.BEGIN_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
@@ -189,10 +193,18 @@ public class HoodieIncrSource extends RowSource {
       return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
 
+    DataFrameReader reader = sparkSession.read().format("hudi");
+    String datasourceOpts = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_INCREMENTAL_SPARK_DATASOURCE_OPTIONS, true);
+    if (!StringUtils.isNullOrEmpty(datasourceOpts)) {
+      Map<String, String> optionsMap = Arrays.stream(datasourceOpts.split(","))
+          .map(option -> Pair.of(option.split("=")[0], option.split("=")[1]))
+          .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+      reader = reader.options(optionsMap);
+    }
     Dataset<Row> source;
     // Do Incr pull. Set end instant if available
     if (queryInfo.isIncremental()) {
-      source = sparkSession.read().format("org.apache.hudi")
+      source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
           .option(BEGIN_INSTANTTIME().key(), queryInfo.getStartInstant())
@@ -204,7 +216,7 @@ public class HoodieIncrSource extends RowSource {
           .load(srcPath);
     } else {
       // if checkpoint is missing from source table, and if strategy is set to READ_UPTO_LATEST_COMMIT, we have to issue snapshot query
-      Dataset<Row> snapshot = sparkSession.read().format("org.apache.hudi")
+      Dataset<Row> snapshot = reader
           .options(readOpts)
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
           .load(srcPath);

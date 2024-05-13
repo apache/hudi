@@ -41,6 +41,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
@@ -301,7 +302,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           Option.empty(),
           100,
           dataBatches.get(0).getKey(),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()));
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()), new TypedProperties());
 
       // The pending tables services should not block the incremental pulls
       // Reads everything up to latest
@@ -334,14 +335,47 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testHoodieIncrSourceWithDataSourceOptions(HoodieTableType tableType) throws IOException {
+    this.tableType = tableType;
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
+    HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(10, 12).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(9).build())
+        .withCompactionConfig(
+            HoodieCompactionConfig.newBuilder()
+                .withScheduleInlineCompaction(true)
+                .withMaxNumDeltaCommitsBeforeCompaction(1)
+                .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
+            .withMetadataIndexColumnStats(true)
+            .withColumnStatsIndexForColumns("_hoodie_commit_time")
+            .build())
+        .build();
+
+    TypedProperties extraProps = new TypedProperties();
+    extraProps.setProperty(HoodieIncrSourceConfig.HOODIE_INCREMENTAL_SPARK_DATASOURCE_OPTIONS.key(), "hoodie.metadata.enable=true,hoodie.enable.data.skipping=true");
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, "100");
+      Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, INSERT, null, "200");
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.empty(),
+          100,
+          inserts.getKey(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()), extraProps);
+    }
+  }
+
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull, int expectedCount,
-                             String expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt) {
+                             String expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt, TypedProperties extraProps) {
 
     Properties properties = new Properties();
     properties.setProperty("hoodie.streamer.source.hoodieincr.path", basePath());
     properties.setProperty("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy", missingCheckpointStrategy.name());
     // TODO: [HUDI-7081] get rid of this
     properties.setProperty(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
+    properties.putAll(extraProps);
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
     TypedProperties typedProperties = new TypedProperties(properties);
@@ -360,7 +394,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull,
                              int expectedCount, String expectedCheckpoint) {
-    readAndAssert(missingCheckpointStrategy, checkpointToPull, expectedCount, expectedCheckpoint, Option.empty());
+    readAndAssert(missingCheckpointStrategy, checkpointToPull, expectedCount, expectedCheckpoint, Option.empty(), new TypedProperties());
   }
 
   private Pair<String, List<HoodieRecord>> writeRecords(SparkRDDWriteClient writeClient,
