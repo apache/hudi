@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.io.SeekableDataInputStream;
-import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -53,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -61,10 +61,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * base file format.
  */
 public class HoodieHFileDataBlock extends HoodieDataBlock {
-  public static final String HFILE_COMPRESSION_ALGO_PARAM_KEY = "hfile_compression_algo";
   private static final Logger LOG = LoggerFactory.getLogger(HoodieHFileDataBlock.class);
 
-  private final Option<CompressionCodec> compressionCodec;
+  private final Option<String> compressionCodec;
   // This path is used for constructing HFile reader context, which should not be
   // interpreted as the actual file path for the HFile data blocks
   private final StoragePath pathForReader;
@@ -89,7 +88,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   public HoodieHFileDataBlock(List<HoodieRecord> records,
                               Map<HeaderMetadataType, String> header,
-                              CompressionCodec compressionCodec,
+                              String compressionCodec,
                               StoragePath pathForReader,
                               boolean useNativeHFileReader) {
     super(records, false, header, new HashMap<>(), HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME);
@@ -109,7 +108,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
     return FileFormatUtils.getInstance(HoodieFileFormat.HFILE).serializeRecordsToLogBlock(
         storageConf, records, writerSchema, getSchema(), getKeyFieldName(),
-        Collections.singletonMap(HFILE_COMPRESSION_ALGO_PARAM_KEY, compressionCodec.get().name()));
+        Collections.singletonMap(HFILE_COMPRESSION_ALGORITHM_NAME.key(), compressionCodec.get()));
   }
 
   @Override

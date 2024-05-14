@@ -60,7 +60,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static org.apache.hudi.common.table.log.block.HoodieHFileDataBlock.HFILE_COMPRESSION_ALGO_PARAM_KEY;
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -77,13 +77,9 @@ public class HFileUtils extends FileFormatUtils {
    * @return the {@link Compression.Algorithm} Enum.
    */
   public static Compression.Algorithm getHFileCompressionAlgorithm(Map<String, String> paramsMap) {
-    String algoName = paramsMap.get(HFILE_COMPRESSION_ALGO_PARAM_KEY);
+    String algoName = paramsMap.get(HFILE_COMPRESSION_ALGORITHM_NAME.key());
     if (StringUtils.isNullOrEmpty(algoName)) {
       return Compression.Algorithm.GZ;
-    }
-    // CompressionCodec.BZIP2 (bz2) and Compression.Algorithm.BZIP2 (bzip2) have different names
-    if (CompressionCodec.BZIP2.getName().equalsIgnoreCase(algoName)) {
-      return Compression.Algorithm.BZIP2;
     }
     return Compression.Algorithm.valueOf(algoName.toUpperCase());
   }

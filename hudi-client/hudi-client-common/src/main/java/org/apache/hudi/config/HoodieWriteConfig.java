@@ -2181,8 +2181,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE);
   }
 
-  public CompressionCodec getHFileCompressionAlgorithm() {
-    return CompressionCodec.valueOf(getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME));
+  public String getHFileCompressionAlgorithm() {
+    return getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME);
   }
 
   public long getOrcMaxFileSize() {

@@ -19,18 +19,15 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.io.compress.CompressionCodec;
-
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.log.block.HoodieHFileDataBlock.HFILE_COMPRESSION_ALGO_PARAM_KEY;
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.util.HFileUtils.getHFileCompressionAlgorithm;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -39,29 +36,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class TestHFileUtils {
   @ParameterizedTest
-  @EnumSource(CompressionCodec.class)
-  public void testGetHFileCompressionAlgorithm(CompressionCodec codec) {
-    Map<CompressionCodec, Compression.Algorithm> expectedAlgoMap = new HashMap<>();
-    expectedAlgoMap.put(CompressionCodec.NONE, Compression.Algorithm.NONE);
-    expectedAlgoMap.put(CompressionCodec.BZIP2, Compression.Algorithm.BZIP2);
-    expectedAlgoMap.put(CompressionCodec.GZIP, Compression.Algorithm.GZ);
-    expectedAlgoMap.put(CompressionCodec.LZ4, Compression.Algorithm.LZ4);
-    expectedAlgoMap.put(CompressionCodec.LZO, Compression.Algorithm.LZO);
-    expectedAlgoMap.put(CompressionCodec.SNAPPY, Compression.Algorithm.SNAPPY);
-    expectedAlgoMap.put(CompressionCodec.ZSTD, Compression.Algorithm.ZSTD);
-
+  @EnumSource(Compression.Algorithm.class)
+  public void testGetHFileCompressionAlgorithm(Compression.Algorithm algo) {
     for (boolean upperCase : new boolean[] {true, false}) {
       Map<String, String> paramsMap = Collections.singletonMap(
-          HFILE_COMPRESSION_ALGO_PARAM_KEY,
-          upperCase ? codec.getName().toUpperCase() : codec.getName().toLowerCase());
-      assertEquals(expectedAlgoMap.get(codec), getHFileCompressionAlgorithm(paramsMap));
+          HFILE_COMPRESSION_ALGORITHM_NAME.key(),
+          upperCase ? algo.getName().toUpperCase() : algo.getName().toLowerCase());
+      assertEquals(algo, getHFileCompressionAlgorithm(paramsMap));
     }
   }
 
   @Test
   public void testGetHFileCompressionAlgorithmWithEmptyString() {
     assertEquals(Compression.Algorithm.GZ, getHFileCompressionAlgorithm(
-        Collections.singletonMap(HFILE_COMPRESSION_ALGO_PARAM_KEY, "")));
+        Collections.singletonMap(HFILE_COMPRESSION_ALGORITHM_NAME.key(), "")));
   }
 
   @Test
