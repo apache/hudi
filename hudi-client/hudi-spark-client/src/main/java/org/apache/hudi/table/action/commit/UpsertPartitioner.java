@@ -375,7 +375,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     long avgSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
     long fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
     try {
-      if (!commitTimeline.empty()) {
+      if (hoodieWriteConfig.getRecordSizeEstimationThreshold() > 0 && !commitTimeline.empty()) {
         // Go over the reverse ordered commits to get a more recent estimate of average record size.
         Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
         while (instants.hasNext()) {

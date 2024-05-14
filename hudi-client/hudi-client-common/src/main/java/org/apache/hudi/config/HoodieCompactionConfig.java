@@ -115,7 +115,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("We use the previous commits' metadata to calculate the estimated record size and use it "
           + " to bin pack records into partitions. If the previous commit is too small to make an accurate estimation, "
           + " Hudi will search commits in the reverse order, until we find a commit that has totalBytesWritten "
-          + " larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * this_threshold)");
+          + " larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * this_threshold). Will use hoodie.copyonwrite.record.size.estimate value when this value is less than 0.");
 
   // 500GB of target IO per compaction (both read and write
   public static final ConfigProperty<String> TARGET_IO_PER_COMPACTION_IN_MB = ConfigProperty
