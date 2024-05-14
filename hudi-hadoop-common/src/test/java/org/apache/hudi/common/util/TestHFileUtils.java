@@ -59,6 +59,12 @@ public class TestHFileUtils {
   }
 
   @Test
+  public void testGetHFileCompressionAlgorithmWithEmptyString() {
+    assertEquals(Compression.Algorithm.GZ, getHFileCompressionAlgorithm(
+        Collections.singletonMap(HFILE_COMPRESSION_ALGO_PARAM_KEY, "")));
+  }
+
+  @Test
   public void testGetDefaultHFileCompressionAlgorithm() {
     assertEquals(Compression.Algorithm.GZ, getHFileCompressionAlgorithm(Collections.emptyMap()));
   }

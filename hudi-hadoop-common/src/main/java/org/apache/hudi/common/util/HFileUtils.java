@@ -78,7 +78,7 @@ public class HFileUtils extends FileFormatUtils {
    */
   public static Compression.Algorithm getHFileCompressionAlgorithm(Map<String, String> paramsMap) {
     String algoName = paramsMap.get(HFILE_COMPRESSION_ALGO_PARAM_KEY);
-    if (algoName == null) {
+    if (StringUtils.isNullOrEmpty(algoName)) {
       return Compression.Algorithm.GZ;
     }
     // CompressionCodec.BZIP2 (bz2) and Compression.Algorithm.BZIP2 (bzip2) have different names
@@ -237,11 +237,11 @@ public class HFileUtils extends FileFormatUtils {
     return baos.toByteArray();
   }
 
-  private Option<String> getRecordKey(HoodieRecord record, Schema readerSchema, String keyFieldName) {
+  private static Option<String> getRecordKey(HoodieRecord record, Schema readerSchema, String keyFieldName) {
     return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
   }
 
-  private byte[] serializeRecord(HoodieRecord<?> record, Schema schema, String keyFieldName) throws IOException {
+  private static byte[] serializeRecord(HoodieRecord<?> record, Schema schema, String keyFieldName) throws IOException {
     Option<Schema.Field> keyField = Option.ofNullable(schema.getField(keyFieldName));
     // Reset key value w/in the record to avoid duplicating the key w/in payload
     if (keyField.isPresent()) {
