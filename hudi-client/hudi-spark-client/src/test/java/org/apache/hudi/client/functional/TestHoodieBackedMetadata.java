@@ -165,6 +165,7 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_EXTENSION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_EXTENSION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.INFLIGHT_EXTENSION;
@@ -2885,6 +2886,42 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     int instant = maxNumDeltacommits + 1;
     Throwable t = assertThrows(HoodieMetadataException.class, () -> doWriteOperation(testTable, String.format("%016d", instant)));
     assertTrue(t.getMessage().startsWith(String.format("Metadata table's deltacommits exceeded %d: ", maxNumDeltacommits)));
+  }
+
+  @Test
+  public void testMORCheckNumDeltaCommits() throws Exception {
+    init(MERGE_ON_READ, true);
+    final int maxNumDeltaCommits = 3;
+    writeConfig = getWriteConfigBuilder(true, true, false)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                    .enable(true)
+                    .enableMetrics(false)
+                    .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommits - 1)
+                    .withMaxNumDeltacommitsWhenPending(maxNumDeltaCommits)
+                    .build())
+            .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    // write deltacommits to data-table and do compaction in metadata-table (with commit-instant)
+    doWriteOperation(testTable, HoodieActiveTimeline.createNewInstantTime(1));
+    doWriteOperation(testTable, HoodieActiveTimeline.createNewInstantTime(1));
+    // ensure the compaction is triggered and executed
+    try (HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true)) {
+      HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
+      final HoodieActiveTimeline activeTimeline = metadataMetaClient.reloadActiveTimeline();
+      Option<HoodieInstant> lastCompaction = activeTimeline.filterCompletedInstants()
+              .filter(s -> s.getAction().equals(COMMIT_ACTION)).lastInstant();
+      assertTrue(lastCompaction.isPresent());
+      // create pending instant in data table
+      testTable.addRequestedCommit(HoodieActiveTimeline.createNewInstantTime(1));
+      // continue writing
+      for (int i = 0; i <= maxNumDeltaCommits; i++) {
+        doWriteOperation(testTable, HoodieActiveTimeline.createNewInstantTime(1));
+      }
+      Throwable t = assertThrows(HoodieMetadataException.class, () -> doWriteOperation(testTable, HoodieActiveTimeline.createNewInstantTime(1)));
+      assertTrue(t.getMessage().startsWith(String.format("Metadata table's deltacommits exceeded %d: ", maxNumDeltaCommits)));
+      assertEquals(maxNumDeltaCommits + 1,
+              activeTimeline.reload().getDeltaCommitTimeline().findInstantsAfter(lastCompaction.get().getTimestamp()).countInstants());
+    }
   }
 
   @Test
