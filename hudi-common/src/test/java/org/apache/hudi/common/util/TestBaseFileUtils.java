@@ -40,7 +40,7 @@ public class TestBaseFileUtils {
         "path/to/file2", "columnName", 3, 8, 1, 15, 120, 250);
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
-    HoodieColumnRangeMetadata<Comparable> result = BaseFileUtils.getColumnRangeInPartition(fileColumnRanges);
+    HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(fileColumnRanges);
     // Step 3: Assertions
     assertEquals(Integer.valueOf(1), new Integer(result.getMinValue().toString()));
     assertEquals(Integer.valueOf(8), new Integer(result.getMaxValue().toString()));
@@ -60,7 +60,7 @@ public class TestBaseFileUtils {
 
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
-    HoodieColumnRangeMetadata<Comparable> result = BaseFileUtils.getColumnRangeInPartition(fileColumnRanges);
+    HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(fileColumnRanges);
     // Step 3: Assertions
     assertEquals(Integer.valueOf(1), new Integer(result.getMinValue().toString()));
     assertEquals(Integer.valueOf(8), new Integer(result.getMaxValue().toString()));
@@ -79,6 +79,6 @@ public class TestBaseFileUtils {
         "path/to/file2", "columnName2", null, 8, 1, 15, 120, 250);
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
-    assertThrows(IllegalArgumentException.class, () -> BaseFileUtils.getColumnRangeInPartition(fileColumnRanges));
+    assertThrows(IllegalArgumentException.class, () -> FileFormatUtils.getColumnRangeInPartition(fileColumnRanges));
   }
 }

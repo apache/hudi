@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -202,7 +202,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     Option<HoodieInstant> latestCommitTime = commitsTimeline.filterCompletedAndCompactionInstants().lastInstant();
 
     if (latestCommitTime.isPresent()) {
-      BaseFileUtils fileUtils = BaseFileUtils.getInstance(this.hoodieTable.getBaseFileFormat());
+      FileFormatUtils fileUtils = FileFormatUtils.getInstance(this.hoodieTable.getBaseFileFormat());
       Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
 
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()

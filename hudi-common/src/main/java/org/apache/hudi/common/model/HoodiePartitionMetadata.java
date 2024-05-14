@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
@@ -137,7 +137,7 @@ public class HoodiePartitionMetadata {
         HOODIE_PARTITION_METAFILE_PREFIX + "_" + UUID.randomUUID() + getMetafileExtension());
     try {
       // write to temporary file
-      BaseFileUtils.getInstance(format).writeMetaFile(storage, tmpPath, props);
+      FileFormatUtils.getInstance(format).writeMetaFile(storage, tmpPath, props);
       // move to actual path
       storage.rename(tmpPath, filePath);
     } finally {
@@ -185,7 +185,7 @@ public class HoodiePartitionMetadata {
   private boolean readBaseFormatMetaFile() {
     for (StoragePath metafilePath : baseFormatMetaFilePaths(partitionPath)) {
       try {
-        BaseFileUtils reader = BaseFileUtils.getInstance(metafilePath);
+        FileFormatUtils reader = FileFormatUtils.getInstance(metafilePath);
         // Data file format
         Map<String, String> metadata = reader.readFooter(
             storage.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);

@@ -46,6 +46,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -198,7 +199,7 @@ public class HoodieFileSliceTestUtils {
         return new HoodieHFileDataBlock(
             records,
             header,
-            Compression.Algorithm.GZ,
+            CompressionCodec.GZIP,
             pathForReader,
             HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
       case PARQUET_DATA_BLOCK:
@@ -207,7 +208,7 @@ public class HoodieFileSliceTestUtils {
             false,
             header,
             HoodieRecord.RECORD_KEY_METADATA_FIELD,
-            CompressionCodecName.GZIP,
+            "gzip",
             0.1,
             true);
       default:
