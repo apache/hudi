@@ -15,13 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
+import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.internal.SQLConf
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {

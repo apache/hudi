@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.spark.sql.functions.{col, from_json}
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
 

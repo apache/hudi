@@ -15,12 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils.isSpark2
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestDeleteTable extends HoodieSparkSqlTestBase {
 

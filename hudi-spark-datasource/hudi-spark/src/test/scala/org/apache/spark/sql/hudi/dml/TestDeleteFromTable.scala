@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.dml
+
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestDeleteFromTable extends HoodieSparkSqlTestBase {
 

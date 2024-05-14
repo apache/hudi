@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -29,8 +29,10 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.File

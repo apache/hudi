@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.common
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieSparkRecordMerger
 import org.apache.hudi.common.config.HoodieStorageConfig
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -30,10 +29,9 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.checkMessageContains
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone

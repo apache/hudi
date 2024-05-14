@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.common
 
 import org.apache.avro.generic.GenericData
 import org.apache.avro.{LogicalTypes, Schema}
