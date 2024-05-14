@@ -23,8 +23,8 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline}
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config._
 import org.apache.hudi.exception.HoodieWriteConflictException
@@ -50,6 +50,7 @@ import scala.util.Using
 
 @Tag("functional")
 class TestRecordLevelIndex extends RecordLevelIndexTestBase {
+
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIInitialization(tableType: HoodieTableType): Unit = {
@@ -59,9 +60,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
   }
 
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIInitializationForMorGlobalIndex(tableType: HoodieTableType): Unit = {
+  @Test
+  def testRLIInitializationForMorGlobalIndex(): Unit = {
+    val tableType = HoodieTableType.MERGE_ON_READ
     val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) +
       (HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1") +
       (HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1") +
@@ -73,7 +74,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val dataGen2 = HoodieTestDataGenerator.createTestGeneratorSecondPartition()
 
     // batch1 inserts
-    val instantTime1 = getInstantTime()
+    val instantTime1 = getNewInstantTime()
     val latestBatch = recordsToStrings(dataGen1.generateInserts(instantTime1, 5)).asScala
     var operation = INSERT_OPERATION_OPT_VAL
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 1))
@@ -86,7 +87,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     deletedDf1.cache()
 
     // batch2. upsert. update few records to 2nd partition from partition1 and insert a few to partition2.
-    val instantTime2 = getInstantTime()
+    val instantTime2 = getNewInstantTime()
 
     val latestBatch2_1 = recordsToStrings(dataGen1.generateUniqueUpdates(instantTime2, 3)).asScala
     val latestBatchDf2_1 = spark.read.json(spark.sparkContext.parallelize(latestBatch2_1, 1))
@@ -111,7 +112,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       (HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true") +
       (HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true")
 
-    val instantTime3 = getInstantTime()
+    val instantTime3 = getNewInstantTime()
     // batch3. updates to partition2
     val latestBatch3 = recordsToStrings(dataGen2.generateUniqueUpdates(instantTime3, 2)).asScala
     val latestBatchDf3 = spark.read.json(spark.sparkContext.parallelize(latestBatch3, 1))
@@ -125,8 +126,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     validateDataAndRecordIndices(hudiOpts, deletedDf3)
   }
 
-  private def getInstantTime(): String = {
-    String.format("%03d", new Integer(instantTime.incrementAndGet()))
+  private def getNewInstantTime(): String = {
+    InProcessTimeGenerator.createNewInstantTime();
   }
 
   @ParameterizedTest

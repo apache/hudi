@@ -20,15 +20,12 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -36,13 +33,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -60,44 +53,22 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
 
   protected final Schema readerSchema;
   private final Option<FileSlice> fileSliceOpt;
-  private final HoodieTableMetaClient metaClient;
-  private final TaskContextSupplier taskContextSupplier;
 
   public HoodieMergedReadHandle(HoodieWriteConfig config,
                                 Option<String> instantTime,
                                 HoodieTable<T, I, K, O> hoodieTable,
                                 Pair<String, String> partitionPathFileIDPair) {
-    this(config, instantTime, hoodieTable, hoodieTable.getMetaClient(), hoodieTable.getTaskContextSupplier(),
-        partitionPathFileIDPair, Option.empty());
+    this(config, instantTime, hoodieTable, partitionPathFileIDPair, Option.empty());
   }
 
   public HoodieMergedReadHandle(HoodieWriteConfig config,
                                 Option<String> instantTime,
                                 HoodieTable<T, I, K, O> hoodieTable,
-                                HoodieTableMetaClient metaClient,
-                                TaskContextSupplier taskContextSupplier,
                                 Pair<String, String> partitionPathFileIDPair,
                                 Option<FileSlice> fileSliceOption) {
     super(config, instantTime, hoodieTable, partitionPathFileIDPair);
     readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
-    if (hoodieTable != null) {
-      this.metaClient = hoodieTable.getMetaClient();
-    } else {
-      this.metaClient = metaClient;
-    }
-    if (this.storage == null) {
-      this.storage = this.metaClient.getStorage();
-      this.fs = (FileSystem) this.storage.getFileSystem();
-    }
-    this.taskContextSupplier = taskContextSupplier;
     fileSliceOpt = fileSliceOption.isPresent() ? fileSliceOption : getLatestFileSlice();
-  }
-
-  @Override
-  public HoodieStorage getStorage() {
-    // constructor in  HoodieIOHandle calls this. We do have two different code paths, where either of HoodieTable is null or meta client.
-    // In case metaClient not being null, we can set fileSystem after the constructor of HoodieIOHandle is called. Hence return null in the interim.
-    return hoodieTable != null ? hoodieTable.getMetaClient().getStorage() : null;
   }
 
   public List<HoodieRecord<T>> getMergedRecords() {
@@ -157,11 +128,11 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
         .map(l -> l.getPath().toString()).collect(toList());
     return HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
-        .withBasePath(metaClient.getBasePathV2().toString())
+        .withBasePath(hoodieTable.getMetaClient().getBasePathV2().toString())
         .withLogFilePaths(logFilePaths)
         .withReaderSchema(readerSchema)
         .withLatestInstantTime(instantTime)
-        .withMaxMemorySizeInBytes(IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config))
+        .withMaxMemorySizeInBytes(IOUtils.getMaxMemoryPerCompaction(hoodieTable.getTaskContextSupplier(), config))
         .withReverseReader(config.getCompactionReverseLogReadEnabled())
         .withBufferSize(config.getMaxDFSStreamBufferSize())
         .withSpillableMapBasePath(config.getSpillableMapBasePath())
@@ -183,7 +154,7 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
       HoodieFileReader baseFileReader = baseFileReaderOpt.get();
       HoodieRecordMerger recordMerger = config.getRecordMerger();
       ClosableIterator<HoodieRecord<T>> baseFileItr = baseFileReader.getRecordIterator(readerSchema);
-      HoodieTableConfig tableConfig = metaClient.getTableConfig();
+      HoodieTableConfig tableConfig = hoodieTable.getMetaClient().getTableConfig();
       Option<Pair<String, String>> simpleKeyGenFieldsOpt =
           tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
       while (baseFileItr.hasNext()) {
@@ -211,18 +182,6 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
     }
 
     return mergedRecords;
-  }
-
-  @Override
-  protected HoodieFileReader createNewFileReader() throws IOException {
-    return HoodieFileReaderFactory.getReaderFactory(this.config.getRecordMerger().getRecordType())
-        .getFileReader(config, metaClient.getStorageConf(), new StoragePath(getLatestBaseFile().getPath()));
-  }
-
-  @Override
-  protected HoodieFileReader createNewFileReader(HoodieBaseFile hoodieBaseFile) throws IOException {
-    return HoodieFileReaderFactory.getReaderFactory(this.config.getRecordMerger().getRecordType())
-        .getFileReader(config, metaClient.getStorageConf(), new StoragePath(hoodieBaseFile.getPath()));
   }
 }
 

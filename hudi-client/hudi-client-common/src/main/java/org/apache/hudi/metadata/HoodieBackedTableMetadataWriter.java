@@ -29,8 +29,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.LocalTaskContextSupplier;
-import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -77,6 +75,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -182,6 +181,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
     }
     ValidationUtils.checkArgument(!initialized || this.metadata != null, "MDT Reader should have been opened post initialization");
+  }
+
+  protected HoodieTable getHoodieTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
+    return null;
   }
 
   private void initMetadataReader() {
@@ -540,6 +543,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   private Pair<Integer, HoodieData<HoodieRecord>> initializeRecordIndexPartition() throws IOException {
     final HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(dataMetaClient,
         dataMetaClient.getActiveTimeline(), metadata);
+    final HoodieTable hoodieTable = getHoodieTable(dataWriteConfig, dataMetaClient);
 
     // Collect the list of latest base files present in each partition
     List<String> partitions = metadata.getAllPartitionPaths();
@@ -574,13 +578,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       LOG.info("Initializing record index from " + partitionFileSlicePairs.size() + " file slices in "
           + partitions.size() + " partitions");
-      records = readRecordKeysFromFileSlices(
+      records = readRecordKeysFromFileSliceSnapshot(
           engineContext,
           partitionFileSlicePairs,
           dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
           this.getClass().getSimpleName(),
           dataMetaClient,
-          dataWriteConfig);
+          dataWriteConfig,
+          hoodieTable);
     }
     records.persist("MEMORY_AND_DISK_SER");
     final long recordCount = records.count();
@@ -595,12 +600,24 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return Pair.of(fileGroupCount, records);
   }
 
-  private static HoodieData<HoodieRecord> readRecordKeysFromFileSlices(HoodieEngineContext engineContext,
-                                                                      List<Pair<String, FileSlice>> partitionFileSlicePairs,
-                                                                      int recordIndexMaxParallelism,
-                                                                      String activeModule,
-                                                                      HoodieTableMetaClient metaClient,
-                                                                      HoodieWriteConfig dataWriteConfig) {
+  /**
+   * Fetch record locations from FileSlice snapshot.
+   * @param engineContext context ot use.
+   * @param partitionFileSlicePairs list of pairs of partition and file slice.
+   * @param recordIndexMaxParallelism parallelism to use.
+   * @param activeModule active module of interest.
+   * @param metaClient metaclient instance to use.
+   * @param dataWriteConfig write config to use.
+   * @param hoodieTable hoodie table instance of interest.
+   * @return
+   */
+  private static HoodieData<HoodieRecord> readRecordKeysFromFileSliceSnapshot(HoodieEngineContext engineContext,
+                                                                              List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                                              int recordIndexMaxParallelism,
+                                                                              String activeModule,
+                                                                              HoodieTableMetaClient metaClient,
+                                                                              HoodieWriteConfig dataWriteConfig,
+                                                                              HoodieTable hoodieTable) {
     if (partitionFileSlicePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -618,9 +635,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       final String partition = partitionAndFileSlice.getKey();
       final FileSlice fileSlice = partitionAndFileSlice.getValue();
       final String fileId = fileSlice.getFileId();
-      final TaskContextSupplier taskContextSupplier = new LocalTaskContextSupplier();
-      return new HoodieMergedReadHandle(dataWriteConfig, instantTime, null, metaClient,
-          taskContextSupplier, Pair.of(partition, fileSlice.getFileId()),
+      return new HoodieMergedReadHandle(dataWriteConfig, instantTime, hoodieTable, Pair.of(partition, fileSlice.getFileId()),
           Option.of(fileSlice)).getMergedRecords().stream().map(record -> {
             HoodieRecord record1 = (HoodieRecord) record;
             return HoodieMetadataPayload.createRecordIndexUpdate(record1.getRecordKey(), partition, fileId,
