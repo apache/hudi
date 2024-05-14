@@ -123,6 +123,27 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
+  public void testGetAppendedLogPaths(boolean isTablePartitioned) throws IOException {
+    // add marker files
+    createSomeMarkers(isTablePartitioned);
+    // add invalid file
+    createInvalidFile(isTablePartitioned ? "2020/06/01" : "", "invalid_file3");
+    long fileSize = FileSystemTestUtils.listRecursive(fs, markerFolderPath).stream()
+        .filter(fileStatus -> !fileStatus.getPath().getName().contains(MarkerUtils.MARKER_TYPE_FILENAME))
+        .count();
+    assertEquals(fileSize, 4);
+
+    List<String> expectedPaths = isTablePartitioned
+        ? CollectionUtils.createImmutableList("2020/06/02/file2")
+        : CollectionUtils.createImmutableList("file2");
+    // then
+    assertIterableEquals(expectedPaths,
+        writeMarkers.getAppendedLogPaths(context, 2).stream().sorted().collect(Collectors.toList())
+    );
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
   public void testAllMarkerPaths(boolean isTablePartitioned) throws IOException {
     // given
     createSomeMarkers(isTablePartitioned);
