@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
@@ -33,6 +34,7 @@ import org.apache.spark.sql.types.StructType;
 import java.io.IOException;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
 
 /**
  * Factory to assist in instantiating a new {@link HoodieInternalRowFileWriter}.
@@ -75,11 +77,11 @@ public class HoodieInternalRowFileWriterFactory {
         path,
         new HoodieParquetConfig<>(
             writeSupport,
-            writeConfig.getParquetCompressionCodec(),
+            getCompressionCodecName(writeConfig.getParquetCompressionCodec()),
             writeConfig.getParquetBlockSize(),
             writeConfig.getParquetPageSize(),
             writeConfig.getParquetMaxFileSize(),
-            writeSupport.getHadoopConf(),
+            new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled()
         ));

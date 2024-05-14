@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -49,8 +48,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -122,7 +121,7 @@ public class TestHoodieRealtimeRecordReader {
     baseJobConf = new JobConf(storageConf.unwrap());
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     fs = HadoopFSUtils.getFs(basePath.toUri().toString(), baseJobConf);
-    storage = HoodieStorageUtils.getStorage(fs);
+    storage = new HoodieHadoopStorage(fs);
   }
 
   @AfterEach
@@ -212,7 +211,7 @@ public class TestHoodieRealtimeRecordReader {
     // TODO: HUDI-154 Once Hive 2.x PR (PR-674) is merged, enable this change
     // logVersionsWithAction.add(Pair.of(HoodieTimeline.ROLLBACK_ACTION, 3));
     FileSlice fileSlice =
-        new FileSlice(partitioned ? FSUtils.getRelativePartitionPath(new Path(basePath.toString()),
+        new FileSlice(partitioned ? HadoopFSUtils.getRelativePartitionPath(new Path(basePath.toString()),
             new Path(partitionDir.getAbsolutePath())) : "default", baseInstant, "fileid0");
     logVersionsWithAction.forEach(logVersionWithAction -> {
       try {

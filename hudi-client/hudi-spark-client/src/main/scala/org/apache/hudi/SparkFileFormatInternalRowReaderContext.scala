@@ -59,7 +59,6 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                               recordKeyColumn: String,
                                               filters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
-  lazy val sparkFileReaderFactory = new HoodieSparkFileReaderFactory
   val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
   lazy val recordKeyFilters: Seq[Filter] = filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
 
@@ -73,7 +72,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     if (FSUtils.isLogFile(filePath)) {
       val projection: UnsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
       new CloseableMappingIterator[InternalRow, UnsafeRow](
-        sparkFileReaderFactory.newParquetFileReader(conf, filePath)
+        new HoodieSparkFileReaderFactory(conf).newParquetFileReader(filePath)
           .asInstanceOf[HoodieSparkParquetReader].getInternalRowIterator(dataSchema, requiredSchema),
         new java.util.function.Function[InternalRow, UnsafeRow] {
           override def apply(data: InternalRow): UnsafeRow = {

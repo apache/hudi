@@ -25,12 +25,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -90,12 +88,12 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
       // and the markers from the requests pending processing.
       currentInstantAllMarkers.addAll(markerHandler.getAllMarkers(markerDir));
       currentInstantAllMarkers.addAll(pendingMarkers);
-      StoragePath tempPath = new StoragePath(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
+      StoragePath tempPath = new StoragePath(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
 
       List<StoragePath> instants = MarkerUtils.getAllMarkerDir(tempPath, storage);
 
       HoodieTableMetaClient metaClient =
-          HoodieTableMetaClient.builder().setConf(HadoopFSUtils.getStorageConf(new Configuration())).setBasePath(basePath)
+          HoodieTableMetaClient.builder().setConf(storage.getConf().newInstance()).setBasePath(basePath)
               .setLoadActiveTimelineOnLoad(true).build();
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
 
@@ -104,7 +102,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
           storage, basePath);
       Set<String> tableMarkers = candidate.stream().flatMap(instant -> {
         return MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(instant, storage,
-                new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf(new Configuration())), 100)
+                new HoodieLocalEngineContext(storage.getConf().newInstance()), 100)
             .values().stream().flatMap(Collection::stream);
       }).collect(Collectors.toSet());
 

@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -71,7 +71,7 @@ public class TestStreamSyncUnitTests {
                                     Boolean isNullTargetSchema, Boolean hasErrorTable, Boolean shouldTryWriteToErrorTable) {
     //basic deltastreamer inputs
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(mock(FileSystem.class));
+    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
     SparkSession sparkSession = mock(SparkSession.class);
     Configuration configuration = mock(Configuration.class);
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
@@ -141,7 +141,7 @@ public class TestStreamSyncUnitTests {
   @MethodSource("getCheckpointToResumeCases")
   void testGetCheckpointToResume(HoodieStreamer.Config cfg, HoodieCommitMetadata commitMetadata, Option<String> expectedResumeCheckpoint) throws IOException {
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(mock(FileSystem.class));
+    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
     TypedProperties props = new TypedProperties();
     SparkSession sparkSession = mock(SparkSession.class);
     Configuration configuration = mock(Configuration.class);

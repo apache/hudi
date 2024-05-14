@@ -88,7 +88,7 @@ public abstract class HoodieLogBlock {
   }
 
   // Return the bytes representation of the data belonging to a LogBlock
-  public byte[] getContentBytes() throws IOException {
+  public byte[] getContentBytes(StorageConfiguration<?> storageConf) throws IOException {
     throw new HoodieException("No implementation was provided");
   }
 

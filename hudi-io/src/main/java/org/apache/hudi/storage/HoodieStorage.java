@@ -123,11 +123,12 @@ public abstract class HoodieStorage implements Closeable {
    *
    * @param path       the file to open.
    * @param bufferSize buffer size to use.
+   * @param wrapStream true if we want to wrap the inputstream based on filesystem specific criteria
    * @return the InputStream to read from.
    * @throws IOException IO error.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract SeekableDataInputStream openSeekable(StoragePath path, int bufferSize) throws IOException;
+  public abstract SeekableDataInputStream openSeekable(StoragePath path, int bufferSize, boolean wrapStream) throws IOException;
 
   /**
    * Appends to an existing file (optional operation).
@@ -279,6 +280,12 @@ public abstract class HoodieStorage implements Closeable {
   public abstract Object unwrapConf();
 
   /**
+   * @return the raw storage.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract HoodieStorage getRawStorage();
+
+  /**
    * Creates a new file with overwrite set to false. This ensures files are created
    * only once and never rewritten, also, here we take care if the content is not
    * empty, will first write the content to a temp file if {needCreateTempFile} is
@@ -392,12 +399,13 @@ public abstract class HoodieStorage implements Closeable {
    * Opens an SeekableDataInputStream at the indicated path with seeks supported.
    *
    * @param path the file to open.
+   * @param wrapStream true if we want to wrap the inputstream based on filesystem specific criteria
    * @return the InputStream to read from.
    * @throws IOException IO error.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public SeekableDataInputStream openSeekable(StoragePath path) throws IOException {
-    return openSeekable(path, getDefaultBlockSize(path));
+  public SeekableDataInputStream openSeekable(StoragePath path, boolean wrapStream) throws IOException {
+    return openSeekable(path, getDefaultBlockSize(path), wrapStream);
   }
 
   /**

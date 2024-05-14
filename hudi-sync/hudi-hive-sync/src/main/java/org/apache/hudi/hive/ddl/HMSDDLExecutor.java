@@ -21,6 +21,7 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HivePartitionUtil;
@@ -205,7 +206,7 @@ public class HMSDDLExecutor implements DDLExecutor {
           partitionSd.setOutputFormat(sd.getOutputFormat());
           partitionSd.setSerdeInfo(sd.getSerdeInfo());
           String fullPartitionPath =
-              FSUtils.constructAbsolutePathInHadoopPath(syncConfig.getString(META_SYNC_BASE_PATH), x).toString();
+              FSUtils.constructAbsolutePath(syncConfig.getString(META_SYNC_BASE_PATH), x).toString();
           List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(x);
           partitionSd.setLocation(fullPartitionPath);
           partitionList.add(new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null));
@@ -229,10 +230,10 @@ public class HMSDDLExecutor implements DDLExecutor {
     try {
       StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
       List<Partition> partitionList = changedPartitions.stream().map(partition -> {
-        Path partitionPath = FSUtils.constructAbsolutePathInHadoopPath(syncConfig.getString(META_SYNC_BASE_PATH), partition);
+        Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(syncConfig.getString(META_SYNC_BASE_PATH), partition);
         String partitionScheme = partitionPath.toUri().getScheme();
         String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
-            ? FSUtils.getDFSFullPartitionPath(syncConfig.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
+            ? HadoopFSUtils.getDFSFullPartitionPath(syncConfig.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSd = sd.deepCopy();
         partitionSd.setLocation(fullPartitionPath);

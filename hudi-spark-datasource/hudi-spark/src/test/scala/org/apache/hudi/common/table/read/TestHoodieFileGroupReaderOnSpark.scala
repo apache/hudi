@@ -23,7 +23,6 @@ import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -73,7 +72,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   override def getStorageConf: StorageConfiguration[_] = {
-    FSUtils.buildInlineConf(HoodieTestUtils.getDefaultStorageConf)
+    HoodieTestUtils.getDefaultStorageConf.getInline
   }
 
   override def getBasePath: String = {

@@ -17,10 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.StoragePath
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -51,7 +49,7 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
   def outputType: StructType = OUTPUT_TYPE
 
   def loadNewProps(filePath: String, props: Properties):Unit = {
-    val fs = HadoopFSUtils.getFs(filePath, new Configuration())
+    val fs = HadoopFSUtils.getFs(filePath, spark.sessionState.newHadoopConf())
     val fis = fs.open(new Path(filePath))
     props.load(fis)
 
@@ -70,8 +68,7 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
     var newProps = new Properties
     loadNewProps(overwriteFilePath, newProps)
     val oldProps = metaClient.getTableConfig.propsMap
-    val metaPathDir = new StoragePath(tablePath, METAFOLDER_NAME)
-    HoodieTableConfig.create(metaClient.getStorage, metaPathDir, newProps)
+    HoodieTableConfig.create(metaClient.getStorage, metaClient.getMetaPath, newProps)
     // reload new props as checksum would have been added
     newProps = HoodieTableMetaClient.reload(metaClient).getTableConfig.getProps
 

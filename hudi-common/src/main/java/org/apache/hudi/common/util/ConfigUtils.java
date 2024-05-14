@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.PropertiesConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.RecordPayloadType;
@@ -30,7 +31,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,7 +100,7 @@ public class ConfigUtils {
   }
 
   /**
-   * Convert the key-value config to a map.The format of the config
+   * Convert the key-value config to a map.  The format of the config
    * is a key-value pair just like "k1=v1\nk2=v2\nk3=v3".
    *
    * @param keyValueConfig Key-value configs in properties format, i.e., multiple lines of
@@ -108,10 +108,23 @@ public class ConfigUtils {
    * @return A {@link Map} of key-value configs.
    */
   public static Map<String, String> toMap(String keyValueConfig) {
+    return toMap(keyValueConfig, "\n");
+  }
+
+  /**
+   * Convert the key-value config to a map. The format of the config is a key-value pair
+   * with defined separator.  For example, if the separator is a comma, the input is
+   * "k1=v1,k2=v2,k3=v3".
+   *
+   * @param keyValueConfig key-value configs in properties format, with defined separator.
+   * @param separator      the separator.
+   * @return A {@link Map} of key-value configs.
+   */
+  public static Map<String, String> toMap(String keyValueConfig, String separator) {
     if (StringUtils.isNullOrEmpty(keyValueConfig)) {
       return new HashMap<>();
     }
-    String[] keyvalues = keyValueConfig.split("\n");
+    String[] keyvalues = keyValueConfig.split(separator);
     Map<String, String> tableProperties = new HashMap<>();
     for (String keyValue : keyvalues) {
       // Handle multiple new lines and lines that contain only spaces after splitting
@@ -150,18 +163,6 @@ public class ConfigUtils {
       sb.append(entry.getKey()).append("=").append(entry.getValue());
     }
     return sb.toString();
-  }
-
-  /**
-   * Creates a Hadoop {@link Configuration} instance with the properties.
-   *
-   * @param props {@link Properties} instance.
-   * @return Hadoop {@link Configuration} instance.
-   */
-  public static Configuration createHadoopConf(Properties props) {
-    Configuration hadoopConf = new Configuration();
-    props.stringPropertyNames().forEach(k -> hadoopConf.set(k, props.getProperty(k)));
-    return hadoopConf;
   }
 
   /**
@@ -303,32 +304,6 @@ public class ConfigUtils {
   }
 
   /**
-   * Gets the raw value for a {@link ConfigProperty} config from Hadoop configuration. The key and
-   * alternative keys are used to fetch the config.
-   *
-   * @param conf           Configs in Hadoop {@link Configuration}.
-   * @param configProperty {@link ConfigProperty} config to fetch.
-   * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
-   */
-  public static Option<String> getRawValueWithAltKeys(Configuration conf,
-                                                      ConfigProperty<?> configProperty) {
-    String value = conf.get(configProperty.key());
-    if (value != null) {
-      return Option.of(value);
-    }
-    for (String alternative : configProperty.getAlternatives()) {
-      String altValue = conf.get(alternative);
-      if (altValue != null) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
-        return Option.of(altValue);
-      }
-    }
-    return Option.empty();
-  }
-
-  /**
    * Gets the String value for a {@link ConfigProperty} config from properties. The key and
    * alternative keys are used to fetch the config. If the config is not found, an
    * {@link IllegalArgumentException} is thrown.
@@ -455,24 +430,6 @@ public class ConfigUtils {
   }
 
   /**
-   * Gets the boolean value for a {@link ConfigProperty} config from Hadoop configuration. The key and
-   * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
-   * config, if exists, is returned if the config is not found in the configuration.
-   *
-   * @param conf           Configs in Hadoop {@link Configuration}.
-   * @param configProperty {@link ConfigProperty} config to fetch.
-   * @return boolean value if the config exists; default boolean value if the config does not exist
-   * and there is default value defined in the {@link ConfigProperty} config; {@code false} otherwise.
-   */
-  public static boolean getBooleanWithAltKeys(Configuration conf,
-                                              ConfigProperty<?> configProperty) {
-    Option<String> rawValue = getRawValueWithAltKeys(conf, configProperty);
-    boolean defaultValue = configProperty.hasDefaultValue()
-        ? Boolean.parseBoolean(configProperty.defaultValue().toString()) : false;
-    return rawValue.map(Boolean::parseBoolean).orElse(defaultValue);
-  }
-
-  /**
    * Gets the integer value for a {@link ConfigProperty} config from properties. The key and
    * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
    * config, if exists, is returned if the config is not found in the properties.
@@ -553,7 +510,7 @@ public class ConfigUtils {
 
   public static TypedProperties fetchConfigs(
       HoodieStorage storage,
-      String metaPath,
+      StoragePath metaPath,
       String propertiesFile,
       String propertiesBackupFile,
       int maxReadRetries,
@@ -626,5 +583,9 @@ public class ConfigUtils {
     config.setValue(USE_NATIVE_HFILE_READER,
         Boolean.toString(storageConf.getBoolean(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue())));
     return config;
+  }
+
+  public static TypedProperties loadGlobalProperties() {
+    return ((PropertiesConfig) ReflectionUtils.loadClass("org.apache.hudi.common.config.DFSPropertiesConfiguration")).getGlobalProperties();
   }
 }

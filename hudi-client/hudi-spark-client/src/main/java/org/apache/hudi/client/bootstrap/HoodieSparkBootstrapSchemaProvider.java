@@ -22,13 +22,13 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -54,7 +54,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
   @Override
   protected Schema getBootstrapSourceSchema(HoodieEngineContext context, List<Pair<String, List<HoodieFileStatus>>> partitions) {
     Schema schema = partitions.stream().flatMap(p -> p.getValue().stream()).map(fs -> {
-          Path filePath = FileStatusUtils.toPath(fs.getPath());
+          Path filePath = HadoopFSUtils.toPath(fs.getPath());
           String extension = FSUtils.getFileExtension(filePath.getName());
           if (PARQUET.getFileExtension().equals(extension)) {
             return getBootstrapSourceSchemaParquet(writeConfig, context, filePath);

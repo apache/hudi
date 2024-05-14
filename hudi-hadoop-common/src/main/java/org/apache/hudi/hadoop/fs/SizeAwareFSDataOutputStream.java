@@ -19,8 +19,8 @@
 
 package org.apache.hudi.hadoop.fs;
 
+import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
@@ -28,6 +28,8 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Wrapper over <code>FSDataOutputStream</code> to keep track of the size of the written bytes. This gives a cheap way
@@ -76,7 +78,7 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
   public void close() throws IOException {
     super.close();
     try {
-      consistencyGuard.waitTillFileAppears(new StoragePath(path.toUri()));
+      consistencyGuard.waitTillFileAppears(convertToStoragePath(path));
     } catch (TimeoutException e) {
       throw new HoodieException(e);
     }

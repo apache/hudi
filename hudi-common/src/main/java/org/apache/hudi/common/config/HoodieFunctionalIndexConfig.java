@@ -136,7 +136,7 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
 
       // 1. Read the existing config
       TypedProperties props =
-          fetchConfigs(storage, metadataFolder.toString(), INDEX_DEFINITION_FILE,
+          fetchConfigs(storage, metadataFolder, INDEX_DEFINITION_FILE,
               INDEX_DEFINITION_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
 
       // 2. backup the existing properties.

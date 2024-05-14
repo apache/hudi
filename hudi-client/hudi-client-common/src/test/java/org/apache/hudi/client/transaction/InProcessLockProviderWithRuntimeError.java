@@ -18,16 +18,17 @@
 
 package org.apache.hudi.client.transaction;
 
-import java.util.concurrent.TimeUnit;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.storage.StorageConfiguration;
+
+import java.util.concurrent.TimeUnit;
 
 public class InProcessLockProviderWithRuntimeError extends InProcessLockProvider {
 
   public InProcessLockProviderWithRuntimeError(
       LockConfiguration lockConfiguration,
-      Configuration conf) {
+      StorageConfiguration<?> conf) {
     super(lockConfiguration, conf);
   }
 

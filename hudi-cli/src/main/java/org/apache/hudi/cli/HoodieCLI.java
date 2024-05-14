@@ -27,8 +27,8 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -92,7 +92,7 @@ public class HoodieCLI {
     if (storage == null || force) {
       storage = (tableMetadata != null)
           ? tableMetadata.getStorage()
-          : HoodieStorageUtils.getStorage(FileSystem.get(conf.unwrap()));
+          : new HoodieHadoopStorage(FileSystem.get(conf.unwrap()));
     }
   }
 

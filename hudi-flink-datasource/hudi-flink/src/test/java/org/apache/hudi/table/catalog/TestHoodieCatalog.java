@@ -33,6 +33,7 @@ import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -424,7 +425,8 @@ public class TestHoodieCatalog {
 
     String tablePathStr = catalog.inferTablePath(catalogPathStr, tablePath);
     Configuration flinkConf = TestConfigurations.getDefaultConf(tablePathStr);
-    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HadoopConfigurations.getHadoopConf(flinkConf), tablePathStr);
+    HoodieTableMetaClient metaClient = HoodieTestUtils
+        .createMetaClient(new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(flinkConf)), tablePathStr);
     TestData.writeData(TestData.DATA_SET_INSERT, flinkConf);
     assertTrue(catalog.partitionExists(tablePath, partitionSpec));
 

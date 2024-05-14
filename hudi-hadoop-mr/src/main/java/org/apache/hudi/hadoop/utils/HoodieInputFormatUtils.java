@@ -82,6 +82,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADAT
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 public class HoodieInputFormatUtils {
 
@@ -184,7 +185,7 @@ public class HoodieInputFormatUtils {
       return getInputFormat(HoodieFileFormat.HFILE, realtime, conf);
     }
     // now we support read log file, try to find log file
-    if (FSUtils.isLogFile(new Path(path)) && realtime) {
+    if (HadoopFSUtils.isLogFile(new Path(path)) && realtime) {
       return getInputFormat(HoodieFileFormat.PARQUET, realtime, conf);
     }
     throw new HoodieIOException("Hoodie InputFormat not implemented for base file of type " + extension);
@@ -360,14 +361,15 @@ public class HoodieInputFormatUtils {
     Path baseDir = partitionPath;
     HoodieStorage storage = HoodieStorageUtils.getStorage(
         partitionPath.toString(), HadoopFSUtils.getStorageConf(conf));
-    if (HoodiePartitionMetadata.hasPartitionMetadata(storage, new StoragePath(partitionPath.toUri()))) {
-      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, new StoragePath(partitionPath.toUri()));
+    StoragePath partitionStoragePath = convertToStoragePath(partitionPath);
+    if (HoodiePartitionMetadata.hasPartitionMetadata(storage,  partitionStoragePath)) {
+      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, partitionStoragePath);
       metadata.readFromFS();
       int levels = metadata.getPartitionDepth();
       baseDir = HoodieHiveUtils.getNthParent(partitionPath, levels);
     } else {
       for (int i = 0; i < partitionPath.depth(); i++) {
-        if (storage.exists(new StoragePath(new StoragePath(baseDir.toUri()), METAFOLDER_NAME))) {
+        if (storage.exists(new StoragePath(convertToStoragePath(baseDir), METAFOLDER_NAME))) {
           break;
         } else if (i == partitionPath.depth() - 1) {
           throw new TableNotFoundException(partitionPath.toString());

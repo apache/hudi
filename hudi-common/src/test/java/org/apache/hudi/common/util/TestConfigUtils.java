@@ -21,11 +21,15 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
 
-import org.apache.hadoop.conf.Configuration;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -38,75 +42,67 @@ public class TestConfigUtils {
       .markAdvanced()
       .withDocumentation("Testing boolean config.");
 
-  @Test
-  public void testToMapSucceeds() {
+  private static Stream<Arguments> separatorArgs() {
+    List<Option<String>> separatorList = new ArrayList<>();
+    separatorList.add(Option.empty());
+    separatorList.add(Option.of("\n"));
+    separatorList.add(Option.of(","));
+    return separatorList.stream().map(Arguments::of);
+  }
+
+  @ParameterizedTest
+  @MethodSource("separatorArgs")
+  public void testToMapSucceeds(Option<String> separator) {
+    String sepString = separator.isPresent() ? separator.get() : "\n";
     Map<String, String> expectedMap = new HashMap<>();
     expectedMap.put("k.1.1.2", "v1");
     expectedMap.put("k.2.1.2", "v2");
     expectedMap.put("k.3.1.2", "v3");
 
     // Test base case
-    String srcKv = "k.1.1.2=v1\nk.2.1.2=v2\nk.3.1.2=v3";
-    Map<String, String> outMap = ConfigUtils.toMap(srcKv);
+    String srcKv = String.format(
+        "k.1.1.2=v1%sk.2.1.2=v2%sk.3.1.2=v3", sepString, sepString);
+    Map<String, String> outMap = toMap(srcKv, separator);
     assertEquals(expectedMap, outMap);
 
     // Test ends with new line
-    srcKv = "k.1.1.2=v1\nk.2.1.2=v2\nk.3.1.2=v3\n";
-    outMap = ConfigUtils.toMap(srcKv);
+    srcKv = String.format(
+        "k.1.1.2=v1%sk.2.1.2=v2%sk.3.1.2=v3%s", sepString, sepString, sepString);
+    outMap = toMap(srcKv, separator);
     assertEquals(expectedMap, outMap);
 
     // Test delimited by multiple new lines
-    srcKv = "k.1.1.2=v1\nk.2.1.2=v2\n\nk.3.1.2=v3";
-    outMap = ConfigUtils.toMap(srcKv);
+    srcKv = String.format(
+        "k.1.1.2=v1%sk.2.1.2=v2%s%sk.3.1.2=v3", sepString, sepString, sepString);
+    outMap = toMap(srcKv, separator);
     assertEquals(expectedMap, outMap);
 
     // Test delimited by multiple new lines with spaces in between
-    srcKv = "k.1.1.2=v1\n  \nk.2.1.2=v2\n\nk.3.1.2=v3";
-    outMap = ConfigUtils.toMap(srcKv);
+    srcKv = String.format(
+        "k.1.1.2=v1%s  %sk.2.1.2=v2%s%sk.3.1.2=v3", sepString, sepString, sepString, sepString);
+    outMap = toMap(srcKv, separator);
     assertEquals(expectedMap, outMap);
 
     // Test with random spaces if trim works properly
-    srcKv = " k.1.1.2 =   v1\n k.2.1.2 = v2 \nk.3.1.2 = v3";
-    outMap = ConfigUtils.toMap(srcKv);
+    srcKv = String.format(
+        " k.1.1.2 =   v1%s k.2.1.2 = v2 %sk.3.1.2 = v3", sepString, sepString);
+    outMap = toMap(srcKv, separator);
     assertEquals(expectedMap, outMap);
   }
 
-  @Test
-  public void testToMapThrowError() {
-    String srcKv = "k.1.1.2=v1=v1.1\nk.2.1.2=v2\nk.3.1.2=v3";
-    assertThrows(IllegalArgumentException.class, () -> ConfigUtils.toMap(srcKv));
+  @ParameterizedTest
+  @MethodSource("separatorArgs")
+  public void testToMapThrowError(Option<String> separator) {
+    String sepString = separator.isPresent() ? separator.get() : "\n";
+    String srcKv = String.format(
+        "k.1.1.2=v1=v1.1%sk.2.1.2=v2%sk.3.1.2=v3", sepString, sepString);
+    assertThrows(IllegalArgumentException.class, () -> toMap(srcKv, separator));
   }
 
-  @Test
-  public void testGetRawValueWithAltKeysFromHadoopConf() {
-    Configuration conf = new Configuration();
-    assertEquals(Option.empty(), ConfigUtils.getRawValueWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
-
-    boolean setValue = !Boolean.parseBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.defaultValue());
-    conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.key(), setValue);
-    assertEquals(Option.of(String.valueOf(setValue)),
-        ConfigUtils.getRawValueWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
-
-    conf = new Configuration();
-    conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
-    assertEquals(Option.of(String.valueOf(setValue)),
-        ConfigUtils.getRawValueWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
-  }
-
-  @Test
-  public void testGetBooleanWithAltKeysFromHadoopConf() {
-    Configuration conf = new Configuration();
-    assertEquals(Boolean.parseBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.defaultValue()),
-        ConfigUtils.getBooleanWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
-
-    boolean setValue = !Boolean.parseBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.defaultValue());
-    conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.key(), setValue);
-    assertEquals(setValue,
-        ConfigUtils.getBooleanWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
-
-    conf = new Configuration();
-    conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
-    assertEquals(setValue,
-        ConfigUtils.getBooleanWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
+  private Map<String, String> toMap(String config, Option<String> separator) {
+    if (separator.isEmpty()) {
+      return ConfigUtils.toMap(config);
+    }
+    return ConfigUtils.toMap(config, separator.get());
   }
 }

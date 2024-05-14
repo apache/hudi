@@ -23,8 +23,9 @@ import org.apache.hudi.common.bloom.{BloomFilter, BloomFilterFactory}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.config.HoodieStorageConfig.{BLOOM_FILTER_DYNAMIC_MAX_ENTRIES, BLOOM_FILTER_FPP_VALUE, BLOOM_FILTER_NUM_ENTRIES_VALUE, BLOOM_FILTER_TYPE}
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
-import org.apache.hudi.common.util.{BaseFileUtils, Option}
-import org.apache.hudi.io.storage.{HoodieAvroParquetWriter, HoodieParquetConfig}
+import org.apache.hudi.common.util.{FileFormatUtils, Option}
+import org.apache.hudi.io.hadoop.HoodieAvroParquetWriter
+import org.apache.hudi.io.storage.HoodieParquetConfig
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 
 import org.apache.avro.Schema
@@ -47,7 +48,7 @@ object SparkHelpers {
                               sourceFile: StoragePath,
                               destinationFile: StoragePath,
                               keysToSkip: Set[String]) {
-    val sourceRecords = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).readAvroRecords(conf, sourceFile).asScala
+    val sourceRecords = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readAvroRecords(conf, sourceFile).asScala
     val schema: Schema = sourceRecords.head.getSchema
     val filter: BloomFilter = BloomFilterFactory.createBloomFilter(
       BLOOM_FILTER_NUM_ENTRIES_VALUE.defaultValue.toInt, BLOOM_FILTER_FPP_VALUE.defaultValue.toDouble,
@@ -61,12 +62,12 @@ object SparkHelpers {
         HoodieStorageConfig.PARQUET_BLOCK_SIZE.defaultValue.toInt,
         HoodieStorageConfig.PARQUET_PAGE_SIZE.defaultValue.toInt,
         HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.defaultValue.toInt,
-        conf.unwrap(),
+        conf,
         HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue.toDouble,
         HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED.defaultValue)
 
     // Add current classLoad for config, if not will throw classNotFound of 'HoodieWrapperFileSystem'.
-    parquetConfig.getHadoopConf().setClassLoader(Thread.currentThread.getContextClassLoader)
+    conf.unwrap().setClassLoader(Thread.currentThread.getContextClassLoader)
 
     val writer = new HoodieAvroParquetWriter(destinationFile, parquetConfig, instantTime, new SparkTaskContextSupplier(), true)
     for (rec <- sourceRecords) {
@@ -139,7 +140,7 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
    * @return
    */
   def fileKeysAgainstBF(conf: StorageConfiguration[_], sqlContext: SQLContext, file: String): Boolean = {
-    val bf = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).readBloomFilterFromMetadata(conf, new StoragePath(file))
+    val bf = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readBloomFilterFromMetadata(conf, new StoragePath(file))
     val foundCount = sqlContext.parquetFile(file)
       .select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
       .collect().count(r => !bf.mightContain(r.getString(0)))

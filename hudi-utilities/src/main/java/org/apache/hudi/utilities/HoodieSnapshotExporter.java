@@ -228,7 +228,7 @@ public class HoodieSnapshotExporter {
     context.foreach(partitionAndFileList, partitionAndFile -> {
       String partition = partitionAndFile.getLeft();
       Path sourceFilePath = new Path(partitionAndFile.getRight());
-      Path toPartitionPath = FSUtils.constructAbsolutePathInHadoopPath(cfg.targetOutputPath, partition);
+      Path toPartitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(cfg.targetOutputPath, partition);
       FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, storageConf.newInstance());
       FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, storageConf.newInstance());
 

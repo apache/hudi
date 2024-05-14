@@ -20,6 +20,7 @@
 package org.apache.hudi.hadoop.fs.inline;
 
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -32,6 +33,8 @@ import org.apache.hadoop.util.Progressable;
 
 import java.io.IOException;
 import java.net.URI;
+
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Enables reading any inline file at a given offset and length. This {@link FileSystem} is used only in read path and does not support
@@ -46,7 +49,7 @@ import java.net.URI;
  */
 public class InLineFileSystem extends FileSystem {
 
-  public static final String SCHEME = "inlinefs";
+  public static final String SCHEME = InLineFSUtils.SCHEME;
   private Configuration conf = null;
 
   @Override
@@ -67,11 +70,11 @@ public class InLineFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path inlinePath, int bufferSize) throws IOException {
-    Path outerPath = InLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
+    Path outerPath = HadoopInLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FSDataInputStream outerStream = outerFs.open(outerPath, bufferSize);
-    StoragePath inlineStoragePath = new StoragePath(inlinePath.toUri());
-    return new InLineFsDataInputStream(InLineFSUtils.startOffset(inlineStoragePath), outerStream, InLineFSUtils.length(inlineStoragePath));
+    StoragePath inlineStoragePath = convertToStoragePath(inlinePath);
+    return new InLineFsDataInputStream(HadoopInLineFSUtils.startOffset(inlineStoragePath), outerStream, HadoopInLineFSUtils.length(inlineStoragePath));
   }
 
   @Override
@@ -85,10 +88,10 @@ public class InLineFileSystem extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path inlinePath) throws IOException {
-    Path outerPath = InLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
+    Path outerPath = HadoopInLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FileStatus status = outerFs.getFileStatus(outerPath);
-    FileStatus toReturn = new FileStatus(InLineFSUtils.length(new StoragePath(inlinePath.toUri())), status.isDirectory(), status.getReplication(), status.getBlockSize(),
+    FileStatus toReturn = new FileStatus(HadoopInLineFSUtils.length(convertToStoragePath(inlinePath)), status.isDirectory(), status.getReplication(), status.getBlockSize(),
         status.getModificationTime(), status.getAccessTime(), status.getPermission(), status.getOwner(),
         status.getGroup(), inlinePath);
     return toReturn;

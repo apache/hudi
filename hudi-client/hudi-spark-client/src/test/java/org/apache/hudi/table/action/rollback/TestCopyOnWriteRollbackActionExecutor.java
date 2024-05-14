@@ -361,7 +361,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     HoodieTable table =
         this.getHoodieTable(metaClient, getConfigBuilder().withRollbackBackupEnabled(true).build());
     HoodieInstant needRollBackInstant = HoodieTestUtils.getCompleteInstant(
-        metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()),
+        metaClient.getStorage(), metaClient.getMetaPath(),
         "002", HoodieTimeline.COMMIT_ACTION);
 
     // Create the rollback plan and perform the rollback

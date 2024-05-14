@@ -228,7 +228,7 @@ public class LSMTimeline {
    */
   public static List<StoragePathInfo> listAllMetaFiles(HoodieTableMetaClient metaClient) throws IOException {
     return metaClient.getStorage().globEntries(
-        new StoragePath(metaClient.getArchivePath() + "/*.parquet"));
+        new StoragePath(metaClient.getArchivePath(), "*.parquet"));
   }
 
   /**

@@ -63,6 +63,7 @@ import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
@@ -74,8 +75,9 @@ import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.JavaScalaConverters;
@@ -132,6 +134,7 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.DataSourceUtils.createUserDefinedBulkInsertPartitioner;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -289,7 +292,7 @@ public class StreamSync implements Serializable, Closeable {
                     TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
     this(cfg, sparkSession, props, new HoodieSparkEngineContext(jssc),
-        HoodieStorageUtils.getStorage(fs), conf, onInitializingHoodieWriteClient,
+        new HoodieHadoopStorage(fs), conf, onInitializingHoodieWriteClient,
         new DefaultStreamContext(schemaProvider, Option.empty()));
   }
 
@@ -310,8 +313,10 @@ public class StreamSync implements Serializable, Closeable {
     this.conf = conf;
 
     HoodieWriteConfig hoodieWriteConfig = getHoodieClientConfig();
-    this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, hoodieWriteConfig.getMetricsConfig());
-    this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig);
+    this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass,
+        new Class<?>[] { HoodieMetricsConfig.class, StorageConfiguration.class},
+        hoodieWriteConfig.getMetricsConfig(), storage.getConf());
+    this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig, storage.getConf());
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(
           cfg, sparkSession, props, hoodieSparkContext, storage);
@@ -984,7 +989,7 @@ public class StreamSync implements Serializable, Closeable {
           writeClientWriteResult = new WriteClientWriteResult(writeClient.upsert(records, instantTime));
           break;
         case BULK_INSERT:
-          writeClientWriteResult = new WriteClientWriteResult(writeClient.bulkInsert(records, instantTime));
+          writeClientWriteResult = new WriteClientWriteResult(writeClient.bulkInsert(records, instantTime, createUserDefinedBulkInsertPartitioner(writeClient.getConfig())));
           break;
         case INSERT_OVERWRITE:
           writeResult = writeClient.insertOverwrite(records, instantTime);

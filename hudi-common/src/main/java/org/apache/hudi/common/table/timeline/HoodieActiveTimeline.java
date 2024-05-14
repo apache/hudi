@@ -273,7 +273,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     deleteInstantFile(instant);
   }
 
-  public static void deleteInstantFile(HoodieStorage storage, String metaPath, HoodieInstant instant) {
+  public static void deleteInstantFile(HoodieStorage storage, StoragePath metaPath, HoodieInstant instant) {
     try {
       storage.deleteFile(new StoragePath(metaPath, instant.getFileName()));
     } catch (IOException e) {
@@ -750,7 +750,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private StoragePath getInstantFileNamePath(String fileName) {
-    return new StoragePath(fileName.contains(SCHEMA_COMMIT_ACTION) ? metaClient.getSchemaFolderName() : metaClient.getMetaPath(), fileName);
+    return new StoragePath(fileName.contains(SCHEMA_COMMIT_ACTION) ? metaClient.getSchemaFolderName() : metaClient.getMetaPath().toString(), fileName);
   }
 
   public void transitionRequestedToInflight(String commitType, String inFlightInstant) {

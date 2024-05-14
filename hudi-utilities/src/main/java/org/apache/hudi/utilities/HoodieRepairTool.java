@@ -22,7 +22,6 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -290,13 +289,13 @@ public class HoodieRepairTool {
       HoodieEngineContext context, String basePathStr, int expectedLevel, int parallelism) {
     FileSystem fs = HadoopFSUtils.getFs(basePathStr, context.getStorageConf());
     Path basePath = new Path(basePathStr);
-    return FSUtils.getFileStatusAtLevel(
+    return HadoopFSUtils.getFileStatusAtLevel(
             context, fs, basePath, expectedLevel, parallelism).stream()
         .filter(fileStatus -> {
           if (!fileStatus.isFile()) {
             return false;
           }
-          return FSUtils.isDataFile(fileStatus.getPath());
+          return HadoopFSUtils.isDataFile(fileStatus.getPath());
         })
         .map(fileStatus -> fileStatus.getPath().toString())
         .collect(Collectors.toList());
@@ -414,7 +413,7 @@ public class HoodieRepairTool {
     List<String> relativeFilePaths = listFilesFromBasePath(
         context, backupPathStr, partitionLevels, cfg.parallelism).stream()
         .map(filePath ->
-            FSUtils.getRelativePartitionPath(new Path(backupPathStr), new Path(filePath)))
+            HadoopFSUtils.getRelativePartitionPath(new Path(backupPathStr), new Path(filePath)))
         .collect(Collectors.toList());
     return restoreFiles(relativeFilePaths);
   }

@@ -24,7 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -61,7 +61,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   private final StoragePath path;
   private final StorageConfiguration<?> conf;
-  private final BaseFileUtils parquetUtils;
+  private final FileFormatUtils parquetUtils;
   private List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
   public HoodieSparkParquetReader(StorageConfiguration<?> conf, StoragePath path) {
@@ -69,7 +69,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     this.conf = conf.newInstance();
     // Avoid adding record in list element when convert parquet schema to avro schema
     conf.set(ADD_LIST_ELEMENT_RECORDS, "false");
-    this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
+    this.parquetUtils = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET);
   }
 
   @Override

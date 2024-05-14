@@ -19,12 +19,7 @@
 
 package org.apache.hudi.storage;
 
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 public class HoodieStorageUtils {
   public static final String DEFAULT_URI = "file:///";
@@ -33,23 +28,11 @@ public class HoodieStorageUtils {
     return getStorage(DEFAULT_URI, conf);
   }
 
-  public static HoodieStorage getStorage(FileSystem fs) {
-    return new HoodieHadoopStorage(fs);
-  }
-
   public static HoodieStorage getStorage(String basePath, StorageConfiguration<?> conf) {
-    return getStorage(HadoopFSUtils.getFs(basePath, conf));
+    return getStorage(new StoragePath(basePath), conf);
   }
 
   public static HoodieStorage getStorage(StoragePath path, StorageConfiguration<?> conf) {
-    return getStorage(HadoopFSUtils.getFs(path, conf.unwrapAs(Configuration.class)));
-  }
-
-  public static HoodieStorage getRawStorage(HoodieStorage storage) {
-    FileSystem fs = (FileSystem) storage.getFileSystem();
-    if (fs instanceof HoodieWrapperFileSystem) {
-      return getStorage(((HoodieWrapperFileSystem) fs).getFileSystem());
-    }
-    return storage;
+    return getIOFactory(conf).getStorage(path);
   }
 }

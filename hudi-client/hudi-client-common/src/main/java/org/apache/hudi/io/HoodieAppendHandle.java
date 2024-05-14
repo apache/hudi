@@ -56,7 +56,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -129,11 +129,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private boolean useWriterSchema = false;
 
   private final Properties recordProperties = new Properties();
-  // Block Sequence number will be used to detect duplicate log blocks(by log reader) added due to spark task retries.
-  // It should always start with 0 for a given file slice. for rolling-over and delete blocks, we increment by 1.
-  private int blockSequenceNumber = 0;
-  // On task failures, a given task could be retried. So, this attempt number will track the number of attempts.
-  private int attemptNumber = 0;
 
   /**
    * This is used by log compaction only.
@@ -145,7 +140,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.useWriterSchema = true;
     this.isLogCompaction = true;
     this.header.putAll(header);
-    this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -162,7 +156,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
-    this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
     this.shouldWriteRecordPositions = config.shouldWriteRecordPositions();
   }
 
@@ -469,14 +462,12 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
         blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, shouldWriteRecordPositions,
-            getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
-                addBlockIdentifier()), keyField));
+            getUpdatedHeader(header, config), keyField));
       }
 
       if (appendDeleteBlocks && recordsToDeleteWithPositions.size() > 0) {
         blocks.add(new HoodieDeleteBlock(recordsToDeleteWithPositions, shouldWriteRecordPositions,
-            getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
-            addBlockIdentifier())));
+            getUpdatedHeader(header, config)));
       }
 
       if (blocks.size() > 0) {
@@ -534,7 +525,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // TODO we can actually deduce file size purely from AppendResult (based on offset and size
       //      of the appended block)
       for (WriteStatus status : statuses) {
-        long logFileSize = FSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
+        long logFileSize = HadoopFSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
         status.getStat().setFileSizeInBytes(logFileSize);
       }
 
@@ -572,10 +563,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
    * Whether there is need to update the record location.
    */
   protected boolean needsUpdateLocation() {
-    return true;
-  }
-
-  protected boolean addBlockIdentifier() {
     return true;
   }
 
@@ -653,12 +640,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
   }
 
-  private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber, long attemptNumber,
-                                                                  HoodieWriteConfig config, boolean addBlockIdentifier) {
+  private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header,
+                                                                  HoodieWriteConfig config) {
     Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
-    if (addBlockIdentifier && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) { // add block sequence numbers only for data table.
-      updatedHeader.put(HeaderMetadataType.BLOCK_IDENTIFIER, attemptNumber + "," + blockSequenceNumber);
-    }
     if (config.shouldWritePartialUpdates()) {
       // When enabling writing partial updates to the data blocks, the "IS_PARTIAL" flag is also
       // written to the block header so that the reader can differentiate partial updates, i.e.,

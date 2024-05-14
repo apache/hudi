@@ -32,7 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
-import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -53,6 +53,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.getHoodieCommitMetadata;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STRING;
 
 /**
@@ -184,14 +185,14 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
         return HoodieTimeline.compareTimestamps(commit, HoodieTimeline.LESSER_THAN_OR_EQUALS,
             fileCommitTime);
-      } else if (FSUtils.isLogFile(path)) {
-        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(path.toUri()));
+      } else if (HadoopFSUtils.isLogFile(path)) {
+        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(convertToStoragePath(path));
         return completionTimeQueryView.isSlicedAfterOrOn(commit, fileCommitTime);
       }
       return false;
     };
     return ((FileSystem) metaClient.getStorage().getFileSystem())
-        .listStatus(FSUtils.constructAbsolutePathInHadoopPath(config.getBasePath(), partitionPath),
+        .listStatus(HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getBasePath(), partitionPath),
             filter);
   }
 
@@ -221,7 +222,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       }
       return false;
     };
-    return fs.listStatus(FSUtils.constructAbsolutePathInHadoopPath(config.getBasePath(), partitionPath), filter);
+    return fs.listStatus(HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getBasePath(), partitionPath), filter);
   }
 
   private FileStatus[] fetchFilesFromInstant(HoodieInstant instantToRollback, String partitionPath, String basePath,
@@ -282,7 +283,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
   }
 
   private static Path[] listFilesToBeDeleted(String basePath, String partitionPath) {
-    return new Path[] {FSUtils.constructAbsolutePathInHadoopPath(basePath, partitionPath)};
+    return new Path[] {HadoopFSUtils.constructAbsolutePathInHadoopPath(basePath, partitionPath)};
   }
 
   private static Path[] getFilesFromCommitMetadata(String basePath, HoodieCommitMetadata commitMetadata, String partitionPath) {
@@ -296,9 +297,9 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       if (path.toString().endsWith(basefileExtension)) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
         return commit.equals(fileCommitTime);
-      } else if (FSUtils.isLogFile(path)) {
+      } else if (HadoopFSUtils.isLogFile(path)) {
         // Since the baseCommitTime is the only commit for new log files, it's okay here
-        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(path.toUri()));
+        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(convertToStoragePath(path));
         return commit.equals(fileCommitTime);
       }
       return false;

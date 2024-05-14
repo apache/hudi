@@ -56,7 +56,6 @@ import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -94,6 +93,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.client.utils.SparkPartitionUtils.getPartitionFieldVals;
 import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
+import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 
 /**
  * Clustering strategy to submit multiple spark jobs and union the results.
@@ -385,8 +385,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
   private HoodieFileReader getBaseOrBootstrapFileReader(StorageConfiguration<?> storageConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp)
       throws IOException {
-    HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType)
-        .getFileReader(writeConfig, storageConf, new StoragePath(clusteringOp.getDataFilePath()));
+    HoodieFileReader baseFileReader = getHoodieSparkIOFactory(storageConf).getReaderFactory(recordType)
+        .getFileReader(writeConfig, new StoragePath(clusteringOp.getDataFilePath()));
     // handle bootstrap path
     if (StringUtils.nonEmpty(clusteringOp.getBootstrapFilePath()) && StringUtils.nonEmpty(bootstrapBasePath)) {
       String bootstrapFilePath = clusteringOp.getBootstrapFilePath();
@@ -397,10 +397,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         partitionValues = getPartitionFieldVals(partitionFields, partitionFilePath, bootstrapBasePath, baseFileReader.getSchema(),
             storageConf.unwrapAs(Configuration.class));
       }
-      baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
+      baseFileReader = getHoodieSparkIOFactory(storageConf).getReaderFactory(recordType).newBootstrapFileReader(
           baseFileReader,
-          HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(
-              writeConfig, storageConf, new StoragePath(bootstrapFilePath)), partitionFields,
+          getHoodieSparkIOFactory(storageConf).getReaderFactory(recordType).getFileReader(
+              writeConfig, new StoragePath(bootstrapFilePath)), partitionFields,
           partitionValues);
     }
     return baseFileReader;
@@ -457,9 +457,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
     String readPathString =
         String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
+    String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).distinct().toArray(String[]::new));
     params.put("hoodie.datasource.read.paths", readPathString);
     // Building HoodieFileIndex needs this param to decide query path
-    params.put("glob.paths", readPathString);
+    params.put("glob.paths", globPathString);
 
     // Let Hudi relations to fetch the schema from the table itself
     BaseRelation relation = SparkAdapterSupport$.MODULE$.sparkAdapter()

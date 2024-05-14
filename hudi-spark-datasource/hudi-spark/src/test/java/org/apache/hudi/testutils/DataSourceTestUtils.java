@@ -18,10 +18,10 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -151,7 +151,7 @@ public class DataSourceTestUtils {
       LocatedFileStatus file = files.next();
       // skip meta folder
       if (file.isFile() && !file.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME + StoragePath.SEPARATOR)) {
-        if (FSUtils.isBaseFile(file.getPath())) {
+        if (HadoopFSUtils.isBaseFile(file.getPath())) {
           return false;
         }
       }

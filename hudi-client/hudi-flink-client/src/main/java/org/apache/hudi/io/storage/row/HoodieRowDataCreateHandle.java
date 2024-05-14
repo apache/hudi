@@ -49,6 +49,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+
 /**
  * Create handle with RowData for datasource implementation of bulk insert.
  */
@@ -171,9 +173,10 @@ public class HoodieRowDataCreateHandle implements Serializable {
     stat.setNumInserts(writeStatus.getTotalRecords());
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(fileId);
-    stat.setPath(new StoragePath(writeConfig.getBasePath()), new StoragePath(path.toUri()));
+    StoragePath storagePath = convertToStoragePath(path);
+    stat.setPath(new StoragePath(writeConfig.getBasePath()), storagePath);
     long fileSizeInBytes = FSUtils.getFileSize(
-        table.getMetaClient().getStorage(), new StoragePath(path.toUri()));
+        table.getMetaClient().getStorage(), storagePath);
     stat.setTotalWriteBytes(fileSizeInBytes);
     stat.setFileSizeInBytes(fileSizeInBytes);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
