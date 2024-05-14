@@ -134,6 +134,7 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.DataSourceUtils.createUserDefinedBulkInsertPartitioner;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -988,7 +989,7 @@ public class StreamSync implements Serializable, Closeable {
           writeClientWriteResult = new WriteClientWriteResult(writeClient.upsert(records, instantTime));
           break;
         case BULK_INSERT:
-          writeClientWriteResult = new WriteClientWriteResult(writeClient.bulkInsert(records, instantTime));
+          writeClientWriteResult = new WriteClientWriteResult(writeClient.bulkInsert(records, instantTime, createUserDefinedBulkInsertPartitioner(writeClient.getConfig())));
           break;
         case INSERT_OVERWRITE:
           writeResult = writeClient.insertOverwrite(records, instantTime);
