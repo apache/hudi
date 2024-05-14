@@ -71,6 +71,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Timer;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -146,11 +147,6 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords) {
-    return this.execute(inputRecords, Option.empty());
-  }
-
-  @Override
-  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     // Cache the tagged records, so we don't end up computing both
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
     if (inputRDD.getStorageLevel() == StorageLevel.NONE()) {
@@ -164,14 +160,12 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
 
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
+    HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start();
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
     LOG.debug("Input workload profile :" + workloadProfile);
-    Long sourceReadAndIndexDurationMs = null;
-    if (sourceReadAndIndexTimer.isPresent()) {
-      sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
-      LOG.info("Source read and index timer " + sourceReadAndIndexDurationMs);
-    }
+    long sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.endTimer();
+    LOG.info("Source read and index timer " + sourceReadAndIndexDurationMs);
 
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
@@ -181,9 +175,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     updateIndexAndCommitIfNeeded(writeStatuses, result);
-    if (sourceReadAndIndexTimer.isPresent()) {
-      result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
-    }
+    result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
     return result;
   }
 
