@@ -62,5 +62,9 @@ public abstract class HoodieIngestionMetrics implements Serializable {
 
   public abstract void updateStreamerSourceNewMessageCount(String sourceMetricName, long sourceNewMessageCount);
 
+  public abstract void updateStreamerSourceParallelism(int sourceParallelism);
+
+  public abstract void updateStreamerSourceBytesToBeIngestedInSyncRound(long sourceBytesToBeIngested);
+
   public abstract void shutdown();
 }
