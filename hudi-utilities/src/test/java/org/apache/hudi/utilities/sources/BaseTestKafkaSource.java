@@ -300,6 +300,7 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
     assertEquals(500, fetch1.getBatch().get().count());
     verify(metrics, times(2)).updateStreamerSourceParallelism(4);
+    verify(metrics, times(2)).updateStreamerSourceBytesToBeIngestedInSyncRound(Long.MAX_VALUE);
   }
 
   static class TestSourceProfile implements SourceProfile<Long> {

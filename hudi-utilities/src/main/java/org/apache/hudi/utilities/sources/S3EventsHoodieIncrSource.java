@@ -73,8 +73,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       TypedProperties props,
       JavaSparkContext sparkContext,
       SparkSession sparkSession,
-      HoodieIngestionMetrics metrics,
-      SchemaProvider schemaProvider) {
+      SchemaProvider schemaProvider,
+      HoodieIngestionMetrics metrics) {
     this(props, sparkContext, sparkSession, new QueryRunner(sparkSession, props),
         new CloudDataFetcher(props, sparkContext, sparkSession, metrics), new DefaultStreamContext(schemaProvider, Option.empty()));
   }
