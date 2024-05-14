@@ -94,13 +94,11 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     paramsMap.put(PARQUET_COMPRESSION_CODEC_NAME.key(), compressionCodecName.get());
     paramsMap.put(PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(expectedCompressionRatio.get()));
     paramsMap.put(PARQUET_DICTIONARY_ENABLED.key(), String.valueOf(useDictionaryEncoding.get()));
+    Schema writerSchema = new Schema.Parser().parse(
+        super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
 
     return FileFormatUtils.getInstance(PARQUET).serializeRecordsToLogBlock(
-        storageConf, records,
-        new Schema.Parser().parse(super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)),
-        getSchema(),
-        getKeyFieldName(),
-        paramsMap);
+        storageConf, records, writerSchema, getSchema(), getKeyFieldName(), paramsMap);
   }
 
   /**

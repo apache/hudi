@@ -105,11 +105,10 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   @Override
   protected byte[] serializeRecords(List<HoodieRecord> records, StorageConfiguration<?> storageConf) throws IOException {
+    Schema writerSchema = new Schema.Parser().parse(
+        super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
     return FileFormatUtils.getInstance(HoodieFileFormat.HFILE).serializeRecordsToLogBlock(
-        storageConf, records,
-        new Schema.Parser().parse(super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)),
-        getSchema(),
-        getKeyFieldName(),
+        storageConf, records, writerSchema, getSchema(), getKeyFieldName(),
         Collections.singletonMap(HFILE_COMPRESSION_ALGO_PARAM_KEY, compressionCodec.get().name()));
   }
 
