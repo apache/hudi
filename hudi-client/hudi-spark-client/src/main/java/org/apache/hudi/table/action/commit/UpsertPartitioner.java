@@ -229,7 +229,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
         if (totalUnassignedInserts > 0) {
           long insertRecordsPerBucket = config.getCopyOnWriteInsertSplitSize();
           if (config.shouldAutoTuneInsertSplits()) {
-            insertRecordsPerBucket = config.getParquetMaxFileSize() / averageRecordSize;
+            insertRecordsPerBucket = (int) Math.ceil((1.0 * config.getParquetMaxFileSize()) / averageRecordSize);
           }
 
           int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
