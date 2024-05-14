@@ -99,10 +99,6 @@ public class FlinkAppendHandle<T, I, K, O>
         && hoodieRecord.getCurrentLocation().getInstantTime().equals("U");
   }
 
-  protected boolean addBlockIdentifier() {
-    return false;
-  }
-
   @Override
   public List<WriteStatus> close() {
     try {
