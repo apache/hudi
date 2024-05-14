@@ -165,6 +165,12 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
     }
   }
 
+  public void updateStreamerSourceBytesToBeIngestedInSyncRound(long sourceBytesToBeIngested) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "sourceBytesToBeIngestedInSyncRound"), sourceBytesToBeIngested);
+    }
+  }
+
   @Override
   public void shutdown() {
     if (metrics != null) {
