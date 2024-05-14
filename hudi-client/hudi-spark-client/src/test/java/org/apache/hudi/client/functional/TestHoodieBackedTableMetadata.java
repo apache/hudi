@@ -19,10 +19,14 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -32,8 +36,12 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -43,7 +51,6 @@ import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
@@ -66,6 +73,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -76,8 +84,12 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
+import static org.apache.hudi.common.model.WriteOperationType.BULK_INSERT;
+import static org.apache.hudi.common.model.WriteOperationType.COMPACT;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
+import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -286,6 +298,112 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   }
 
   /**
+   * This tests the case where the two clean actions delete the same file and commit
+   * to the metadata table. The metadata table should not contain the deleted file afterwards.
+   * A new cleaner plan may contain the same file to delete if the previous cleaner
+   * plan has not been successfully executed before the new one is scheduled.
+   */
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testRepeatedCleanActionsWithMetadataTableEnabled(final HoodieTableType tableType) throws Exception {
+    initPath();
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMaxNumDeltaCommitsBeforeCompaction(4)
+            .build())
+        .build();
+    init(tableType, writeConfig);
+    String partition = "p1";
+    // Simulate two bulk insert operations adding two data files in partition "p1"
+    String instant1 = HoodieActiveTimeline.createNewInstantTime();
+    HoodieCommitMetadata commitMetadata1 =
+        testTable.doWriteOperation(instant1, BULK_INSERT, emptyList(), asList(partition), 1);
+    String instant2 = HoodieActiveTimeline.createNewInstantTime();
+    HoodieCommitMetadata commitMetadata2 =
+        testTable.doWriteOperation(instant2, BULK_INSERT, emptyList(), asList(partition), 1);
+
+    final HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(hadoopConf)
+        .setBasePath(metadataTableBasePath)
+        .build();
+    while (getNumCompactions(metadataMetaClient) == 0) {
+      // Write until the compaction happens in the metadata table
+      testTable.doWriteOperation(
+          HoodieActiveTimeline.createNewInstantTime(), BULK_INSERT, emptyList(), asList(partition), 1);
+      metadataMetaClient.reloadActiveTimeline();
+    }
+
+    assertEquals(1, getNumCompactions(metadataMetaClient));
+
+    List<String> fileIdsToReplace = new ArrayList<>();
+    fileIdsToReplace.addAll(commitMetadata1.getFileIdAndRelativePaths().keySet());
+    fileIdsToReplace.addAll(commitMetadata2.getFileIdAndRelativePaths().keySet());
+    // Simulate clustering operation replacing two data files with a new data file
+    testTable.doCluster(
+        HoodieActiveTimeline.createNewInstantTime(),
+        Collections.singletonMap(partition, fileIdsToReplace), asList(partition), 1);
+    Set<String> fileSetBeforeCleaning = getFilePathsInPartition(partition);
+
+    // Simulate two clean actions deleting the same set of date files
+    // based on the first two commits
+    String cleanInstant = HoodieActiveTimeline.createNewInstantTime();
+    HoodieCleanMetadata cleanMetadata = testTable.doCleanBasedOnCommits(cleanInstant, asList(instant1, instant2));
+    List<String> deleteFileList = cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns();
+    assertTrue(deleteFileList.size() > 0);
+
+    Set<String> fileSetAfterFirstCleaning = getFilePathsInPartition(partition);
+    validateFilesAfterCleaning(deleteFileList, fileSetBeforeCleaning, fileSetAfterFirstCleaning);
+
+    metaClient.reloadActiveTimeline();
+    HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(
+        metaClient, new HoodieInstant(HoodieInstant.State.REQUESTED, CLEAN_ACTION, cleanInstant));
+    testTable.repeatClean(HoodieActiveTimeline.createNewInstantTime(), cleanerPlan, cleanMetadata);
+
+    // Compaction should not happen after the first compaction in this test case
+    assertEquals(1, getNumCompactions(metadataMetaClient));
+    Set<String> fileSetAfterSecondCleaning = getFilePathsInPartition(partition);
+    validateFilesAfterCleaning(deleteFileList, fileSetBeforeCleaning, fileSetAfterSecondCleaning);
+  }
+
+  private int getNumCompactions(HoodieTableMetaClient metaClient) {
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    return timeline
+        .filter(s -> {
+          try {
+            return s.getAction().equals(HoodieTimeline.COMMIT_ACTION)
+                && HoodieCommitMetadata.fromBytes(
+                    timeline.getInstantDetails(s).get(), HoodieCommitMetadata.class)
+                .getOperationType().equals(COMPACT);
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        })
+        .countInstants();
+  }
+
+  private Set<String> getFilePathsInPartition(String partition) throws IOException {
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
+        new HoodieLocalEngineContext(hadoopConf),
+        HoodieMetadataConfig.newBuilder().enable(true).build(),
+        basePath);
+    return Arrays.stream(tableMetadata.getAllFilesInPartition(new Path(basePath, partition)))
+        .map(status -> status.getPath().getName()).collect(Collectors.toSet());
+  }
+
+  private void validateFilesAfterCleaning(List<String> deleteFileList,
+                                          Set<String> fileSetBeforeCleaning,
+                                          Set<String> fileSetAfterCleaning) {
+    assertEquals(deleteFileList.size(), fileSetBeforeCleaning.size() - fileSetAfterCleaning.size());
+    for (String deleteFile : deleteFileList) {
+      assertFalse(fileSetAfterCleaning.contains(deleteFile));
+    }
+    for (String file : fileSetAfterCleaning) {
+      assertTrue(fileSetBeforeCleaning.contains(file));
+    }
+  }
+
+  /**
    * Verify the metadata table log files for the record field correctness. On disk format
    * should be based on meta fields and key deduplication config. And the in-memory merged
    * records should all be materialized fully irrespective of the config.
@@ -302,7 +420,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     // Compaction should not be triggered yet. Let's verify no base file
     // and few log files available.
     List<FileSlice> fileSlices = table.getSliceView()
-        .getLatestFileSlices(MetadataPartitionType.FILES.getPartitionPath()).collect(Collectors.toList());
+        .getLatestFileSlices(FILES.getPartitionPath()).collect(Collectors.toList());
     if (fileSlices.isEmpty()) {
       throw new IllegalStateException("LogFile slices are not available!");
     }
@@ -377,7 +495,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
         .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
         .withLatestInstantTime(latestCommitTimestamp)
-        .withPartition(MetadataPartitionType.FILES.getPartitionPath())
+        .withPartition(FILES.getPartitionPath())
         .withReaderSchema(schema)
         .withMaxMemorySizeInBytes(100000L)
         .withBufferSize(4096)
@@ -401,7 +519,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   private void verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(HoodieTable table) throws IOException {
     table.getHoodieView().sync();
     List<FileSlice> fileSlices = table.getSliceView()
-        .getLatestFileSlices(MetadataPartitionType.FILES.getPartitionPath()).collect(Collectors.toList());
+        .getLatestFileSlices(FILES.getPartitionPath()).collect(Collectors.toList());
     if (!fileSlices.get(0).getBaseFile().isPresent()) {
       throw new IllegalStateException("Base file not available!");
     }

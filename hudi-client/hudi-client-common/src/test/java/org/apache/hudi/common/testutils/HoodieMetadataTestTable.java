@@ -19,6 +19,7 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -119,6 +120,16 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
       writer.update(cleanMetadata, commitTime);
     }
     return cleanMetadata;
+  }
+
+  @Override
+  public void repeatClean(String cleanCommitTime,
+                          HoodieCleanerPlan cleanerPlan,
+                          HoodieCleanMetadata cleanMetadata) throws IOException {
+    super.repeatClean(cleanCommitTime, cleanerPlan, cleanMetadata);
+    if (writer != null) {
+      writer.update(cleanMetadata, cleanCommitTime);
+    }
   }
 
   public HoodieTestTable addCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
