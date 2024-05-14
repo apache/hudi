@@ -180,11 +180,6 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     public Option<String> getProperty(EngineProperty prop) {
       return Option.empty();
     }
-
-    @Override
-    public Supplier<Integer> getAttemptNumberSupplier() {
-      return () -> (int)attemptId;
-    }
   }
 
   protected void initFileSystem(String basePath, StorageConfiguration<?> hadoopConf) {
