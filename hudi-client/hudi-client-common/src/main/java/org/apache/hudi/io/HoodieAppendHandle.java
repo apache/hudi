@@ -462,12 +462,12 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
         blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, shouldWriteRecordPositions,
-            header, keyField));
+            getUpdatedHeader(header, config), keyField));
       }
 
       if (appendDeleteBlocks && recordsToDeleteWithPositions.size() > 0) {
         blocks.add(new HoodieDeleteBlock(recordsToDeleteWithPositions, shouldWriteRecordPositions,
-            header));
+            getUpdatedHeader(header, config)));
       }
 
       if (blocks.size() > 0) {
@@ -638,6 +638,19 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         throw new HoodieException("Base file format " + hoodieTable.getBaseFileFormat()
             + " does not have associated log block type");
     }
+  }
+
+  private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header,
+                                                                  HoodieWriteConfig config) {
+    Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
+    if (config.shouldWritePartialUpdates()) {
+      // When enabling writing partial updates to the data blocks, the "IS_PARTIAL" flag is also
+      // written to the block header so that the reader can differentiate partial updates, i.e.,
+      // the "SCHEMA" header contains the partial schema.
+      updatedHeader.put(
+          HeaderMetadataType.IS_PARTIAL, Boolean.toString(true));
+    }
+    return updatedHeader;
   }
 
   private static HoodieLogBlock getBlock(HoodieWriteConfig writeConfig,
