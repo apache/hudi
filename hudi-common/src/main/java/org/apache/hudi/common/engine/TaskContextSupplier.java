@@ -39,5 +39,7 @@ public abstract class TaskContextSupplier implements Serializable {
   /**
    * @returns the attempt number for the task of interest. Attempt starts with 0 and goes up by 1 on retries.
    */
-  public abstract Supplier<Integer> getAttemptNumberSupplier();
+  public abstract Supplier<Integer> getTaskAttemptNumberSupplier();
+
+  public abstract Supplier<Integer> getStageAttemptNumberSupplier();
 }
