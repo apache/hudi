@@ -30,9 +30,9 @@ public abstract class HoodieIOHandle<T, I, K, O> {
 
   protected final String instantTime;
   protected final HoodieWriteConfig config;
-  protected final HoodieStorage storage;
-  protected final FileSystem fs;
   protected final HoodieTable<T, I, K, O> hoodieTable;
+  protected FileSystem fs;
+  protected HoodieStorage storage;
 
   HoodieIOHandle(HoodieWriteConfig config, Option<String> instantTime, HoodieTable<T, I, K, O> hoodieTable) {
     this.instantTime = instantTime.orElse(StringUtils.EMPTY_STRING);

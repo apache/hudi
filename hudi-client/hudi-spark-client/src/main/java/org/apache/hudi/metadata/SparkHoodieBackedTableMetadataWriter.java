@@ -41,6 +41,8 @@ import org.apache.hudi.index.functional.HoodieFunctionalIndex;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
@@ -209,6 +211,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       }
     }
     return HoodieJavaRDD.of(Collections.emptyList(), sparkEngineContext, parallelism);
+  }
+
+  @Override
+  protected HoodieTable getHoodieTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
+    return HoodieSparkTable.create(writeConfig, engineContext, metaClient);
   }
 
   @Override
