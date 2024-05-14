@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -99,13 +98,13 @@ public abstract class BaseFileUtils {
   public BloomFilter readBloomFilterFromMetadata(StorageConfiguration<?> configuration, StoragePath filePath) {
     Map<String, String> footerVals =
         readFooter(configuration, false, filePath,
-            HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+            HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+            HoodieBloomFilterWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
             HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE);
-    String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
+    String footerVal = footerVals.get(HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     if (null == footerVal) {
       // We use old style key "com.uber.hoodie.bloomfilter"
-      footerVal = footerVals.get(HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
+      footerVal = footerVals.get(HoodieBloomFilterWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     }
     BloomFilter toReturn = null;
     if (footerVal != null) {
