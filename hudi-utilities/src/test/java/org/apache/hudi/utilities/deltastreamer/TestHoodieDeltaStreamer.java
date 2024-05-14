@@ -2882,12 +2882,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(sqlContext.sparkContext().hadoopConfiguration()).build();
-    List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getHadoopConf()), metaClient.getBasePath(), false, true);
+    List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getHadoopConf()), metaClient.getBasePath(), false);
     Configuration hadoopConf = metaClient.getHadoopConf();
     HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        HoodieMetadataConfig.newBuilder().enable(false).withAssumeDatePartitioning(true).build());
+        HoodieMetadataConfig.newBuilder().enable(false).build());
     List<String> baseFiles = partitions.parallelStream().flatMap(partition -> fsView.getLatestBaseFiles(partition).map(HoodieBaseFile::getPath)).collect(Collectors.toList());
     // Verify each partition has one base file because parallelism is 1.
     assertEquals(baseFiles.size(), partitions.size());
