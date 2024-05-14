@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -158,9 +159,12 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
 
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
+    HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start(); // time taken from dedup -> tag location -> building workload profile
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
     LOG.debug("Input workload profile :" + workloadProfile);
+    long sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.endTimer();
+    LOG.info("Source read and index timer " + sourceReadAndIndexDurationMs);
 
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
@@ -170,6 +174,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     updateIndexAndCommitIfNeeded(writeStatuses, result);
+    result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
     return result;
   }
 
