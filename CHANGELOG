@@ -170,3 +170,7 @@ c29d62a70 [AUDIT-781]: Upgrade to version release-v1.14.1 (#692)
 ---[2024-05-09 13:39:51] [release-v1.14.3] ---
 87c9171b278 [ENG-9551][HUDI-4732] Add support for confluent schema registry with proto (#695)
 354f664ecbb [AUDIT-781] Upgrade to version release-v1.14.2 (#694)
+
+---[2024-05-14 11:28:25] [release-v1.14.4] Upgrade to version release-v1.14.4---
+c8336d5b0 [ENG-8631][MINOR] Use parent as the glob path when full file path specified (#706)
+5d7fd31f7 [AUDIT-784] Upgrade to version release-v1.14.3 (#696)
