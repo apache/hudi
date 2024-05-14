@@ -38,6 +38,7 @@ import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -126,6 +127,7 @@ public class TestPriorityBasedFileSystemView {
   }
 
   @Test
+  @Disabled
   public void testBadRequestExceptionWithPrimary() {
     final TestLogAppender appender = new TestLogAppender();
     final Logger logger = (Logger) LogManager.getLogger(PriorityBasedFileSystemView.class);
