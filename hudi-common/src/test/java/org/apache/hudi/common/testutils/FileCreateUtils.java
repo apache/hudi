@@ -381,7 +381,7 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION);
   }
 
-  public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
+  public static URI createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
     Path metaFilePath;
     try {
       Path parentPath = Paths.get(new URI(basePath).getPath(), partitionPath);
@@ -390,6 +390,7 @@ public class FileCreateUtils {
       if (Files.notExists(metaFilePath)) {
         Files.createFile(metaFilePath);
       }
+      return metaFilePath.toUri();
     } catch (URISyntaxException e) {
       throw new HoodieException("Error creating partition meta file", e);
     }
