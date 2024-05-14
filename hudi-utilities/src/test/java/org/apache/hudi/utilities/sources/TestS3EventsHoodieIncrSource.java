@@ -75,7 +75,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +85,6 @@ import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -109,6 +107,8 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
   SourceProfileSupplier sourceProfileSupplier;
   @Mock
   QueryInfo queryInfo;
+  @Mock
+  HoodieIngestionMetrics metrics;
   private JavaSparkContext jsc;
   private HoodieTableMetaClient metaClient;
 
@@ -499,19 +499,22 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected4, typedProperties);
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
+    ArgumentCaptor<Integer> argumentCaptorForMetrics = ArgumentCaptor.forClass(Integer.class);
     verify(mockCloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), argumentCaptor.capture());
-    List<Integer> numPartitions = Collections.emptyList();
+    verify(metrics, atLeastOnce()).updateStreamerSourceParallelism(argumentCaptorForMetrics.capture());
+    List<Integer> numPartitions;
     if (snapshotCheckPoint.equals("1") || snapshotCheckPoint.equals("2")) {
-      Assertions.assertEquals(Arrays.asList(12, 3, 1), argumentCaptor.getAllValues());
+      numPartitions = Arrays.asList(12, 3, 1);
     } else {
-      Assertions.assertEquals(Arrays.asList(23, 1), argumentCaptor.getAllValues());
+      numPartitions = Arrays.asList(23, 1);
     }
+    Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
+    Assertions.assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
   }
 
   @Test
   public void testCreateSource() throws IOException {
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
-    HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
     Source s3Source = UtilHelpers.createSource(S3EventsHoodieIncrSource.class.getName(), typedProperties, jsc(), spark(), metrics,
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
     assertEquals(Source.SourceType.ROW, s3Source.getSourceType());
@@ -521,7 +524,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
                              Option<String> checkpointToPull, long sourceLimit, String expectedCheckpoint,
                              TypedProperties typedProperties) {
     S3EventsHoodieIncrSource incrSource = new S3EventsHoodieIncrSource(typedProperties, jsc(),
-        spark(), mockQueryRunner, new CloudDataFetcher(typedProperties, jsc(), spark(), mockCloudObjectsSelectorCommon),
+        spark(), mockQueryRunner, new CloudDataFetcher(typedProperties, jsc(), spark(), metrics, mockCloudObjectsSelectorCommon),
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
     Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = incrSource.fetchNextBatch(checkpointToPull, sourceLimit);
