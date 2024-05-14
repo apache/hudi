@@ -23,15 +23,14 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline}
-import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.config._
 import org.apache.hudi.exception.HoodieWriteConflictException
-import org.apache.hudi.functional.TestCOWDataSourceStorage.{SQL_DRIVER_IS_NOT_NULL, SQL_DRIVER_IS_NULL, SQL_QUERY_EQUALITY_VALIDATOR_CLASS_NAME, SQL_QUERY_INEQUALITY_VALIDATOR_CLASS_NAME, SQL_RIDER_IS_NOT_NULL, SQL_RIDER_IS_NULL}
-import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.util.JavaConversions
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.lit
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -42,6 +41,7 @@ import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, Meth
 
 import java.util.Collections
 import java.util.concurrent.Executors
+
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -50,7 +50,6 @@ import scala.util.Using
 
 @Tag("functional")
 class TestRecordLevelIndex extends RecordLevelIndexTestBase {
-
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIInitialization(tableType: HoodieTableType): Unit = {
@@ -75,7 +74,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
 
     // batch1 inserts
     val instantTime1 = getNewInstantTime()
-    val latestBatch = recordsToStrings(dataGen1.generateInserts(instantTime1, 5)).asScala
+    val latestBatch = recordsToStrings(dataGen1.generateInserts(instantTime1, 5)).asScala.toSeq
     var operation = INSERT_OPERATION_OPT_VAL
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 1))
     latestBatchDf.cache()
@@ -89,11 +88,11 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     // batch2. upsert. update few records to 2nd partition from partition1 and insert a few to partition2.
     val instantTime2 = getNewInstantTime()
 
-    val latestBatch2_1 = recordsToStrings(dataGen1.generateUniqueUpdates(instantTime2, 3)).asScala
+    val latestBatch2_1 = recordsToStrings(dataGen1.generateUniqueUpdates(instantTime2, 3)).asScala.toSeq
     val latestBatchDf2_1 = spark.read.json(spark.sparkContext.parallelize(latestBatch2_1, 1))
     val latestBatchDf2_2 = latestBatchDf2_1.withColumn("partition", lit(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH))
       .withColumn("partition_path", lit(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH))
-    val latestBatch2_3 = recordsToStrings(dataGen2.generateInserts(instantTime2, 2)).asScala
+    val latestBatch2_3 = recordsToStrings(dataGen2.generateInserts(instantTime2, 2)).asScala.toSeq
     val latestBatchDf2_3 = spark.read.json(spark.sparkContext.parallelize(latestBatch2_3, 1))
     val latestBatchDf2Final = latestBatchDf2_3.union(latestBatchDf2_2)
     latestBatchDf2Final.cache()
@@ -114,7 +113,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
 
     val instantTime3 = getNewInstantTime()
     // batch3. updates to partition2
-    val latestBatch3 = recordsToStrings(dataGen2.generateUniqueUpdates(instantTime3, 2)).asScala
+    val latestBatch3 = recordsToStrings(dataGen2.generateUniqueUpdates(instantTime3, 2)).asScala.toSeq
     val latestBatchDf3 = spark.read.json(spark.sparkContext.parallelize(latestBatch3, 1))
     latestBatchDf3.cache()
     latestBatchDf.write.format("org.apache.hudi")
