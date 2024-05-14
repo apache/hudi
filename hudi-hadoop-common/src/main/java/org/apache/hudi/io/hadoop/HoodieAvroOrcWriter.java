@@ -19,7 +19,6 @@
 
 package org.apache.hudi.io.hadoop;
 
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
@@ -155,7 +154,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
 
     if (orcConfig.useBloomFilter()) {
       final BloomFilter bloomFilter = orcConfig.getBloomFilter();
-      writer.addUserMetadata(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString())));
+      writer.addUserMetadata(HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString())));
       if (minRecordKey != null && maxRecordKey != null) {
         writer.addUserMetadata(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER, ByteBuffer.wrap(getUTF8Bytes(minRecordKey)));
         writer.addUserMetadata(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER, ByteBuffer.wrap(getUTF8Bytes(maxRecordKey)));
