@@ -82,6 +82,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -96,8 +97,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
-  protected static int timelineServicePort =
-      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
+  protected static int timelineServicePort = 1024 + new Random().nextInt(50000);
   private static transient SparkSession spark;
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;

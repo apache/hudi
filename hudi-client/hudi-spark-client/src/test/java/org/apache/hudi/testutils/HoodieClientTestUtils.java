@@ -62,6 +62,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -90,7 +91,7 @@ public class HoodieClientTestUtils {
    */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
-        .setMaster("local[8]")
+        .setMaster("local[2]")
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
         .set("spark.sql.shuffle.partitions", "4")
@@ -279,23 +280,30 @@ public class HoodieClientTestUtils {
    */
   public static TimelineService initTimelineService(
       HoodieEngineContext context, String basePath, int timelineServicePort) {
-    try {
-      HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-          .withPath(basePath)
-          .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-              .withRemoteServerPort(timelineServicePort).build())
-          .build();
-      TimelineService timelineService = new TimelineService(context, new Configuration(),
-          TimelineService.Config.builder().enableMarkerRequests(true)
-              .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          HoodieStorageUtils.getStorage(HoodieTestUtils.getDefaultStorageConf()),
-          FileSystemViewManager.createViewManager(context, config.getViewStorageConfig(), config.getCommonConfig()));
-      timelineService.startService();
-      LOG.info("Timeline service server port: " + timelineServicePort);
-      return timelineService;
-    } catch (Exception ex) {
-      throw new RuntimeException(ex);
+    int retries = 3;
+    Exception lastException = null;
+    while (retries > 0) {
+      try {
+        HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+            .withPath(basePath)
+            .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+                .withRemoteServerPort(timelineServicePort).build())
+            .build();
+        TimelineService timelineService = new TimelineService(context, new Configuration(),
+            TimelineService.Config.builder().enableMarkerRequests(true)
+                .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
+            HoodieStorageUtils.getStorage(HoodieTestUtils.getDefaultStorageConf()),
+            FileSystemViewManager.createViewManager(context, config.getViewStorageConfig(), config.getCommonConfig()));
+        timelineService.startService();
+        LOG.info("Timeline service server port: " + timelineServicePort);
+        return timelineService;
+      } catch (Exception ex) {
+        retries--;
+        timelineServicePort = 1024 + new Random().nextInt(50000);
+        lastException = ex;
+      }
     }
+    throw new RuntimeException(lastException);
   }
 
   public static Option<HoodieCommitMetadata> getCommitMetadataForLatestInstant(HoodieTableMetaClient metaClient) {

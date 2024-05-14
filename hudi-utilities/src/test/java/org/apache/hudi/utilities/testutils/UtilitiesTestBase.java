@@ -40,7 +40,8 @@ import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.table.action.commit.TestSparkWriteHelper;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -88,9 +89,7 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 
 import scala.Tuple2;
@@ -165,7 +164,7 @@ public class UtilitiesTestBase {
       zookeeperTestService.start();
     }
 
-    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4]", sparkConf());
+    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(TestSparkWriteHelper.class.getName()));
     context = new HoodieSparkEngineContext(jsc);
     sqlContext = new SQLContext(jsc);
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
@@ -266,17 +265,6 @@ public class UtilitiesTestBase {
   @AfterEach
   public void teardown() throws Exception {
     TestDataSource.resetDataGen();
-  }
-
-  private static Map<String, String> sparkConf() {
-    Map<String, String> conf = new HashMap<>();
-    conf.put("spark.default.parallelism", "2");
-    conf.put("spark.sql.shuffle.partitions", "2");
-    conf.put("spark.executor.memory", "1G");
-    conf.put("spark.driver.memory", "1G");
-    conf.put("spark.hadoop.mapred.output.compress", "true");
-    conf.put("spark.ui.enable", "false");
-    return conf;
   }
 
   /**

@@ -131,6 +131,8 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <skipTests>${skip.hudi-spark3.unit.tests}</skipTests>
+          <forkCount>2</forkCount>
+          <reuseForks>true</reuseForks>
         </configuration>
       </plugin>
       <plugin>

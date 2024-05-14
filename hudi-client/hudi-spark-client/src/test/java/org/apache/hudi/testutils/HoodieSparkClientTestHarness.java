@@ -277,7 +277,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    */
   protected void cleanupFileSystem() throws IOException {
     if (storage != null) {
-      LOG.warn("Closing file-system instance used in previous test-run");
+      LOG.info("Closing file-system instance used in previous test-run");
       storage.close();
       storage = null;
     }
