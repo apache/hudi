@@ -21,7 +21,6 @@ package org.apache.hudi.examples.spark;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,6 +33,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -84,13 +84,13 @@ public class HoodieWriteClientExample {
 
       // initialize the table, if not done already
       Path path = new Path(tablePath);
-      FileSystem fs = FSUtils.getFs(tablePath, jsc.hadoopConfiguration());
+      FileSystem fs = HadoopFSUtils.getFs(tablePath, jsc.hadoopConfiguration());
       if (!fs.exists(path)) {
         HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(tableType)
-          .setTableName(tableName)
-          .setPayloadClass(HoodieAvroPayload.class)
-          .initTable(jsc.hadoopConfiguration(), tablePath);
+            .setTableType(tableType)
+            .setTableName(tableName)
+            .setPayloadClass(HoodieAvroPayload.class)
+            .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tablePath);
       }
 
       // Create the write client to write some records in
@@ -99,52 +99,52 @@ public class HoodieWriteClientExample {
               .withDeleteParallelism(2).forTable(tableName)
               .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
               .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(20, 30).build()).build();
-      SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg);
+      try (SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg)) {
 
-      // inserts
-      String newCommitTime = client.startCommit();
-      LOG.info("Starting commit " + newCommitTime);
+        // inserts
+        String newCommitTime = client.startCommit();
+        LOG.info("Starting commit " + newCommitTime);
 
-      List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
-      List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
-      JavaRDD<HoodieRecord<HoodieAvroPayload>> writeRecords = jsc.parallelize(records, 1);
-      client.insert(writeRecords, newCommitTime);
+        List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
+        List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
+        JavaRDD<HoodieRecord<HoodieAvroPayload>> writeRecords = jsc.parallelize(records, 1);
+        client.insert(writeRecords, newCommitTime);
 
-      // updates
-      newCommitTime = client.startCommit();
-      LOG.info("Starting commit " + newCommitTime);
-      List<HoodieRecord<HoodieAvroPayload>> toBeUpdated = dataGen.generateUpdates(newCommitTime, 2);
-      records.addAll(toBeUpdated);
-      recordsSoFar.addAll(toBeUpdated);
-      writeRecords = jsc.parallelize(records, 1);
-      client.upsert(writeRecords, newCommitTime);
+        // updates
+        newCommitTime = client.startCommit();
+        LOG.info("Starting commit " + newCommitTime);
+        List<HoodieRecord<HoodieAvroPayload>> toBeUpdated = dataGen.generateUpdates(newCommitTime, 2);
+        records.addAll(toBeUpdated);
+        recordsSoFar.addAll(toBeUpdated);
+        writeRecords = jsc.parallelize(records, 1);
+        client.upsert(writeRecords, newCommitTime);
 
-      // Delete
-      newCommitTime = client.startCommit();
-      LOG.info("Starting commit " + newCommitTime);
-      // just delete half of the records
-      int numToDelete = recordsSoFar.size() / 2;
-      List<HoodieKey> toBeDeleted = recordsSoFar.stream().map(HoodieRecord::getKey).limit(numToDelete).collect(Collectors.toList());
-      JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(toBeDeleted, 1);
-      client.delete(deleteRecords, newCommitTime);
+        // Delete
+        newCommitTime = client.startCommit();
+        LOG.info("Starting commit " + newCommitTime);
+        // just delete half of the records
+        int numToDelete = recordsSoFar.size() / 2;
+        List<HoodieKey> toBeDeleted = recordsSoFar.stream().map(HoodieRecord::getKey).limit(numToDelete).collect(Collectors.toList());
+        JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(toBeDeleted, 1);
+        client.delete(deleteRecords, newCommitTime);
 
-      // Delete by partition
-      newCommitTime = client.startCommit();
-      client.startCommitWithTime(newCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
-      LOG.info("Starting commit " + newCommitTime);
-      // The partition where the data needs to be deleted
-      List<String> partitionList = toBeDeleted.stream().map(s -> s.getPartitionPath()).distinct().collect(Collectors.toList());
-      List<String> deleteList = recordsSoFar.stream().filter(f -> !partitionList.contains(f.getPartitionPath()))
-          .map(m -> m.getKey().getPartitionPath()).distinct().collect(Collectors.toList());
-      client.deletePartitions(deleteList, newCommitTime);
+        // Delete by partition
+        newCommitTime = client.startCommit();
+        client.startCommitWithTime(newCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+        LOG.info("Starting commit " + newCommitTime);
+        // The partition where the data needs to be deleted
+        List<String> partitionList = toBeDeleted.stream().map(s -> s.getPartitionPath()).distinct().collect(Collectors.toList());
+        List<String> deleteList = recordsSoFar.stream().filter(f -> !partitionList.contains(f.getPartitionPath()))
+            .map(m -> m.getKey().getPartitionPath()).distinct().collect(Collectors.toList());
+        client.deletePartitions(deleteList, newCommitTime);
 
-      // compaction
-      if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {
-        Option<String> instant = client.scheduleCompaction(Option.empty());
-        HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instant.get());
-        client.commitCompaction(instant.get(), compactionMetadata.getCommitMetadata().get(), Option.empty());
+        // compaction
+        if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {
+          Option<String> instant = client.scheduleCompaction(Option.empty());
+          HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instant.get());
+          client.commitCompaction(instant.get(), compactionMetadata.getCommitMetadata().get(), Option.empty());
+        }
       }
-      client.close();
     }
   }
 

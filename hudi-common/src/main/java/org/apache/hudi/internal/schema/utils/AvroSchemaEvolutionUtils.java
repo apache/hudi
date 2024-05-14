@@ -25,11 +25,9 @@ import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE;
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter.convert;
 
@@ -77,7 +75,7 @@ public class AvroSchemaEvolutionUtils {
 
     // Remove redundancy from diffFromEvolutionSchema.
     // for example, now we add a struct col in evolvedSchema, the struct col is " user struct<name:string, age:int> "
-    // when we do diff operation: user, user.name, user.age will appeared in the resultSet which is redundancy, user.name and user.age should be excluded.
+    // when we do diff operation: user, user.name, user.age will appear in the resultSet which is redundancy, user.name and user.age should be excluded.
     // deal with add operation
     TreeMap<Integer, String> finalAddAction = new TreeMap<>();
     for (int i = 0; i < diffFromEvolutionColumns.size(); i++) {
@@ -136,15 +134,14 @@ public class AvroSchemaEvolutionUtils {
    *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
-   * @param opts         config options
    * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
-  public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema, Map<String, String> opts) {
+  public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema) {
     if (targetSchema.getType() == Schema.Type.NULL || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
 
-    if (sourceSchema.getType() == Schema.Type.NULL || sourceSchema.getFields().isEmpty()) {
+    if (sourceSchema == null || sourceSchema.getType() == Schema.Type.NULL || sourceSchema.getFields().isEmpty()) {
       return targetSchema;
     }
 
@@ -153,14 +150,12 @@ public class AvroSchemaEvolutionUtils {
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
-    boolean makeNewColsNullable = "true".equals(opts.get(MAKE_NEW_COLUMNS_NULLABLE.key()));
 
     List<String> nullableUpdateColsInSource = new ArrayList<>();
     List<String> typeUpdateColsInSource = new ArrayList<>();
     colNamesSourceSchema.forEach(field -> {
       // handle columns that needs to be made nullable
-      if ((makeNewColsNullable && !colNamesTargetSchema.contains(field))
-          || colNamesTargetSchema.contains(field) && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
+      if (colNamesTargetSchema.contains(field) && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
         nullableUpdateColsInSource.add(field);
       }
       // handle columns that needs type to be updated

@@ -50,13 +50,13 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
     withTempDir(f => {
       val tableName = "testTable"
       val tablePath = new Path(f.getCanonicalPath, tableName).toUri.toString
-      val metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName)
+      val metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf, tablePath, HoodieTableType.COPY_ON_WRITE, tableName)
 
       val writeConfig = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.INMEMORY).build())
         .withMarkersType("DIRECT")
         .build()
-      val engineContext = new HoodieJavaEngineContext(new Configuration())
+      val engineContext = new HoodieJavaEngineContext(HoodieTestUtils.getDefaultStorageConf)
       val writer = LSMTimelineWriter.getInstance(writeConfig, HoodieJavaTable.create(writeConfig, engineContext).asInstanceOf[HoodieJavaTable[HoodieAvroPayload]])
 
       val startTs = System.currentTimeMillis()
@@ -94,7 +94,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         }
       }
       benchmark.addCase("read start time") { _ =>
-        new CompletionTimeQueryView(metaClient).getStartTimeSet(startTs + 1 + 1000 + "", startTs + commitsNum + 1000 + "", earliestStartTimeFunc)
+        new CompletionTimeQueryView(metaClient).getStartTimes(startTs + 1 + 1000 + "", startTs + commitsNum + 1000 + "", earliestStartTimeFunc)
       }
       benchmark.run()
       val totalSize = LSMTimeline.latestSnapshotManifest(metaClient).getFiles.asScala

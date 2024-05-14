@@ -69,7 +69,7 @@ public class TestStatsCommand extends CLIFunctionalTestHarness {
     String tableName = tableName();
     tablePath = tablePath(tableName);
 
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
     // Create table and connect
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
@@ -90,7 +90,7 @@ public class TestStatsCommand extends CLIFunctionalTestHarness {
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String k = entry.getKey();
       Integer[] v = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, k, hadoopConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, k, storageConf(),
           Option.of(v[0]), Option.of(v[1]));
     }
 

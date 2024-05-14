@@ -61,7 +61,6 @@ import org.apache.hadoop.hbase.client.RegionLocator;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.spark.Partitioner;
 import org.apache.spark.SparkConf;
@@ -96,6 +95,8 @@ import static org.apache.hadoop.hbase.security.SecurityConstants.MASTER_KRB_PRIN
 import static org.apache.hadoop.hbase.security.SecurityConstants.REGIONSERVER_KRB_PRINCIPAL;
 import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_AUTHORIZATION_CONF_KEY;
 import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_CONF_KEY;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Hoodie Index implementation backed by HBase.
@@ -107,10 +108,10 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   public static final String DEFAULT_SPARK_DYNAMIC_ALLOCATION_MAX_EXECUTORS_CONFIG_NAME =
       "spark.dynamicAllocation.maxExecutors";
 
-  private static final byte[] SYSTEM_COLUMN_FAMILY = Bytes.toBytes("_s");
-  private static final byte[] COMMIT_TS_COLUMN = Bytes.toBytes("commit_ts");
-  private static final byte[] FILE_NAME_COLUMN = Bytes.toBytes("file_name");
-  private static final byte[] PARTITION_PATH_COLUMN = Bytes.toBytes("partition_path");
+  private static final byte[] SYSTEM_COLUMN_FAMILY = getUTF8Bytes("_s");
+  private static final byte[] COMMIT_TS_COLUMN = getUTF8Bytes("commit_ts");
+  private static final byte[] FILE_NAME_COLUMN = getUTF8Bytes("file_name");
+  private static final byte[] PARTITION_PATH_COLUMN = getUTF8Bytes("partition_path");
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieHBaseIndex.class);
   private static Connection hbaseConnection = null;
@@ -217,7 +218,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   }
 
   private Get generateStatement(String key) throws IOException {
-    return new Get(Bytes.toBytes(getHBaseKey(key))).readVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
+    return new Get(getUTF8Bytes(getHBaseKey(key))).readVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
         .addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN).addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN);
   }
 
@@ -272,10 +273,10 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
               taggedRecords.add(currentRecord);
               continue;
             }
-            String keyFromResult = Bytes.toString(result.getRow());
-            String commitTs = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN));
-            String fileId = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
-            String partitionPath = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
+            String keyFromResult = fromUTF8Bytes(result.getRow());
+            String commitTs = fromUTF8Bytes(result.getValue(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN));
+            String fileId = fromUTF8Bytes(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
+            String partitionPath = fromUTF8Bytes(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
             if (!HoodieIndexUtils.checkIfValidCommit(completedCommitsTimeline, commitTs)) {
               // if commit is invalid, treat this as a new taggedRecord
               taggedRecords.add(currentRecord);
@@ -369,14 +370,14 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
                     // This is an update, no need to update index
                     continue;
                   }
-                  Put put = new Put(Bytes.toBytes(getHBaseKey(recordDelegate.getRecordKey())));
-                  put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN, Bytes.toBytes(loc.get().getInstantTime()));
-                  put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN, Bytes.toBytes(loc.get().getFileId()));
-                  put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN, Bytes.toBytes(recordDelegate.getPartitionPath()));
+                  Put put = new Put(getUTF8Bytes(getHBaseKey(recordDelegate.getRecordKey())));
+                  put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN, getUTF8Bytes(loc.get().getInstantTime()));
+                  put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN, getUTF8Bytes(loc.get().getFileId()));
+                  put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN, getUTF8Bytes(recordDelegate.getPartitionPath()));
                   mutations.add(put);
                 } else {
                   // Delete existing index for a deleted record
-                  Delete delete = new Delete(Bytes.toBytes(getHBaseKey(recordDelegate.getRecordKey())));
+                  Delete delete = new Delete(getUTF8Bytes(getHBaseKey(recordDelegate.getRecordKey())));
                   mutations.add(delete);
                 }
               }
@@ -550,7 +551,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
       int maxReqPerSec = getMaxReqPerSec(numRSAlive, maxQpsPerRegionServer, qpsFraction);
       int numTasks = numTasksDuringPut;
       int maxParallelPutsTask = Math.max(1, Math.min(numTasks, maxExecutors));
-      int multiPutBatchSizePerSecPerTask = Math.max(1, (int) Math.ceil(maxReqPerSec / maxParallelPutsTask));
+      int multiPutBatchSizePerSecPerTask = Math.max(1, (int) Math.ceil((double) maxReqPerSec / maxParallelPutsTask));
       LOG.info("HbaseIndexThrottling: qpsFraction :" + qpsFraction);
       LOG.info("HbaseIndexThrottling: numRSAlive :" + numRSAlive);
       LOG.info("HbaseIndexThrottling: maxReqPerSec :" + maxReqPerSec);
@@ -616,7 +617,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
       while (scannerIterator.hasNext()) {
         Result result = scannerIterator.next();
         currentVersionResults.add(result);
-        statements.add(generateStatement(Bytes.toString(result.getRow()), 0L, rollbackTime - 1));
+        statements.add(generateStatement(fromUTF8Bytes(result.getRow()), 0L, rollbackTime - 1));
 
         if (scannerIterator.hasNext() &&  statements.size() < multiGetBatchSize) {
           continue;

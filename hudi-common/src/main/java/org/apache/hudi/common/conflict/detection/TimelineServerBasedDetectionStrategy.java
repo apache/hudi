@@ -21,8 +21,7 @@ package org.apache.hudi.common.conflict.detection;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.storage.HoodieStorage;
 
 import java.util.Set;
 
@@ -53,12 +52,14 @@ public abstract class TimelineServerBasedDetectionStrategy implements EarlyConfl
    * @param markerDir                         Marker directory.
    * @param basePath                          Base path of the table.
    * @param maxAllowableHeartbeatIntervalInMs Heartbeat timeout.
-   * @param fileSystem                        {@link FileSystem} instance.
+   * @param storage                        {@link HoodieStorage} instance.
    * @param markerHandler                     Marker handler.
    * @param completedCommits                  Completed Hudi commits.
    */
   public abstract void startAsyncDetection(Long initialDelayMs, Long periodMs, String markerDir,
                                            String basePath, Long maxAllowableHeartbeatIntervalInMs,
-                                           FileSystem fileSystem, Object markerHandler,
+                                           HoodieStorage storage, Object markerHandler,
                                            Set<HoodieInstant> completedCommits);
+
+  public abstract void stop();
 }

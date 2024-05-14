@@ -24,7 +24,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -33,10 +32,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
@@ -79,7 +79,7 @@ public class SparkSampleWritesUtils {
       Pair<Boolean, String> result = doSampleWrites(jsc, recordsOpt, writeConfig, instantTime);
       if (result.getLeft()) {
         long avgSize = getAvgSizeFromSampleWrites(jsc, result.getRight());
-        LOG.info("Overwriting record size estimate to " + avgSize);
+        LOG.info("Overwriting record size estimate to {}", avgSize);
         TypedProperties props = writeConfig.getProps();
         props.put(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(avgSize));
         return Option.of(HoodieWriteConfig.newBuilder().withProperties(props).build());
@@ -97,7 +97,7 @@ public class SparkSampleWritesUtils {
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(String.format("%s_samples_%s", writeConfig.getTableName(), instantTime))
         .setCDCEnabled(false)
-        .initTable(jsc.hadoopConfiguration(), sampleWritesBasePath);
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), sampleWritesBasePath);
     TypedProperties props = writeConfig.getProps();
     props.put(SAMPLE_WRITES_ENABLED.key(), "false");
     final HoodieWriteConfig sampleWriteConfig = HoodieWriteConfig.newBuilder()
@@ -120,7 +120,7 @@ public class SparkSampleWritesUtils {
         sampleWriteClient.startCommitWithTime(instantTime);
         JavaRDD<WriteStatus> writeStatusRDD = sampleWriteClient.bulkInsert(jsc.parallelize(samples, 1), instantTime);
         if (writeStatusRDD.filter(WriteStatus::hasErrors).count() > 0) {
-          LOG.error(String.format("sample writes for table %s failed with errors.", writeConfig.getTableName()));
+          LOG.error("sample writes for table {} failed with errors.", writeConfig.getTableName());
           if (LOG.isTraceEnabled()) {
             LOG.trace("Printing out the top 100 errors");
             writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
@@ -138,10 +138,10 @@ public class SparkSampleWritesUtils {
   }
 
   private static String getSampleWritesBasePath(JavaSparkContext jsc, HoodieWriteConfig writeConfig, String instantTime) throws IOException {
-    Path basePath = new CachingPath(writeConfig.getBasePath(), SAMPLE_WRITES_FOLDER_PATH + Path.SEPARATOR + instantTime);
-    FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
-    if (fs.exists(basePath)) {
-      fs.delete(basePath, true);
+    StoragePath basePath = new StoragePath(writeConfig.getBasePath(), SAMPLE_WRITES_FOLDER_PATH + StoragePath.SEPARATOR + instantTime);
+    HoodieStorage storage = getMetaClient(jsc, writeConfig.getBasePath()).getStorage();
+    if (storage.exists(basePath)) {
+      storage.deleteDirectory(basePath);
     }
     return basePath.toString();
   }
@@ -159,7 +159,8 @@ public class SparkSampleWritesUtils {
   }
 
   private static HoodieTableMetaClient getMetaClient(JavaSparkContext jsc, String basePath) {
-    FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
-    return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
+    FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
+    return HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf())).setBasePath(basePath).build();
   }
 }

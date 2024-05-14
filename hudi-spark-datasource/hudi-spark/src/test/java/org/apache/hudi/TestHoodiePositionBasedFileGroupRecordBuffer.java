@@ -35,6 +35,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -55,6 +56,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -90,7 +92,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     partitionPath = partitionPaths[0];
     partitionValues[0] = partitionPath;
 
-    metaClient = HoodieTableMetaClient.builder().setConf(getHadoopConf()).setBasePath(getBasePath()).build();
+    metaClient = createMetaClient(getStorageConf(), getBasePath());
     avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
     Option<String[]> partitionFields = metaClient.getTableConfig().getPartitionFields();
     Option<String> partitionNameOpt = StringUtils.isNullOrEmpty(partitionPaths[0])
@@ -103,7 +105,11 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         partitionNameOpt,
         partitionFields,
         useCustomMerger ? new CustomMerger() : new HoodieSparkRecordMerger(),
-        new TypedProperties());
+        new TypedProperties(),
+        1024 * 1024 * 1000,
+        metaClient.getTempFolderPath(),
+        ExternalSpillableMap.DiskMapType.ROCKS_DB,
+        false);
   }
 
   public Map<HoodieLogBlock.HeaderMetadataType, String> getHeader() {

@@ -45,13 +45,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +65,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDeleteRecord;
 
@@ -177,12 +178,14 @@ public class HoodieIndexUtils {
    * @param candidateRecordKeys - Candidate keys to filter
    * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static List<Pair<String, Long>> filterKeysFromFile(Path filePath, List<String> candidateRecordKeys,
-                                                            Configuration configuration) throws HoodieIndexException {
+  public static List<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
+                                                            List<String> candidateRecordKeys,
+                                                            StorageConfiguration<?> configuration) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
     List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
-    try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(configuration, filePath)) {
+    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(configuration)
+        .getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();

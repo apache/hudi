@@ -18,10 +18,13 @@
 
 package org.apache.hudi.metrics.prometheus;
 
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +41,10 @@ import static org.mockito.Mockito.when;
 public class TestPrometheusReporter {
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieWriteConfig writeConfig;
+  @Mock
+  HoodieMetricsConfig metricsConfig;
+  StorageConfiguration storageConf = HoodieTestUtils.getDefaultStorageConf();
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -51,14 +57,14 @@ public class TestPrometheusReporter {
 
   @Test
   public void testRegisterGauge() {
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getTableName()).thenReturn("foo");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS);
-    when(config.getPrometheusPort()).thenReturn(9090);
-    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS);
+    when(metricsConfig.getPrometheusPort()).thenReturn(9090);
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     assertDoesNotThrow(() -> {
-      new HoodieMetrics(config);
-      hoodieMetrics = new HoodieMetrics(config);
+      new HoodieMetrics(writeConfig, storageConf);
+      hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
       metrics = hoodieMetrics.getMetrics();
     });
   }

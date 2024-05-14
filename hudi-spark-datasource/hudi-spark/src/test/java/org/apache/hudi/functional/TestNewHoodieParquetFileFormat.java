@@ -18,14 +18,12 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -40,18 +38,13 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
-@Disabled("HUDI-6756")
 public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
 
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
-    HoodieTableType[] tableType = {COPY_ON_WRITE, MERGE_ON_READ};
-    Integer[] nPartitions = {0, 1, 2};
-    for (HoodieTableType tt : tableType) {
-      for (Integer n : nPartitions) {
-        b.add(Arguments.of(tt, n));
-      }
-    }
+    b.add(Arguments.of(MERGE_ON_READ, 0));
+    b.add(Arguments.of(COPY_ON_WRITE, 1));
+    b.add(Arguments.of(MERGE_ON_READ, 2));
     return b.build();
   }
 
@@ -104,11 +97,9 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
 
   protected void testCount(String tableBasePath) {
     Dataset<Row> legacyDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "false")
         .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
         .load(tableBasePath);
     Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "true")
         .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true")
         .load(tableBasePath);
     assertEquals(legacyDf.count(), fileFormatDf.count());
@@ -124,11 +115,9 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
 
   protected void runIndividualComparison(String tableBasePath, String firstColumn, String... columns) {
     Dataset<Row> legacyDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "false")
         .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
         .load(tableBasePath);
     Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "true")
         .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true")
         .load(tableBasePath);
     if (firstColumn.isEmpty()) {

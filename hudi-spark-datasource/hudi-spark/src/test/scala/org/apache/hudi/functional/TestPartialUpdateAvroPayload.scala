@@ -18,32 +18,35 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.FileSystem
+import org.apache.hudi.{DataSourceWriteOptions, QuickstartUtils}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, QuickstartUtils}
+
+import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{DoubleType, StringType}
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
-import scala.collection.JavaConversions._
+
+import scala.collection.JavaConverters._
 
 class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
   var spark: SparkSession = null
 
-  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
@@ -54,7 +57,7 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown() = {
@@ -76,7 +79,7 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
     val hoodieTableType = HoodieTableType.valueOf(tableType)
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(1))
-    val recordsRDD = spark.sparkContext.parallelize(records, 2)
+    val recordsRDD = spark.sparkContext.parallelize(records.asScala.toSeq, 2)
     val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING)).withColumn("ts", lit(1L))
     inputDF.write.format("hudi")
       .options(getQuickstartWriteConfigs)
@@ -123,7 +126,6 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
       .save(basePath)
 
     val finalDF = spark.read.format("hudi")
-      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), String.valueOf(useFileGroupReader))
       .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), String.valueOf(useFileGroupReader))
       .load(basePath)
     assertEquals(finalDF.select("rider").collectAsList().get(0).getString(0), upsert1DF.select("rider").collectAsList().get(0).getString(0))

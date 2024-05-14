@@ -38,7 +38,6 @@ import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.utilities.sources.AvroDFSSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -49,9 +48,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.testutils.HiveTestService.HS2_JDBC_URL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
@@ -107,12 +108,12 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
         + MOR_DAG_SOURCE_PATH, fs, basePath + "/" + MOR_DAG_FILE_NAME);
 
     TypedProperties props = getProperties();
-    UtilitiesTestBase.Helpers.savePropsToDFS(props, fs, basePath + "/test-source"
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, basePath + "/test-source"
         + ".properties");
 
     UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(System.getProperty("user.dir") + "/.."
         + COW_DAG_SPARK_DATASOURCE_NODES_RELATIVE_PATH, fs, basePath + "/" + COW_DAG_FILE_NAME_SPARK_DATASOURCE_NODES);
-    UtilitiesTestBase.Helpers.savePropsToDFS(getProperties(), fs, basePath + "/test-source"
+    UtilitiesTestBase.Helpers.savePropsToDFS(getProperties(), storage, basePath + "/test-source"
         + ".properties");
     UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(System.getProperty("user.dir") + "/.."
         + SPARK_SQL_DAG_SOURCE_PATH, fs, basePath + "/" + SPARK_SQL_DAG_FILE_NAME);
@@ -127,14 +128,14 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     // Source schema is the target schema of upstream table
     downstreamProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/source.avsc");
     downstreamProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", basePath + "/source.avsc");
-    UtilitiesTestBase.Helpers.savePropsToDFS(downstreamProps, fs,
+    UtilitiesTestBase.Helpers.savePropsToDFS(downstreamProps, storage,
         basePath + "/test-downstream-source.properties");
     // these tests cause a lot of log verbosity from spark, turning it down
     org.apache.log4j.Logger.getLogger("org.apache.spark").setLevel(org.apache.log4j.Level.WARN);
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanupClass() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
@@ -209,7 +210,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     cfg.workloadDagGenerator = ComplexDagGenerator.class.getName();
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(cfg.targetBasePath);
     assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), 2);
   }
 
@@ -228,7 +229,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     }
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(cfg.targetBasePath);
     assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), 1);
   }
 
@@ -243,7 +244,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     cfg.workloadYamlPath = basePath + "/" + COW_DAG_FILE_NAME;
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(cfg.targetBasePath);
     //assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), 5);
   }
 
@@ -258,7 +259,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     cfg.workloadYamlPath = basePath + "/" + MOR_DAG_FILE_NAME;
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(cfg.targetBasePath);
     //assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), 7);
   }
 
@@ -270,7 +271,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     TypedProperties props = getProperties();
     props.setProperty("hoodie.write.concurrency.mode", "optimistic_concurrency_control");
     props.setProperty("hoodie.failed.writes.cleaner.policy", "LAZY");
-    UtilitiesTestBase.Helpers.savePropsToDFS(props, fs, basePath + "/test-source"
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, basePath + "/test-source"
         + ".properties");
     String inputBasePath = basePath + "/input";
     String outputBasePath = basePath + "/result";
@@ -279,7 +280,8 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     cfg.workloadYamlPath = basePath + "/" + COW_DAG_FILE_NAME_SPARK_DATASOURCE_NODES;
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(cfg.targetBasePath);
+
     assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), 3);
   }
 

@@ -20,10 +20,8 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieJavaWriteClient;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
@@ -34,9 +32,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 
 import java.util.Collections;
 import java.util.List;
@@ -49,18 +47,19 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   /**
    * Hudi backed table metadata writer.
    *
-   * @param hadoopConf                 Hadoop configuration to use for the metadata writer
+   * @param storageConf                Storage configuration to use for the metadata writer
    * @param writeConfig                Writer config
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
    * @param inflightInstantTimestamp   Timestamp of any instant in progress
    */
-  protected JavaHoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy, HoodieEngineContext engineContext,
+  protected JavaHoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                HoodieEngineContext engineContext,
                                                 Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
   }
 
-  public static HoodieTableMetadataWriter create(Configuration conf,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context,
                                                  Option<String> inflightInstantTimestamp) {
@@ -68,7 +67,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
         conf, writeConfig, EAGER, context, inflightInstantTimestamp);
   }
 
-  public static HoodieTableMetadataWriter create(Configuration conf,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
@@ -80,8 +79,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   @Override
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
-      Registry registry = Registry.getRegistry("HoodieMetadata");
-      this.metrics = Option.of(new HoodieMetadataMetrics(registry));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), storageConf));
     } else {
       this.metrics = Option.empty();
     }
@@ -119,7 +117,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
 
   @Override
   protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs, HoodieFunctionalIndexDefinition indexDefinition, HoodieTableMetaClient metaClient,
-                                                               int parallelism, Schema readerSchema, SerializableConfiguration hadoopConf) {
+                                                               int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf) {
     throw new HoodieNotSupportedException("Functional index not supported for Java metadata table writer yet.");
   }
 }

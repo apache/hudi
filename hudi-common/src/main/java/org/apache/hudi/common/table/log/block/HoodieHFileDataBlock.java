@@ -19,46 +19,40 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.HoodieAvroHFileReader;
-import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
+import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.io.hfile.HFileContext;
-import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
-import java.util.TreeMap;
+import java.util.function.Supplier;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -68,14 +62,14 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieHFileDataBlock.class);
-  private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
 
-  private final Option<Compression.Algorithm> compressionAlgorithm;
+  private final Option<String> compressionCodec;
   // This path is used for constructing HFile reader context, which should not be
   // interpreted as the actual file path for the HFile data blocks
-  private final Path pathForReader;
+  private final StoragePath pathForReader;
+  private final HoodieConfig hFileReaderConfig;
 
-  public HoodieHFileDataBlock(FSDataInputStream inputStream,
+  public HoodieHFileDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                               Option<byte[]> content,
                               boolean readBlockLazily,
                               HoodieLogBlockContentLocation logBlockContentLocation,
@@ -83,19 +77,24 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Map<HeaderMetadataType, String> header,
                               Map<HeaderMetadataType, String> footer,
                               boolean enablePointLookups,
-                              Path pathForReader) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieAvroHFileReader.KEY_FIELD_NAME, enablePointLookups);
-    this.compressionAlgorithm = Option.empty();
+                              StoragePath pathForReader,
+                              boolean useNativeHFileReader) {
+    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema,
+        header, footer, HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME, enablePointLookups);
+    this.compressionCodec = Option.empty();
     this.pathForReader = pathForReader;
+    this.hFileReaderConfig = getHFileReaderConfig(useNativeHFileReader);
   }
 
   public HoodieHFileDataBlock(List<HoodieRecord> records,
                               Map<HeaderMetadataType, String> header,
-                              Compression.Algorithm compressionAlgorithm,
-                              Path pathForReader) {
-    super(records, false, header, new HashMap<>(), HoodieAvroHFileReader.KEY_FIELD_NAME);
-    this.compressionAlgorithm = Option.of(compressionAlgorithm);
+                              String compressionCodec,
+                              StoragePath pathForReader,
+                              boolean useNativeHFileReader) {
+    super(records, false, header, new HashMap<>(), HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME);
+    this.compressionCodec = Option.of(compressionCodec);
     this.pathForReader = pathForReader;
+    this.hFileReaderConfig = getHFileReaderConfig(useNativeHFileReader);
   }
 
   @Override
@@ -104,81 +103,25 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords(List<HoodieRecord> records) throws IOException {
-    HFileContext context = new HFileContextBuilder()
-        .withBlockSize(DEFAULT_BLOCK_SIZE)
-        .withCompression(compressionAlgorithm.get())
-        .withCellComparator(new HoodieHBaseKVComparator())
-        .build();
-
-    Configuration conf = new Configuration();
-    CacheConfig cacheConfig = new CacheConfig(conf);
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    FSDataOutputStream ostream = new FSDataOutputStream(baos, null);
-
-    // Use simple incrementing counter as a key
-    boolean useIntegerKey = !getRecordKey(records.get(0)).isPresent();
-    // This is set here to avoid re-computing this in the loop
-    int keyWidth = useIntegerKey ? (int) Math.ceil(Math.log(records.size())) + 1 : -1;
-
-    // Serialize records into bytes
-    Map<String, byte[]> sortedRecordsMap = new TreeMap<>();
-    // Get writer schema
-    Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-
-    Iterator<HoodieRecord> itr = records.iterator();
-    int id = 0;
-    while (itr.hasNext()) {
-      HoodieRecord<?> record = itr.next();
-      String recordKey;
-      if (useIntegerKey) {
-        recordKey = String.format("%" + keyWidth + "s", id++);
-      } else {
-        recordKey = getRecordKey(record).get();
-      }
-
-      final byte[] recordBytes = serializeRecord(record, writerSchema);
-      if (sortedRecordsMap.containsKey(recordKey)) {
-        LOG.error("Found duplicate record with recordKey: " + recordKey);
-        printRecord("Previous record", sortedRecordsMap.get(recordKey), writerSchema);
-        printRecord("Current record", recordBytes, writerSchema);
-        throw new HoodieException(String.format("Writing multiple records with same key %s not supported for %s",
-            recordKey, this.getClass().getName()));
-      }
-      sortedRecordsMap.put(recordKey, recordBytes);
-    }
-
-    HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withOutputStream(ostream).withFileContext(context).create();
-
-    // Write the records
-    sortedRecordsMap.forEach((recordKey, recordBytes) -> {
-      try {
-        KeyValue kv = new KeyValue(getUTF8Bytes(recordKey), null, null, recordBytes);
-        writer.append(kv);
-      } catch (IOException e) {
-        throw new HoodieIOException("IOException serializing records", e);
-      }
-    });
-
-    writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.SCHEMA_KEY), getUTF8Bytes(getSchema().toString()));
-
-    writer.close();
-    ostream.flush();
-    ostream.close();
-
-    return baos.toByteArray();
+  protected byte[] serializeRecords(List<HoodieRecord> records, StorageConfiguration<?> storageConf) throws IOException {
+    Schema writerSchema = new Schema.Parser().parse(
+        super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
+    return FileFormatUtils.getInstance(HoodieFileFormat.HFILE).serializeRecordsToLogBlock(
+        storageConf, records, writerSchema, getSchema(), getKeyFieldName(),
+        Collections.singletonMap(HFILE_COMPRESSION_ALGORITHM_NAME.key(), compressionCodec.get()));
   }
 
   @Override
   protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
-    Configuration hadoopConf = FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf());
-    FileSystem fs = FSUtils.getFs(pathForReader.toString(), hadoopConf);
+    StorageConfiguration<?> storageConf = getBlockContentLocation().get().getStorageConf().getInline();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(pathForReader, storageConf);
     // Read the content
-    try (HoodieAvroHFileReader reader = new HoodieAvroHFileReader(hadoopConf, pathForReader, new CacheConfig(hadoopConf),
-        fs, content, Option.of(getSchemaFromHeader()))) {
+    try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(storageConf)
+        .getReaderFactory(HoodieRecordType.AVRO)
+        .getContentReader(hFileReaderConfig, pathForReader, HoodieFileFormat.HFILE,
+            storage, content, Option.of(getSchemaFromHeader()))) {
       return unsafeCast(reader.getRecordIterator(readerSchema));
     }
   }
@@ -187,11 +130,13 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
-    Configuration hadoopConf = FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf());
-    FileSystem fs = FSUtils.getFs(pathForReader.toString(), hadoopConf);
+    StorageConfiguration<?> storageConf = getBlockContentLocation().get().getStorageConf().getInline();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(pathForReader, storageConf);
     // Read the content
-    try (HoodieAvroHFileReader reader = new HoodieAvroHFileReader(hadoopConf, pathForReader, new CacheConfig(hadoopConf),
-        fs, content, Option.of(getSchemaFromHeader()))) {
+    try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
+        HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecordType.AVRO).getContentReader(
+            hFileReaderConfig, pathForReader, HoodieFileFormat.HFILE, storage, content,
+            Option.of(getSchemaFromHeader()))) {
       return unsafeCast(reader.getIndexedRecordIterator(readerSchema, readerSchema));
     }
   }
@@ -203,32 +148,23 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
-    Configuration inlineConf = FSUtils.buildInlineConf(blockContentLoc.getHadoopConf());
+    StorageConfiguration<?> inlineConf = blockContentLoc.getStorageConf().getInline();
 
-    Path inlinePath = InLineFSUtils.getInlineFilePath(
+    StoragePath inlinePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    try (final HoodieAvroHFileReader reader =
-             new HoodieAvroHFileReader(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf),
-             Option.of(getSchemaFromHeader()))) {
+    try (final HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory.getIOFactory(inlineConf)
+        .getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(hFileReaderConfig, inlinePath, HoodieFileFormat.HFILE, Option.of(getSchemaFromHeader()))) {
       // Get writer's schema from the header
       final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =
           fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
 
       return new CloseableMappingIterator<>(recordIterator, data -> (HoodieRecord<T>) data);
     }
-  }
-
-  private byte[] serializeRecord(HoodieRecord<?> record, Schema schema) throws IOException {
-    Option<Schema.Field> keyField = getKeyField(schema);
-    // Reset key value w/in the record to avoid duplicating the key w/in payload
-    if (keyField.isPresent()) {
-      record.truncateRecordKey(schema, new Properties(), keyField.get().name());
-    }
-    return HoodieAvroUtils.recordToBytes(record, schema).get();
   }
 
   /**
@@ -238,5 +174,12 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema);
     byte[] json = HoodieAvroUtils.avroToJson(record, true);
     LOG.error(String.format("%s: %s", msg, new String(json)));
+  }
+
+  private HoodieConfig getHFileReaderConfig(boolean useNativeHFileReader) {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(
+        HoodieReaderConfig.USE_NATIVE_HFILE_READER, Boolean.toString(useNativeHFileReader));
+    return config;
   }
 }

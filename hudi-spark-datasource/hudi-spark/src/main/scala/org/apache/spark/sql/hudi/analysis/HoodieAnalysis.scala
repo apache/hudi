@@ -131,7 +131,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //       Please check rule's scala-doc for more details
     rules += (_ => ResolveImplementationsEarly())
 
-    rules
+    rules.toSeq
   }
 
   def customPostHocResolutionRules: Seq[RuleBuilder] = {
@@ -150,7 +150,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       rules += spark3PostHocResolution
     }
 
-    rules
+    rules.toSeq
   }
 
   def customOptimizerRules: Seq[RuleBuilder] = {
@@ -191,7 +191,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
     rules += (spark => HoodiePruneFileSourcePartitions(spark))
 
-    rules
+    rules.toSeq
   }
 
   /**

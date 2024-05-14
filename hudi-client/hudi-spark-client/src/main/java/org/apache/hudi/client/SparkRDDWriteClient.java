@@ -20,28 +20,30 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.utils.SparkReleaseResources;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -55,7 +57,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -141,8 +142,8 @@ public class SparkRDDWriteClient<T> extends
     preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsert(context, instantTime, HoodieJavaRDD.of(records));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    if (result.getIndexLookupDuration().isPresent()) {
-      metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
+    if (result.getSourceReadAndIndexDurationMs().isPresent()) {
+      metrics.updateSourceReadAndIndexMetrics(HoodieMetrics.DURATION_STR, result.getSourceReadAndIndexDurationMs().get());
     }
     return postWrite(resultRDD, instantTime, table);
   }
@@ -265,12 +266,20 @@ public class SparkRDDWriteClient<T> extends
     return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
   }
 
+  public HoodieWriteResult managePartitionTTL(String instantTime) {
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime));
+    preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.managePartitionTTL(context, instantTime);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+    return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
+  }
+
   @Override
-  protected void initMetadataTable(Option<String> instantTime) {
+  protected void initMetadataTable(Option<String> instantTime, HoodieTableMetaClient metaClient) {
     // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
     // if it didn't exist before
     // See https://issues.apache.org/jira/browse/HUDI-3343 for more details
-    initializeMetadataTable(instantTime);
+    initializeMetadataTable(instantTime, metaClient);
   }
 
   /**
@@ -279,13 +288,31 @@ public class SparkRDDWriteClient<T> extends
    *
    * @param inFlightInstantTimestamp - The in-flight action responsible for the metadata table initialization
    */
-  private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
+  private void initializeMetadataTable(Option<String> inFlightInstantTimestamp, HoodieTableMetaClient metaClient) {
     if (!config.isMetadataTableEnabled()) {
       return;
     }
+    // if metadata table is enabled, emit enablement metrics
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (tableConfig.isMetadataTableAvailable()) {
+      // if metadata table is available, lets emit partitions of interest
+      boolean isMetadataColStatsAvailable = false;
+      boolean isMetadataBloomFilterAvailable = false;
+      boolean isMetadataRliAvailable = false;
+      if (tableConfig.getMetadataPartitions().contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
+        isMetadataColStatsAvailable = true;
+      }
+      if (tableConfig.getMetadataPartitions().contains(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath())) {
+        isMetadataBloomFilterAvailable = true;
+      }
+      if (tableConfig.getMetadataPartitions().contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
+        isMetadataRliAvailable = true;
+      }
+      metrics.emitMetadataEnablementMetrics(true, isMetadataColStatsAvailable, isMetadataBloomFilterAvailable, isMetadataRliAvailable);
+    }
 
-    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
-        context, inFlightInstantTimestamp)) {
+    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(
+        context.getStorageConf(), config, context, inFlightInstantTimestamp)) {
       if (writer.isInitialized()) {
         writer.performTableServices(inFlightInstantTimestamp);
       }
@@ -320,21 +347,6 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   protected void releaseResources(String instantTime) {
-    // If we do not explicitly release the resource, spark will automatically manage the resource and clean it up automatically
-    // see: https://spark.apache.org/docs/latest/rdd-programming-guide.html#removing-data
-    if (config.areReleaseResourceEnabled()) {
-      HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) context;
-      Map<Integer, JavaRDD<?>> allCachedRdds = sparkEngineContext.getJavaSparkContext().getPersistentRDDs();
-      List<Integer> allDataIds = new ArrayList<>(sparkEngineContext.removeCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime)));
-      if (config.isMetadataTableEnabled()) {
-        String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-        allDataIds.addAll(sparkEngineContext.removeCachedDataIds(HoodieDataCacheKey.of(metadataTableBasePath, instantTime)));
-      }
-      for (int id : allDataIds) {
-        if (allCachedRdds.containsKey(id)) {
-          allCachedRdds.get(id).unpersist();
-        }
-      }
-    }
+    SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
   }
 }

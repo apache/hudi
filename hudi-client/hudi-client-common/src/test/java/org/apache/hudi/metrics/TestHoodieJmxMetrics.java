@@ -18,8 +18,11 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,19 +43,22 @@ import static org.mockito.Mockito.when;
 public class TestHoodieJmxMetrics {
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieWriteConfig writeConfig;
+  @Mock
+  HoodieMetricsConfig metricsConfig;
+  StorageConfiguration storageConf = HoodieTestUtils.getDefaultStorageConf();
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
   @BeforeEach
   void setup() {
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getTableName()).thenReturn("foo");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
-    when(config.getJmxHost()).thenReturn("localhost");
-    when(config.getJmxPort()).thenReturn(String.valueOf(NetworkTestUtils.nextFreePort()));
-    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(config);
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
+    when(metricsConfig.getJmxHost()).thenReturn("localhost");
+    when(metricsConfig.getJmxPort()).thenReturn(String.valueOf(NetworkTestUtils.nextFreePort()));
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
     metrics = hoodieMetrics.getMetrics();
   }
 

@@ -22,16 +22,20 @@ package org.apache.hudi.gcp.bigquery;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.google.cloud.bigquery.BigQuery;
+import com.google.cloud.bigquery.ExternalTableDefinition;
 import com.google.cloud.bigquery.Field;
+import com.google.cloud.bigquery.HivePartitioningOptions;
 import com.google.cloud.bigquery.Job;
 import com.google.cloud.bigquery.JobInfo;
 import com.google.cloud.bigquery.JobStatus;
 import com.google.cloud.bigquery.QueryJobConfiguration;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
+import com.google.cloud.bigquery.Table;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,12 +43,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
+import java.util.ArrayList;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 public class TestHoodieBigQuerySyncClient {
   private static final String PROJECT_ID = "test_project";
@@ -67,7 +76,7 @@ public class TestHoodieBigQuerySyncClient {
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TEST_TABLE)
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(new Configuration(), basePath);
+        .initTable(HadoopFSUtils.getStorageConf(new Configuration()), basePath);
   }
 
   @BeforeEach
@@ -124,5 +133,32 @@ public class TestHoodieBigQuerySyncClient {
     assertEquals(configuration.getQuery(),
         String.format("CREATE OR REPLACE EXTERNAL TABLE `%s.%s.%s` ( `field` STRING ) OPTIONS (enable_list_inference=true, uris=[\"%s\"], format=\"PARQUET\", "
             + "file_set_spec_type=\"NEW_LINE_DELIMITED_MANIFEST\")", PROJECT_ID, TEST_DATASET, TEST_TABLE, MANIFEST_FILE_URI));
+  }
+
+  @Test
+  void skipUpdatingSchema_partitioned() throws Exception {
+    BigQuerySyncConfig config = new BigQuerySyncConfig(properties);
+    client = new HoodieBigQuerySyncClient(config, mockBigQuery);
+    Table mockTable = mock(Table.class);
+    ExternalTableDefinition mockTableDefinition = mock(ExternalTableDefinition.class);
+    // The table schema has no change: it contains a "field" and a "partition_field".
+    Schema schema = Schema.of(Field.of("field", StandardSQLTypeName.STRING));
+    List<String> partitionFields = new ArrayList<String>();
+    partitionFields.add("partition_field");
+    List<Field> bqFields = new ArrayList<Field>();
+    // The "partition_field" always follows "field".
+    bqFields.add(Field.of("field", StandardSQLTypeName.STRING));
+    bqFields.add(Field.of("partition_field", StandardSQLTypeName.STRING));
+    Schema bqSchema = Schema.of(bqFields);
+    HivePartitioningOptions hivePartitioningOptions = HivePartitioningOptions.newBuilder().setRequirePartitionFilter(true).build();
+
+    when(mockBigQuery.getTable(any())).thenReturn(mockTable);
+    when(mockTable.getDefinition()).thenReturn(mockTableDefinition);
+    when(mockTableDefinition.getSchema()).thenReturn(bqSchema);
+    when(mockTableDefinition.getHivePartitioningOptions()).thenReturn(hivePartitioningOptions);
+
+    client.updateTableSchema(TEST_TABLE, schema, partitionFields);
+    // Expect no update.
+    verify(mockBigQuery, never()).update(mockTable);
   }
 }

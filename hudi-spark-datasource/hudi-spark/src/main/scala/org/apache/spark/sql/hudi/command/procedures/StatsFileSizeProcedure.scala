@@ -17,11 +17,11 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import com.codahale.metrics.{Histogram, Snapshot, UniformReservoir}
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.storage.StoragePath
+
+import com.codahale.metrics.{Histogram, Snapshot, UniformReservoir}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.command.procedures.StatsFileSizeProcedure.MAX_FILES
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -64,8 +64,8 @@ class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
     val globRegex = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
     val limit: Int = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Int]
     val basePath = getBasePath(table)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val fs = metaClient.getFs
+    val metaClient = createMetaClient(jsc, basePath)
+    val storage = metaClient.getStorage
     val isTablePartitioned = metaClient.getTableConfig.isTablePartitioned
     val maximumPartitionDepth = if (isTablePartitioned) metaClient.getTableConfig.getPartitionFields.get.length else 0
     val sanitisedGlobRegex = (isTablePartitioned, globRegex) match {
@@ -77,13 +77,13 @@ class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
     }
     validateGlobRegex(sanitisedGlobRegex, maximumPartitionDepth)
     val globPath = String.format("%s/%s", basePath, sanitisedGlobRegex)
-    val statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath))
+    val statuses = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(globPath))
     val globalHistogram = new Histogram(new UniformReservoir(MAX_FILES))
     val commitHistogramMap = new java.util.HashMap[String, Histogram]()
     statuses.asScala.foreach(
       status => {
         val instantTime = FSUtils.getCommitTime(status.getPath.getName)
-        val len = status.getLen
+        val len = status.getLength
         commitHistogramMap.putIfAbsent(instantTime, new Histogram(new UniformReservoir(MAX_FILES)))
         commitHistogramMap.get(instantTime).update(len)
         globalHistogram.update(len)

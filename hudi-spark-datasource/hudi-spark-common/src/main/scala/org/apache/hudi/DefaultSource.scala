@@ -17,20 +17,24 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
-import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.HoodieSchemaNotFoundException
+import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.model.{HoodieTableType, WriteConcurrencyMode}
+import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.io.storage.HoodieSparkIOFactory
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.PathUtils
+
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
@@ -40,7 +44,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
 /**
@@ -62,6 +65,9 @@ class DefaultSource extends RelationProvider
       // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
       spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
     }
+    // Always use spark io factory
+    spark.sparkContext.hadoopConfiguration.set(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(),
+      classOf[HoodieSparkIOFactory].getName)
     // Revisit EMRFS incompatibilities, for now disable
     spark.sparkContext.hadoopConfiguration.set("fs.s3.metadata.cache.expiration.seconds", "0")
   }
@@ -70,7 +76,17 @@ class DefaultSource extends RelationProvider
 
   override def createRelation(sqlContext: SQLContext,
                               parameters: Map[String, String]): BaseRelation = {
-    createRelation(sqlContext, parameters, null)
+    try {
+      val relation = createRelation(sqlContext, parameters, null)
+      if (relation.schema.isEmpty) {
+        new EmptyRelation(sqlContext, new StructType())
+      } else {
+        relation
+      }
+    } catch {
+      case _: HoodieSchemaNotFoundException => new EmptyRelation(sqlContext, new StructType())
+      case e => throw e
+    }
   }
 
   override def createRelation(sqlContext: SQLContext,
@@ -86,10 +102,11 @@ class DefaultSource extends RelationProvider
     val readPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
     val allPaths = path.map(p => Seq(p)).getOrElse(Seq()) ++ readPaths
 
-    val fs = FSUtils.getFs(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
+    val storage = HoodieStorageUtils.getStorage(
+      allPaths.head, HadoopFSUtils.getStorageConf(sqlContext.sparkContext.hadoopConfiguration))
 
     val globPaths = if (path.exists(_.contains("*")) || readPaths.nonEmpty) {
-      PathUtils.checkAndGlobPathIfNecessary(allPaths, fs)
+      PathUtils.checkAndGlobPathIfNecessary(allPaths, storage)
     } else {
       Seq.empty
     }
@@ -105,16 +122,17 @@ class DefaultSource extends RelationProvider
 
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
-      DataSourceUtils.getTablePath(fs, globPaths.toArray)
+      DataSourceUtils.getTablePath(storage, globPaths.asJava)
     } else {
-      DataSourceUtils.getTablePath(fs, Array(new Path(path.get)))
+      DataSourceUtils.getTablePath(storage, Seq(new StoragePath(path.get)).asJava)
     }
     log.info("Obtained hudi table path: " + tablePath)
 
-    val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.asJava)
-      .setConf(fs.getConf).setBasePath(tablePath).build()
+    val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.toMap.asJava)
+      .setConf(storage.getConf.newInstance())
+      .setBasePath(tablePath).build()
 
-    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
+    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters.toMap)
   }
 
   /**
@@ -137,15 +155,18 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
-      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
-      HoodieSparkSqlWriter.cleanup()
-    } else {
-      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
-      HoodieSparkSqlWriter.cleanup()
-      if (!success) {
-        throw new HoodieException("Write to Hudi failed")
+    try {
+      if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
+        HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
+      } else {
+        val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
+        if (!success) {
+          throw new HoodieException("Failed to write to Hudi")
+        }
       }
+    }
+    finally {
+      HoodieSparkSqlWriter.cleanup()
     }
 
     new HoodieEmptyRelation(sqlContext, df.schema)
@@ -164,7 +185,7 @@ class DefaultSource extends RelationProvider
   }
 
   def validateMultiWriterConfigs(options: Map[String, String]) : Unit = {
-    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrElse(WRITE_CONCURRENCY_MODE.key(),
       WRITE_CONCURRENCY_MODE.defaultValue())).supportsMultiWriter()) {
       // ensure some valid value is set for identifier
       checkState(options.contains(STREAMING_CHECKPOINT_IDENTIFIER.key()), "For multi-writer scenarios, please set "
@@ -183,7 +204,8 @@ class DefaultSource extends RelationProvider
       throw new HoodieException(s"'path'  must be specified.")
     }
     val metaClient = HoodieTableMetaClient.builder().setConf(
-      sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
+      HadoopFSUtils.getStorageConf(sqlContext.sparkSession.sessionState.newHadoopConf()))
+      .setBasePath(path.get).build()
 
     val sqlSchema = DefaultSource.resolveSchema(metaClient, parameters, schema)
     (shortName(), sqlSchema)
@@ -214,7 +236,7 @@ object DefaultSource {
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
                      schema: StructType,
-                     globPaths: Seq[Path],
+                     globPaths: Seq[StoragePath],
                      parameters: Map[String, String]): BaseRelation = {
     val tableType = metaClient.getTableType
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
@@ -223,115 +245,108 @@ object DefaultSource {
       parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
     val isMultipleBaseFileFormatsEnabled = metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled
 
-    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
-    // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
-    //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
-    //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
-    //       from the table itself
-    val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
-      None
+    val createTimeLineRln = parameters.get(DataSourceReadOptions.CREATE_TIMELINE_RELATION.key())
+    val createFSRln = parameters.get(DataSourceReadOptions.CREATE_FILESYSTEM_RELATION.key())
+
+    if (createTimeLineRln.isDefined) {
+      new TimelineRelation(sqlContext, parameters, metaClient)
+    } else if (createFSRln.isDefined) {
+      new FileSystemRelation(sqlContext, parameters, metaClient)
     } else {
-      Option(schema)
-    }
+      log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
-    val useNewParquetFileFormat =
-      parameters.getOrElse(
-        USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
-        USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean &&
-      !metaClient.isMetadataTable &&
-      parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
-        .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
+      // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
+      //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
+      //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
+      //       from the table itself
+      val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
+        None
+      } else {
+        Option(schema)
+      }
 
-    if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-      new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
-    } else if (isCdcQuery) {
-      if (useNewParquetFileFormat) {
-        if (tableType == COPY_ON_WRITE) {
-          new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-            sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
+      val useNewParquetFileFormat = parameters.getOrElse(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
+        HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean &&
+        !metaClient.isMetadataTable &&
+        !parameters.getOrElse(SCHEMA_EVOLUTION_ENABLED.key(), SCHEMA_EVOLUTION_ENABLED.defaultValue().toString).toBoolean &&
+        parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue()).equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
+      if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
+        new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
+      } else if (isCdcQuery) {
+        if (useNewParquetFileFormat) {
+          if (tableType == COPY_ON_WRITE) {
+            new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
+          } else {
+            new HoodieMergeOnReadCDCHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
+          }
         } else {
-          new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-            sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
+          CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
         }
       } else {
-        CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
-      }
-    } else {
-      lazy val fileFormatUtils = if ((isMultipleBaseFileFormatsEnabled && !isBootstrappedTable)
-        || (useNewParquetFileFormat)) {
-        val formatUtils = new HoodieSparkFileFormatUtils(sqlContext, metaClient, parameters, userSchema)
-        if (formatUtils.hasSchemaOnRead) Option.empty else Some(formatUtils)
-      } else {
-        Option.empty
-      }
 
-      if (isMultipleBaseFileFormatsEnabled) {
-        if (isBootstrappedTable) {
-          throw new HoodieException(s"Multiple base file formats are not supported for bootstrapped table")
+        (tableType, queryType, isBootstrappedTable) match {
+          case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
+               (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
+               (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
+            if (useNewParquetFileFormat) {
+              new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
+            } else {
+              resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+            }
+          case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+            if (useNewParquetFileFormat) {
+              new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrappedTable).build()
+            } else {
+              new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+            }
+
+          case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
+            if (useNewParquetFileFormat) {
+              new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
+            } else {
+              new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+            }
+
+          case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
+            if (useNewParquetFileFormat) {
+              new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = true).build()
+            } else {
+              HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+            }
+
+          case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+            if (useNewParquetFileFormat) {
+              new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrappedTable).build()
+            } else {
+              MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+            }
+
+          case (_, _, true) =>
+            if (useNewParquetFileFormat) {
+              new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = true).build()
+            } else {
+              resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+            }
+
+          case (_, _, _) =>
+            throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
+              s"isBootstrappedTable: $isBootstrappedTable ")
         }
-        resolveMultiFileFormatRelation(tableType, queryType, fileFormatUtils.get)
-      }
-
-      (tableType, queryType, isBootstrappedTable) match {
-        case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
-             (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
-             (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          if (fileFormatUtils.isDefined) {
-            new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
-          } else {
-            resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
-          }
-        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          if (fileFormatUtils.isDefined) {
-            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrappedTable).build()
-          } else {
-            new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
-          }
-
-        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          if (fileFormatUtils.isDefined) {
-            new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
-          } else {
-            new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
-          }
-
-        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-          if (fileFormatUtils.isDefined) {
-            new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = true).build()
-          } else {
-            HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-          }
-
-        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          if (fileFormatUtils.isDefined) {
-            new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrappedTable).build()
-          } else {
-            MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
-          }
-
-        case (_, _, true) =>
-          if (fileFormatUtils.isDefined) {
-            new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = true).build()
-          } else {
-            resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
-          }
-
-        case (_, _, _) =>
-          throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
-            s"isBootstrappedTable: $isBootstrappedTable ")
       }
     }
   }
 
   private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
-                                             globPaths: Seq[Path],
+                                             globPaths: Seq[StoragePath],
                                              userSchema: Option[StructType],
                                              metaClient: HoodieTableMetaClient,
                                              parameters: Map[String, String]): BaseRelation = {
@@ -349,7 +364,7 @@ object DefaultSource {
   }
 
   private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
-                                          globPaths: Seq[Path],
+                                          globPaths: Seq[StoragePath],
                                           userSchema: Option[StructType],
                                           metaClient: HoodieTableMetaClient,
                                           optParams: Map[String, String]): BaseRelation = {
@@ -364,21 +379,6 @@ object DefaultSource {
       baseRelation
     } else {
       baseRelation.toHadoopFsRelation
-    }
-  }
-
-  private def resolveMultiFileFormatRelation(tableType: HoodieTableType,
-                                             queryType: String,
-                                             fileFormatUtils: HoodieSparkFileFormatUtils): BaseRelation = {
-    (tableType, queryType) match {
-      case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL) |
-           (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL) =>
-        fileFormatUtils.getHadoopFsRelation(isMOR = false, isBootstrap = false)
-      case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL) |
-           (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL) =>
-        fileFormatUtils.getHadoopFsRelation(isMOR = true, isBootstrap = false)
-      case (_, _) =>
-        throw new HoodieException(s"Multiple base file formats not supported for query type : $queryType for tableType: $tableType")
     }
   }
 
@@ -397,7 +397,9 @@ object DefaultSource {
         AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
       } catch {
         case _: Exception =>
-          require(schema.isDefined, "Fail to resolve source schema")
+          if (schema.isEmpty || schema.get == null) {
+            throw new HoodieSchemaNotFoundException("Failed to resolve source schema")
+          }
           schema.get
       }
     }

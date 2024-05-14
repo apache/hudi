@@ -26,7 +26,8 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
-import org.apache.hudi.hadoop.CachingPath
+import org.apache.hudi.hadoop.fs.HadoopFSUtils.{convertToHadoopFileStatus, convertToStoragePathInfo}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{AvroConversionUtils, BaseFileOnlyRelation, DataSourceReadOptions, HoodieFileIndex, HoodieFileIndexTrait, HoodiePartitionFileSliceMapping, SparkAdapterSupport}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -34,7 +35,6 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.types.StructType
 
-import java.net.URI
 import scala.collection.JavaConverters._
 
 
@@ -60,7 +60,8 @@ class NewHoodieInMemoryFileIndex(sparkSession: SparkSession,
 
   private def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
-  private lazy val basePath: Path = metaClient.getBasePathV2
+
+  private lazy val basePath: StoragePath = metaClient.getBasePathV2
   private def timeline: HoodieTimeline = metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
   override def partitionSpec(): PartitionSpec = userSpecifiedPartitionSpec.get
 
@@ -69,7 +70,7 @@ class NewHoodieInMemoryFileIndex(sparkSession: SparkSession,
       case Some(ts) =>
         specifiedQueryTimestamp.foreach(t => validateTimestampAsOf(metaClient, t))
         val partitionDirs = super.listFiles(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters), dataFilters)
-        val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+        val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).map(s => convertToStoragePathInfo(s)).asJava)
 
         fsView.getPartitionPaths.asScala.map { partitionPath =>
           val relativePath = FSUtils.getRelativePartitionPath(basePath, partitionPath)
@@ -82,13 +83,13 @@ class NewHoodieInMemoryFileIndex(sparkSession: SparkSession,
       val partitionPath = relation.getPartitionColumnsAsInternalRowWithRelativePath(p._1)
       val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = p._2.map(slice => {
         if (slice.getBaseFile.isPresent) {
-          slice.getBaseFile.get().getFileStatus
+          slice.getBaseFile.get().getPathInfo
         } else if (includeLogFiles && slice.getLogFiles.findAny().isPresent) {
-          slice.getLogFiles.findAny().get().getFileStatus
+          slice.getLogFiles.findAny().get().getPathInfo
         } else {
           null
         }
-      }).filter(slice => slice != null)
+      }).filter(slice => slice != null).map(i => convertToHadoopFileStatus(i))
       val c = p._2.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
         || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
         foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
@@ -112,7 +113,7 @@ object NewHoodieInMemoryFileIndex {
 
 
   def makeNewHoodieInMemoryFileIndex(sparkSession: SparkSession,
-                                     rootPathsSpecified: Seq[Path],
+                                     rootPathsSpecified: Seq[StoragePath],
                                      parameters: Map[String, String],
                                      userSpecifiedSchema: Option[StructType],
                                      fileStatusCache: FileStatusCache = NoopCache,
@@ -131,15 +132,15 @@ object NewHoodieInMemoryFileIndex {
 
     val partitionColumns = metaClient.getTableConfig.getPartitionFields.orElse(Array.empty)
 
-    val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(basePath)
+    val tablePathWithoutScheme = basePath.getPathWithoutSchemeAndAuthority
     val paths = rootPathsSpecified.map(p => {
-      val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(p.getParent)
-      new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
+      val partitionPathWithoutScheme = p.getPathWithoutSchemeAndAuthority
+      tablePathWithoutScheme.toUri.relativize(partitionPathWithoutScheme.toUri).toString
     }).filterNot(isNullOrEmpty).distinct.map(r =>
-      PartitionPath(relation.getPartitionColumnsAsInternalRowWithRelativePath(r), new Path(basePath, r)))
+      PartitionPath(relation.getPartitionColumnsAsInternalRowWithRelativePath(r), new Path(basePath.toString, r)))
     val partitionSpec = Some(PartitionSpec(StructType(schema.fields.filter(f => partitionColumns.contains(f.name))), paths))
 
-    new NewHoodieInMemoryFileIndex(sparkSession, rootPathsSpecified, parameters, userSpecifiedSchema, fileStatusCache,
+    new NewHoodieInMemoryFileIndex(sparkSession, rootPathsSpecified.map(p => new Path(p.toUri)), parameters, userSpecifiedSchema, fileStatusCache,
       metaClient, includeLogFiles, relation, partitionSpec)
 
   }

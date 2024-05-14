@@ -32,7 +32,6 @@ import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -49,7 +48,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -101,7 +100,7 @@ public class SparkBootstrapCommitActionExecutor<T>
         HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
         WriteOperationType.BOOTSTRAP,
         extraMetadata);
-    bootstrapSourceFileSystem = FSUtils.getFs(config.getBootstrapSourceBasePath(), hadoopConf);
+    bootstrapSourceFileSystem = HadoopFSUtils.getFs(config.getBootstrapSourceBasePath(), hadoopConf);
   }
 
   private void validate() {
@@ -298,13 +297,7 @@ public class SparkBootstrapCommitActionExecutor<T>
     TypedProperties properties = new TypedProperties();
     properties.putAll(config.getProps());
 
-    KeyGeneratorInterface keyGenerator;
-    try {
-      keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(properties);
-    } catch (IOException e) {
-      throw new HoodieKeyGeneratorException("Init keyGenerator failed ", e);
-    }
-
+    KeyGeneratorInterface keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(properties);
     BootstrapPartitionPathTranslator translator = ReflectionUtils.loadClass(config.getBootstrapPartitionPathTranslatorClass());
 
     List<Pair<String, Pair<String, HoodieFileStatus>>> bootstrapPaths = partitions.stream()

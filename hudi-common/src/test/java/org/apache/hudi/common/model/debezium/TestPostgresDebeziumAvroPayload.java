@@ -38,11 +38,11 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -199,11 +199,11 @@ public class TestPostgresDebeziumAvroPayload {
         .combineAndGetUpdateValue(oldVal, avroSchema).get();
 
     assertEquals("valid string value", outputRecord.get("string_col"));
-    assertEquals("valid byte value", new String(((ByteBuffer) outputRecord.get("byte_col")).array(), StandardCharsets.UTF_8));
+    assertEquals("valid byte value", fromUTF8Bytes(((ByteBuffer) outputRecord.get("byte_col")).array()));
     assertNull(outputRecord.get("string_null_col_1"));
     assertNull(outputRecord.get("byte_null_col_1"));
     assertEquals("valid string value", ((Utf8) outputRecord.get("string_null_col_2")).toString());
-    assertEquals("valid byte value", new String(((ByteBuffer) outputRecord.get("byte_null_col_2")).array(), StandardCharsets.UTF_8));
+    assertEquals("valid byte value", fromUTF8Bytes(((ByteBuffer) outputRecord.get("byte_null_col_2")).array()));
   }
 
   private GenericRecord createRecord(int primaryKeyValue, @Nullable Operation op, @Nullable Long lsnValue) {

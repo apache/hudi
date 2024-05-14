@@ -25,17 +25,16 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.secondary.SecondaryIndexType;
 import org.apache.hudi.metadata.MetadataPartitionType;
-
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.Instant;
 import java.util.Properties;
 import java.util.Set;
@@ -92,14 +91,14 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
     super();
   }
 
-  public static void create(FileSystem fs, Path metadataFolder, Properties properties)
+  public static void create(HoodieStorage storage, StoragePath metadataFolder, Properties properties)
       throws IOException {
-    if (!fs.exists(metadataFolder)) {
-      fs.mkdirs(metadataFolder);
+    if (!storage.exists(metadataFolder)) {
+      storage.createDirectory(metadataFolder);
     }
     HoodieConfig hoodieConfig = new HoodieConfig(properties);
-    Path propertyPath = new Path(metadataFolder, INDEX_DEFINITION_FILE);
-    try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+    StoragePath propertyPath = new StoragePath(metadataFolder, INDEX_DEFINITION_FILE);
+    try (OutputStream outputStream = storage.create(propertyPath)) {
       if (!hoodieConfig.contains(INDEX_NAME)) {
         throw new IllegalArgumentException(INDEX_NAME.key() + " property needs to be specified");
       }
@@ -108,61 +107,68 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
     }
   }
 
-  public static void update(FileSystem fs, Path metadataFolder, Properties updatedProps) {
-    modify(fs, metadataFolder, updatedProps, ConfigUtils::upsertProperties);
+  public static void update(HoodieStorage storage, StoragePath metadataFolder,
+                            Properties updatedProps) {
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties);
   }
 
-  public static void delete(FileSystem fs, Path metadataFolder, Set<String> deletedProps) {
+  public static void delete(HoodieStorage storage, StoragePath metadataFolder,
+                            Set<String> deletedProps) {
     Properties props = new Properties();
     deletedProps.forEach(p -> props.setProperty(p, ""));
-    modify(fs, metadataFolder, props, ConfigUtils::deleteProperties);
+    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties);
   }
 
-  public static void recover(FileSystem fs, Path metadataFolder) throws IOException {
-    Path cfgPath = new Path(metadataFolder, INDEX_DEFINITION_FILE);
-    Path backupCfgPath = new Path(metadataFolder, INDEX_DEFINITION_FILE_BACKUP);
-    recoverIfNeeded(fs, cfgPath, backupCfgPath);
+  public static void recover(HoodieStorage storage, StoragePath metadataFolder)
+      throws IOException {
+    StoragePath cfgPath = new StoragePath(metadataFolder, INDEX_DEFINITION_FILE);
+    StoragePath backupCfgPath = new StoragePath(metadataFolder, INDEX_DEFINITION_FILE_BACKUP);
+    recoverIfNeeded(storage, cfgPath, backupCfgPath);
   }
 
-  private static void modify(FileSystem fs, Path metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
-    Path cfgPath = new Path(metadataFolder, INDEX_DEFINITION_FILE);
-    Path backupCfgPath = new Path(metadataFolder, INDEX_DEFINITION_FILE_BACKUP);
+  private static void modify(HoodieStorage storage, StoragePath metadataFolder,
+                             Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
+    StoragePath cfgPath = new StoragePath(metadataFolder, INDEX_DEFINITION_FILE);
+    StoragePath backupCfgPath = new StoragePath(metadataFolder, INDEX_DEFINITION_FILE_BACKUP);
     try {
       // 0. do any recovery from prior attempts.
-      recoverIfNeeded(fs, cfgPath, backupCfgPath);
+      recoverIfNeeded(storage, cfgPath, backupCfgPath);
 
       // 1. Read the existing config
-      TypedProperties props = fetchConfigs(fs, metadataFolder.toString(), INDEX_DEFINITION_FILE, INDEX_DEFINITION_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
+      TypedProperties props =
+          fetchConfigs(storage, metadataFolder, INDEX_DEFINITION_FILE,
+              INDEX_DEFINITION_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
 
       // 2. backup the existing properties.
-      try (FSDataOutputStream out = fs.create(backupCfgPath, false)) {
+      try (OutputStream out = storage.create(backupCfgPath, false)) {
         storeProperties(props, out);
       }
 
       // 3. delete the properties file, reads will go to the backup, until we are done.
-      fs.delete(cfgPath, false);
+      storage.deleteFile(cfgPath);
 
       // 4. Upsert and save back.
       String checksum;
-      try (FSDataOutputStream out = fs.create(cfgPath, true)) {
+      try (OutputStream out = storage.create(cfgPath, true)) {
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
       }
 
       // 4. verify and remove backup.
-      try (FSDataInputStream in = fs.open(cfgPath)) {
+      try (InputStream in = storage.open(cfgPath)) {
         props.clear();
         props.load(in);
-        if (!props.containsKey(INDEX_DEFINITION_CHECKSUM.key()) || !props.getProperty(INDEX_DEFINITION_CHECKSUM.key()).equals(checksum)) {
+        if (!props.containsKey(INDEX_DEFINITION_CHECKSUM.key())
+            || !props.getProperty(INDEX_DEFINITION_CHECKSUM.key()).equals(checksum)) {
           // delete the properties file and throw exception indicating update failure
           // subsequent writes will recover and update, reads will go to the backup until then
-          fs.delete(cfgPath, false);
+          storage.deleteFile(cfgPath);
           throw new HoodieIOException("Checksum property missing or does not match.");
         }
       }
 
       // 5. delete the backup properties file
-      fs.delete(backupCfgPath, false);
+      storage.deleteFile(backupCfgPath);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
     }
@@ -181,7 +187,8 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
    * @param outputStream - output stream to which properties will be written
    * @return return the table checksum
    */
-  private static String storeProperties(Properties props, FSDataOutputStream outputStream) throws IOException {
+  private static String storeProperties(Properties props, OutputStream outputStream)
+      throws IOException {
     final String checksum;
     if (isValidChecksum(props)) {
       checksum = props.getProperty(INDEX_DEFINITION_CHECKSUM.key());

@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -171,9 +170,9 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
 
   private void verifyRecords(TestTableContents mainTable, TestTableContents experimentTable) {
     Map<String, GenericRecord> mainRecordsMap =
-        GenericRecordValidationTestUtils.getRecordsMap(mainTable.config, hadoopConf, dataGen);
+        GenericRecordValidationTestUtils.getRecordsMap(mainTable.config, storageConf, dataGen);
     Map<String, GenericRecord> experimentRecordsMap =
-        GenericRecordValidationTestUtils.getRecordsMap(experimentTable.config, hadoopConf, dataGen);
+        GenericRecordValidationTestUtils.getRecordsMap(experimentTable.config, storageConf, dataGen);
 
     // Verify row count.
     assertEquals(mainRecordsMap.size(), experimentRecordsMap.size());
@@ -364,7 +363,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     properties.put(HoodieTableConfig.NAME.key(), tableName2);
 
     // Create metaclient
-    HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(hadoopConf, basePath2,
+    HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(storageConf, basePath2,
         HoodieTableType.MERGE_ON_READ, properties);
     HoodieWriteConfig config2 = getConfigBuilderForSecondTable(tableName2, basePath2,
         TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
@@ -406,8 +405,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
-            .withRemoteServerPort(timelineServicePort)
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build())
+            .withRemoteServerPort(timelineServicePort).build())
         .withProperties(properties);
   }
 

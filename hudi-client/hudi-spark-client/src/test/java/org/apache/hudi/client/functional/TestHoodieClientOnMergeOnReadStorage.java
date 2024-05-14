@@ -100,7 +100,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
     // Verify all the records.
     metaClient.reloadActiveTimeline();
-    Map<String, GenericRecord> recordMap = GenericRecordValidationTestUtils.getRecordsMap(config, hadoopConf, dataGen);
+    Map<String, GenericRecord> recordMap = GenericRecordValidationTestUtils.getRecordsMap(config, storageConf, dataGen);
     assertEquals(75, recordMap.size());
   }
 
@@ -132,7 +132,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
     // Verify all the records.
     metaClient.reloadActiveTimeline();
-    assertDataInMORTable(config, commitTime, timeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+    assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
   }
 
   @Test
@@ -187,7 +187,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
     // Verify all the records.
     assertDataInMORTable(config, lastCommitBeforeLogCompaction, logCompactionTimeStamp.get(),
-        hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+        storageConf, Arrays.asList(dataGen.getPartitionPaths()));
   }
 
   /**
@@ -230,7 +230,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     client.logCompact(timeStamp.get());
     // Verify all the records.
     assertDataInMORTable(config, lastCommitBeforeLogCompaction, timeStamp.get(),
-        hadoopConf, Arrays.asList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
+        storageConf, Arrays.asList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
   }
 
   /**
@@ -424,7 +424,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
       assertTrue(logCompactionTimeStamp.isPresent());
       HoodieWriteMetadata metadata = lcClient.logCompact(logCompactionTimeStamp.get());
       lcClient.commitLogCompaction(logCompactionTimeStamp.get(), (HoodieCommitMetadata) metadata.getCommitMetadata().get(), Option.empty());
-      assertDataInMORTable(config, prevCommitTime, logCompactionTimeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+      assertDataInMORTable(config, prevCommitTime, logCompactionTimeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
     }
   }
 
@@ -435,7 +435,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     for (String partitionPath: partitionPaths) {
       fileSystemView.getLatestFileSlices(partitionPath).forEach(slice -> {
         HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-            .withFileSystem(metaClient.getFs())
+            .withStorage(metaClient.getStorage())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(slice.getLogFiles()
                 .sorted(HoodieLogFile.getLogFileComparator())
@@ -444,11 +444,12 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
             .withLatestInstantTime(instant)
             .withBufferSize(config.getMaxDFSStreamBufferSize())
             .withOptimizedLogBlocksScan(true)
+            .withTableMetaClient(metaClient)
             .build();
         scanner.scan(true);
         List<String> prevInstants = scanner.getValidBlockInstants();
         HoodieUnMergedLogRecordScanner scanner2 = HoodieUnMergedLogRecordScanner.newBuilder()
-            .withFileSystem(metaClient.getFs())
+            .withStorage(metaClient.getStorage())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(slice.getLogFiles()
                 .sorted(HoodieLogFile.getLogFileComparator())
@@ -457,6 +458,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
             .withLatestInstantTime(currentInstant)
             .withBufferSize(config.getMaxDFSStreamBufferSize())
             .withOptimizedLogBlocksScan(true)
+            .withTableMetaClient(table.getMetaClient())
             .build();
         scanner2.scan(true);
         List<String> currentInstants = scanner2.getValidBlockInstants();

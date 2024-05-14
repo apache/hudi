@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.collection.RocksDBBasedMap;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.config.SourceTestConfig;
@@ -63,11 +64,10 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
   public static void initDataGen(TypedProperties props, int partition) {
     try {
-      boolean useRocksForTestDataGenKeys = props.getBoolean(SourceTestConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS.key(),
-          SourceTestConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS.defaultValue());
-      String baseStoreDir = props.getString(SourceTestConfig.ROCKSDB_BASE_DIR_FOR_TEST_DATAGEN_KEYS.key(),
+      boolean useRocksForTestDataGenKeys = ConfigUtils.getBooleanWithAltKeys(props, SourceTestConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS);
+      String baseStoreDir = ConfigUtils.getStringWithAltKeys(props, SourceTestConfig.ROCKSDB_BASE_DIR_FOR_TEST_DATAGEN_KEYS,
           File.createTempFile("test_data_gen", ".keys").getParent()) + "/" + partition;
-      LOG.info("useRocksForTestDataGenKeys=" + useRocksForTestDataGenKeys + ", BaseStoreDir=" + baseStoreDir);
+      LOG.info("useRocksForTestDataGenKeys={}, BaseStoreDir={}", useRocksForTestDataGenKeys, baseStoreDir);
       dataGeneratorMap.put(partition, new HoodieTestDataGenerator(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS,
           useRocksForTestDataGenKeys ? new RocksDBBasedMap<>(baseStoreDir) : new HashMap<>()));
     } catch (IOException e) {
@@ -106,18 +106,17 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
   protected static Stream<GenericRecord> fetchNextBatch(TypedProperties props, int sourceLimit, String instantTime,
       int partition) {
-    int maxUniqueKeys =
-        props.getInteger(SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.defaultValue());
+    int maxUniqueKeys = ConfigUtils.getIntWithAltKeys(props, SourceTestConfig.MAX_UNIQUE_RECORDS_PROP);
 
     HoodieTestDataGenerator dataGenerator = dataGeneratorMap.get(partition);
 
     // generate `sourceLimit` number of upserts each time.
     int numExistingKeys = dataGenerator.getNumExistingKeys(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-    LOG.info("NumExistingKeys=" + numExistingKeys);
+    LOG.info("NumExistingKeys={}", numExistingKeys);
 
     int numUpdates = Math.min(numExistingKeys, sourceLimit / 2);
     int numInserts = sourceLimit - numUpdates;
-    LOG.info("Before adjustments => numInserts=" + numInserts + ", numUpdates=" + numUpdates);
+    LOG.info("Before adjustments => numInserts={}, numUpdates={}", numInserts, numUpdates);
     boolean reachedMax = false;
 
     if (numInserts + numExistingKeys > maxUniqueKeys) {
@@ -134,17 +133,16 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     Stream<GenericRecord> deleteStream = Stream.empty();
     Stream<GenericRecord> updateStream;
     long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-    LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
-        + ", Free Memory=" + Runtime.getRuntime().freeMemory());
+    LOG.info("Before DataGen. Memory Usage={}, Total Memory={}, Free Memory={}", memoryUsage1, Runtime.getRuntime().totalMemory(),
+        Runtime.getRuntime().freeMemory());
     if (!reachedMax && numUpdates >= 50) {
-      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50) + ", NumDeletes=50, maxUniqueRecords="
-          + maxUniqueKeys);
+      LOG.info("After adjustments => NumInserts={}, NumUpdates={}, NumDeletes=50, maxUniqueRecords={}", numInserts, (numUpdates - 50), maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
       deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50).map(AbstractBaseTestSource::toGenericRecord);
       updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
           .map(AbstractBaseTestSource::toGenericRecord);
     } else {
-      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
+      LOG.info("After adjustments => NumInserts={}, NumUpdates={}, maxUniqueRecords={}", numInserts, numUpdates, maxUniqueKeys);
       updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
           .map(AbstractBaseTestSource::toGenericRecord);
     }

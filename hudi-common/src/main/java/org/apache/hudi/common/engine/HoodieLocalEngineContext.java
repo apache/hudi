@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.engine;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -32,8 +31,7 @@ import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -56,12 +54,12 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrap
  */
 public final class HoodieLocalEngineContext extends HoodieEngineContext {
 
-  public HoodieLocalEngineContext(Configuration conf) {
+  public HoodieLocalEngineContext(StorageConfiguration<?> conf) {
     this(conf, new LocalTaskContextSupplier());
   }
 
-  public HoodieLocalEngineContext(Configuration conf, TaskContextSupplier taskContextSupplier) {
-    super(new SerializableConfiguration(conf), taskContextSupplier);
+  public HoodieLocalEngineContext(StorageConfiguration<?> conf, TaskContextSupplier taskContextSupplier) {
+    super(conf, taskContextSupplier);
   }
 
   @Override

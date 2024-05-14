@@ -93,7 +93,7 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.4.0' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1170hive313spark340
-elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' ]]; then
+elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' && ${SCALA_PROFILE} == 'scala-2.12' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
@@ -103,11 +103,22 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1180hive313spark350
+elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+  HADOOP_VERSION=3.3.5
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.18.0
+  SPARK_VERSION=3.5.0
+  SPARK_HADOOP_VERSION=3
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1180hive313spark350scala213
 fi
 
 # build docker image
 cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1
 docker build \
+--build-arg SCALA_VERSION=$SCALA_PROFILE \
 --build-arg HADOOP_VERSION=$HADOOP_VERSION \
 --build-arg HIVE_VERSION=$HIVE_VERSION \
 --build-arg DERBY_VERSION=$DERBY_VERSION \

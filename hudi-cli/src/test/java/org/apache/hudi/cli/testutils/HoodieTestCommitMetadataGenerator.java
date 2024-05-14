@@ -23,16 +23,17 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,27 +65,27 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
   /**
    * Create a commit file with default CommitMetadata.
    */
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration) throws Exception {
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration) throws Exception {
     createCommitFileWithMetadata(basePath, commitTime, configuration, Option.empty(), Option.empty());
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
       Option<Integer> writes, Option<Integer> updates) throws Exception {
     createCommitFileWithMetadata(basePath, commitTime, configuration, writes, updates, Collections.emptyMap());
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
                                                   Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
     createCommitFileWithMetadata(basePath, commitTime, configuration, UUID.randomUUID().toString(),
         UUID.randomUUID().toString(), writes, updates, extraMetadata);
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
       String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates) throws Exception {
     createCommitFileWithMetadata(basePath, commitTime, configuration, fileId1, fileId2, writes, updates, Collections.emptyMap());
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
       String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
     List<String> commitFileNames = Arrays.asList(
         HoodieTimeline.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
@@ -97,7 +98,7 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
     }
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
                                                   String fileId1, String fileId2, Option<Integer> writes,
                                                   Option<Integer> updates, Map<String, String> extraMetadata,
                                                   boolean setDefaultFileId) throws Exception {
@@ -112,9 +113,9 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
     }
   }
 
-  static void createFileWithMetadata(String basePath, Configuration configuration, String name, byte[] content) throws IOException {
+  static void createFileWithMetadata(String basePath, StorageConfiguration<?> configuration, String name, byte[] content) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
-    try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
+    try (OutputStream os = HadoopFSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
       os.write(content);
     }
   }

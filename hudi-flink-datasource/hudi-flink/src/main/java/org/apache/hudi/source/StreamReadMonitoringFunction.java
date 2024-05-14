@@ -124,6 +124,7 @@ public class StreamReadMonitoringFunction
         .partitionPruner(partitionPruner)
         .skipCompaction(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
         .skipClustering(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
+        .skipInsertOverwrite(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_INSERT_OVERWRITE))
         .build();
   }
 
@@ -212,7 +213,7 @@ public class StreamReadMonitoringFunction
       return;
     }
     IncrementalInputSplits.Result result =
-        incrementalInputSplits.inputSplits(metaClient, this.issuedInstant, this.issuedOffset, this.cdcEnabled);
+        incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled);
     if (result.isEmpty()) {
       // no new instants, returns early
       return;

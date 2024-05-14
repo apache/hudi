@@ -85,7 +85,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       .defaultValue(1000)
       .markAdvanced()
       .withDocumentation("Max size limit to push down partition filters, if the estimate push down "
-          + "filters exceed this size, will directly try to fetch all partitions");
+          + "filters exceed this size, will directly try to fetch all partitions between the min/max."
+          + "In case of glue metastore, this value should be reduced because it has a filter length limit.");
 
   public static String getBucketSpec(String bucketCols, int bucketNum) {
     return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";

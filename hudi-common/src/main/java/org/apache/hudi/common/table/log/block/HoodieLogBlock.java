@@ -25,9 +25,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,13 +36,14 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -67,10 +68,7 @@ public abstract class HoodieLogBlock {
   private final Option<HoodieLogBlockContentLocation> blockContentLocation;
   // data for a specific block
   private Option<byte[]> content;
-  // TODO : change this to just InputStream so this works for any FileSystem
-  // create handlers to return specific type of inputstream based on FS
-  // input stream corresponding to the log file where this logBlock belongs
-  private final FSDataInputStream inputStream;
+  private final Supplier<SeekableDataInputStream> inputStreamSupplier;
   // Toggle flag, whether to read blocks lazily (I/O intensive) or not (Memory intensive)
   protected boolean readBlockLazily;
 
@@ -79,18 +77,18 @@ public abstract class HoodieLogBlock {
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
       @Nonnull Option<byte[]> content,
-      @Nullable FSDataInputStream inputStream,
+      @Nullable Supplier<SeekableDataInputStream> inputStreamSupplier,
       boolean readBlockLazily) {
     this.logBlockHeader = logBlockHeader;
     this.logBlockFooter = logBlockFooter;
     this.blockContentLocation = blockContentLocation;
     this.content = content;
-    this.inputStream = inputStream;
+    this.inputStreamSupplier = inputStreamSupplier;
     this.readBlockLazily = readBlockLazily;
   }
 
   // Return the bytes representation of the data belonging to a LogBlock
-  public byte[] getContentBytes() throws IOException {
+  public byte[] getContentBytes(StorageConfiguration<?> storageConf) throws IOException {
     throw new HoodieException("No implementation was provided");
   }
 
@@ -201,8 +199,8 @@ public abstract class HoodieLogBlock {
    * intensive CompactedScanner, the location helps to lazily read contents from the log file
    */
   public static final class HoodieLogBlockContentLocation {
-    // Hadoop Config required to access the file
-    private final Configuration hadoopConf;
+    // Storage Config required to access the file
+    private final StorageConfiguration<?> storageConf;
     // The logFile that contains this block
     private final HoodieLogFile logFile;
     // The filePosition in the logFile for the contents of this block
@@ -212,20 +210,20 @@ public abstract class HoodieLogBlock {
     // The final position where the complete block ends
     private final long blockEndPos;
 
-    public HoodieLogBlockContentLocation(Configuration hadoopConf,
+    public HoodieLogBlockContentLocation(StorageConfiguration<?> storageConf,
                                          HoodieLogFile logFile,
                                          long contentPositionInLogFile,
                                          long blockSize,
                                          long blockEndPos) {
-      this.hadoopConf = hadoopConf;
+      this.storageConf = storageConf;
       this.logFile = logFile;
       this.contentPositionInLogFile = contentPositionInLogFile;
       this.blockSize = blockSize;
       this.blockEndPos = blockEndPos;
     }
 
-    public Configuration getHadoopConf() {
-      return hadoopConf;
+    public StorageConfiguration<?> getStorageConf() {
+      return storageConf;
     }
 
     public HoodieLogFile getLogFile() {
@@ -264,7 +262,7 @@ public abstract class HoodieLogBlock {
   /**
    * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}.
    */
-  public static Map<HeaderMetadataType, String> getLogMetadata(DataInputStream dis) throws IOException {
+  public static Map<HeaderMetadataType, String> getLogMetadata(SeekableDataInputStream dis) throws IOException {
 
     Map<HeaderMetadataType, String> metadata = new HashMap<>();
     // 1. Read the metadata written out
@@ -288,7 +286,7 @@ public abstract class HoodieLogBlock {
    * Read or Skip block content of a log block in the log file. Depends on lazy reading enabled in
    * {@link HoodieMergedLogRecordScanner}
    */
-  public static Option<byte[]> tryReadContent(FSDataInputStream inputStream, Integer contentLength, boolean readLazily)
+  public static Option<byte[]> tryReadContent(SeekableDataInputStream inputStream, Integer contentLength, boolean readLazily)
       throws IOException {
     if (readLazily) {
       // Seek to the end of the content block
@@ -308,13 +306,17 @@ public abstract class HoodieLogBlock {
    */
   protected void inflate() throws HoodieIOException {
     checkState(!content.isPresent(), "Block has already been inflated");
-    checkState(inputStream != null, "Block should have input-stream provided");
+    checkState(inputStreamSupplier != null, "Block should have input-stream provided");
 
-    try {
+    try (SeekableDataInputStream inputStream = inputStreamSupplier.get()) {
       content = Option.of(new byte[(int) this.getBlockContentLocation().get().getBlockSize()]);
       inputStream.seek(this.getBlockContentLocation().get().getContentPositionInLogFile());
       inputStream.readFully(content.get(), 0, content.get().length);
       inputStream.seek(this.getBlockContentLocation().get().getBlockEndPos());
+    } catch (InterruptedIOException e) {
+      // Stop retry inflate if encounters InterruptedIOException
+      Thread.currentThread().interrupt();
+      throw new HoodieIOException("Thread is interrupted while inflating.", e);
     } catch (IOException e) {
       // TODO : fs.open() and return inputstream again, need to pass FS configuration
       // because the inputstream might close/timeout for large number of log blocks to be merged

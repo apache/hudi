@@ -19,14 +19,14 @@
 package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.hadoop.fs.FileStatus;
 
 /**
  * Data transfer object for instant state.
- *
+ * <p>
  * see org.apache.hudi.sink.meta.CkpMessage.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -48,9 +48,9 @@ public class InstantStateDTO {
   @JsonProperty("state")
   String state;
 
-  public static InstantStateDTO fromFileStatus(FileStatus fileStatus) {
+  public static InstantStateDTO fromStoragePathInfo(StoragePathInfo pathInfo) {
     InstantStateDTO ret = new InstantStateDTO();
-    String fileName = fileStatus.getPath().getName();
+    String fileName = pathInfo.getPath().getName();
     String[] nameAndExt = fileName.split("\\.");
     ValidationUtils.checkState(nameAndExt.length == 2);
     ret.instant = nameAndExt[0];

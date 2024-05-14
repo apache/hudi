@@ -35,10 +35,9 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -66,8 +65,9 @@ public class TestCompletionTimeQueryView {
   @Test
   void testReadCompletionTime() throws Exception {
     String tableName = "testTable";
-    String tablePath = tempFile.getAbsolutePath() + Path.SEPARATOR + tableName;
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
       // query completion time from LSM timeline
@@ -95,8 +95,9 @@ public class TestCompletionTimeQueryView {
   @Test
   void testReadStartTime() throws Exception {
     String tableName = "testTable";
-    String tablePath = tempFile.getAbsolutePath() + Path.SEPARATOR + tableName;
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
       // query start time from LSM timeline
@@ -114,7 +115,7 @@ public class TestCompletionTimeQueryView {
   }
 
   private String getInstantTimeSetFormattedString(CompletionTimeQueryView view, int completionTime1, int completionTime2) {
-    return view.getStartTimeSet(String.format("%08d", completionTime1), String.format("%08d", completionTime2), s -> String.format("%08d", Integer.parseInt(s) - 1000))
+    return view.getStartTimes(String.format("%08d", completionTime1), String.format("%08d", completionTime2), s -> String.format("%08d", Integer.parseInt(s) - 1000))
         .stream().sorted().collect(Collectors.joining(","));
   }
 
@@ -143,8 +144,12 @@ public class TestCompletionTimeQueryView {
     writer.write(activeActions.subList(2, 4), Option.empty(), Option.empty());
     writer.write(activeActions.subList(4, 6), Option.empty(), Option.empty());
     // reconcile the active timeline
-    instants.subList(0, 3 * 6).forEach(instant -> HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), instant));
-    ValidationUtils.checkState(metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4, "should archive 6 instants with 4 as active");
+    instants.subList(0, 3 * 6).forEach(
+        instant -> HoodieActiveTimeline.deleteInstantFile(metaClient.getStorage(),
+            metaClient.getMetaPath(), instant));
+    ValidationUtils.checkState(
+        metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4,
+        "should archive 6 instants with 4 as active");
   }
 
   @SuppressWarnings("rawtypes")

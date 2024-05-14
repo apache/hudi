@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -31,15 +32,16 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -110,7 +112,7 @@ public class HoodieTestCommitGenerator {
   }
 
   public static String getBaseFilename(String instantTime, String fileId) {
-    return FSUtils.makeBaseFileName(instantTime, BASE_FILE_WRITE_TOKEN, fileId);
+    return FSUtils.makeBaseFileName(instantTime, BASE_FILE_WRITE_TOKEN, fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
   }
 
   public static String getLogFilename(String instantTime, String fileId) {
@@ -169,7 +171,7 @@ public class HoodieTestCommitGenerator {
       String basePath, Configuration configuration,
       String filename, byte[] content) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + filename);
-    try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
+    try (OutputStream os = HadoopFSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
       os.write(content);
     }
   }
@@ -177,7 +179,7 @@ public class HoodieTestCommitGenerator {
   public static void createDataFile(
       String basePath, Configuration configuration,
       String partitionPath, String filename) throws IOException {
-    FileSystem fs = FSUtils.getFs(basePath, configuration);
+    FileSystem fs = HadoopFSUtils.getFs(basePath, configuration);
     Path filePath = new Path(new Path(basePath, partitionPath), filename);
     Path parent = filePath.getParent();
     if (!fs.exists(parent)) {

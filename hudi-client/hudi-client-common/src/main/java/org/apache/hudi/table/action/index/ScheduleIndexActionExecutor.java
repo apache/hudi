@@ -67,16 +67,21 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
   private static final Integer LATEST_INDEX_PLAN_VERSION = INDEX_PLAN_VERSION_1;
 
   private final List<MetadataPartitionType> partitionIndexTypes;
+
+  private final List<String> partitionPaths;
+
   private final TransactionManager txnManager;
 
   public ScheduleIndexActionExecutor(HoodieEngineContext context,
                                      HoodieWriteConfig config,
                                      HoodieTable<T, I, K, O> table,
                                      String instantTime,
-                                     List<MetadataPartitionType> partitionIndexTypes) {
+                                     List<MetadataPartitionType> partitionIndexTypes,
+                                     List<String> partitionPaths) {
     super(context, config, table, instantTime);
     this.partitionIndexTypes = partitionIndexTypes;
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.partitionPaths = partitionPaths;
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
   }
 
   @Override
@@ -84,8 +89,11 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     validateBeforeScheduling();
     // make sure that it is idempotent, check with previously pending index operations.
     Set<String> indexesInflightOrCompleted = getInflightAndCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
+
     Set<String> requestedPartitions = partitionIndexTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
+    requestedPartitions.addAll(partitionPaths);
     requestedPartitions.removeAll(indexesInflightOrCompleted);
+
     if (!requestedPartitions.isEmpty()) {
       LOG.warn(String.format("Following partitions already exist or inflight: %s. Going to schedule indexing of only these partitions: %s",
           indexesInflightOrCompleted, requestedPartitions));
@@ -142,8 +150,8 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
   private void abort(HoodieInstant indexInstant) {
     // delete metadata partition
     partitionIndexTypes.forEach(partitionType -> {
-      if (metadataPartitionExists(table.getMetaClient().getBasePath(), context, partitionType)) {
-        deleteMetadataPartition(table.getMetaClient().getBasePath(), context, partitionType);
+      if (metadataPartitionExists(table.getMetaClient().getBasePath(), context, partitionType.getPartitionPath())) {
+        deleteMetadataPartition(table.getMetaClient().getBasePath(), context, partitionType.getPartitionPath());
       }
     });
     // delete requested instant

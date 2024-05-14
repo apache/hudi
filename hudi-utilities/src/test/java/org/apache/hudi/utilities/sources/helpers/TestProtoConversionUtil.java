@@ -57,7 +57,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -67,6 +66,7 @@ import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil.toUnsignedBigInteger;
 
@@ -578,6 +578,6 @@ public class TestProtoConversionUtil {
   private static String randomString(int size) {
     byte[] bytes = new byte[size];
     RANDOM.nextBytes(bytes);
-    return new String(bytes, StandardCharsets.UTF_8);
+    return fromUTF8Bytes(bytes);
   }
 }

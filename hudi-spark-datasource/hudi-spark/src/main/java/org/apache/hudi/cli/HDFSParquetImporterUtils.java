@@ -25,7 +25,6 @@ import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -38,7 +37,9 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -61,7 +62,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -70,6 +70,8 @@ import java.util.List;
 import java.util.Properties;
 
 import scala.Tuple2;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * Loads data from Parquet Sources.
@@ -125,9 +127,9 @@ public class HDFSParquetImporterUtils implements Serializable {
   }
 
   public int dataImport(JavaSparkContext jsc) {
-    FileSystem fs = FSUtils.getFs(this.targetPath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(this.targetPath, jsc.hadoopConfiguration());
     this.props = this.propsFilePath == null || this.propsFilePath.isEmpty() ? buildProperties(this.configs)
-        : readConfig(fs.getConf(), new Path(this.propsFilePath), this.configs).getProps(true);
+        : readConfig(fs.getConf(), new StoragePath(this.propsFilePath), this.configs).getProps(true);
     LOG.info("Starting data import with configs : " + props.toString());
     int ret = -1;
     try {
@@ -157,7 +159,8 @@ public class HDFSParquetImporterUtils implements Serializable {
             .setTableName(this.tableName)
             .setTableType(this.tableType)
             .build();
-        HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), this.targetPath, properties);
+        HoodieTableMetaClient.initTableAndGetMetaClient(
+            HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), this.targetPath, properties);
       }
 
       // Get schema.
@@ -250,7 +253,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     return properties;
   }
 
-  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
+  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, StoragePath cfgPath, List<String> overriddenProps) {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
@@ -277,7 +280,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
-        .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
+        .orElseGet(() -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
             .withParallelism(parallelism, parallelism)
@@ -306,7 +309,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     try (FSDataInputStream inputStream = fs.open(p)) {
       inputStream.readFully(0, buf.array(), 0, buf.array().length);
     }
-    return new String(buf.array(), StandardCharsets.UTF_8);
+    return fromUTF8Bytes(buf.array());
   }
 
   public static int handleErrors(JavaSparkContext jsc, String instantTime, JavaRDD<WriteStatus> writeResponse) {

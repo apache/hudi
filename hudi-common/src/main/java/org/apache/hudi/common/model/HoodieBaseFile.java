@@ -20,12 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.CachingPath;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-
-import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 /**
  * Hoodie base file - Represents metadata about Hudi file in DFS.
@@ -47,12 +43,13 @@ public class HoodieBaseFile extends BaseFile {
     this.commitTime = dataFile.getCommitTime();
   }
 
-  public HoodieBaseFile(FileStatus fileStatus) {
-    this(fileStatus, null);
+  public HoodieBaseFile(StoragePathInfo pathInfo) {
+    this(pathInfo, null);
   }
 
-  public HoodieBaseFile(FileStatus fileStatus, BaseFile bootstrapBaseFile) {
-    this(fileStatus, getFileIdAndCommitTimeFromFileName(fileStatus.getPath().getName()), bootstrapBaseFile);
+  public HoodieBaseFile(StoragePathInfo pathInfo, BaseFile bootstrapBaseFile) {
+    this(pathInfo, getFileIdAndCommitTimeFromFileName(pathInfo.getPath().getName()),
+        bootstrapBaseFile);
   }
 
   public HoodieBaseFile(String filePath) {
@@ -74,12 +71,14 @@ public class HoodieBaseFile extends BaseFile {
     this.commitTime = commitTime;
   }
 
-  private HoodieBaseFile(FileStatus fileStatus, String[] fileIdAndCommitTime, BaseFile bootstrapBaseFile) {
-    this(fileStatus, fileIdAndCommitTime[0], fileIdAndCommitTime[1], bootstrapBaseFile);
+  private HoodieBaseFile(StoragePathInfo pathInfo, String[] fileIdAndCommitTime,
+                         BaseFile bootstrapBaseFile) {
+    this(pathInfo, fileIdAndCommitTime[0], fileIdAndCommitTime[1], bootstrapBaseFile);
   }
 
-  public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
-    super(maybeHandleExternallyGeneratedFileName(fileStatus, fileId));
+  public HoodieBaseFile(StoragePathInfo pathInfo, String fileId, String commitTime,
+                        BaseFile bootstrapBaseFile) {
+    super(maybeHandleExternallyGeneratedFileName(pathInfo, fileId));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
     this.commitTime = commitTime;
@@ -131,23 +130,24 @@ public class HoodieBaseFile extends BaseFile {
   /**
    * If the file was created externally, the original file path will have a '_[commitTime]_hudiext' suffix when stored in the metadata table. That suffix needs to be removed from the FileStatus so
    * that the actual file can be found and read.
-   * @param fileStatus an input file status that may require updating
-   * @param fileId the fileId for the file
+   *
+   * @param pathInfo an input path info that may require updating
+   * @param fileId   the fileId for the file
    * @return the original file status if it was not externally created, or a new FileStatus with the original file name if it was externally created
    */
-  private static FileStatus maybeHandleExternallyGeneratedFileName(FileStatus fileStatus, String fileId) {
-    if (fileStatus == null) {
+  private static StoragePathInfo maybeHandleExternallyGeneratedFileName(StoragePathInfo pathInfo,
+                                                                        String fileId) {
+    if (pathInfo == null) {
       return null;
     }
-    if (ExternalFilePathUtil.isExternallyCreatedFile(fileStatus.getPath().getName())) {
+    if (ExternalFilePathUtil.isExternallyCreatedFile(pathInfo.getPath().getName())) {
       // fileId is the same as the original file name for externally created files
-      Path parent = fileStatus.getPath().getParent();
-      return new FileStatus(fileStatus.getLen(), fileStatus.isDirectory(), fileStatus.getReplication(),
-          fileStatus.getBlockSize(), fileStatus.getModificationTime(), fileStatus.getAccessTime(),
-          fileStatus.getPermission(), fileStatus.getOwner(), fileStatus.getGroup(),
-          new CachingPath(parent, createRelativePathUnsafe(fileId)));
+      StoragePath parent = pathInfo.getPath().getParent();
+      return new StoragePathInfo(
+          new StoragePath(parent, fileId), pathInfo.getLength(), pathInfo.isDirectory(),
+          pathInfo.getBlockReplication(), pathInfo.getBlockSize(), pathInfo.getModificationTime());
     } else {
-      return fileStatus;
+      return pathInfo;
     }
   }
 

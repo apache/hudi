@@ -31,6 +31,7 @@
 
     <properties>
         <dynamodb-local.version>1.15.0</dynamodb-local.version>
+        <moto.version>5.0.1</moto.version>
     </properties>
 
     <dependencies>
@@ -261,6 +262,21 @@
                                         </wait>
                                     </run>
                                 </image>
+                                <image>
+                                    <name>motoserver/moto:${moto.version}</name>
+                                    <alias>it-aws</alias>
+                                    <run>
+                                        <ports>
+                                            <port>${moto.port}:${moto.port}</port>
+                                        </ports>
+                                        <wait>
+                                            <http>
+                                                <url>${moto.endpoint}/moto-api/</url>
+                                            </http>
+                                            <time>10000</time>
+                                        </wait>
+                                    </run>
+                                </image>
                             </images>
                         </configuration>
                     </execution>
@@ -282,9 +298,6 @@
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
-            </resource>
-            <resource>
-                <directory>src/test/resources</directory>
             </resource>
         </resources>
     </build>

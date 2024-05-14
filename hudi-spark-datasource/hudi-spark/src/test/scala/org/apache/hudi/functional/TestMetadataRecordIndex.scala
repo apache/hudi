@@ -18,23 +18,23 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
 import org.apache.spark.sql._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -61,7 +61,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
   override def setUp() {
     initPath()
     initSparkContexts()
-    initFileSystem()
+    initHoodieStorage()
     initTestDataGenerator()
 
     setTableName("hoodie_test")
@@ -107,7 +107,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     validateDataAndRecordIndices(hudiOpts)
   }
 
-  private def getLatestClusteringInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
+  private def getLatestClusteringInstant(): Option[HoodieInstant] = {
     metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant()
   }
 
@@ -124,7 +124,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     } else {
       records1 = recordsToStrings(dataGen.generateInserts(getInstantTime(), 100)).asScala
     }
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1.toSeq, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(hudiOpts)
       .option(OPERATION.key, operation)
@@ -183,7 +183,10 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
       val recordKey: String = row.getAs("_hoodie_record_key")
       val partitionPath: String = row.getAs("_hoodie_partition_path")
       val fileName: String = row.getAs("_hoodie_file_name")
-      val recordLocation = recordIndexMap.get(recordKey)
+      val recordLocations = recordIndexMap.get(recordKey)
+      assertFalse(recordLocations.isEmpty)
+      // assuming no duplicate keys for now
+      val recordLocation = recordLocations.get(0)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
       if (!writeConfig.inlineClusteringEnabled && !writeConfig.isAsyncClusteringEnabled) {
         // The file id changes after clustering, so only assert it for usual upsert and compaction operations

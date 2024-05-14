@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -78,7 +79,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     tableName = "test_table_" + ITTestCompactionCommand.class.getName();
     basePath = Paths.get(basePath, tableName).toString();
 
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     // Create table and connect
     new TableCommand().createTable(
         basePath, tableName, HoodieTableType.MERGE_ON_READ.name(),

@@ -22,18 +22,18 @@ import org.apache.hudi.client.CompactionAdminClient;
 import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
 import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.List;
 
@@ -60,9 +60,11 @@ public class HoodieCompactionAdminTool {
    * Executes one of compaction admin operations.
    */
   public void run(JavaSparkContext jsc) throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+        .setBasePath(cfg.basePath).build();
     try (CompactionAdminClient admin = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), cfg.basePath)) {
-      final FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
+      final FileSystem fs = HadoopFSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
       if (cfg.outputPath != null && fs.exists(new Path(cfg.outputPath))) {
         throw new IllegalStateException("Output File Path already exists");
       }
@@ -107,11 +109,10 @@ public class HoodieCompactionAdminTool {
   private <T> void serializeOperationResult(FileSystem fs, T result) throws Exception {
     if ((cfg.outputPath != null) && (result != null)) {
       Path outputPath = new Path(cfg.outputPath);
-      FSDataOutputStream fsout = fs.create(outputPath, true);
-      ObjectOutputStream out = new ObjectOutputStream(fsout);
-      out.writeObject(result);
-      out.close();
-      fsout.close();
+      try (OutputStream stream = fs.create(outputPath, true);
+           ObjectOutputStream out = new ObjectOutputStream(stream)) {
+        out.writeObject(result);
+      }
     }
   }
 

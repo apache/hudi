@@ -81,12 +81,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.config = config;
     this.table = table;
     this.metaClient = table.getMetaClient();
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
     this.timelineWriter = LSMTimelineWriter.getInstance(config, table);
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
-    this.metrics = new HoodieMetrics(config);
+    this.metrics = new HoodieMetrics(config, table.getStorageConf());
   }
 
   public int archiveIfRequired(HoodieEngineContext context) throws IOException {
@@ -228,7 +228,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     if (table.isMetadataTable()) {
       HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
           .setBasePath(HoodieTableMetadata.getDatasetBasePath(config.getBasePath()))
-          .setConf(metaClient.getHadoopConf())
+          .setConf(metaClient.getStorageConf().newInstance())
           .build();
       Option<HoodieInstant> qualifiedEarliestInstant =
           TimelineUtils.getEarliestInstantForMetadataArchival(
@@ -342,11 +342,13 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       );
     }
     if (!completedInstants.isEmpty()) {
-      context.foreach(
-          completedInstants,
-          instant -> activeTimeline.deleteInstantFileIfExists(instant),
-          Math.min(completedInstants.size(), config.getArchiveDeleteParallelism())
-      );
+      // Due to the concurrency between deleting completed instants and reading data,
+      // there may be hole in the timeline, which can lead to errors when reading data.
+      // Therefore, the concurrency of deleting completed instants is temporarily disabled,
+      // and instants are deleted in ascending order to prevent the occurrence of such holes.
+      // See HUDI-7207 and #10325.
+      completedInstants.stream()
+          .forEach(instant -> activeTimeline.deleteInstantFileIfExists(instant));
     }
 
     return true;

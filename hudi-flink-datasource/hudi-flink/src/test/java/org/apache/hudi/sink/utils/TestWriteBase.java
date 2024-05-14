@@ -20,30 +20,37 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.hamcrest.MatcherAssert;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
@@ -121,6 +128,30 @@ public class TestWriteBase {
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
+
+  protected Configuration conf;
+
+  @TempDir
+  protected File tempFile;
+
+  @BeforeEach
+  public void before() {
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
+    setUp(conf);
+  }
+
+  /**
+   * Override to have custom configuration.
+   */
+  protected void setUp(Configuration conf) {
+    // for subclass extension
+  }
+
+  @AfterEach
+  public void after() {
+    conf = null;
+  }
 
   /**
    * Utils to composite the test stages.
@@ -452,8 +483,8 @@ public class TestWriteBase {
     }
 
     private void checkWrittenDataMor(File baseFile, Map<String, String> expected, int partitions) throws Exception {
-      FileSystem fs = FSUtils.getFs(basePath, new org.apache.hadoop.conf.Configuration());
-      TestData.checkWrittenDataMOR(fs, baseFile, expected, partitions);
+      HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, HoodieTestUtils.getDefaultStorageConf());
+      TestData.checkWrittenDataMOR(storage, baseFile, expected, partitions);
     }
 
     public TestHarness checkWrittenDataCOW(Map<String, List<String>> expected) throws IOException {
@@ -493,11 +524,14 @@ public class TestWriteBase {
 
     public TestHarness rollbackLastCompleteInstantToInflight() throws Exception {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-      Option<HoodieInstant> lastCompletedInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
-      HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), lastCompletedInstant.get());
+      Option<HoodieInstant> lastCompletedInstant =
+          metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+      HoodieActiveTimeline.deleteInstantFile(
+          metaClient.getStorage(), metaClient.getMetaPath(), lastCompletedInstant.get());
       // refresh the heartbeat in case it is timed out.
-      OutputStream outputStream =
-          metaClient.getFs().create(new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + this.lastComplete), true);
+      OutputStream outputStream = metaClient.getStorage().create(new StoragePath(
+          HoodieTableMetaClient.getHeartbeatFolderPath(basePath)
+              + StoragePath.SEPARATOR + this.lastComplete), true);
       outputStream.close();
       this.lastPending = this.lastComplete;
       this.lastComplete = lastCompleteInstant();
@@ -515,8 +549,8 @@ public class TestWriteBase {
      * Used to simulate the use case that the coordinator has not finished a new instant initialization,
      * while the write task fails intermittently.
      */
-    public TestHarness coordinatorFails() throws Exception {
-      this.pipeline.coordinatorFails();
+    public TestHarness restartCoordinator() throws Exception {
+      this.pipeline.restartCoordinator();
       return this;
     }
 
@@ -568,5 +602,21 @@ public class TestWriteBase {
       assertEquals(count, TestUtils.getCompletedInstantCount(basePath, isMor ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION));
       return this;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  protected TestHarness preparePipeline() throws Exception {
+    return preparePipeline(conf);
+  }
+
+  protected TestHarness preparePipeline(Configuration conf) throws Exception {
+    return TestHarness.instance().preparePipeline(tempFile, conf);
+  }
+
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.COPY_ON_WRITE;
   }
 }

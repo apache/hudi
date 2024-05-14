@@ -18,15 +18,18 @@
 
 package org.apache.spark.sql.hudi.catalog
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.sql.InsertMode
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.HoodieSpark3CatalogUtils.MatchBucketTransform
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
@@ -388,7 +391,7 @@ object HoodieCatalog {
       case t => throw new HoodieException(s"Partitioning by transformation `$t` is not supported")
     }
 
-    (identityCols, bucketSpec)
+    (identityCols.toSeq, bucketSpec)
   }
 
   def isTablePartitioned(table: Option[CatalogTable]): Boolean = {
@@ -398,13 +401,13 @@ object HoodieCatalog {
   def buildPartitionTransforms(spark: SparkSession,
                                basePath: String): Array[Transform] = {
     val metaClient = HoodieTableMetaClient.builder()
-      .setConf(spark.sessionState.newHadoopConf())
+      .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()))
       .setBasePath(basePath)
       .build()
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
     val metadataFileSystemView = FileSystemViewManager.createInMemoryFileSystemView(
       new HoodieSparkEngineContext(spark.sparkContext), metaClient, metadataConfig)
-    val partitions: List[Path] = metadataFileSystemView.getPartitionPaths.asScala.toList
+    val partitions: List[StoragePath] = metadataFileSystemView.getPartitionPaths.asScala.toList
     val transforms = mutable.Set[Transform]()
     partitions.foreach { path =>
       path.toString.split("/").foreach { part =>

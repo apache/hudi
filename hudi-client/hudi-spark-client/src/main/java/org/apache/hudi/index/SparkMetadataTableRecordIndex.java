@@ -80,10 +80,6 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       HoodieWriteConfig otherConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps())
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(FALLBACK_INDEX_TYPE).build()).build();
       HoodieIndex fallbackIndex = SparkHoodieIndexFactory.createIndex(otherConfig);
-
-      // Fallback index needs to be a global index like record index
-      ValidationUtils.checkArgument(fallbackIndex.isGlobal(), "Fallback index needs to be a global index like record index");
-
       return fallbackIndex.tagLocation(records, context, hoodieTable);
     }
 
@@ -167,9 +163,10 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       recordKeyIterator.forEachRemaining(keysToLookup::add);
 
       // recordIndexInfo object only contains records that are present in record_index.
-      Map<String, HoodieRecordGlobalLocation> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(keysToLookup);
+      Map<String, List<HoodieRecordGlobalLocation>> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(keysToLookup);
       return recordIndexInfo.entrySet().stream()
-          .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
+          .flatMap(e -> e.getValue().stream().map(loc -> new Tuple2<>(e.getKey(), loc)))
+          .iterator();
     }
   }
 

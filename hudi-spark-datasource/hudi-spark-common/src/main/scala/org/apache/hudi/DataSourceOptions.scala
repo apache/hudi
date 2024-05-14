@@ -35,6 +35,7 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGene
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction
+
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 import org.slf4j.LoggerFactory
 
@@ -85,15 +86,6 @@ object DataSourceReadOptions {
     .withDocumentation("For Snapshot query on merge on read table, control whether we invoke the record " +
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
-
-  val USE_NEW_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.read.use.new.parquet.file.format")
-    .defaultValue("true")
-    .markAdvanced()
-    .sinceVersion("0.14.0")
-    .withDocumentation("Read using the new Hudi parquet file format. The new Hudi parquet file format is " +
-      "introduced as an experimental feature in 0.14.0. Currently, the new Hudi parquet file format only applies " +
-      "to bootstrap and MOR queries. Schema evolution is also not supported by the new file format.")
 
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
@@ -218,6 +210,37 @@ object DataSourceReadOptions {
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
   val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
+
+  val CREATE_TIMELINE_RELATION: ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.table.valued.function.timeline.relation")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("When this is set, the relation created by DefaultSource is for a view representing" +
+        " the result set of the table valued function hudi_query_timeline(...)")
+
+  val TIMELINE_RELATION_ARG_ARCHIVED_TIMELINE:  ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.table.valued.function.timeline.relation.archived")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("When this is set, the result set of the table valued function hudi_query_timeline(...)" +
+        " will include archived timeline")
+
+  val CREATE_FILESYSTEM_RELATION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.create.filesystem.relation")
+    .defaultValue("false")
+    .markAdvanced()
+    .sinceVersion("1.0.0")
+    .withDocumentation("When this is set, the relation created by DefaultSource is for a view representing" +
+      " the result set of the table valued function hudi_filesystem_view(...)")
+
+  val FILESYSTEM_RELATION_ARG_SUBPATH:  ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.table.valued.function.filesystem.relation.subpath")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("A regex under the table's base path to get file system view information")
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
@@ -478,7 +501,9 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .markAdvanced()
     .withDocumentation("If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation. " +
-      "This config is deprecated as of 0.14.0. Please use hoodie.datasource.insert.dup.policy instead.");
+      "<br /> **Note** Just for Insert operation in Spark SQL writing since 0.14.0, users can switch to the config `hoodie.datasource.insert.dup.policy` instead " +
+      "for a simplified duplicate handling experience. The new config will be incorporated into all other writing flows and this config will be fully deprecated " +
+      "in future releases.");
 
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")
@@ -539,9 +564,7 @@ object DataSourceWriteOptions {
   @Deprecated
   val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
 
-  val HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS: ConfigProperty[String] = HoodieCommonConfig.HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS
-
-  val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
+  val SET_NULL_FOR_MISSING_COLUMNS: ConfigProperty[String] = HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS
 
   val SPARK_SQL_INSERT_INTO_OPERATION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.spark.sql.insert.into.operation")
@@ -575,7 +598,7 @@ object DataSourceWriteOptions {
     .withValidValues(NONE_INSERT_DUP_POLICY, DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY)
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("When operation type is set to \"insert\", users can optionally enforce a dedup policy. This policy will be employed "
+    .withDocumentation("**Note** This is only applicable to Spark SQL writing.<br />When operation type is set to \"insert\", users can optionally enforce a dedup policy. This policy will be employed "
       + " when records being ingested already exists in storage. Default policy is none and no action will be taken. Another option is to choose " +
       " \"drop\", on which matching records from incoming will be dropped and the rest will be ingested. Third option is \"fail\" which will " +
       "fail the write operation when same records are re-ingested. In other words, a given record as deduced by the key generation policy " +
@@ -1015,7 +1038,7 @@ object DataSourceOptionsHelper {
     var newProp: ConfigProperty[U] = ConfigProperty.key(prop.key())
       .defaultValue(converter(prop.defaultValue()))
       .withDocumentation(prop.doc())
-      .withAlternatives(prop.getAlternatives.asScala: _*)
+      .withAlternatives(prop.getAlternatives.asScala.toSeq: _*)
 
     newProp = toScalaOption(prop.getSinceVersion) match {
       case Some(version) => newProp.sinceVersion(version)

@@ -19,7 +19,6 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
-import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
@@ -39,11 +39,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
@@ -73,8 +72,9 @@ public class TestLegacyArchivedMetaEntryReader {
   @Test
   void testReadLegacyArchivedTimeline() throws Exception {
     String tableName = "testTable";
-    String tablePath = tempFile.getAbsolutePath() + Path.SEPARATOR + tableName;
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareLegacyArchivedTimeline(metaClient);
     LegacyArchivedMetaEntryReader reader = new LegacyArchivedMetaEntryReader(metaClient);
     ClosableIterator<ActiveAction> iterator = reader.getActiveActionsIterator();
@@ -101,9 +101,10 @@ public class TestLegacyArchivedMetaEntryReader {
 
   private HoodieLogFormat.Writer openWriter(HoodieTableMetaClient metaClient) {
     try {
-      return HoodieLogFormat.newWriterBuilder().onParentPath(new Path(metaClient.getArchivePath()))
+      return HoodieLogFormat.newWriterBuilder()
+          .onParentPath(new StoragePath(metaClient.getArchivePath()))
           .withFileId("commits").withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
-          .withFs(metaClient.getFs()).withDeltaCommit("").build();
+          .withStorage(metaClient.getStorage()).withDeltaCommit("").build();
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize HoodieLogFormat writer", e);
     }

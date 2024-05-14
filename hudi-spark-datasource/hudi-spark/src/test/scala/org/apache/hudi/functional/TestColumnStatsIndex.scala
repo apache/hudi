@@ -18,18 +18,20 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
@@ -136,6 +138,65 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
       assertTrue(result.getLong(0) == 4)
       assertTrue(result.getLong(1) == 1)
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testMetadataColumnStatsWithFilesFilter(shouldReadInMemory: Boolean): Unit = {
+    val targetColumnsToIndex = Seq("c1", "c2", "c3")
+
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
+    )
+
+    val opts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true"
+    ) ++ metadataOpts
+
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
+
+    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
+    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+
+    inputDF
+      .sort("c1")
+      .repartition(4, new Column("c1"))
+      .write
+      .format("hudi")
+      .options(opts)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(toProperties(metadataOpts))
+      .build()
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+    val requestedColumns = Seq("c1")
+    // get all file names
+    val stringEncoder: Encoder[String] = org.apache.spark.sql.Encoders.STRING
+    val fileNameSet: Set[String] = columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { df =>
+      val fileNames: Array[String] = df.select("fileName").as[String](stringEncoder).collect()
+      val newFileNameSet: Set[String] = fileNames.toSet
+      newFileNameSet
+    }
+    val targetFileName = fileNameSet.take(2)
+    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Some(targetFileName)) { df =>
+      assertEquals(2, df.collect().length)
+      val targetDFFileNameSet: Set[String] = df.select("fileName").as[String](stringEncoder).collect().toSet
+      assertEquals(targetFileName, targetDFFileNameSet)
     }
   }
 
@@ -394,13 +455,14 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     val utils = new ParquetUtils
 
-    val conf = new Configuration()
+    val conf = HoodieTestUtils.getDefaultStorageConf
     val path = new Path(pathStr)
-    val fs = path.getFileSystem(conf)
+    val fs = path.getFileSystem(conf.unwrap)
 
-    val parquetFilePath = fs.listStatus(path).filter(fs => fs.getPath.getName.endsWith(".parquet")).toSeq.head.getPath
+    val parquetFilePath = new StoragePath(
+      fs.listStatus(path).filter(fs => fs.getPath.getName.endsWith(".parquet")).toSeq.head.getPath.toUri)
 
-    val ranges = utils.readRangeFromParquetMetadata(conf, parquetFilePath,
+    val ranges = utils.readColumnStatsFromMetadata(conf, parquetFilePath,
       Seq("c1", "c2", "c3a", "c3b", "c3c", "c4", "c5", "c6", "c7", "c8").asJava)
 
     ranges.asScala.foreach(r => {

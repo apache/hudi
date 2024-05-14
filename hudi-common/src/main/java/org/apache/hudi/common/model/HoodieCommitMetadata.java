@@ -23,19 +23,19 @@ import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -47,6 +47,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -132,11 +133,11 @@ public class HoodieCommitMetadata implements Serializable {
     return this.operationType;
   }
 
-  public HashMap<String, String> getFileIdAndFullPaths(Path basePath) {
+  public HashMap<String, String> getFileIdAndFullPaths(StoragePath basePath) {
     HashMap<String, String> fullPaths = new HashMap<>();
     for (Map.Entry<String, String> entry : getFileIdAndRelativePaths().entrySet()) {
       String fullPath = entry.getValue() != null
-          ? FSUtils.getPartitionPath(basePath, entry.getValue()).toString()
+          ? FSUtils.constructAbsolutePath(basePath, entry.getValue()).toString()
           : null;
       fullPaths.put(entry.getKey(), fullPath);
     }
@@ -148,7 +149,7 @@ public class HoodieCommitMetadata implements Serializable {
     if (getPartitionToWriteStats().get(partitionPath) != null) {
       for (HoodieWriteStat stat : getPartitionToWriteStats().get(partitionPath)) {
         if ((stat.getFileId() != null)) {
-          String fullPath = FSUtils.getPartitionPath(basePath, stat.getPath()).toString();
+          String fullPath = FSUtils.constructAbsolutePath(basePath, stat.getPath()).toString();
           fullPaths.add(fullPath);
         }
       }
@@ -161,7 +162,7 @@ public class HoodieCommitMetadata implements Serializable {
     for (Map.Entry<String, List<HoodieWriteStat>> entry : getPartitionToWriteStats().entrySet()) {
       for (HoodieWriteStat stat : entry.getValue()) {
         HoodieFileGroupId fileGroupId = new HoodieFileGroupId(stat.getPartitionPath(), stat.getFileId());
-        Path fullPath = new Path(basePath, stat.getPath());
+        StoragePath fullPath = new StoragePath(basePath, stat.getPath());
         fileGroupIdToFullPaths.put(fileGroupId, fullPath.toString());
       }
     }
@@ -173,26 +174,29 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit.
    *
-   * @param hadoopConf
-   * @param basePath   The base path
+   * @param storageConf storage configuration.
+   * @param basePath    The base path
    * @return the file full path to file status mapping
    */
-  public Map<String, FileStatus> getFullPathToFileStatus(Configuration hadoopConf, String basePath) {
-    Map<String, FileStatus> fullPathToFileStatus = new HashMap<>();
+  public Map<String, StoragePathInfo> getFullPathToInfo(StorageConfiguration<?> storageConf,
+                                                        String basePath) {
+    Map<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
       // Iterate through all the written files.
       for (HoodieWriteStat stat : stats) {
         String relativeFilePath = stat.getPath();
-        Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
+        StoragePath fullPath = relativeFilePath != null
+            ? FSUtils.constructAbsolutePath(basePath, relativeFilePath) : null;
         if (fullPath != null) {
-          long blockSize = FSUtils.getFs(fullPath.toString(), hadoopConf).getDefaultBlockSize(fullPath);
-          FileStatus fileStatus = new FileStatus(stat.getFileSizeInBytes(), false, 0, blockSize,
-              0, fullPath);
-          fullPathToFileStatus.put(fullPath.getName(), fileStatus);
+          long blockSize =
+              HoodieStorageUtils.getStorage(fullPath.toString(), storageConf).getDefaultBlockSize(fullPath);
+          StoragePathInfo pathInfo = new StoragePathInfo(
+              fullPath, stat.getFileSizeInBytes(), false, (short) 0, blockSize, 0);
+          fullPathToInfoMap.put(fullPath.getName(), pathInfo);
         }
       }
     }
-    return fullPathToFileStatus;
+    return fullPathToInfoMap;
   }
 
   /**
@@ -200,29 +204,32 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit by file group ID.
    *
-   * <p>Note: different with {@link #getFullPathToFileStatus(Configuration, String)},
+   * <p>Note: different with {@link #getFullPathToInfo(StorageConfiguration, String)},
    * only the latest commit file for a file group is returned,
    * this is an optimization for COPY_ON_WRITE table to eliminate legacy files for filesystem view.
    *
-   * @param hadoopConf
-   * @param basePath   The base path
+   * @param storageConf storage configuration.
+   * @param basePath    The base path
    * @return the file ID to file status mapping
    */
-  public Map<String, FileStatus> getFileIdToFileStatus(Configuration hadoopConf, String basePath) {
-    Map<String, FileStatus> fileIdToFileStatus = new HashMap<>();
+  public Map<String, StoragePathInfo> getFileIdToInfo(StorageConfiguration<?> storageConf,
+                                                      String basePath) {
+    Map<String, StoragePathInfo> fileIdToInfoMap = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
       // Iterate through all the written files.
       for (HoodieWriteStat stat : stats) {
         String relativeFilePath = stat.getPath();
-        Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
+        StoragePath fullPath =
+            relativeFilePath != null ? FSUtils.constructAbsolutePath(basePath,
+                relativeFilePath) : null;
         if (fullPath != null) {
-          FileStatus fileStatus = new FileStatus(stat.getFileSizeInBytes(), false, 0, 0,
-              0, fullPath);
-          fileIdToFileStatus.put(stat.getFileId(), fileStatus);
+          StoragePathInfo pathInfo =
+              new StoragePathInfo(fullPath, stat.getFileSizeInBytes(), false, (short) 0, 0, 0);
+          fileIdToInfoMap.put(stat.getFileId(), pathInfo);
         }
       }
     }
-    return fileIdToFileStatus;
+    return fileIdToInfoMap;
   }
 
   public String toJsonString() throws IOException {
@@ -248,9 +255,8 @@ public class HoodieCommitMetadata implements Serializable {
   // TODO: refactor this method to avoid doing the json tree walking (HUDI-4822).
   public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(byte[] bytes, HoodieFileGroupId fileGroupId) {
     try {
-      String jsonStr = new String(
-          convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class),
-          StandardCharsets.UTF_8);
+      String jsonStr = fromUTF8Bytes(
+          convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class));
       if (jsonStr.isEmpty()) {
         return Option.empty();
       }
@@ -516,9 +522,8 @@ public class HoodieCommitMetadata implements Serializable {
         return clazz.newInstance();
       }
       return fromJsonString(
-          new String(
-              convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class),
-              StandardCharsets.UTF_8),
+          fromUTF8Bytes(
+              convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class)),
           clazz);
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);

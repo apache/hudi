@@ -29,10 +29,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.metrics.MetricsReporterType;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
@@ -47,14 +52,14 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   TransactionManager transactionManager;
 
   @BeforeEach
-  private void init() throws IOException {
+  private void init(TestInfo testInfo) throws IOException {
     initPath();
     initMetaClient();
-    this.writeConfig = getWriteConfig();
-    this.transactionManager = new TransactionManager(this.writeConfig, this.metaClient.getFs());
+    this.writeConfig = getWriteConfig(testInfo.getTags().contains("useLockProviderWithRuntimeError"));
+    this.transactionManager = new TransactionManager(this.writeConfig, this.metaClient.getStorage());
   }
 
-  private HoodieWriteConfig getWriteConfig() {
+  private HoodieWriteConfig getWriteConfig(boolean useLockProviderWithRuntimeError) {
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -62,13 +67,15 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
         .build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder()
-            .withLockProvider(InProcessLockProvider.class)
+            .withLockProvider(useLockProviderWithRuntimeError ? InProcessLockProviderWithRuntimeError.class : InProcessLockProvider.class)
             .withLockWaitTimeInMillis(50L)
             .withNumRetries(2)
             .withRetryWaitTimeInMillis(10L)
             .withClientNumRetries(2)
             .withClientRetryWaitTimeInMillis(10L)
             .build())
+        .forTable("testtable")
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder().withReporterType(MetricsReporterType.INMEMORY.toString()).withLockingMetrics(true).on(true).build())
         .build();
   }
 
@@ -243,6 +250,19 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     transactionManager.endTransaction(Option.empty());
     Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
     Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
+  }
+
+  @Test
+  @Tag("useLockProviderWithRuntimeError")
+  public void testTransactionsWithUncheckedLockProviderRuntimeException() {
+    assertThrows(RuntimeException.class, () -> {
+      try {
+        transactionManager.beginTransaction(Option.empty(), Option.empty());
+      } finally {
+        transactionManager.endTransaction(Option.empty());
+      }
+    });
+
   }
 
   private Option<HoodieInstant> getInstant(String timestamp) {

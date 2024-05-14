@@ -32,6 +32,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JavaConversions
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, Literal}
 import org.apache.spark.sql.types.StringType
@@ -39,8 +40,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
-import scala.collection.JavaConverters
-import scala.jdk.CollectionConverters.{asScalaIteratorConverter, collectionAsScalaIterableConverter}
+import scala.collection.JavaConverters._
 
 class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
@@ -298,7 +298,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
   }
 
   protected def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
-    val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
+    val props = TypedProperties.fromMap(hudiOpts.asJava)
     HoodieWriteConfig.newBuilder()
       .withProps(props)
       .withPath(basePath)

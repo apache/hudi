@@ -20,7 +20,6 @@ package org.apache.hudi.client.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
-import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.client.timeline.ActiveActionWithDetails;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -29,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -36,11 +36,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +49,6 @@ import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -140,13 +139,13 @@ public class LegacyArchivedMetaEntryReader {
   private ClosableIterator<ActiveAction> loadInstants(HoodieArchivedTimeline.TimeRangeFilter filter) {
     try {
       // List all files
-      FileStatus[] fsStatuses = metaClient.getFs().globStatus(
-          new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
+      List<StoragePathInfo> pathInfoList = metaClient.getStorage().globEntries(
+          new StoragePath(metaClient.getArchivePath(), ".commits_.archive*"));
 
       // Sort files by version suffix in reverse (implies reverse chronological order)
-      Arrays.sort(fsStatuses, new ArchiveLogVersionComparator());
+      pathInfoList.sort(new ArchiveLogVersionComparator());
 
-      ClosableIterator<HoodieRecord<IndexedRecord>> itr = getRecordIterator(fsStatuses);
+      ClosableIterator<HoodieRecord<IndexedRecord>> itr = getRecordIterator(pathInfoList);
 
       return new ClosableIterator<ActiveAction>() {
         private ActiveAction activeAction;
@@ -204,10 +203,11 @@ public class LegacyArchivedMetaEntryReader {
   /**
    * Returns the avro record iterator with given file statuses.
    */
-  private ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(FileStatus[] fsStatuses) throws IOException {
+  private ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(
+      List<StoragePathInfo> pathInfoList) throws IOException {
     return new ClosableIterator<HoodieRecord<IndexedRecord>>() {
 
-      final Iterator<FileStatus> fsItr = Arrays.asList(fsStatuses).iterator();
+      final Iterator<StoragePathInfo> pathInfoIterator = pathInfoList.iterator();
       HoodieLogFormat.Reader reader;
       ClosableIterator<HoodieRecord<IndexedRecord>> recordItr;
 
@@ -240,13 +240,16 @@ public class LegacyArchivedMetaEntryReader {
           reader = null;
         }
         // new reader
-        while (fsItr.hasNext()) {
-          FileStatus fs = fsItr.next();
+        while (pathInfoIterator.hasNext()) {
+          StoragePathInfo pathInfo = pathInfoIterator.next();
           try {
-            reader = HoodieLogFormat.newReader(metaClient.getFs(),
-                new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+            reader = HoodieLogFormat.newReader(
+                metaClient.getStorage(),
+                new HoodieLogFile(pathInfo.getPath()),
+                HoodieArchivedMetaEntry.getClassSchema());
           } catch (IOException ioe) {
-            throw new HoodieIOException("Error initializing the reader for archived log: " + fs.getPath(), ioe);
+            throw new HoodieIOException(
+                "Error initializing the reader for archived log: " + pathInfo.getPath(), ioe);
           }
           while (reader.hasNext()) {
             HoodieLogBlock block = reader.next();
@@ -256,6 +259,13 @@ public class LegacyArchivedMetaEntryReader {
               if (recordItr.hasNext()) {
                 return true;
               }
+            }
+          }
+          if (!reader.hasNext()) {
+            try {
+              reader.close();
+            } catch (IOException e) {
+              throw new HoodieIOException("Failed to close log reader " + pathInfo.getPath());
             }
           }
         }
@@ -280,14 +290,15 @@ public class LegacyArchivedMetaEntryReader {
   /**
    * Sort files by reverse order of version suffix in file name.
    */
-  public static class ArchiveLogVersionComparator implements Comparator<FileStatus>, Serializable {
+  public static class ArchiveLogVersionComparator
+      implements Comparator<StoragePathInfo>, Serializable {
     @Override
-    public int compare(FileStatus f1, FileStatus f2) {
+    public int compare(StoragePathInfo f1, StoragePathInfo f2) {
       return Integer.compare(getArchivedFileSuffix(f2), getArchivedFileSuffix(f1));
     }
   }
 
-  private static int getArchivedFileSuffix(FileStatus f) {
+  private static int getArchivedFileSuffix(StoragePathInfo f) {
     try {
       Matcher fileMatcher = ARCHIVE_FILE_PATTERN.matcher(f.getPath().getName());
       if (fileMatcher.matches()) {

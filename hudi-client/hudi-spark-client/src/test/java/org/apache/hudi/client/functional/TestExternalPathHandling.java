@@ -154,7 +154,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(
         cleanTime,
         Option.empty(),
-        cleanStats);
+        cleanStats,
+        Collections.EMPTY_MAP);
     try (HoodieTableMetadataWriter hoodieTableMetadataWriter = (HoodieTableMetadataWriter) writeClient.initTable(WriteOperationType.UPSERT, Option.of(cleanTime)).getMetadataWriter(cleanTime).get()) {
       hoodieTableMetadataWriter.update(cleanMetadata, cleanTime);
       metaClient.getActiveTimeline().transitionCleanInflightToComplete(true, inflightClean,
@@ -292,6 +293,6 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     return new HoodieCleanerPlan(earliestInstantToRetain,
         latestCommit,
         writeConfig.getCleanerPolicy().name(), Collections.emptyMap(),
-        CleanPlanner.LATEST_CLEAN_PLAN_VERSION, filePathsToBeDeletedPerPartition, Collections.emptyList());
+        CleanPlanner.LATEST_CLEAN_PLAN_VERSION, filePathsToBeDeletedPerPartition, Collections.emptyList(), Collections.EMPTY_MAP);
   }
 }

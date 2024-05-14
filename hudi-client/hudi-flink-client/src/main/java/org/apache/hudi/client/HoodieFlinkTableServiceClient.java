@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -133,7 +134,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       // commit to data table after committing to metadata table.
       // We take the lock here to ensure all writes to metadata table happens within a single lock (single writer).
       // Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      writeTableMetadata(table, clusteringCommitTime, metadata, writeStatuses.orElse(context.emptyHoodieData()));
+      writeTableMetadata(table, clusteringCommitTime, metadata, writeStatuses.orElseGet(context::emptyHoodieData));
 
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
       table.getActiveTimeline().transitionReplaceInflightToComplete(
@@ -197,7 +198,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
    */
   private HoodieBackedTableMetadataWriter initMetadataWriter(Option<String> latestPendingInstant) {
     return (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
-        FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT, latestPendingInstant);
+        HadoopFSUtils.getStorageConf(FlinkClientUtil.getHadoopConf()), this.config, HoodieFlinkEngineContext.DEFAULT, latestPendingInstant);
   }
 
   public void initMetadataTable() {
@@ -210,7 +211,9 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
         // guard the metadata writer with concurrent lock
         this.txnManager.getLockManager().lock();
         try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter(latestPendingInstant)) {
-          metadataWriter.performTableServices(Option.empty());
+          if (metadataWriter.isInitialized()) {
+            metadataWriter.performTableServices(Option.empty());
+          }
         }
       } catch (Exception e) {
         throw new HoodieException("Failed to initialize metadata table", e);

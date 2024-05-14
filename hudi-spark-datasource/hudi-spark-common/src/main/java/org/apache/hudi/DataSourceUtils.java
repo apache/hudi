@@ -40,11 +40,11 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -55,7 +55,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,11 +71,12 @@ public class DataSourceUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(DataSourceUtils.class);
 
-  public static String getTablePath(FileSystem fs, Path[] userProvidedPaths) throws IOException {
+  public static String getTablePath(HoodieStorage storage,
+                                    List<StoragePath> userProvidedPaths) throws IOException {
     LOG.info("Getting table path..");
-    for (Path path : userProvidedPaths) {
+    for (StoragePath path : userProvidedPaths) {
       try {
-        Option<Path> tablePath = TablePathUtils.getTablePath(fs, path);
+        Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, path);
         if (tablePath.isPresent()) {
           return tablePath.get().toString();
         }
@@ -85,7 +85,8 @@ public class DataSourceUtils {
       }
     }
 
-    throw new TableNotFoundException(Arrays.stream(userProvidedPaths).map(Path::toString).collect(Collectors.joining(",")));
+    throw new TableNotFoundException(userProvidedPaths.stream()
+        .map(StoragePath::toString).collect(Collectors.joining(",")));
   }
 
   /**
@@ -95,7 +96,7 @@ public class DataSourceUtils {
    *
    * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
    */
-  private static Option<BulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
+  public static Option<BulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
       throws HoodieException {
     String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
     try {

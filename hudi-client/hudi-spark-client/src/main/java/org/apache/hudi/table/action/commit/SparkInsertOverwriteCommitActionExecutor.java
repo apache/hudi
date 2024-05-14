@@ -36,7 +36,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.Partitioner;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +71,7 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   protected Partitioner getPartitioner(WorkloadProfile profile) {
     return table.getStorageLayout().layoutPartitionerClass()
         .map(c -> getLayoutPartitioner(profile, c))
-        .orElse(new SparkInsertOverwritePartitioner(profile, context, table, config));
+        .orElseGet(() -> new SparkInsertOverwritePartitioner(profile, context, table, config));
   }
 
   @Override
@@ -81,14 +81,15 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
 
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    if (writeMetadata.getWriteStatuses().isEmpty()) {
-      String staticOverwritePartition = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
-      if (StringUtils.isNullOrEmpty(staticOverwritePartition)) {
-        return Collections.emptyMap();
-      } else {
-        return Collections.singletonMap(staticOverwritePartition, getAllExistingFileIds(staticOverwritePartition));
-      }
+    String staticOverwritePartition = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
+    if (StringUtils.nonEmpty(staticOverwritePartition)) {
+      // static insert overwrite partitions
+      List<String> partitionPaths = Arrays.asList(staticOverwritePartition.split(","));
+      context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of matching static partitions");
+      return HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitionPaths, partitionPaths.size()).mapToPair(
+          partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
     } else {
+      // dynamic insert overwrite partitions
       return HoodieJavaPairRDD.getJavaPairRDD(writeMetadata.getWriteStatuses().map(status -> status.getStat().getPartitionPath()).distinct().mapToPair(partitionPath ->
           Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
     }

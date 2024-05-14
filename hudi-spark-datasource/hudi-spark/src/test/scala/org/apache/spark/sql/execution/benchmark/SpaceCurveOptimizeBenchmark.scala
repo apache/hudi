@@ -23,11 +23,11 @@ import org.apache.hudi.ColumnStatsIndexHelper.buildColumnStatsTableFor
 import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
 import org.apache.hudi.sort.SpaceCurveSortingHelper
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, StructField}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.util.Random
 
 @Tag("functional")
@@ -38,7 +38,7 @@ object SpaceCurveOptimizeBenchmark extends HoodieSparkSqlTestBase {
 
     val orderedColsTypes = Seq(StructField(co1, IntegerType), StructField(co2, IntegerType))
     val colStatsIndexTable =
-      buildColumnStatsTableFor(spark, sourceTableDF.inputFiles.toSeq, orderedColsTypes)
+      buildColumnStatsTableFor(spark, sourceTableDF.inputFiles.toSeq.asJava, orderedColsTypes.asJava)
         .collect()
         .map(f => (f.getInt(1), f.getInt(2), f.getInt(4), f.getInt(5)))
 
@@ -107,11 +107,11 @@ object SpaceCurveOptimizeBenchmark extends HoodieSparkSqlTestBase {
   def prepareInterTypeTable(tablePath: Path, numRows: Int, col1Range: Int = 1000000, col2Range: Int = 1000000, skewed: Boolean = false): Unit = {
     import spark.implicits._
     val df = spark.range(numRows).map(_ => (Random.nextInt(col1Range), Random.nextInt(col2Range))).toDF("c1_int", "c2_int")
-    val dfOptimizeByMap = SpaceCurveSortingHelper.orderDataFrameByMappingValues(df, LayoutOptimizationStrategy.ZORDER, Seq("c1_int", "c2_int"), 200)
-    val dfOptimizeBySample = SpaceCurveSortingHelper.orderDataFrameBySamplingValues(df, LayoutOptimizationStrategy.ZORDER, Seq("c1_int", "c2_int"), 200)
+    val dfOptimizeByMap = SpaceCurveSortingHelper.orderDataFrameByMappingValues(df, LayoutOptimizationStrategy.ZORDER, Seq("c1_int", "c2_int").asJava, 200)
+    val dfOptimizeBySample = SpaceCurveSortingHelper.orderDataFrameBySamplingValues(df, LayoutOptimizationStrategy.ZORDER, Seq("c1_int", "c2_int").asJava, 200)
 
-    val dfHilbertOptimizeByMap = SpaceCurveSortingHelper.orderDataFrameByMappingValues(df, LayoutOptimizationStrategy.HILBERT, Seq("c1_int", "c2_int"), 200)
-    val dfHilbertOptimizeBySample = SpaceCurveSortingHelper.orderDataFrameBySamplingValues(df, LayoutOptimizationStrategy.HILBERT, Seq("c1_int", "c2_int"), 200)
+    val dfHilbertOptimizeByMap = SpaceCurveSortingHelper.orderDataFrameByMappingValues(df, LayoutOptimizationStrategy.HILBERT, Seq("c1_int", "c2_int").asJava, 200)
+    val dfHilbertOptimizeBySample = SpaceCurveSortingHelper.orderDataFrameBySamplingValues(df, LayoutOptimizationStrategy.HILBERT, Seq("c1_int", "c2_int").asJava, 200)
 
     saveAsTable(dfOptimizeByMap, tablePath, if (skewed) "z_sort_byMap_skew" else "z_sort_byMap")
     saveAsTable(dfOptimizeBySample, tablePath, if (skewed) "z_sort_bySample_skew" else "z_sort_bySample")

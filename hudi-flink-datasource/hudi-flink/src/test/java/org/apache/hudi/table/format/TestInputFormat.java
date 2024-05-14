@@ -27,11 +27,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
@@ -356,7 +358,7 @@ public class TestInputFormat {
         .build();
 
     // default read the latest commit
-    IncrementalInputSplits.Result splits = incrementalInputSplits.inputSplits(metaClient, null, null, true);
+    IncrementalInputSplits.Result splits = incrementalInputSplits.inputSplits(metaClient, null, true);
 
     List<RowData> result = readData(inputFormat, splits.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
 
@@ -398,7 +400,7 @@ public class TestInputFormat {
         .build();
 
     // default read the latest commit
-    IncrementalInputSplits.Result splits = incrementalInputSplits.inputSplits(metaClient, null, null, true);
+    IncrementalInputSplits.Result splits = incrementalInputSplits.inputSplits(metaClient, null, true);
 
     List<RowData> result = readData(inputFormat, splits.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
 
@@ -438,7 +440,7 @@ public class TestInputFormat {
 
     // default read the latest commit
     // the compaction base files are skipped
-    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits1.isEmpty());
     List<RowData> result1 = readData(inputFormat, splits1.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
 
@@ -454,7 +456,7 @@ public class TestInputFormat {
     String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 0, HoodieTimeline.COMMIT_ACTION);
     conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
 
-    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits2.isEmpty());
     List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     String actual2 = TestData.rowDataToString(result2);
@@ -470,7 +472,7 @@ public class TestInputFormat {
     inputFormat = this.tableSource.getInputFormat(true);
 
     // filter out the last commit by partition pruning
-    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits3.isEmpty());
     List<RowData> result3 = readData(inputFormat, splits3.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     String actual3 = TestData.rowDataToString(result3);
@@ -503,7 +505,7 @@ public class TestInputFormat {
 
     // default read the latest commit
     // the clustering files are skipped
-    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits1.isEmpty());
     List<RowData> result1 = readData(inputFormat, splits1.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
 
@@ -519,7 +521,7 @@ public class TestInputFormat {
     String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 0, HoodieTimeline.REPLACE_COMMIT_ACTION);
     conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
 
-    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits2.isEmpty());
     List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     String actual2 = TestData.rowDataToString(result2);
@@ -536,7 +538,7 @@ public class TestInputFormat {
     inputFormat = this.tableSource.getInputFormat(true);
 
     // filter out the last commit by partition pruning
-    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits3.isEmpty());
     List<RowData> result3 = readData(inputFormat, splits3.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     String actual3 = TestData.rowDataToString(result3);
@@ -574,7 +576,9 @@ public class TestInputFormat {
     List<HoodieInstant> instants = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
     assertThat(instants.size(), is(2));
 
-    String c4 = instants.get(1).getTimestamp();
+    String c2 = oriInstants.get(1).getTimestamp();
+    String c3 = oriInstants.get(2).getTimestamp();
+    String c4 = oriInstants.get(3).getTimestamp();
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
@@ -587,7 +591,7 @@ public class TestInputFormat {
 
     // timeline: c1, c2.inflight, c3.inflight, c4
     // default read the latest commit
-    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits1.isEmpty());
     List<RowData> result1 = readData(inputFormat, splits1.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result1, TestData.dataSetInsert(7, 8));
@@ -595,7 +599,7 @@ public class TestInputFormat {
     // timeline: c1, c2.inflight, c3.inflight, c4
     // -> c1
     conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
-    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits2.isEmpty());
     List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result2, TestData.dataSetInsert(1, 2, 7, 8));
@@ -604,13 +608,13 @@ public class TestInputFormat {
     // c4 -> c2
     TestUtils.saveInstantAsComplete(metaClient, oriInstants.get(1), metadataList.get(0)); // complete c2
     assertThat(splits2.getEndInstant(), is(c4));
-    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, splits2.getEndInstant(), splits2.getOffset(), false);
+    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, splits2.getOffset(), false);
     assertFalse(splits3.isEmpty());
     List<RowData> result3 = readData(inputFormat, splits3.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result3, TestData.dataSetInsert(3, 4));
 
     // test c2 and c4, c2 completion time > c1, so it is not a hollow instant
-    IncrementalInputSplits.Result splits4 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(0).getTimestamp(), oriInstants.get(0).getCompletionTime(), false);
+    IncrementalInputSplits.Result splits4 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(0).getCompletionTime(), false);
     assertFalse(splits4.isEmpty());
     List<RowData> result4 = readData(inputFormat, splits4.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result4, TestData.dataSetInsert(3, 4, 7, 8));
@@ -618,23 +622,23 @@ public class TestInputFormat {
     // timeline: c1, c2, c3, c4
     // c4 -> c3
     TestUtils.saveInstantAsComplete(metaClient, oriInstants.get(2), metadataList.get(1)); // complete c3
-    assertThat(splits3.getEndInstant(), is(c4));
-    IncrementalInputSplits.Result splits5 = incrementalInputSplits.inputSplits(metaClient, splits3.getEndInstant(), splits3.getOffset(), false);
+    assertThat(splits3.getEndInstant(), is(c2));
+    IncrementalInputSplits.Result splits5 = incrementalInputSplits.inputSplits(metaClient, splits3.getOffset(), false);
     assertFalse(splits5.isEmpty());
     List<RowData> result5 = readData(inputFormat, splits5.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result5, TestData.dataSetInsert(5, 6));
 
     // c4 ->
-    assertThat(splits5.getEndInstant(), is(c4));
-    IncrementalInputSplits.Result splits6 = incrementalInputSplits.inputSplits(metaClient, splits5.getEndInstant(), splits5.getOffset(), false);
+    assertThat(splits5.getEndInstant(), is(c3));
+    IncrementalInputSplits.Result splits6 = incrementalInputSplits.inputSplits(metaClient, splits5.getOffset(), false);
     assertTrue(splits6.isEmpty());
 
-    // test c2 and c4, c2 is recognized as a hollow instant
+    // test c2, c3 and c4, c2 and c3 is recognized as hollow instants
     // the (version_number, completion_time) pair is not consistent, just for test purpose
-    IncrementalInputSplits.Result splits7 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(2).getTimestamp(), oriInstants.get(3).getCompletionTime(), false);
+    IncrementalInputSplits.Result splits7 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(3).getCompletionTime(), false);
     assertFalse(splits7.isEmpty());
     List<RowData> result7 = readData(inputFormat, splits7.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
-    TestData.assertRowDataEquals(result7, TestData.dataSetInsert(3, 4, 7, 8));
+    TestData.assertRowDataEquals(result7, TestData.dataSetInsert(3, 4, 5, 6));
   }
 
   @Test
@@ -656,7 +660,7 @@ public class TestInputFormat {
         .build();
 
     // default read the latest commit
-    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits1.isEmpty());
     List<RowData> result1 = readData(inputFormat, splits1.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
 
@@ -671,7 +675,7 @@ public class TestInputFormat {
     String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 1, HoodieTimeline.COMMIT_ACTION);
     conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
 
-    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits2.isEmpty());
     List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     String actual2 = TestData.rowDataToString(result2);
@@ -778,9 +782,10 @@ public class TestInputFormat {
       TestData.writeData(dataset, conf);
     }
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
-        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .map(HoodieInstant::getCompletionTime).collect(Collectors.toList());
 
     assertThat(commits.size(), is(3));
 
@@ -862,9 +867,10 @@ public class TestInputFormat {
       TestData.writeDataAsBatch(dataset, conf);
     }
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
-        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .map(HoodieInstant::getCompletionTime).collect(Collectors.toList());
 
     assertThat(commits.size(), is(3));
 
@@ -921,8 +927,9 @@ public class TestInputFormat {
     assertThat(inputFormat5, instanceOf(CdcInputFormat.class));
 
     List<RowData> actual5 = readData(inputFormat5);
-    final List<RowData> expected5 = TestData.dataSetInsert(1, 2);
-    TestData.assertRowDataEquals(actual5, expected5);
+    // even though the start commit "000" is out of range, after instants filtering,
+    // it detects that all the instants are still active, so the intermediate changes got returned.
+    TestData.assertRowDataEquals(actual5, expected3);
 
     // start and end commit: both are out of range
     conf.setString(FlinkOptions.READ_START_COMMIT, "001");
@@ -1011,14 +1018,15 @@ public class TestInputFormat {
         HoodieFlinkEngineContext.DEFAULT, FlinkWriteClients.getHoodieClientConfig(conf));
     writeClient.clean();
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
-        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .map(HoodieInstant::getCompletionTime).collect(Collectors.toList());
 
     assertThat(commits.size(), is(4));
 
     List<String> archivedCommits = metaClient.getArchivedTimeline().getCommitsTimeline().filterCompletedInstants()
-        .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .getInstantsAsStream().map(HoodieInstant::getCompletionTime).collect(Collectors.toList());
 
     assertThat(archivedCommits.size(), is(6));
 
@@ -1136,10 +1144,8 @@ public class TestInputFormat {
     assertTrue(firstCommit.isPresent());
     assertThat(firstCommit.get().getAction(), is(HoodieTimeline.DELTA_COMMIT_ACTION));
 
-    java.nio.file.Path metaFilePath = Paths.get(metaClient.getMetaPath(), firstCommit.get().getFileName());
-    TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().getTimestamp());
-
-    String compactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().map(HoodieInstant::getTimestamp).get();
+    java.nio.file.Path metaFilePath = Paths.get(metaClient.getMetaPath().toString(), firstCommit.get().getFileName());
+    String newCompletionTime = TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().getTimestamp());
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
@@ -1150,8 +1156,8 @@ public class TestInputFormat {
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
         .skipCompaction(skipCompaction)
         .build();
-    conf.setString(FlinkOptions.READ_END_COMMIT, compactionInstant);
-    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    conf.setString(FlinkOptions.READ_END_COMMIT, newCompletionTime);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, false);
     assertFalse(splits2.isEmpty());
     List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result2, TestData.dataSetInsert(1, 2));

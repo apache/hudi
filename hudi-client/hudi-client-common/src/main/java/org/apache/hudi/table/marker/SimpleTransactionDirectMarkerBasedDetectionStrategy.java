@@ -19,11 +19,12 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.client.transaction.DirectMarkerTransactionManager;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
+import org.apache.hudi.storage.HoodieStorage;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,15 +40,16 @@ public class SimpleTransactionDirectMarkerBasedDetectionStrategy
       SimpleTransactionDirectMarkerBasedDetectionStrategy.class);
 
   public SimpleTransactionDirectMarkerBasedDetectionStrategy(
-      HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+      HoodieStorage storage, String partitionPath, String fileId, String instantTime,
       HoodieActiveTimeline activeTimeline, HoodieWriteConfig config) {
-    super(fs, partitionPath, fileId, instantTime, activeTimeline, config);
+    super(storage, partitionPath, fileId, instantTime, activeTimeline, config);
   }
 
   @Override
   public void detectAndResolveConflictIfNecessary() throws HoodieEarlyConflictDetectionException {
     DirectMarkerTransactionManager txnManager =
-        new DirectMarkerTransactionManager((HoodieWriteConfig) config, fs, partitionPath, fileId);
+        new DirectMarkerTransactionManager((HoodieWriteConfig) config,
+            (FileSystem) storage.getFileSystem(), partitionPath, fileId);
     try {
       // Need to do transaction before create marker file when using early conflict detection
       txnManager.beginTransaction(instantTime);

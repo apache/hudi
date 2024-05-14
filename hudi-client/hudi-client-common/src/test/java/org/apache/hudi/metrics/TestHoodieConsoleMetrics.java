@@ -18,7 +18,11 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.storage.StorageConfiguration;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,17 +39,20 @@ import static org.mockito.Mockito.when;
 public class TestHoodieConsoleMetrics {
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieWriteConfig writeConfig;
+  @Mock
+  HoodieMetricsConfig metricsConfig;
+  StorageConfiguration storageConf = HoodieTestUtils.getDefaultStorageConf();
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
   @BeforeEach
   public void start() {
-    when(config.getTableName()).thenReturn("console_metrics_test");
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.CONSOLE);
-    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(config);
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CONSOLE);
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
     metrics = hoodieMetrics.getMetrics();
   }
 

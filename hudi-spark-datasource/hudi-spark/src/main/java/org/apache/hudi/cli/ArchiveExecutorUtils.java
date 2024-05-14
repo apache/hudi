@@ -61,7 +61,7 @@ public final class ArchiveExecutorUtils {
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
       archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {
-      LOG.error("Failed to archive with IOException: " + ioe);
+      LOG.error("Failed to archive with IOException: {}", ioe.getMessage());
       throw ioe;
     }
     return 0;

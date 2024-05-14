@@ -20,20 +20,25 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieErrorTableConfig;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
+import org.apache.hudi.utilities.streamer.BaseErrorTableWriter;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.avro.Schema;
@@ -43,10 +48,12 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
@@ -81,6 +88,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected String tableType;
   protected String tableBasePath;
+  protected String tableName;
   protected Boolean shouldCluster;
   protected Boolean shouldCompact;
   protected Boolean rowWriterEnable;
@@ -91,12 +99,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   protected String sourceSchemaFile;
   protected String targetSchemaFile;
   protected boolean useKafkaSource;
+  protected boolean withErrorTable;
   protected boolean useTransformer;
   protected boolean userProvidedSchema;
 
   protected Map<String, String> readOpts = new HashMap<String, String>() {
     {
-      put(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "false");
       put(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     }
   };
@@ -109,8 +117,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   @BeforeEach
   public void setupTest() {
     super.setupTest();
+    TestErrorTable.commited = new HashMap<>();
+    TestErrorTable.errorEvents = new ArrayList<>();
     useSchemaProvider = false;
     hasTransformer = false;
+    withErrorTable = false;
     sourceSchemaFile = "";
     targetSchemaFile = "";
     topicName = "topic" + testNum;
@@ -125,7 +136,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   @AfterAll
   static void teardownAll() {
     defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
-    HoodieDeltaStreamerTestBase.cleanupKafkaTestUtils();
   }
 
   protected HoodieStreamer deltaStreamer;
@@ -146,11 +156,10 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(String[] transformerClasses, boolean nullForDeletedCols,
                                                               TypedProperties extraProps) throws IOException {
-    extraProps.setProperty(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "false");
     extraProps.setProperty(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
-    extraProps.setProperty(DataSourceWriteOptions.HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS().key(), Boolean.toString(nullForDeletedCols));
+    extraProps.setProperty(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS().key(), Boolean.toString(nullForDeletedCols));
 
     //we set to 0 so that we create new base files on insert instead of adding inserts to existing filegroups via small file handling
     extraProps.setProperty("hoodie.parquet.small.file.limit", "0");
@@ -177,6 +186,16 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
       extraProps.setProperty(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), "_row_key");
     }
 
+    if (withErrorTable) {
+      extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), "true");
+      extraProps.setProperty(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(), "true");
+      extraProps.setProperty(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_RECORD_CREATION.key(), "true");
+      extraProps.setProperty(HoodieErrorTableConfig.ERROR_TARGET_TABLE.key(), tableName + "ERROR");
+      extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH.key(), basePath + tableName + "ERROR");
+      extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS.key(), TestErrorTable.class.getName());
+      extraProps.setProperty("hoodie.base.path", tableBasePath);
+    }
+
     List<String> transformerClassNames = new ArrayList<>();
     Collections.addAll(transformerClassNames, transformerClasses);
 
@@ -187,7 +206,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
           transformerClassNames, PROPS_FILENAME_TEST_AVRO_KAFKA, false,  useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
     } else {
       prepareParquetDFSSource(false, hasTransformer, sourceSchemaFile, targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
-          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps);
+          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, false);
       cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
           transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
           useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
@@ -199,6 +218,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   protected void addData(Dataset<Row> df, Boolean isFirst) {
     if (useSchemaProvider) {
       TestSchemaProvider.sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+      if (withErrorTable && isFirst) {
+        TestSchemaProvider.setTargetSchema(AvroConversionUtils.convertStructTypeToAvroSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk"));
+      }
     }
     if (useKafkaSource) {
       addKafkaData(df, isFirst);
@@ -306,4 +328,42 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
       TestSchemaProvider.targetSchema = null;
     }
   }
+
+  public static class TestErrorTable extends BaseErrorTableWriter {
+
+    public static List<JavaRDD> errorEvents = new ArrayList<>();
+    public static Map<String,Option<JavaRDD>> commited = new HashMap<>();
+
+    public TestErrorTable(HoodieStreamer.Config cfg, SparkSession sparkSession, TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
+                          HoodieStorage storage) {
+      super(cfg, sparkSession, props, hoodieSparkContext, storage);
+    }
+
+    @Override
+    public void addErrorEvents(JavaRDD errorEvent) {
+      errorEvents.add(errorEvent);
+    }
+
+    @Override
+    public boolean upsertAndCommit(String baseTableInstantTime, Option commitedInstantTime) {
+      if (errorEvents.size() > 0) {
+        JavaRDD errorsCombined = errorEvents.get(0);
+        for (int i = 1; i < errorEvents.size(); i++) {
+          errorsCombined = errorsCombined.union(errorEvents.get(i));
+        }
+        commited.put(baseTableInstantTime, Option.of(errorsCombined));
+        errorEvents = new ArrayList<>();
+
+      } else {
+        commited.put(baseTableInstantTime, Option.empty());
+      }
+      return true;
+    }
+
+    @Override
+    public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+      return Option.empty();
+    }
+  }
+
 }

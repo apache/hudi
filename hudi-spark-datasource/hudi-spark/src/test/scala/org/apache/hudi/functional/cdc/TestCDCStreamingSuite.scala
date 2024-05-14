@@ -17,10 +17,11 @@
 
 package org.apache.hudi.functional.cdc
 
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+
 import org.apache.spark.sql.QueryTest.checkAnswer
 import org.apache.spark.sql.catalyst.expressions.{Add, If, Literal}
 import org.apache.spark.sql.execution.streaming.MemoryStream
@@ -85,11 +86,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
       .option(HoodieWriteConfig.TBL_NAME.key, "country_to_population")
       .save(countryToPopulationTblPath)
 
-    val hadoopConf = spark.sessionState.newHadoopConf()
-    val userToCountryMetaClient = HoodieTableMetaClient.builder()
-      .setBasePath(userToCountryTblPath)
-      .setConf(hadoopConf)
-      .build()
+    val userToCountryMetaClient = createMetaClient(spark, userToCountryTblPath)
 
     val inputData = new MemoryStream[(Int, String, String)](100, spark.sqlContext)
     val df = inputData.toDS().toDF("userid", "country", "ts")

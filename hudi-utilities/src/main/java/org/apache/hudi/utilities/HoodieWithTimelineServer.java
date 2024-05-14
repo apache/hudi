@@ -37,12 +37,14 @@ import java.io.InputStreamReader;
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
 
 public class HoodieWithTimelineServer implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private final Config cfg;
 
   public HoodieWithTimelineServer(Config cfg) {
@@ -101,7 +103,7 @@ public class HoodieWithTimelineServer implements Serializable {
     try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
 
       System.out.println("Sleeping for " + cfg.delaySecs + " secs ");
-      Thread.sleep(cfg.delaySecs * 1000);
+      Thread.sleep(cfg.delaySecs * 1000L);
       System.out.println("Woke up after sleeping for " + cfg.delaySecs + " secs ");
 
       HttpGet request = new HttpGet(url);
@@ -110,7 +112,7 @@ public class HoodieWithTimelineServer implements Serializable {
 
       System.out.println("Response Code from(" + url + ") : " + response.getStatusLine().getStatusCode());
 
-      try (BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
+      try (BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent(), StandardCharsets.UTF_8))) {
         StringBuilder result = new StringBuilder();
         rd.lines().forEach(result::append);
         System.out.println("Got result (" + result + ")");

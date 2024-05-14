@@ -19,6 +19,7 @@
 package org.apache.hudi.internal.schema.convert;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
@@ -32,6 +33,7 @@ import org.apache.avro.Schema;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -79,11 +81,13 @@ public class AvroInternalSchemaConverter {
    * but for the metadata table HoodieMetadata.avsc uses a trick where we have a bunch of
    * different types wrapped in record for col stats.
    *
-   * @param Schema avro schema.
+   * @param schema avro schema.
    * @return an avro Schema where null is the first.
    */
   public static Schema fixNullOrdering(Schema schema) {
-    if (schema.getType() == Schema.Type.NULL) {
+    if (schema == null) {
+      return Schema.create(Schema.Type.NULL);
+    } else if (schema.getType() == Schema.Type.NULL) {
       return schema;
     }
     return convert(convert(schema), schema.getFullName());
@@ -154,13 +158,36 @@ public class AvroInternalSchemaConverter {
     return visitAvroSchemaToBuildType(schema, visited, true, nextId);
   }
 
+  private static void checkNullType(Type fieldType, String fieldName, Deque<String> visited) {
+    if (fieldType == null) {
+      StringBuilder sb = new StringBuilder();
+      sb.append("Field '");
+      Iterator<String> visitedIterator = visited.descendingIterator();
+      while (visitedIterator.hasNext()) {
+        sb.append(visitedIterator.next());
+        sb.append(".");
+      }
+      sb.append(fieldName);
+      sb.append("' has type null");
+      throw new HoodieNullSchemaTypeException(sb.toString());
+    } else if (fieldType.typeId() == Type.TypeID.ARRAY) {
+      visited.push(fieldName);
+      checkNullType(((Types.ArrayType) fieldType).elementType(), "element", visited);
+      visited.pop();
+    } else if (fieldType.typeId() == Type.TypeID.MAP) {
+      visited.push(fieldName);
+      checkNullType(((Types.MapType) fieldType).valueType(), "value", visited);
+      visited.pop();
+    }
+  }
+
   /**
    * Converts an avro schema into hudi type.
    *
    * @param schema a avro schema.
    * @param visited track the visit node when do traversal for avro schema; used to check if the name of avro record schema is correct.
    * @param firstVisitRoot track whether the current visited schema node is a root node.
-   * @param nextId a initial id which used to create id for all fields.
+   * @param nextId an initial id which used to create id for all fields.
    * @return a hudi type match avro schema.
    */
   private static Type visitAvroSchemaToBuildType(Schema schema, Deque<String> visited, Boolean firstVisitRoot, AtomicInteger nextId) {
@@ -180,7 +207,9 @@ public class AvroInternalSchemaConverter {
         }
         nextId.set(nextAssignId + fields.size());
         fields.stream().forEach(field -> {
-          fieldTypes.add(visitAvroSchemaToBuildType(field.schema(), visited, false, nextId));
+          Type fieldType = visitAvroSchemaToBuildType(field.schema(), visited, false, nextId);
+          checkNullType(fieldType, field.name(), visited);
+          fieldTypes.add(fieldType);
         });
         visited.pop();
         List<Types.Field> internalFields = new ArrayList<>(fields.size());
@@ -275,7 +304,7 @@ public class AvroInternalSchemaConverter {
    *
    * @param type a hudi type.
    * @param recordName the record name
-   * @return a Avro schema match this type
+   * @return an Avro schema match this type
    */
   public static Schema buildAvroSchemaFromType(Type type, String recordName) {
     Map<Type, Schema> cache = new HashMap<>();
@@ -301,7 +330,7 @@ public class AvroInternalSchemaConverter {
    * @param cache use to cache intermediate convert result to save cost.
    * @param recordName auto-generated record name used as a fallback, in case
    * {@link org.apache.hudi.internal.schema.Types.RecordType} doesn't bear original record-name
-   * @return a Avro schema match this type
+   * @return an Avro schema match this type
    */
   private static Schema visitInternalSchemaToBuildAvroSchema(Type type, Map<Type, Schema> cache, String recordName) {
     switch (type.typeId()) {
