@@ -216,17 +216,6 @@ public class HoodieTestUtils {
   }
 
   /**
-   * @param conf     file system configuration.
-   * @param basePath base path of the Hudi table.
-   * @return a new {@link HoodieTableMetaClient} instance.
-   */
-  public static HoodieTableMetaClient createMetaClient(Configuration conf,
-                                                       String basePath) {
-    return createMetaClient((StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
-        new Class<?>[] {Configuration.class, boolean.class}, conf, true), basePath);
-  }
-
-  /**
    * @param storage  {@link HoodieStorage} instance.
    * @param basePath base path of the Hudi table.
    * @return a new {@link HoodieTableMetaClient} instance.

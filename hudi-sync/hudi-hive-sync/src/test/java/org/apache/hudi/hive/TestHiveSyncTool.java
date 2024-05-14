@@ -43,6 +43,7 @@ import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -453,7 +454,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.removeCommitFromActiveTimeline("500", COMMIT_ACTION);
     HiveTestUtil.removeCommitFromActiveTimeline("600", COMMIT_ACTION);
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
-        hiveClient.config.getHadoopConf(), basePath);
+        new HadoopStorageConfiguration(hiveClient.config.getHadoopConf()), basePath);
     assertEquals(
         Arrays.asList("400", "700", "800"),
         metaClient.getActiveTimeline().getInstants().stream()

@@ -35,6 +35,7 @@ import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
@@ -75,7 +76,7 @@ import java.util.stream.Collectors;
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.hudi.configuration.FlinkOptions.PRECOMBINE_FIELD;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
-import static org.apache.hudi.table.catalog.HoodieCatalogTestUtils.createHiveConf;
+import static org.apache.hudi.table.catalog.HoodieCatalogTestUtils.createStorageConf;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -221,7 +222,7 @@ public class TestHoodieHiveCatalog {
 
     // validate key generator for partitioned table
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
-        createHiveConf(), hoodieCatalog.inferTablePath(tablePath, table));
+        createStorageConf(), hoodieCatalog.inferTablePath(tablePath, table));
     String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
 
@@ -232,7 +233,7 @@ public class TestHoodieHiveCatalog {
     hoodieCatalog.createTable(singleKeyMultiPartitionPath, singleKeyMultiPartitionTable, false);
 
     HoodieTableMetaClient singleKeyMultiPartitionTableMetaClient = HoodieTestUtils.createMetaClient(
-        createHiveConf(),
+        createStorageConf(),
         hoodieCatalog.inferTablePath(singleKeyMultiPartitionPath, singleKeyMultiPartitionTable));
     assertThat(singleKeyMultiPartitionTableMetaClient.getTableConfig().getKeyGeneratorClassName(), is(ComplexAvroKeyGenerator.class.getName()));
 
@@ -245,7 +246,7 @@ public class TestHoodieHiveCatalog {
     hoodieCatalog.createTable(multiKeySinglePartitionPath, multiKeySinglePartitionTable, false);
 
     HoodieTableMetaClient multiKeySinglePartitionTableMetaClient = HoodieTestUtils.createMetaClient(
-        createHiveConf(),
+        createStorageConf(),
         hoodieCatalog.inferTablePath(multiKeySinglePartitionPath, multiKeySinglePartitionTable));
     assertThat(multiKeySinglePartitionTableMetaClient.getTableConfig().getKeyGeneratorClassName(), is(ComplexAvroKeyGenerator.class.getName()));
 
@@ -256,7 +257,7 @@ public class TestHoodieHiveCatalog {
     hoodieCatalog.createTable(nonPartitionPath, nonPartitionTable, false);
 
     metaClient = HoodieTestUtils.createMetaClient(
-        createHiveConf(), hoodieCatalog.inferTablePath(nonPartitionPath, nonPartitionTable));
+        createStorageConf(), hoodieCatalog.inferTablePath(nonPartitionPath, nonPartitionTable));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
   }
@@ -325,7 +326,7 @@ public class TestHoodieHiveCatalog {
     hoodieCatalog.createTable(tablePath, table, true);
 
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
-        createHiveConf(), hoodieCatalog.inferTablePath(tablePath, table));
+        createStorageConf(), hoodieCatalog.inferTablePath(tablePath, table));
     return metaClient.getTableConfig().getProps();
   }
 
@@ -450,7 +451,7 @@ public class TestHoodieHiveCatalog {
     hoodieCatalog.dropPartition(tablePath, partitionSpec, false);
 
     String tablePathStr = hoodieCatalog.inferTablePath(tablePath, hoodieCatalog.getTable(tablePath));
-    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(hoodieCatalog.getHiveConf(), tablePathStr);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(hoodieCatalog.getHiveConf()), tablePathStr);
     HoodieInstant latestInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().orElse(null);
     assertNotNull(latestInstant, "Delete partition commit should be completed");
     HoodieCommitMetadata commitMetadata = WriteProfiles.getCommitMetadata(tablePath.getObjectName(), new org.apache.flink.core.fs.Path(tablePathStr),

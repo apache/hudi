@@ -59,7 +59,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
     StoragePath path = convertToStoragePath(fileSplit.getPath());
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
     HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
-    reader = HoodieIOFactory.getIOFactory(HadoopFSUtils.getStorageConf(conf)).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+    reader = HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, path, HoodieFileFormat.HFILE, Option.empty());
 
     schema = reader.getSchema();
