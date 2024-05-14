@@ -39,7 +39,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat.{ROW_INDEX_TEMPORARY_COLUMN_NAME, getAppliedFilters, getAppliedRequiredSchema, getRecordKeyRelatedFilters, makeCloseableFileGroupMappingRecordIterator}
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat.{OPTION_RETURNING_BATCH, ROW_INDEX_TEMPORARY_COLUMN_NAME, getAppliedFilters, getAppliedRequiredSchema, getRecordKeyRelatedFilters, makeCloseableFileGroupMappingRecordIterator}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, Metadata, MetadataBuilder, StringType, StructField, StructType}
@@ -312,7 +312,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       StructType(Nil),
       tableSchema.structTypeSchema,
       Nil,
-      options,
+      options + (OPTION_RETURNING_BATCH -> super.supportBatch(sparkSession, tableSchema.structTypeSchema).toString),
       new Configuration(hadoopConf))
 
     //Rules for appending partitions and filtering in the bootstrap readers:
@@ -380,6 +380,14 @@ object HoodieFileGroupReaderBasedParquetFileFormat {
   private val FILE_SOURCE_GENERATED_METADATA_COL_ATTR_KEY = "__file_source_generated_metadata_col"
   private val FILE_SOURCE_METADATA_COL_ATTR_KEY = "__file_source_metadata_col"
   private val METADATA_COL_ATTR_KEY = "__metadata_col"
+
+  /**
+   * A required option (since Spark 3.3.2) to pass to buildReaderWithPartitionValues to return columnar batch output or not.
+   * For ParquetFileFormat and OrcFileFormat, passing this option is required.
+   * This should only be passed as true if it can actually be supported, which can be checked
+   * by calling supportBatch.
+   */
+  private val OPTION_RETURNING_BATCH = "returning_batch"
 
   def getRecordKeyRelatedFilters(filters: Seq[Filter], recordKeyColumn: String): Seq[Filter] = {
     filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
