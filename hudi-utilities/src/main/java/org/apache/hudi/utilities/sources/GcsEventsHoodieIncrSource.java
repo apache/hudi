@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectIncrCheckpoint;
@@ -112,24 +113,29 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   private final QueryRunner queryRunner;
   private final Option<SchemaProvider> schemaProvider;
   private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
-
   private static final Logger LOG = LoggerFactory.getLogger(GcsEventsHoodieIncrSource.class);
 
-  public GcsEventsHoodieIncrSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
-                                   SchemaProvider schemaProvider) {
-
+  public GcsEventsHoodieIncrSource(
+      TypedProperties props,
+      JavaSparkContext jsc,
+      SparkSession spark,
+      SchemaProvider schemaProvider,
+      HoodieIngestionMetrics metrics) {
     this(props, jsc, spark,
-        new CloudDataFetcher(props, jsc, spark),
+        new CloudDataFetcher(props, jsc, spark, metrics),
         new QueryRunner(spark, props),
         new DefaultStreamContext(schemaProvider, Option.empty())
     );
   }
 
-  public GcsEventsHoodieIncrSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
-                                   StreamContext streamContext) {
-
+  public GcsEventsHoodieIncrSource(
+      TypedProperties props,
+      JavaSparkContext jsc,
+      SparkSession spark,
+      HoodieIngestionMetrics metrics,
+      StreamContext streamContext) {
     this(props, jsc, spark,
-        new CloudDataFetcher(props, jsc, spark),
+        new CloudDataFetcher(props, jsc, spark, metrics),
         new QueryRunner(spark, props),
         streamContext
     );

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
@@ -60,14 +61,17 @@ public class CloudDataFetcher implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  public CloudDataFetcher(TypedProperties props, JavaSparkContext jsc, SparkSession sparkSession) {
-    this(props, jsc, sparkSession, new CloudObjectsSelectorCommon(props));
+  private final HoodieIngestionMetrics metrics;
+
+  public CloudDataFetcher(TypedProperties props, JavaSparkContext jsc, SparkSession sparkSession, HoodieIngestionMetrics metrics) {
+    this(props, jsc, sparkSession, metrics, new CloudObjectsSelectorCommon(props));
   }
 
-  public CloudDataFetcher(TypedProperties props, JavaSparkContext jsc, SparkSession sparkSession, CloudObjectsSelectorCommon cloudObjectsSelectorCommon) {
+  public CloudDataFetcher(TypedProperties props, JavaSparkContext jsc, SparkSession sparkSession, HoodieIngestionMetrics metrics, CloudObjectsSelectorCommon cloudObjectsSelectorCommon) {
     this.props = props;
     this.sparkContext = jsc;
     this.sparkSession = sparkSession;
+    this.metrics = metrics;
     this.cloudObjectsSelectorCommon = cloudObjectsSelectorCommon;
   }
 
@@ -131,7 +135,9 @@ public class CloudDataFetcher implements Serializable {
     }
     // inflate 10% for potential hoodie meta fields
     double totalSizeWithHoodieMetaFields = totalSize * 1.1;
+    metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(totalSize);
     int numPartitions = (int) Math.max(Math.ceil(totalSizeWithHoodieMetaFields / bytesPerPartition), 1);
+    metrics.updateStreamerSourceParallelism(numPartitions);
     return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props), schemaProviderOption, numPartitions);
   }
 }
