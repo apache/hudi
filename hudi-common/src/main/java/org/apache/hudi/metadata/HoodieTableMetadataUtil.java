@@ -67,9 +67,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -1212,7 +1212,7 @@ public class HoodieTableMetadataUtil {
     try {
       if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePathV2(), filePath);
-        return BaseFileUtils.getInstance(HoodieFileFormat.PARQUET)
+        return FileFormatUtils.getInstance(HoodieFileFormat.PARQUET)
             .readColumnStatsFromMetadata(datasetMetaClient.getStorageConf(), fullFilePath, columnsToIndex);
       }
 
@@ -1893,7 +1893,7 @@ public class HoodieTableMetadataUtil {
           .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
       // Step 3: Aggregate Column Ranges
       Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-          .map(entry -> BaseFileUtils.getColumnRangeInPartition(entry.getValue()));
+          .map(entry -> FileFormatUtils.getColumnRangeInPartition(entry.getValue()));
       return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(toList()), false).iterator();
     });
   }
@@ -1957,7 +1957,7 @@ public class HoodieTableMetadataUtil {
             .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
         // Step 3: Aggregate Column Ranges
         Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-            .map(entry -> BaseFileUtils.getColumnRangeInPartition(entry.getValue()));
+            .map(entry -> FileFormatUtils.getColumnRangeInPartition(entry.getValue()));
         return HoodieMetadataPayload.createPartitionStatsRecords(partitionName, partitionStatsRangeMetadata.collect(toList()), false).iterator();
       });
     } catch (Exception e) {

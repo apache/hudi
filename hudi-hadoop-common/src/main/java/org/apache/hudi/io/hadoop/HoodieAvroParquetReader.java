@@ -24,7 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -59,7 +59,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   private final StoragePath path;
   private final StorageConfiguration<?> conf;
-  private final BaseFileUtils parquetUtils;
+  private final FileFormatUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
   public HoodieAvroParquetReader(StorageConfiguration<?> storageConf, StoragePath path) {
@@ -67,7 +67,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     // by the Reader (for proper config propagation to Parquet components)
     this.conf = tryOverrideDefaultConfigs(storageConf.newInstance());
     this.path = path;
-    this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
+    this.parquetUtils = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET);
   }
 
   @Override

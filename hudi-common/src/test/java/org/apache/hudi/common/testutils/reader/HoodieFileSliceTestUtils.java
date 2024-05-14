@@ -56,7 +56,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -70,6 +69,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.DELETE_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
@@ -198,7 +199,7 @@ public class HoodieFileSliceTestUtils {
         return new HoodieHFileDataBlock(
             records,
             header,
-            Compression.Algorithm.GZ,
+            HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(),
             pathForReader,
             HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
       case PARQUET_DATA_BLOCK:
@@ -207,7 +208,7 @@ public class HoodieFileSliceTestUtils {
             false,
             header,
             HoodieRecord.RECORD_KEY_METADATA_FIELD,
-            CompressionCodecName.GZIP,
+            PARQUET_COMPRESSION_CODEC_NAME.defaultValue(),
             0.1,
             true);
       default:
