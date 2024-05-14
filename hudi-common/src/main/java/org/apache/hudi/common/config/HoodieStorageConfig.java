@@ -87,8 +87,6 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Lower values increase the size in bytes of metadata tracked within HFile, but can offer potentially "
           + "faster lookup times.");
 
-
-
   public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_FORMAT = ConfigProperty
       .key("hoodie.logfile.data.block.format")
       .noDefaultValue()
