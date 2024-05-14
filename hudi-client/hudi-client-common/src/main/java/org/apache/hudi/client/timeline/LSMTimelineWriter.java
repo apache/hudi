@@ -271,7 +271,7 @@ public class LSMTimelineWriter {
         // Read the input source file
         try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieIOFactory.getIOFactory(metaClient.getStorageConf())
             .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-            .getFileReader(config, metaClient.getStorageConf(), new StoragePath(metaClient.getArchivePath(), fileName))) {
+            .getFileReader(config, new StoragePath(metaClient.getArchivePath(), fileName))) {
           // Read the meta entry
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), HoodieLSMTimelineInstant.getClassSchema())) {
             while (iterator.hasNext()) {

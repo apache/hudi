@@ -23,8 +23,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.PathWithBootstrapFileStatus;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -52,7 +52,7 @@ public class TestHoodieMergeOnReadTableInputFormat {
   @BeforeEach
   void setUp() throws IOException {
     fs = FileSystem.get(tempDir.toUri(), new Configuration());
-    storage = HoodieStorageUtils.getStorage(fs);
+    storage = new HoodieHadoopStorage(fs);
   }
 
   @AfterEach

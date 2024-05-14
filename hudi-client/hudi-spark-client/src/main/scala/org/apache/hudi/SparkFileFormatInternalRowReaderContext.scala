@@ -52,7 +52,6 @@ import scala.collection.mutable
  */
 class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, PartitionedFile => Iterator[InternalRow]]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
-  lazy val sparkFileReaderFactory = new HoodieSparkFileReaderFactory
   val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
 
   override def getFileRecordIterator(filePath: StoragePath,
@@ -69,7 +68,7 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
       val structType: StructType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
       val projection: UnsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
       new CloseableMappingIterator[InternalRow, UnsafeRow](
-        sparkFileReaderFactory.newParquetFileReader(conf, filePath)
+        new HoodieSparkFileReaderFactory(conf).newParquetFileReader(filePath)
           .asInstanceOf[HoodieSparkParquetReader].getInternalRowIterator(dataSchema, requiredSchema),
         new java.util.function.Function[InternalRow, UnsafeRow] {
           override def apply(data: InternalRow): UnsafeRow = {

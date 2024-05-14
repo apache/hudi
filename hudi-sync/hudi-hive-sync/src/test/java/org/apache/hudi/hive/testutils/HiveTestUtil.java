@@ -60,8 +60,8 @@ import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -170,7 +170,7 @@ public class HiveTestUtil {
     }
     hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, hiveTestService.getHiveConf());
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
-    storage = HoodieStorageUtils.getStorage(fileSystem);
+    storage = new HoodieHadoopStorage(fileSystem);
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     if (ddlExecutor != null) {

@@ -82,8 +82,8 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
                                   Schema schema) throws Exception {
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
 
-    HoodieFileReader reader = getHoodieSparkIOFactory().getReaderFactory(recordType)
-        .getFileReader(table.getConfig(), table.getStorageConf(), sourceFilePath);
+    HoodieFileReader reader = getHoodieSparkIOFactory(table.getStorageConf()).getReaderFactory(recordType)
+        .getFileReader(table.getConfig(), sourceFilePath);
 
     HoodieExecutor<Void> executor = null;
     try {
