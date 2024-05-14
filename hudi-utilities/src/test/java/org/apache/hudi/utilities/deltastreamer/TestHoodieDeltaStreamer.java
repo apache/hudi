@@ -67,13 +67,14 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
-import org.apache.hudi.io.storage.HoodieAvroParquetReader;
+import org.apache.hudi.io.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
@@ -2870,20 +2871,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String tableBasePath = basePath + "/test_table_bulk_insert";
     String sortColumn = "weight";
     TypedProperties bulkInsertProps =
-        new DFSPropertiesConfiguration(fs.getConf(), new Path(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
     bulkInsertProps.setProperty("hoodie.bulkinsert.shuffle.parallelism", "1");
     bulkInsertProps.setProperty("hoodie.bulkinsert.user.defined.partitioner.class", "org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner");
     bulkInsertProps.setProperty("hoodie.bulkinsert.user.defined.partitioner.sort.columns", sortColumn);
     String bulkInsertPropsFileName = "bulk_insert_override.properties";
-    UtilitiesTestBase.Helpers.savePropsToDFS(bulkInsertProps, fs, basePath + "/" + bulkInsertPropsFileName);
+    UtilitiesTestBase.Helpers.savePropsToDFS(bulkInsertProps, storage, basePath + "/" + bulkInsertPropsFileName);
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()), bulkInsertPropsFileName, false);
     syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(sqlContext.sparkContext().hadoopConfiguration()).build();
-    List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getHadoopConf()), metaClient.getBasePath(), false);
-    Configuration hadoopConf = metaClient.getHadoopConf();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(HoodieTestUtils.getDefaultStorageConf()).build();
+    List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getBasePath(), false);
+    StorageConfiguration hadoopConf = metaClient.getStorageConf();
     HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
@@ -2893,7 +2894,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(baseFiles.size(), partitions.size());
     // Verify if each parquet file is actually sorted by sortColumn.
     for (String filePath : baseFiles) {
-      try (HoodieAvroParquetReader parquetReader = new HoodieAvroParquetReader(sqlContext.sparkContext().hadoopConfiguration(), new Path(filePath))) {
+      try (HoodieAvroParquetReader parquetReader = new HoodieAvroParquetReader(HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath))) {
         ClosableIterator<HoodieRecord<IndexedRecord>> iterator = parquetReader.getRecordIterator();
         List<Float> sortColumnValues = new ArrayList<>();
         while (iterator.hasNext()) {
