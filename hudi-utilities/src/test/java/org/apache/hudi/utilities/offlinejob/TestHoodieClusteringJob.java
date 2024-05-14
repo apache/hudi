@@ -134,6 +134,56 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         "Must not contain any records w/ clustering instant time");
   }
 
+  @Test
+  public void testPurgePendingClusteringJobIfConflict() throws Exception {
+    String tableBasePath = basePath + "/purgePendingClusteringIfConflict";
+    Properties props = getPropertiesForKeyGen(true);
+    HoodieWriteConfig config = getWriteConfig(tableBasePath);
+    props.putAll(config.getProps());
+    Properties metaClientProps = HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .fromProperties(props)
+        .build();
+
+    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(
+        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath, metaClientProps);
+    client = new SparkRDDWriteClient(context, config);
+
+    writeData(false, client.createNewInstantTime(), 100, true);
+    writeData(false, client.createNewInstantTime(), 100, true);
+
+    // offline clustering execute without clean
+    HoodieClusteringJob hoodieCluster = getClusteringConfigForPurgeIfConflict(tableBasePath, true,
+        "scheduleAndExecute", false, "2015/.*/.*");
+    hoodieCluster.cluster(0);
+    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(1, tableBasePath);
+    HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath);
+
+    // remove the completed instant from timeline
+    HoodieInstant latestClusteringInstant = metaClient.getActiveTimeline()
+        .filterCompletedInstantsOrRewriteTimeline().getCompletedReplaceTimeline().getInstants().get(0);
+    String completedFilePath = tableBasePath + "/" + METAFOLDER_NAME + "/" + latestClusteringInstant.getFileName();
+    deleteFileFromDfs(fs, completedFilePath);
+    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(0, tableBasePath);
+
+    // trigger clustering on no conflict partition
+    hoodieCluster = getClusteringConfigForPurgeIfConflict(tableBasePath, true, "scheduleAndExecute",
+        false, "2016/.*/.*");
+    hoodieCluster.cluster(0);
+    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(1, tableBasePath);
+    HoodieOfflineJobTestBase.TestHelpers.assertNRollbackCommits(0, tableBasePath);
+    HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath);
+
+    // trigger clustering on conflict partition
+    hoodieCluster = getClusteringConfigForPurgeIfConflict(tableBasePath, true, "scheduleAndExecute",
+        false, "2015/.*/.*");
+    hoodieCluster.cluster(0);
+    HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(2, tableBasePath);
+    HoodieOfflineJobTestBase.TestHelpers.assertNRollbackCommits(1, tableBasePath);
+    HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath);
+  }
+
   private void deleteCommitMetaFile(String instantTime, String suffix) throws IOException {
     String targetPath = basePath + "/" + METAFOLDER_NAME + "/" + instantTime + suffix;
     deleteFileFromDfs(fs, targetPath);
@@ -143,17 +193,26 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private HoodieClusteringJob init(String tableBasePath, boolean runSchedule, String scheduleAndExecute, boolean isAutoClean) {
-    HoodieClusteringJob.Config clusterConfig = buildHoodieClusteringUtilConfig(tableBasePath, runSchedule, scheduleAndExecute, isAutoClean);
+  private HoodieClusteringJob init(String tableBasePath, boolean runSchedule, String runningMode, boolean isAutoClean) {
+    HoodieClusteringJob.Config clusterConfig = buildHoodieClusteringUtilConfig(tableBasePath, runSchedule, runningMode, isAutoClean);
     clusterConfig.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
     return new HoodieClusteringJob(jsc, clusterConfig);
   }
 
-  private HoodieClusteringJob getClusteringConfigForPurge(String tableBasePath, boolean runSchedule, String scheduleAndExecute, boolean isAutoClean,
+  private HoodieClusteringJob getClusteringConfigForPurge(String tableBasePath, boolean runSchedule, String runningMode, boolean isAutoClean,
                                                           String pendingInstant) {
-    HoodieClusteringJob.Config clusterConfig = buildHoodieClusteringUtilConfig(tableBasePath, runSchedule, scheduleAndExecute, isAutoClean);
+    HoodieClusteringJob.Config clusterConfig = buildHoodieClusteringUtilConfig(tableBasePath, runSchedule, runningMode, isAutoClean);
     clusterConfig.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
     clusterConfig.clusteringInstantTime = pendingInstant;
+    return new HoodieClusteringJob(jsc, clusterConfig);
+  }
+
+  private HoodieClusteringJob getClusteringConfigForPurgeIfConflict(String tableBasePath, boolean runSchedule, String runningMode, boolean isAutoClean,
+                                                                    String partitionRegexPattern) {
+    HoodieClusteringJob.Config clusterConfig = buildHoodieClusteringUtilConfig(tableBasePath, runSchedule, runningMode, isAutoClean);
+    clusterConfig.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
+    clusterConfig.configs.add(String.format("%s=%s", "hoodie.clustering.plan.strategy.partition.regex.pattern", partitionRegexPattern));
+    clusterConfig.purgePendingClusteringJobIfConflict = true;
     return new HoodieClusteringJob(jsc, clusterConfig);
   }
 

@@ -180,7 +180,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
         .build());
   }
 
-  public List<String> getRegexPatternMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
+  public static List<String> getRegexPatternMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
     String pattern = config.getClusteringPartitionFilterRegexPattern();
     if (!StringUtils.isNullOrEmpty(pattern)) {
       partitionPaths = partitionPaths.stream()
@@ -192,5 +192,10 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
   protected int getNumberOfOutputFileGroups(long groupSize, long targetFileSize) {
     return (int) Math.ceil(groupSize / (double) targetFileSize);
+  }
+
+  public static List<String> filterPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
+    partitionPaths = ClusteringPlanPartitionFilter.filter(partitionPaths, config);
+    return getRegexPatternMatchedPartitions(config, partitionPaths);
   }
 }

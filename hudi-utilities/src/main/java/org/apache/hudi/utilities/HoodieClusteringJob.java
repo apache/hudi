@@ -21,15 +21,19 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -40,8 +44,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.PURGE_PENDING_INSTANT;
@@ -121,6 +129,10 @@ public class HoodieClusteringJob {
         splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
+    @Parameter(names = {"--purge-pending-clustering-job-if-conflict"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
+        + "purge the pending clustering plan which has conflict on the current selected partition firstly.")
+    public Boolean purgePendingClusteringJobIfConflict = false;
+
     @Override
     public String toString() {
       return "HoodieClusteringJobConfig{\n"
@@ -133,6 +145,7 @@ public class HoodieClusteringJob {
           + "   --retry " + retry + ", \n"
           + "   --schedule " + runSchedule + ", \n"
           + "   --retry-last-failed-clustering-job " + retryLastFailedClusteringJob + ", \n"
+          + "   --purge-pending-clustering-job-if-conflict " + purgePendingClusteringJobIfConflict + ", \n"
           + "   --mode " + runningMode + ", \n"
           + "   --job-max-processing-time-ms " + maxProcessingTimeMs + ", \n"
           + "   --props " + propsFilePath + ", \n"
@@ -194,7 +207,7 @@ public class HoodieClusteringJob {
         }
         case PURGE_PENDING_INSTANT: {
           LOG.info("Running Mode: [" + PURGE_PENDING_INSTANT + "];");
-          return doPurgePendingInstant(jsc);
+          return doPurgePendingInstant(jsc, cfg.clusteringInstantTime);
         }
         default: {
           LOG.error("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
@@ -273,6 +286,27 @@ public class HoodieClusteringJob {
         }
       }
 
+      if (cfg.purgePendingClusteringJobIfConflict) {
+        HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
+        SyncableFileSystemView fileSystemView = (SyncableFileSystemView) table.getSliceView();
+        Set<String> visitedInstants = new HashSet<>();
+        for (Pair<HoodieFileGroupId, HoodieInstant> pendingClustering : fileSystemView.getFileGroupsInPendingClustering().collect(Collectors.toList())) {
+          HoodieFileGroupId fileGroupId = pendingClustering.getLeft();
+          String instantTs = pendingClustering.getRight().getTimestamp();
+          if (visitedInstants.contains(instantTs)) {
+            continue;
+          } else {
+            visitedInstants.add(instantTs);
+          }
+          List<String> conflictPartitions = PartitionAwareClusteringPlanStrategy
+              .filterPartitions(client.getConfig(), Collections.singletonList(fileGroupId.getPartitionPath()));
+          if (!conflictPartitions.isEmpty()) {
+            LOG.info("Purge pending clustering instant {} for it has conflict on partition {}", instantTs, fileGroupId.getPartitionPath());
+            doPurgePendingInstant(jsc, instantTs);
+          }
+        }
+      }
+
       instantTime = instantTime.isPresent() ? instantTime : doSchedule(client);
       if (!instantTime.isPresent()) {
         LOG.info("Couldn't generate cluster plan");
@@ -287,11 +321,11 @@ public class HoodieClusteringJob {
     }
   }
 
-  private int doPurgePendingInstant(JavaSparkContext jsc) throws Exception {
+  private int doPurgePendingInstant(JavaSparkContext jsc, String instantTime) throws Exception {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
-      client.purgePendingClustering(cfg.clusteringInstantTime);
+      client.purgePendingClustering(instantTime);
     }
     return 0;
   }

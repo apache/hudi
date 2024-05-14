@@ -130,5 +130,13 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
       int numCommits = timeline.countInstants();
       assertEquals(expected, numCommits, "Got=" + numCommits + ", exp =" + expected);
     }
+
+    static void assertNRollbackCommits(int expected, String tablePath) {
+      HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
+      HoodieTimeline timeline = meta.getActiveTimeline().getRollbackTimeline();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numCommits = timeline.countInstants();
+      assertEquals(expected, numCommits, "Got=" + numCommits + ", exp =" + expected);
+    }
   }
 }
