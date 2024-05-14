@@ -63,7 +63,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.CorruptedLogFileException;
-import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -113,6 +112,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
@@ -2774,9 +2775,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(records, header, CompressionCodec.GZIP, pathForReader, HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
+        return new HoodieHFileDataBlock(records, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), pathForReader, HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, "gzip", 0.1, true);
+        return new HoodieParquetDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, PARQUET_COMPRESSION_CODEC_NAME.defaultValue(), 0.1, true);
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }

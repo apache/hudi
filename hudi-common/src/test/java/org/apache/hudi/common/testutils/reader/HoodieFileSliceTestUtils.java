@@ -71,6 +71,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.DELETE_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
@@ -208,7 +209,7 @@ public class HoodieFileSliceTestUtils {
             false,
             header,
             HoodieRecord.RECORD_KEY_METADATA_FIELD,
-            "gzip",
+            PARQUET_COMPRESSION_CODEC_NAME.defaultValue(),
             0.1,
             true);
       default:
