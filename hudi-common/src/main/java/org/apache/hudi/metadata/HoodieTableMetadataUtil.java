@@ -2000,16 +2000,15 @@ public class HoodieTableMetadataUtil {
       // Pre-allocate with the maximum length possible
       filenameToSizeMap = new HashMap<>(pathInfos.size());
 
+      // Presence of partition meta file implies this is a HUDI partition
+      isHoodiePartition = pathInfos.stream().anyMatch(status -> status.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
       for (StoragePathInfo pathInfo : pathInfos) {
         if (pathInfo.isDirectory()) {
           // Ignore .hoodie directory as there cannot be any partitions inside it
           if (!pathInfo.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
             this.subDirectories.add(pathInfo.getPath());
           }
-        } else if (pathInfo.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
-          // Presence of partition meta file implies this is a HUDI partition
-          this.isHoodiePartition = true;
-        } else if (FSUtils.isDataFile(pathInfo.getPath())) {
+        } else if (isHoodiePartition && FSUtils.isDataFile(pathInfo.getPath())) {
           // Regular HUDI data file (base file or log file)
           String dataFileCommitTime = FSUtils.getCommitTime(pathInfo.getPath().getName());
           // Limit the file listings to files which were created by successful commits before the maxInstant time.
