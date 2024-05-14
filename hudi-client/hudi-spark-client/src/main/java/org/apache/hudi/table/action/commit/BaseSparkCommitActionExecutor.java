@@ -71,7 +71,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Timer;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -160,7 +159,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
 
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
-    HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start();
+    HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start(); // time taken from dedup -> tag location -> building workload profile
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
     LOG.debug("Input workload profile :" + workloadProfile);

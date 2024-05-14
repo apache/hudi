@@ -25,8 +25,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieInternalConfig;
@@ -66,7 +64,7 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     return HoodieWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType, Option.of(HoodieTimer.start()));
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 
   @Override
