@@ -53,16 +53,13 @@ public class JmxMetricsReporter extends MetricsReporter {
                 host, portsConfig));
       }
       int[] ports = getPortRangeFromString(portsConfig);
-      boolean successfullyStartedServer = false;
-      for (int port : ports) {
-        jmxReporterServer = createJmxReport(host, port);
-        LOG.info("Started JMX server on port " + port + ".");
-        successfullyStartedServer = true;
-        break;
-      }
+      initializeJmxReporterServer(host, ports);
+
+      boolean successfullyStartedServer = isServerCreated();
       if (!successfullyStartedServer) {
         throw new HoodieException(
-            "Could not start JMX server on any configured port. Ports: " + portsConfig);
+            "Could not start JMX server on any configured port. Ports: " + portsConfig
+                + ". Maybe require port range for multiple hoodie tables");
       }
       LOG.info("Configured JMXReporter with {port:" + portsConfig + "}");
     } catch (Exception e) {
@@ -72,9 +69,25 @@ public class JmxMetricsReporter extends MetricsReporter {
     }
   }
 
+  private boolean isServerCreated() {
+    return jmxReporterServer != null;
+  }
+
+  private void initializeJmxReporterServer(String host, int[] ports) {
+    for (int port : ports) {
+      try {
+        jmxReporterServer = createJmxReport(host, port);
+        LOG.info("Started JMX server on port " + port + ".");
+        break;
+      } catch (Exception e) {
+        LOG.info("Skip for initializing jmx port " + port + " because of already in use");
+      }
+    }
+  }
+
   @Override
   public void start() {
-    if (jmxReporterServer != null) {
+    if (isServerCreated()) {
       jmxReporterServer.start();
     } else {
       LOG.error("Cannot start as the jmxReporter is null.");
