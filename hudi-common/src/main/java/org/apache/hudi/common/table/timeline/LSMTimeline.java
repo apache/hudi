@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieLSMTimelineManifest;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.ArchivedInstantReadSchemas;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -292,5 +293,9 @@ public class LSMTimeline {
    */
   public static StoragePathFilter getManifestFilePathFilter() {
     return path -> path.getName().startsWith(MANIFEST_FILE_PREFIX) && !path.getName().endsWith(TEMP_FILE_SUFFIX);
+  }
+
+  public static boolean isSupportingLayout(HoodieTableMetaClient metaClient) {
+    return metaClient.getTableConfig().getTableVersion().versionCode() > HoodieTableVersion.SIX.versionCode();
   }
 }

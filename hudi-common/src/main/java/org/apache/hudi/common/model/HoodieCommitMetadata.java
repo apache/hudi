@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -522,10 +523,19 @@ public class HoodieCommitMetadata implements Serializable {
         return clazz.newInstance();
       }
       return fromJsonString(
-          fromUTF8Bytes(
-              convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class)),
-          clazz);
+              fromUTF8Bytes(
+                      convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class)),
+              clazz);
     } catch (Exception e) {
+      if (e.getClass().getCanonicalName().equals("org.apache.avro.InvalidAvroMagicException")) {
+        LOG.warn("Commit metadata is not in avro file. Assuming 0.x writer and reading as json");
+        try {
+          return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
+        } catch (Exception ie) {
+          throw new IOException("unable to read commit metadata", ie);
+        }
+      }
+      LOG.info("Exception class Name is (" + e.getClass().getCanonicalName() + ")");
       throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);
     }
   }
