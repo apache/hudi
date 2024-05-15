@@ -72,7 +72,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
         metaClient.getStorage, partition)
       val baseFormatFile: Option[StoragePath] = HoodiePartitionMetadata.baseFormatMetaPathIfExists(
         metaClient.getStorage, partition)
-      val latestCommit: String = metaClient.getActiveTimeline.getCommitTimeline.lastInstant.get.getTimestamp
+      val latestCommit: String = metaClient.getActiveTimeline.getCommitAndReplaceTimeline.lastInstant.get.getTimestamp
       var action = if (textFormatFile.isPresent) "MIGRATE" else "NONE"
       if (!dryRun) {
         if (!baseFormatFile.isPresent) {

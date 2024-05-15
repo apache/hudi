@@ -320,7 +320,7 @@ public class CompactionCommand {
         .filter(pair -> pair.getRight() != null)
         .collect(Collectors.toList());
 
-    Set<String> committedInstants = timeline.getCommitTimeline().filterCompletedInstants()
+    Set<String> committedInstants = timeline.getCommitAndReplaceTimeline().filterCompletedInstants()
         .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
     List<Comparable[]> rows = new ArrayList<>();

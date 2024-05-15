@@ -69,7 +69,7 @@ public class StatsCommand {
     long totalRecordsWritten = 0;
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = activeTimeline.getCommitAndReplaceTimeline().filterCompletedInstants();
 
     List<Comparable[]> rows = new ArrayList<>();
     DecimalFormat df = new DecimalFormat("#.00");

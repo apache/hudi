@@ -113,7 +113,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       client.commit(newCommitTime, jsc().parallelize(statuses));
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertTrue(commit.isPresent());
       assertEquals("001", commit.get().getTimestamp(), "commit should be 001");
 
@@ -189,7 +189,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertTrue(deltaCommit.isPresent());
       assertEquals("000000001", deltaCommit.get().getTimestamp(), "Delta commit should be 000000001");
 
-      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
@@ -377,7 +377,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertEquals(200, getTotalRecordsWritten(instantCommitMetadataPairOpt.get().getValue()));
 
       Option<HoodieInstant> commit =
-          metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+          metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
