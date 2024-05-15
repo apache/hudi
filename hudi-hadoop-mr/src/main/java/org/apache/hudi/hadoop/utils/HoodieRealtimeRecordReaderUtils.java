@@ -26,7 +26,6 @@ import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -67,6 +66,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 public class HoodieRealtimeRecordReaderUtils {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReaderUtils.class);
@@ -308,7 +308,7 @@ public class HoodieRealtimeRecordReaderUtils {
   public static HoodieFileReader getBaseFileReader(Path path, JobConf conf) throws IOException {
     HoodieConfig hoodieConfig = getReaderConfigs(HadoopFSUtils.getStorageConf(conf));
     return HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-        .getFileReader(hoodieConfig, HadoopFSUtils.getStorageConf(conf), new StoragePath(path.toUri()));
+        .getFileReader(hoodieConfig, HadoopFSUtils.getStorageConf(conf), convertToStoragePath(path));
   }
 
   private static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {

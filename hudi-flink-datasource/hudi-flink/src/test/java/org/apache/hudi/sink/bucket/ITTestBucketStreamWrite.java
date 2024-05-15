@@ -110,7 +110,7 @@ public class ITTestBucketStreamWrite {
 
     // delete successful commit to simulate an unsuccessful write
     HoodieStorage storage = metaClient.getStorage();
-    StoragePath path = new StoragePath(metaClient.getMetaPath() + StoragePath.SEPARATOR + filename);
+    StoragePath path = new StoragePath(metaClient.getMetaPath(), filename);
     storage.deleteDirectory(path);
 
     // marker types are different for COW and MOR
