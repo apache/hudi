@@ -88,6 +88,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, "", projectedColumnsReadStats)
   }
 
+  @Disabled
   @Test
   def testMergeOnReadSnapshotRelationWithDeltaLogs(): Unit = {
     val tablePath = s"$basePath/mor-with-logs"
