@@ -20,10 +20,10 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -31,6 +31,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -49,28 +50,31 @@ import static org.mockito.Mockito.when;
 public class TestFSUtilsMocked {
 
   @Mock
-  private FileSystem mockFileSystem;
+  private HoodieStorage mockStorage;
 
-  private final Path basePath = new Path("/base/path");
+  private final StoragePath basePath = new StoragePath("/base/path");
   private final Set<String> fileNames = new HashSet<>(Arrays.asList("file1.txt", "file2.txt"));
-  private FileStatus mockFileStatus1;
-  private FileStatus mockFileStatus2;
+  private StoragePathInfo mockFile1;
+  private StoragePathInfo mockFile2;
 
   @BeforeEach
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    mockFileStatus1 = new FileStatus(100, false, 3, 1024, 0, new Path("/base/path/file1.txt"));
-    mockFileStatus2 = new FileStatus(200, false, 3, 1024, 0, new Path("/base/path/file2.txt"));
+    mockFile1 = new StoragePathInfo(new StoragePath("/base/path/file1.txt"), 100, false, (short) 3, 1024, 0);
+    mockFile2 = new StoragePathInfo(new StoragePath("/base/path/file2.txt"), 200, false, (short) 3, 1024, 0);
   }
 
   @Test
-  public void testGetFileStatusesUnderPartitionWithListStatus() throws IOException, IOException {
+  public void testGetPathInfoUnderPartitionWithListStatus() throws IOException, IOException {
     // Setup
-    when(mockFileSystem.getScheme()).thenReturn("file"); // Assuming "file" is list status friendly
-    when(mockFileSystem.listStatus(eq(basePath), any())).thenReturn(new FileStatus[] {mockFileStatus1, mockFileStatus2});
+    when(mockStorage.getScheme()).thenReturn("file"); // Assuming "file" is list status friendly
+    List<StoragePathInfo> listingResult = new ArrayList<>();
+    listingResult.add(mockFile1);
+    listingResult.add(mockFile2);
+    when(mockStorage.listDirectEntries(eq(basePath), any())).thenReturn(listingResult);
 
     // Execute
-    List<Option<FileStatus>> result = FSUtils.getFileStatusesUnderPartition(mockFileSystem, basePath, fileNames, false);
+    List<Option<StoragePathInfo>> result = FSUtils.getPathInfoUnderPartition(mockStorage, basePath, fileNames, false);
 
     // Verify
     assertEquals(2, result.size());
@@ -78,18 +82,18 @@ public class TestFSUtilsMocked {
     assertTrue(result.get(1).isPresent());
 
     // Cleanup
-    verify(mockFileSystem, times(1)).listStatus((Path) any(), any());
+    verify(mockStorage, times(1)).listDirectEntries((StoragePath) any(), any());
   }
 
   @Test
-  public void testGetFileStatusesUnderPartitionIgnoringMissingFiles() throws IOException {
+  public void testGetPathInfoUnderPartitionIgnoringMissingFiles() throws IOException {
     // Setup for scenario where file2.txt does not exist
-    when(mockFileSystem.getScheme()).thenReturn("hdfs"); // Assuming "hdfs" is not list status friendly
-    when(mockFileSystem.getFileStatus(new Path("/base/path/file1.txt"))).thenReturn(mockFileStatus1);
-    when(mockFileSystem.getFileStatus(new Path("/base/path/file2.txt"))).thenThrow(new FileNotFoundException());
+    when(mockStorage.getScheme()).thenReturn("hdfs"); // Assuming "hdfs" is not list status friendly
+    when(mockStorage.getPathInfo(new StoragePath("/base/path/file1.txt"))).thenReturn(mockFile1);
+    when(mockStorage.getPathInfo(new StoragePath("/base/path/file2.txt"))).thenThrow(new FileNotFoundException());
 
     // Execute
-    List<Option<FileStatus>> result = FSUtils.getFileStatusesUnderPartition(mockFileSystem, basePath, fileNames, true);
+    List<Option<StoragePathInfo>> result = FSUtils.getPathInfoUnderPartition(mockStorage, basePath, fileNames, true);
 
     // Verify
     assertEquals(2, result.size());
@@ -97,20 +101,20 @@ public class TestFSUtilsMocked {
     assertFalse(result.get(1).isPresent()); // Missing file results in an empty Option
 
     // Cleanup
-    verify(mockFileSystem, times(2)).getFileStatus(any());
+    verify(mockStorage, times(2)).getPathInfo(any());
   }
 
   @Test
-  public void testGetFileStatusesUnderPartitionThrowsHoodieIOException() throws IOException {
+  public void testGetPathInfoUnderPartitionThrowsHoodieIOException() throws IOException {
     // Setup
-    when(mockFileSystem.getScheme()).thenReturn("file"); // Assuming "file" is list status friendly
-    when(mockFileSystem.listStatus((Path) any(), any())).thenThrow(new IOException());
+    when(mockStorage.getScheme()).thenReturn("file"); // Assuming "file" is list status friendly
+    when(mockStorage.listDirectEntries((StoragePath) any(), any())).thenThrow(new IOException());
 
     // Execute & Verify
     assertThrows(HoodieIOException.class, () ->
-        FSUtils.getFileStatusesUnderPartition(mockFileSystem, basePath, fileNames, false));
+        FSUtils.getPathInfoUnderPartition(mockStorage, basePath, fileNames, false));
 
     // Cleanup
-    verify(mockFileSystem, times(1)).listStatus((Path) any(), any());
+    verify(mockStorage, times(1)).listDirectEntries((StoragePath) any(), any());
   }
 }

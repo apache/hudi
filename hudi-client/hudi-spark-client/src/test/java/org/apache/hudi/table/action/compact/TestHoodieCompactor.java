@@ -42,11 +42,11 @@ import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -82,7 +82,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     // Create a temp folder as the base path
     initPath();
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    fs = HadoopFSUtils.getFs(basePath, hadoopConf);
+    storage = HoodieStorageUtils.getStorage(basePath, hadoopConf);
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
     initTestDataGenerator();
   }

@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.hadoop.fs.CachingPath;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
@@ -160,7 +160,8 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : allPartitionsOnStorage) {
-      Path storagePartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
+      Path storagePartitionPath =
+          FSUtils.getPartitionPathInHadoopPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
@@ -182,7 +183,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       String storagePath = paths.get(storageValue);
       try {
         String relativePath = FSUtils.getRelativePartitionPath(
-            metaClient.getBasePathV2(), new CachingPath(storagePath));
+            metaClient.getBasePathV2(), new StoragePath(storagePath));
         events.add(PartitionEvent.newPartitionDropEvent(relativePath));
       } catch (IllegalArgumentException e) {
         LOG.error("Cannot parse the path stored in the metastore, ignoring it for "
@@ -203,7 +204,8 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : writtenPartitionsOnStorage) {
-      Path storagePartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
+      Path storagePartitionPath =
+          FSUtils.getPartitionPathInHadoopPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);

@@ -18,6 +18,8 @@
 
 package org.apache.parquet.avro;
 
+import org.apache.hudi.storage.StoragePath;
+
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.specific.SpecificData;
 import org.apache.hadoop.fs.Path;
@@ -37,8 +39,8 @@ public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> 
   private boolean isReflect = true;
 
   @Deprecated
-  public HoodieAvroParquetReaderBuilder(Path path) {
-    super(path);
+  public HoodieAvroParquetReaderBuilder(StoragePath path) {
+    super(new Path(path.toUri()));
   }
 
   public HoodieAvroParquetReaderBuilder(InputFile file) {

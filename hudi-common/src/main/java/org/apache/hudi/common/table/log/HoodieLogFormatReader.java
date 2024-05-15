@@ -22,9 +22,9 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +38,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private final List<HoodieLogFile> logFiles;
   private HoodieLogFileReader currentReader;
-  private final FileSystem fs;
+  private final HoodieStorage storage;
   private final Schema readerSchema;
   private final InternalSchema internalSchema;
   private final String recordKeyField;
@@ -47,11 +47,11 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
 
-  HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema,
+  HoodieLogFormatReader(HoodieStorage storage, List<HoodieLogFile> logFiles, Schema readerSchema,
                         boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
                         String recordKeyField, InternalSchema internalSchema) throws IOException {
     this.logFiles = logFiles;
-    this.fs = fs;
+    this.storage = storage;
     this.readerSchema = readerSchema;
     this.bufferSize = bufferSize;
     this.recordKeyField = recordKeyField;
@@ -59,7 +59,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     if (!logFiles.isEmpty()) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
-      this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, false,
+      this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
           enableRecordLookups, recordKeyField, internalSchema);
     }
   }
@@ -85,7 +85,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       try {
         HoodieLogFile nextLogFile = logFiles.remove(0);
         this.currentReader.close();
-        this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, false,
+        this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
             enableInlineReading, recordKeyField, internalSchema);
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);

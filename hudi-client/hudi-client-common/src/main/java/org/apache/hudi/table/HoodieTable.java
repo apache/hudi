@@ -75,6 +75,8 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
@@ -85,7 +87,6 @@ import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -699,11 +700,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
             .flatMap(Collection::stream)
             .collect(Collectors.toList()),
         partitionFilePair -> {
-          final FileSystem fileSystem = metaClient.getFs();
+          final HoodieStorage storage = metaClient.getStorage();
           LOG.info("Deleting invalid data file=" + partitionFilePair);
           // Delete
           try {
-            fileSystem.delete(new Path(partitionFilePair.getValue()), false);
+            storage.deleteFile(new StoragePath(partitionFilePair.getValue()));
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
           }
@@ -801,10 +802,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths, FileVisibility visibility) {
-    final FileSystem fileSystem = metaClient.getRawFs();
+    final HoodieStorage storage = metaClient.getRawHoodieStorage();
     List<String> fileList = partitionFilePaths.map(Pair::getValue).collect(Collectors.toList());
     try {
-      getConsistencyGuard(fileSystem, config.getConsistencyGuardConfig()).waitTill(partitionPath, fileList, visibility);
+      getConsistencyGuard(storage, config.getConsistencyGuardConfig())
+          .waitTill(partitionPath, fileList, visibility);
     } catch (IOException | TimeoutException ioe) {
       LOG.error("Got exception while waiting for files to show up", ioe);
       return false;
@@ -817,10 +819,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * <p>
    * Default consistencyGuard class is {@link OptimisticConsistencyGuard}.
    */
-  public static ConsistencyGuard getConsistencyGuard(FileSystem fs, ConsistencyGuardConfig consistencyGuardConfig) throws IOException {
+  public static ConsistencyGuard getConsistencyGuard(HoodieStorage storage,
+                                                     ConsistencyGuardConfig consistencyGuardConfig)
+      throws IOException {
     try {
       return consistencyGuardConfig.shouldEnableOptimisticConsistencyGuard()
-          ? new OptimisticConsistencyGuard(fs, consistencyGuardConfig) : new FailSafeConsistencyGuard(fs, consistencyGuardConfig);
+          ? new OptimisticConsistencyGuard(storage, consistencyGuardConfig)
+          : new FailSafeConsistencyGuard(storage, consistencyGuardConfig);
     } catch (Throwable e) {
       throw new IOException("Could not load ConsistencyGuard ", e);
     }
@@ -1043,10 +1048,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     if (clearAll && partitions.size() > 0) {
       LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
       metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
-      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+      HoodieTableConfig.update(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
     } else if (partitionType.isPresent() && partitions.remove(partitionType.get().getPartitionPath())) {
       metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", partitions));
-      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+      HoodieTableConfig.update(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
     }
   }
 

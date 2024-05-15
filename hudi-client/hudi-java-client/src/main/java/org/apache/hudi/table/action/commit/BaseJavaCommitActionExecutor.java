@@ -44,12 +44,12 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -104,7 +104,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       HoodieTableMetaClient metaClient = table.getMetaClient();
       HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
       try {
-        if (!metaClient.getFs().exists(new Path(metaClient.getMetaPath(), inflightInstant.getFileName()))) {
+        if (!metaClient.getStorage().exists(
+            new StoragePath(metaClient.getMetaPath(), inflightInstant.getFileName()))) {
           throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", e);
         }
       } catch (IOException ex) {

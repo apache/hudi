@@ -18,7 +18,7 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 /**
  * Hoodie write handle that supports write as mini-batch.
@@ -42,5 +42,5 @@ public interface MiniBatchHandle {
   /**
    * Returns the write file path.
    */
-  Path getWritePath();
+  StoragePath getWritePath();
 }

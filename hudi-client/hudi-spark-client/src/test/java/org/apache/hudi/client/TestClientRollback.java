@@ -96,7 +96,8 @@ public class TestClientRollback extends HoodieClientTestBase {
     HoodieWriteConfig cfg = getConfigBuilder().withCleanConfig(HoodieCleanConfig.newBuilder()
         .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+      HoodieTestDataGenerator.writePartitionMetadataDeprecated(storage,
+          HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
       /**
        * Write 1 (only inserts)
@@ -231,7 +232,8 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+      HoodieTestDataGenerator.writePartitionMetadataDeprecated(storage,
+          HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
       /**
        * Write 1 (only inserts)
@@ -275,7 +277,8 @@ public class TestClientRollback extends HoodieClientTestBase {
     HoodieWriteConfig cfg = getConfigBuilder().withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+      HoodieTestDataGenerator.writePartitionMetadataDeprecated(storage,
+          HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
       /**
        * Write 1 (only inserts)

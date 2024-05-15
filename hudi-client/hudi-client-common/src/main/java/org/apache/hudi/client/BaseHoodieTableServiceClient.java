@@ -929,11 +929,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
         // do we need to handle failed rollback of a bootstrap
         rollbackFailedBootstrap();
-        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, entry.getKey(), config);
+        HeartbeatUtils.deleteHeartbeatFile(storage, basePath, entry.getKey(), config);
         break;
       } else {
         rollback(entry.getKey(), entry.getValue(), skipLocking);
-        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, entry.getKey(), config);
+        HeartbeatUtils.deleteHeartbeatFile(storage, basePath, entry.getKey(), config);
       }
     }
   }

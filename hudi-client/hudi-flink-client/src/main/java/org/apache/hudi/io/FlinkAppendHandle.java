@@ -25,11 +25,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.log.HoodieLogFileWriteCallback;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -127,7 +127,7 @@ public class FlinkAppendHandle<T, I, K, O>
   }
 
   @Override
-  public Path getWritePath() {
+  public StoragePath getWritePath() {
     return writer.getLogFile().getPath();
   }
 }

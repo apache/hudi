@@ -73,6 +73,9 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.SparkKeyGenUtils;
@@ -103,7 +106,6 @@ import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
@@ -193,7 +195,7 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Filesystem used.
    */
-  private transient FileSystem fs;
+  private transient HoodieStorage storage;
 
   /**
    * Spark context Wrapper.
@@ -258,14 +260,14 @@ public class StreamSync implements Serializable, Closeable {
 
   @VisibleForTesting
   StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession,
-             TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
+             TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, HoodieStorage storage, Configuration conf,
              Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, SchemaProvider userProvidedSchemaProvider,
              Option<BaseErrorTableWriter> errorTableWriter, SourceFormatAdapter formatAdapter, Option<Transformer> transformer,
              boolean useRowWriter, boolean autoGenerateRecordKeys) {
     this.cfg = cfg;
     this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
-    this.fs = fs;
+    this.storage = storage;
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
     this.userProvidedSchemaProvider = userProvidedSchemaProvider;
@@ -281,19 +283,23 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   @Deprecated
-  public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
+  public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession,
+                    SchemaProvider schemaProvider,
                     TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
-    this(cfg, sparkSession, props, new HoodieSparkEngineContext(jssc), fs, conf, onInitializingHoodieWriteClient, new DefaultStreamContext(schemaProvider, Option.empty()));
+    this(cfg, sparkSession, props, new HoodieSparkEngineContext(jssc),
+        HoodieStorageUtils.getStorage(fs), conf, onInitializingHoodieWriteClient,
+        new DefaultStreamContext(schemaProvider, Option.empty()));
   }
 
   public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession,
-                    TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
+                    TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
+                    HoodieStorage storage, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, StreamContext streamContext) throws IOException {
     this.cfg = cfg;
     this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
-    this.fs = fs;
+    this.storage = storage;
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
     this.userProvidedSchemaProvider = streamContext.getSchemaProvider();
@@ -306,7 +312,8 @@ public class StreamSync implements Serializable, Closeable {
     this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, hoodieWriteConfig.getMetricsConfig());
     this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig);
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
-      this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, hoodieSparkContext, fs);
+      this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(
+          cfg, sparkSession, props, hoodieSparkContext, storage);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     refreshTimeline();
@@ -326,13 +333,15 @@ public class StreamSync implements Serializable, Closeable {
    * @throws IOException in case of any IOException
    */
   public void refreshTimeline() throws IOException {
-    if (fs.exists(new Path(cfg.targetBasePath))) {
+    if (storage.exists(new StoragePath(cfg.targetBasePath))) {
       try {
         HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
             .setConf(conf)
             .setBasePath(cfg.targetBasePath)
             .setPayloadClassName(cfg.payloadClassName)
-            .setRecordMergerStrategy(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
+            .setRecordMergerStrategy(
+                props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(),
+                    HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
             .build();
         switch (meta.getTableType()) {
           case COPY_ON_WRITE:
@@ -347,12 +356,17 @@ public class StreamSync implements Serializable, Closeable {
       } catch (HoodieIOException e) {
         LOG.warn("Full exception msg " + e.getMessage());
         if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
-          String basePathWithForwardSlash = cfg.targetBasePath.endsWith("/") ? cfg.targetBasePath : String.format("%s/", cfg.targetBasePath);
-          String pathToHoodieProps = String.format("%s%s/%s", basePathWithForwardSlash, HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
-          String pathToHoodiePropsBackup = String.format("%s%s/%s", basePathWithForwardSlash, HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
-          boolean hoodiePropertiesExists = fs.exists(new Path(basePathWithForwardSlash))
-              && fs.exists(new Path(pathToHoodieProps))
-              && fs.exists(new Path(pathToHoodiePropsBackup));
+          String basePathWithForwardSlash = cfg.targetBasePath.endsWith("/") ? cfg.targetBasePath :
+              String.format("%s/", cfg.targetBasePath);
+          String pathToHoodieProps = String.format("%s%s/%s", basePathWithForwardSlash,
+              HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+          String pathToHoodiePropsBackup = String.format("%s%s/%s", basePathWithForwardSlash,
+              HoodieTableMetaClient.METAFOLDER_NAME,
+              HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
+          boolean hoodiePropertiesExists =
+              storage.exists(new StoragePath(basePathWithForwardSlash))
+                  && storage.exists(new StoragePath(pathToHoodieProps))
+                  && storage.exists(new StoragePath(pathToHoodiePropsBackup));
           if (!hoodiePropertiesExists) {
             LOG.warn("Base path exists, but table is not fully initialized. Re-initializing again");
             initializeEmptyTable();
@@ -360,8 +374,11 @@ public class StreamSync implements Serializable, Closeable {
             HoodieTableMetaClient metaClientToValidate = HoodieTableMetaClient.builder().setConf(conf).setBasePath(cfg.targetBasePath).build();
             if (metaClientToValidate.reloadActiveTimeline().countInstants() > 0) {
               // Deleting the recreated hoodie.properties and throwing exception.
-              fs.delete(new Path(String.format("%s%s/%s", basePathWithForwardSlash, HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
-              throw new HoodieIOException("hoodie.properties is missing. Likely due to some external entity. Please populate the hoodie.properties and restart the pipeline. ",
+              storage.deleteDirectory(new StoragePath(String.format("%s%s/%s", basePathWithForwardSlash,
+                  HoodieTableMetaClient.METAFOLDER_NAME,
+                  HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
+              throw new HoodieIOException(
+                  "hoodie.properties is missing. Likely due to some external entity. Please populate the hoodie.properties and restart the pipeline. ",
                   e.getIOException());
             }
           }
@@ -688,10 +705,10 @@ public class StreamSync implements Serializable, Closeable {
    */
   @VisibleForTesting
   SchemaProvider getDeducedSchemaProvider(Schema incomingSchema, SchemaProvider sourceSchemaProvider, HoodieTableMetaClient metaClient) {
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), fs, cfg.targetBasePath, metaClient);
+    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), storage, cfg.targetBasePath, metaClient);
     Option<InternalSchema> internalSchemaOpt = HoodieConversionUtils.toJavaOption(
         HoodieSchemaUtils.getLatestTableInternalSchema(
-            new HoodieConfig(HoodieStreamer.Config.getProps(fs, cfg)), metaClient));
+            new HoodieConfig(HoodieStreamer.Config.getProps(conf, cfg)), metaClient));
     // Deduce proper target (writer's) schema for the input dataset, reconciling its
     // schema w/ the table's one
     Schema targetSchema = HoodieSchemaUtils.deduceWriterSchema(
@@ -789,7 +806,7 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   private HoodieWriteConfig prepareHoodieConfigForRowWriter(Schema writerSchema) {
-    HoodieConfig hoodieConfig = new HoodieConfig(HoodieStreamer.Config.getProps(fs, cfg));
+    HoodieConfig hoodieConfig = new HoodieConfig(HoodieStreamer.Config.getProps(conf, cfg));
     hoodieConfig.setValue(DataSourceWriteOptions.TABLE_TYPE(), cfg.tableType);
     hoodieConfig.setValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(), cfg.payloadClassName);
     hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
@@ -1240,8 +1257,8 @@ public class StreamSync implements Serializable, Closeable {
 
   }
 
-  public FileSystem getFs() {
-    return fs;
+  public HoodieStorage getStorage() {
+    return storage;
   }
 
   public TypedProperties getProps() {

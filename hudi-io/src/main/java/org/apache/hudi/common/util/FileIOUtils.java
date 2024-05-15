@@ -20,8 +20,13 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -162,11 +167,13 @@ public class FileIOUtils {
     }
   }
 
-  public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<byte[]> content, boolean ignoreIOE) {
+  public static void createFileInPath(HoodieStorage storage,
+                                      StoragePath fullPath,
+                                      Option<byte[]> content, boolean ignoreIOE) {
     try {
       // If the path does not exist, create it first
-      if (!fileSystem.exists(fullPath)) {
-        if (fileSystem.createNewFile(fullPath)) {
+      if (!storage.exists(fullPath)) {
+        if (storage.createNewFile(fullPath)) {
           LOG.info("Created a new file in meta path: " + fullPath);
         } else {
           throw new HoodieIOException("Failed to create file " + fullPath);
@@ -174,7 +181,7 @@ public class FileIOUtils {
       }
 
       if (content.isPresent()) {
-        try (OutputStream out = fileSystem.create(fullPath, true)) {
+        try (OutputStream out = storage.create(fullPath, true)) {
           out.write(content.get());
         }
       }
@@ -186,12 +193,64 @@ public class FileIOUtils {
     }
   }
 
-  public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<byte[]> content) {
-    createFileInPath(fileSystem, fullPath, content, false);
+  public static void createFileInPath(HoodieStorage storage, StoragePath fullPath, Option<byte[]> content) {
+    createFileInPath(storage, fullPath, content, false);
   }
 
-  public static Option<byte[]> readDataFromPath(FileSystem fileSystem, org.apache.hadoop.fs.Path detailPath, boolean ignoreIOE) {
-    try (InputStream is = fileSystem.open(detailPath)) {
+  public static boolean copy(HoodieStorage srcStorage, StoragePath src,
+                             HoodieStorage dstStorage, StoragePath dst,
+                             boolean deleteSource,
+                             boolean overwrite,
+                             Configuration conf) throws IOException {
+    StoragePathInfo pathInfo = srcStorage.getPathInfo(src);
+    return copy(srcStorage, pathInfo, dstStorage, dst, deleteSource, overwrite, conf);
+  }
+
+  /**
+   * Copy files between FileSystems.
+   */
+  public static boolean copy(HoodieStorage srcStorage, StoragePathInfo srcPathInfo,
+                             HoodieStorage dstStorage, StoragePath dst,
+                             boolean deleteSource,
+                             boolean overwrite,
+                             Configuration conf) throws IOException {
+    StoragePath src = srcPathInfo.getPath();
+    if (srcPathInfo.isDirectory()) {
+      if (!dstStorage.createDirectory(dst)) {
+        return false;
+      }
+      List<StoragePathInfo> contents = srcStorage.listDirectEntries(src);
+      for (StoragePathInfo subPathInfo : contents) {
+        copy(srcStorage, subPathInfo, dstStorage,
+            new StoragePath(dst, subPathInfo.getPath().getName()),
+            deleteSource, overwrite, conf);
+      }
+    } else {
+      InputStream in = null;
+      OutputStream out = null;
+      try {
+        in = srcStorage.open(src);
+        out = dstStorage.create(dst, overwrite);
+        IOUtils.copyBytes(in, out, conf, true);
+      } catch (IOException e) {
+        IOUtils.closeStream(out);
+        IOUtils.closeStream(in);
+        throw e;
+      }
+    }
+    if (deleteSource) {
+      if (srcPathInfo.isDirectory()) {
+        return srcStorage.deleteDirectory(src);
+      }
+      return srcStorage.deleteFile(src);
+    } else {
+      return true;
+    }
+
+  }
+
+  public static Option<byte[]> readDataFromPath(HoodieStorage storage, StoragePath detailPath, boolean ignoreIOE) {
+    try (InputStream is = storage.open(detailPath)) {
       return Option.of(FileIOUtils.readAsByteArray(is));
     } catch (IOException e) {
       LOG.warn("Could not read commit details from " + detailPath, e);
@@ -202,8 +261,8 @@ public class FileIOUtils {
     }
   }
 
-  public static Option<byte[]> readDataFromPath(FileSystem fileSystem, org.apache.hadoop.fs.Path detailPath) {
-    return readDataFromPath(fileSystem, detailPath, false);
+  public static Option<byte[]> readDataFromPath(HoodieStorage storage, StoragePath detailPath) {
+    return readDataFromPath(storage, detailPath, false);
   }
 
   /**

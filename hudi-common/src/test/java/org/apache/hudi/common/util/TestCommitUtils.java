@@ -143,7 +143,8 @@ public class TestCommitUtils {
     timeline = timeline.reload();
     assertEquals(Option.of("5"), CommitUtils.getValidCheckpointForCurrentWriter(timeline, SINK_CHECKPOINT_KEY, ID1));
     assertEquals(Option.of("6"), CommitUtils.getValidCheckpointForCurrentWriter(timeline, SINK_CHECKPOINT_KEY, ID2));
-    assertEquals(Option.empty(), CommitUtils.getValidCheckpointForCurrentWriter(timeline, SINK_CHECKPOINT_KEY, ID3));
+    assertEquals(
+        Option.empty(), CommitUtils.getValidCheckpointForCurrentWriter(timeline, SINK_CHECKPOINT_KEY, ID3));
   }
 
   private HoodieWriteStat createWriteStat(String partition, String fileId) {

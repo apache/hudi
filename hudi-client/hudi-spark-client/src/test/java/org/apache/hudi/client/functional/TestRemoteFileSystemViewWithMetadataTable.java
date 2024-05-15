@@ -43,11 +43,11 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -85,7 +85,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
   public void setUp() throws Exception {
     initPath();
     initSparkContexts();
-    initFileSystem();
+    initHoodieStorage();
     dataGen = new HoodieTestDataGenerator(0x1f86);
   }
 
@@ -114,7 +114,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
       timelineService = new TimelineService(localEngineContext, new Configuration(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          FileSystem.get(new Configuration()),
+          HoodieStorageUtils.getStorage(new Configuration()),
           FileSystemViewManager.createViewManager(
               context, config.getViewStorageConfig(),
               config.getCommonConfig(),

@@ -307,7 +307,9 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<BaseFileDTO> dataFiles = executeRequest(LATEST_DATA_FILE_ON_INSTANT_URL, paramsMap,
           BASE_FILE_DTOS_REFERENCE, RequestMethod.GET);
-      return Option.fromJavaOptional(dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile).findFirst());
+      return Option.fromJavaOptional(dataFiles.stream()
+          .map(BaseFileDTO::toHoodieBaseFile)
+          .findFirst());
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
@@ -629,7 +631,9 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<BaseFileDTO> dataFiles = executeRequest(LATEST_PARTITION_DATA_FILE_URL, paramsMap,
           BASE_FILE_DTOS_REFERENCE, RequestMethod.GET);
-      return Option.fromJavaOptional(dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile).findFirst());
+      return Option.fromJavaOptional(dataFiles.stream()
+          .map(BaseFileDTO::toHoodieBaseFile)
+          .findFirst());
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

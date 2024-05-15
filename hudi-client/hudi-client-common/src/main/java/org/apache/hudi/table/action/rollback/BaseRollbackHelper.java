@@ -40,11 +40,14 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -152,7 +155,7 @@ public class BaseRollbackHelper implements Serializable {
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
         HoodieLogFormat.Writer writer = null;
-        final Path filePath;
+        final StoragePath filePath;
         try {
           String partitionPath = rollbackRequest.getPartitionPath();
           String fileId = rollbackRequest.getFileId();
@@ -165,7 +168,7 @@ public class BaseRollbackHelper implements Serializable {
               .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePathV2().toString(), partitionPath))
               .withFileId(fileId)
               .overBaseCommit(latestBaseInstant)
-              .withFs(metaClient.getFs())
+              .withStorage(metaClient.getStorage())
               .withLogWriteCallback(getRollbackLogMarkerCallback(writeMarkers, partitionPath, fileId))
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
@@ -193,8 +196,8 @@ public class BaseRollbackHelper implements Serializable {
         // This step is intentionally done after writer is closed. Guarantees that
         // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
         // cloud-storage : HUDI-168
-        Map<FileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
-            metaClient.getFs().getFileStatus(Objects.requireNonNull(filePath)),
+        Map<StoragePathInfo, Long> filesToNumBlocksRollback = Collections.singletonMap(
+            metaClient.getStorage().getPathInfo(Objects.requireNonNull(filePath)),
             1L
         );
 
@@ -323,15 +326,15 @@ public class BaseRollbackHelper implements Serializable {
             List<String> missingLogFiles = v1.getValue().getRight().get();
 
             // fetch file sizes.
-            Path fullPartitionPath = StringUtils.isNullOrEmpty(partition) ? new Path(basePathStr) : new Path(basePathStr, partition);
-            FileSystem fs = fullPartitionPath.getFileSystem(serializableConfiguration.get());
-            List<Option<FileStatus>> fileStatusesOpt = FSUtils.getFileStatusesUnderPartition(fs,
+            StoragePath fullPartitionPath = StringUtils.isNullOrEmpty(partition) ? new StoragePath(basePathStr) : new StoragePath(basePathStr, partition);
+            HoodieStorage storage = HoodieStorageUtils.getStorage(fullPartitionPath, serializableConfiguration.get());
+            List<Option<StoragePathInfo>> pathInfoOptList = FSUtils.getPathInfoUnderPartition(storage,
                 fullPartitionPath, new HashSet<>(missingLogFiles), true);
-            List<FileStatus> fileStatuses = fileStatusesOpt.stream().filter(fileStatusOption -> fileStatusOption.isPresent())
+            List<StoragePathInfo> pathInfoList = pathInfoOptList.stream().filter(fileStatusOption -> fileStatusOption.isPresent())
                 .map(fileStatusOption -> fileStatusOption.get()).collect(Collectors.toList());
 
-            HashMap<FileStatus, Long> commandBlocksCount = new HashMap<>(rollbackStat.getCommandBlocksCount());
-            fileStatuses.forEach(fileStatus -> commandBlocksCount.put(fileStatus, fileStatus.getLen()));
+            HashMap<StoragePathInfo, Long> commandBlocksCount = new HashMap<>(rollbackStat.getCommandBlocksCount());
+            pathInfoList.forEach(pathInfo -> commandBlocksCount.put(pathInfo, pathInfo.getLength()));
 
             return new HoodieRollbackStat(
                 rollbackStat.getPartitionPath(),
@@ -357,7 +360,7 @@ public class BaseRollbackHelper implements Serializable {
         boolean isDeleted = true;
         if (doDelete) {
           try {
-            isDeleted = metaClient.getFs().delete(fullDeletePath);
+            isDeleted = ((FileSystem) metaClient.getStorage().getFileSystem()).delete(fullDeletePath);
           } catch (FileNotFoundException e) {
             // if first rollback attempt failed and retried again, chances that some files are already deleted.
             isDeleted = true;

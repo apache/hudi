@@ -43,12 +43,12 @@ import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.TableName;
@@ -325,7 +325,8 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       // We are trying to approximately imitate the case when the RDD is recomputed. For RDD creating, driver code is not
       // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
       // upsert will not run into conflicts.
-      metaClient.getFs().delete(new Path(metaClient.getMetaPath(), "001.inflight"));
+      metaClient.getStorage().deleteDirectory(
+          new StoragePath(metaClient.getMetaPath(), "001.inflight"));
 
       writeClient.upsert(writeRecords, newCommitTime);
       assertNoWriteErrors(writeStatues.collect());

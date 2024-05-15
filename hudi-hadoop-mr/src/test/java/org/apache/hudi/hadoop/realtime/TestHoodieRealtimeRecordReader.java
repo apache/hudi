@@ -47,6 +47,8 @@ import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -106,6 +108,7 @@ public class TestHoodieRealtimeRecordReader {
 
   private static final String PARTITION_COLUMN = "datestr";
   private JobConf baseJobConf;
+  private HoodieStorage storage;
   private FileSystem fs;
   private Configuration hadoopConf;
 
@@ -117,6 +120,7 @@ public class TestHoodieRealtimeRecordReader {
     baseJobConf = new JobConf(hadoopConf);
     baseJobConf.set(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1024 * 1024));
     fs = HadoopFSUtils.getFs(basePath.toUri().toString(), baseJobConf);
+    storage = HoodieStorageUtils.getStorage(fs);
   }
 
   @AfterEach
@@ -135,7 +139,8 @@ public class TestHoodieRealtimeRecordReader {
 
   private Writer writeLogFile(File partitionDir, Schema schema, String fileId, String baseCommit, String newCommit,
                               int numberOfRecords) throws InterruptedException, IOException {
-    return InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, fileId, baseCommit, newCommit,
+    return InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, fileId,
+        baseCommit, newCommit,
         numberOfRecords, 0,
         0);
   }
@@ -220,11 +225,13 @@ public class TestHoodieRealtimeRecordReader {
 
         HoodieLogFormat.Writer writer;
         if (action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
-          writer = InputFormatTestUtil.writeRollback(partitionDir, fs, "fileid0", baseInstant, instantTime,
+          writer = InputFormatTestUtil.writeRollback(partitionDir, storage, "fileid0", baseInstant,
+              instantTime,
               String.valueOf(baseInstantTs + logVersion - 1), logVersion);
         } else {
           writer =
-              InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", baseInstant,
+              InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid0",
+                  baseInstant,
                   instantTime, 120, 0, logVersion, logBlockType);
         }
         long size = writer.getCurrentSize();
@@ -312,7 +319,8 @@ public class TestHoodieRealtimeRecordReader {
     // insert new records to log file
     String newCommitTime = "101";
     HoodieLogFormat.Writer writer =
-        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime, newCommitTime,
+        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid0",
+            instantTime, newCommitTime,
             numRecords, numRecords, 0);
     long size = writer.getCurrentSize();
     writer.close();
@@ -538,7 +546,8 @@ public class TestHoodieRealtimeRecordReader {
     schema = SchemaTestUtil.getComplexEvolvedSchema();
     String newCommitTime = "101";
     HoodieLogFormat.Writer writer =
-        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime, newCommitTime,
+        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid0",
+            instantTime, newCommitTime,
             numberOfLogRecords, 0, 1);
     long size = writer.getCurrentSize();
     logFiles.add(writer.getLogFile());
@@ -547,18 +556,23 @@ public class TestHoodieRealtimeRecordReader {
 
     // write rollback for the previous block in new log file version
     newCommitTime = "102";
-    writer = InputFormatTestUtil.writeRollbackBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime,
-        newCommitTime, "101", 1);
+    writer =
+        InputFormatTestUtil.writeRollbackBlockToLogFile(partitionDir, storage, schema, "fileid0",
+            instantTime,
+            newCommitTime, "101", 1);
     logFiles.add(writer.getLogFile());
     writer.close();
 
-    commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-        schema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION);
+    commitMetadata =
+        CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
+            WriteOperationType.UPSERT,
+            schema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION);
     FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime, commitMetadata);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
-        new FileSplit(new Path(partitionDir + "/fileid0_1_" + instantTime + ".parquet"), 0, 1, baseJobConf),
+        new FileSplit(new Path(partitionDir + "/fileid0_1_" + instantTime + ".parquet"), 0, 1,
+            baseJobConf),
         basePath.toUri().toString(), logFiles, newCommitTime, false, Option.empty());
 
     // create a RecordReader to be used by HoodieRealtimeRecordReader
@@ -687,7 +701,8 @@ public class TestHoodieRealtimeRecordReader {
     try {
       String newCommitTime = "102";
       HoodieLogFormat.Writer writer =
-          InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime, newCommitTime,
+          InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid0",
+              instantTime, newCommitTime,
               numRecords, numRecords, 0);
       writer.close();
       createDeltaCommitFile(basePath, newCommitTime, "2016/05/01", "2016/05/01/.fileid0_100.log.1_1-0-1", "fileid0", schema.toString());
@@ -848,18 +863,23 @@ public class TestHoodieRealtimeRecordReader {
       int logVersion = 1;
       int baseInstantTs = Integer.parseInt(baseInstant);
       String instantTime = String.valueOf(baseInstantTs + logVersion);
-      HoodieLogFormat.Writer writer = InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid1", baseInstant,
-          instantTime, 100, 0, logVersion);
+      HoodieLogFormat.Writer writer =
+          InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid1",
+              baseInstant,
+              instantTime, 100, 0, logVersion);
       long size = writer.getCurrentSize();
       writer.close();
       assertTrue(size > 0, "block - size should be > 0");
-      HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-          schema.toString(), HoodieTimeline.COMMIT_ACTION);
+      HoodieCommitMetadata commitMetadata =
+          CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
+              WriteOperationType.UPSERT,
+              schema.toString(), HoodieTimeline.COMMIT_ACTION);
       FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime, commitMetadata);
       // create a split with new log file(s)
       fileSlice.addLogFile(new HoodieLogFile(writer.getLogFile().getPath(), size));
       RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(
-          new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0, writer.getLogFile().getPath()),
+          new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0,
+              new Path(writer.getLogFile().getPath().toUri())),
           baseUri.toString(),
           fileSlice.getLogFiles().collect(Collectors.toList()),
           false,

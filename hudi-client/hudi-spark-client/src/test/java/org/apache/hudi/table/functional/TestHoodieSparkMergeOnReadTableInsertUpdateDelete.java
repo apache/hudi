@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -58,7 +59,6 @@ import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
@@ -131,8 +131,9 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
       hoodieTable.getHoodieView().sync();
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      HoodieTableFileSystemView tableView =
+          getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent());
 
@@ -285,8 +286,10 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      HoodieTableFileSystemView tableView =
+          getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(),
+              allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertFalse(dataFilesToRead.findAny().isPresent());
 
@@ -358,11 +361,13 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
       JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
-      long expectedLogFileNum = statuses.map(writeStatus -> (HoodieDeltaWriteStat) writeStatus.getStat())
-          .flatMap(deltaWriteStat -> deltaWriteStat.getLogFiles().iterator())
-          .count();
+      long expectedLogFileNum =
+          statuses.map(writeStatus -> (HoodieDeltaWriteStat) writeStatus.getStat())
+              .flatMap(deltaWriteStat -> deltaWriteStat.getLogFiles().iterator())
+              .count();
       // inject a fake log file to test marker file for log file
-      HoodieDeltaWriteStat correctWriteStat = (HoodieDeltaWriteStat) statuses.map(WriteStatus::getStat).take(1).get(0);
+      HoodieDeltaWriteStat correctWriteStat =
+          (HoodieDeltaWriteStat) statuses.map(WriteStatus::getStat).take(1).get(0);
       assertTrue(FSUtils.isLogFile(new Path(correctWriteStat.getPath())));
       HoodieLogFile correctLogFile = new HoodieLogFile(correctWriteStat.getPath());
       String correctWriteToken = FSUtils.getWriteTokenFromLogPath(correctLogFile.getPath());
@@ -371,7 +376,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       String originalLogfileName = correctLogFile.getPath().getName();
       String logFileWithoutWriteToken = originalLogfileName.substring(0, originalLogfileName.lastIndexOf("_") + 1);
       String newLogFileName = logFileWithoutWriteToken + newToken;
-      Path parentPath = correctLogFile.getPath().getParent();
+      Path parentPath = new Path(correctLogFile.getPath().getParent().toUri());
       FileSystem fs = parentPath.getFileSystem(jsc().hadoopConfiguration());
       // copy to create another log file w/ diff write token.
       fs.copyToLocalFile(new Path(config.getBasePath(), correctLogFile.getPath().toString()), new Path(config.getBasePath().toString() + "/" + parentPath, newLogFileName));

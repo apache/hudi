@@ -99,7 +99,7 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
     new File(basePath + "/2016/05/01/").mkdirs();
     new File(basePath + "/2016/05/02/").mkdirs();
     new File(basePath + "/2016/05/06/").mkdirs();
-    HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
+    HoodieTestDataGenerator.writePartitionMetadataDeprecated(hoodieStorage(), new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
         basePath);
     // Make commit1
     File file11 = new File(basePath + "/2016/05/01/" + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, "id11", BASE_FILE_EXTENSION));

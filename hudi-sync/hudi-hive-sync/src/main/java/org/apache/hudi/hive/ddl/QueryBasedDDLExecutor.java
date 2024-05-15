@@ -161,7 +161,8 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     StringBuilder alterSQL = getAlterTablePrefix(tableName);
     for (int i = 0; i < partitions.size(); i++) {
       String partitionClause = getPartitionClause(partitions.get(i));
-      String fullPartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), partitions.get(i)).toString();
+      String fullPartitionPath =
+          FSUtils.getPartitionPathInHadoopPath(config.getString(META_SYNC_BASE_PATH), partitions.get(i)).toString();
       alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '").append(fullPartitionPath)
           .append("' ");
       if ((i + 1) % batchSyncPartitionNum == 0) {
@@ -210,7 +211,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      Path partitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), partition);
+      Path partitionPath = FSUtils.getPartitionPathInHadoopPath(config.getString(META_SYNC_BASE_PATH), partition);
       String partitionScheme = partitionPath.toUri().getScheme();
       String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
           ? FSUtils.getDFSFullPartitionPath(config.getHadoopFileSystem(), partitionPath) : partitionPath.toString();

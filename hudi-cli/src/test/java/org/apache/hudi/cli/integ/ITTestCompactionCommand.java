@@ -46,6 +46,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -254,7 +255,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
 
     renameFiles.forEach(lfPair -> {
       try {
-        metaClient.getFs().rename(lfPair.getLeft().getPath(), lfPair.getRight().getPath());
+        metaClient.getStorage().rename(lfPair.getLeft().getPath(), lfPair.getRight().getPath());
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }

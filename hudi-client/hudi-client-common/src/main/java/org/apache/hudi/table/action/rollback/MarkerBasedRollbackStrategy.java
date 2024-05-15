@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -109,8 +110,8 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
   }
 
   protected HoodieRollbackRequest getRollbackRequestForAppend(HoodieInstant instantToRollback, String fileNameWithPartitionToRollback) {
-    Path fullLogFilePath = new Path(basePath, fileNameWithPartitionToRollback);
-    String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullLogFilePath.getParent());
+    StoragePath fullLogFilePath = new StoragePath(basePath, fileNameWithPartitionToRollback);
+    String relativePartitionPath = FSUtils.getRelativePartitionPath(new StoragePath(basePath), fullLogFilePath.getParent());
     String fileId;
     String baseCommitTime;
     Option<HoodieLogFile> latestLogFileOption;
@@ -120,15 +121,15 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       LOG.warn("Find old marker type for log file: " + fileNameWithPartitionToRollback);
       fileId = FSUtils.getFileIdFromFilePath(fullLogFilePath);
       baseCommitTime = FSUtils.getCommitTime(fullLogFilePath.getName());
-      Path partitionPath = FSUtils.getPartitionPath(config.getBasePath(), relativePartitionPath);
+      StoragePath partitionPath = FSUtils.getPartitionPath(config.getBasePath(), relativePartitionPath);
 
       // NOTE: Since we're rolling back incomplete Delta Commit, it only could have appended its
       //       block to the latest log-file
       try {
-        latestLogFileOption = FSUtils.getLatestLogFile(table.getMetaClient().getFs(), partitionPath, fileId,
+        latestLogFileOption = FSUtils.getLatestLogFile(table.getMetaClient().getStorage(), partitionPath, fileId,
             HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime);
         if (latestLogFileOption.isPresent() && baseCommitTime.equals(instantToRollback.getTimestamp())) {
-          Path fullDeletePath = new Path(partitionPath, latestLogFileOption.get().getFileName());
+          StoragePath fullDeletePath = new StoragePath(partitionPath, latestLogFileOption.get().getFileName());
           return new HoodieRollbackRequest(relativePartitionPath, EMPTY_STRING, EMPTY_STRING,
               Collections.singletonList(fullDeletePath.toString()),
               Collections.emptyMap());
@@ -137,7 +138,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
           HoodieLogFile latestLogFile = latestLogFileOption.get();
           // NOTE: Markers don't carry information about the cumulative size of the blocks that have been appended,
           //       therefore we simply stub this value.
-          logBlocksToBeDeleted = Collections.singletonMap(latestLogFile.getFileStatus().getPath().toString(), latestLogFile.getFileStatus().getLen());
+          logBlocksToBeDeleted = Collections.singletonMap(latestLogFile.getPathInfo().getPath().toString(), latestLogFile.getPathInfo().getLength());
         }
         return new HoodieRollbackRequest(relativePartitionPath, fileId, baseCommitTime, Collections.emptyList(), logBlocksToBeDeleted);
       } catch (IOException ioException) {

@@ -47,6 +47,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
@@ -243,13 +245,15 @@ public class UtilHelpers {
   public static InitialCheckPointProvider createInitialCheckpointProvider(
       String className, TypedProperties props) throws IOException {
     try {
-      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[]{TypedProperties.class}, props);
+      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
     } catch (Throwable e) {
       throw new IOException("Could not load initial checkpoint provider class " + className, e);
     }
   }
 
-  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
+  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig,
+                                                      StoragePath cfgPath,
+                                                      List<String> overriddenProps) {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
@@ -568,19 +572,25 @@ public class UtilHelpers {
 
   public static SchemaProvider getSchemaProviderForKafkaSource(SchemaProvider provider, TypedProperties cfg, JavaSparkContext jssc) {
     if (KafkaOffsetPostProcessor.Config.shouldAddOffsets(cfg)) {
-      return new SchemaProviderWithPostProcessor(provider, Option.ofNullable(new KafkaOffsetPostProcessor(cfg, jssc)));
+      return new SchemaProviderWithPostProcessor(provider,
+          Option.ofNullable(new KafkaOffsetPostProcessor(cfg, jssc)));
     }
     return provider;
   }
 
-  public static SchemaProvider createRowBasedSchemaProvider(StructType structType, TypedProperties cfg, JavaSparkContext jssc) {
+  public static SchemaProvider createRowBasedSchemaProvider(StructType structType,
+                                                            TypedProperties cfg,
+                                                            JavaSparkContext jssc) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
 
-  public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc, FileSystem fs, String basePath, HoodieTableMetaClient tableMetaClient) {
+  public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc,
+                                                    HoodieStorage storage,
+                                                    String basePath,
+                                                    HoodieTableMetaClient tableMetaClient) {
     try {
-      if (FSUtils.isTableExists(basePath, fs)) {
+      if (FSUtils.isTableExists(basePath, storage)) {
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
 
         return tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false);

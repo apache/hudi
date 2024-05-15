@@ -36,13 +36,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -190,7 +192,7 @@ public class CommitMetadataUtils {
     return partitionToWriteStatHoodieData
         .join(partitionToMissingLogFilesHoodieData)
         .map((SerializableFunction<Pair<String, Pair<Map<String, HoodieWriteStat>, Map<String, List<String>>>>, Pair<String, List<HoodieWriteStat>>>) v1 -> {
-          final Path basePathLocal = new Path(basePathStr);
+          final StoragePath basePathLocal = new StoragePath(basePathStr);
           String partitionPath = v1.getKey();
           Map<String, HoodieWriteStat> fileIdToOriginalWriteStat = v1.getValue().getKey();
           Map<String, List<String>> missingFileIdToLogFileNames = v1.getValue().getValue();
@@ -199,17 +201,17 @@ public class CommitMetadataUtils {
               .collect(Collectors.toList());
 
           // fetch file sizes from FileSystem
-          Path fullPartitionPath = StringUtils.isNullOrEmpty(partitionPath) ? new Path(basePathStr) : new Path(basePathStr, partitionPath);
-          FileSystem fileSystem = fullPartitionPath.getFileSystem(serializableConfiguration.get());
-          List<Option<FileStatus>> fileStatuesOpt = FSUtils.getFileStatusesUnderPartition(fileSystem, fullPartitionPath, new HashSet<>(missingLogFileNames), true);
-          List<FileStatus> fileStatuses = fileStatuesOpt.stream().filter(fileStatusOpt -> fileStatusOpt.isPresent()).map(fileStatusOption -> fileStatusOption.get()).collect(Collectors.toList());
+          StoragePath fullPartitionPath = StringUtils.isNullOrEmpty(partitionPath) ? new StoragePath(basePathStr) : new StoragePath(basePathStr, partitionPath);
+          HoodieStorage storage = HoodieStorageUtils.getStorage(fullPartitionPath, serializableConfiguration.get());
+          List<Option<StoragePathInfo>> pathInfoOptList = FSUtils.getPathInfoUnderPartition(storage, fullPartitionPath, new HashSet<>(missingLogFileNames), true);
+          List<StoragePathInfo> pathInfoList = pathInfoOptList.stream().filter(fileStatusOpt -> fileStatusOpt.isPresent()).map(fileStatusOption -> fileStatusOption.get()).collect(Collectors.toList());
 
           // populate fileId -> List<FileStatus>
-          Map<String, List<FileStatus>> missingFileIdToLogFilesList = new HashMap<>();
-          fileStatuses.forEach(fileStatus -> {
-            String fileId = FSUtils.getFileIdFromLogPath(fileStatus.getPath());
+          Map<String, List<StoragePathInfo>> missingFileIdToLogFilesList = new HashMap<>();
+          pathInfoList.forEach(pathInfo -> {
+            String fileId = FSUtils.getFileIdFromLogPath(pathInfo.getPath());
             missingFileIdToLogFilesList.putIfAbsent(fileId, new ArrayList<>());
-            missingFileIdToLogFilesList.get(fileId).add(fileStatus);
+            missingFileIdToLogFilesList.get(fileId).add(pathInfo);
           });
 
           List<HoodieWriteStat> missingWriteStats = new ArrayList();
@@ -217,9 +219,9 @@ public class CommitMetadataUtils {
             String fileId = k;
             HoodieDeltaWriteStat originalWriteStat =
                 (HoodieDeltaWriteStat) fileIdToOriginalWriteStat.get(fileId); // are there chances that there won't be any write stat in original list?
-            logFileStatuses.forEach(fileStatus -> {
+            logFileStatuses.forEach(pathInfo -> {
               // for every missing file, add a new HoodieDeltaWriteStat
-              HoodieDeltaWriteStat writeStat = getHoodieDeltaWriteStatFromPreviousStat(fileStatus, basePathLocal,
+              HoodieDeltaWriteStat writeStat = getHoodieDeltaWriteStatFromPreviousStat(pathInfo, basePathLocal,
                   partitionPath, fileId, originalWriteStat);
               missingWriteStats.add(writeStat);
             });
@@ -228,13 +230,13 @@ public class CommitMetadataUtils {
         }).collectAsList();
   }
 
-  private static HoodieDeltaWriteStat getHoodieDeltaWriteStatFromPreviousStat(FileStatus fileStatus,
-                                                                              Path basePathLocal,
+  private static HoodieDeltaWriteStat getHoodieDeltaWriteStatFromPreviousStat(StoragePathInfo pathInfo,
+                                                                              StoragePath basePathLocal,
                                                                               String partitionPath,
                                                                               String fileId,
                                                                               HoodieDeltaWriteStat originalWriteStat) {
     HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
-    HoodieLogFile logFile = new HoodieLogFile(fileStatus);
+    HoodieLogFile logFile = new HoodieLogFile(pathInfo);
     writeStat.setPath(basePathLocal, logFile.getPath());
     writeStat.setPartitionPath(partitionPath);
     writeStat.setFileId(fileId);

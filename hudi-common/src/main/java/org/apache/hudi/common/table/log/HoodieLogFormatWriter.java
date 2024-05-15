@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat.WriterBuilder;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -50,6 +51,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private HoodieLogFile logFile;
   private FSDataOutputStream output;
 
+  private final HoodieStorage storage;
   private final FileSystem fs;
   private final long sizeThreshold;
   private final Integer bufferSize;
@@ -61,20 +63,22 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
-  HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold,
+  HoodieLogFormatWriter(HoodieStorage storage, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold,
                         String rolloverLogWriteToken, HoodieLogFileWriteCallback logFileWriteCallback) {
-    this.fs = fs;
+    this.storage = storage;
+    this.fs = (FileSystem) storage.getFileSystem();
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
-    this.bufferSize = bufferSize;
-    this.replication = replication;
+    this.bufferSize = bufferSize != null ? bufferSize : FSUtils.getDefaultBufferSize(fs);
+    this.replication = replication != null ? replication
+        : FSUtils.getDefaultReplication(fs, new Path(logFile.getPath().getParent().toString()));
     this.rolloverLogWriteToken = rolloverLogWriteToken;
     this.logFileWriteCallback = logFileWriteCallback;
     addShutDownHook();
   }
 
   public FileSystem getFs() {
-    return fs;
+    return (FileSystem) storage.getFileSystem();
   }
 
   @Override
@@ -94,7 +98,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
    */
   private FSDataOutputStream getOutputStream() throws IOException, InterruptedException {
     if (this.output == null) {
-      Path path = logFile.getPath();
+      Path path = new Path(logFile.getPath().toUri());
       if (fs.exists(path)) {
         boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
         // here we use marker file to fence concurrent append to the same file. So it is safe to use speculation in spark now.
@@ -231,14 +235,18 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void rollOver() throws IOException {
     closeStream();
-    this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
+    this.logFile = logFile.rollOver(storage, rolloverLogWriteToken);
     this.closed = false;
   }
 
   private void createNewFile() throws IOException {
     logFileWriteCallback.preLogFileCreate(logFile);
     this.output =
-        fs.create(this.logFile.getPath(), false, bufferSize, replication, WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
+        ((FileSystem) storage.getFileSystem()).create(
+            new Path(this.logFile.getPath().toUri()), false,
+            bufferSize,
+            replication,
+            WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
   }
 
   @Override

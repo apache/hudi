@@ -83,7 +83,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
     StreamSync service = getDeltaSync();
     service.refreshTimeline();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(new Configuration(service.getFs().getConf()))
+        .setConf(new Configuration((Configuration) service.getStorage().getConf()))
         .setBasePath(service.getCfg().targetBasePath)
         .build();
     String instantTime = HoodieActiveTimeline.createNewInstantTime();

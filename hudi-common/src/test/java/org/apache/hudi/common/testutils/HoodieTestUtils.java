@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -217,8 +216,7 @@ public class HoodieTestUtils {
   }
 
   public static void createCompactionCommitInMetadataTable(
-      Configuration hadoopConf, HoodieWrapperFileSystem wrapperFs, String basePath,
-      String instantTime) throws IOException {
+      Configuration hadoopConf, String basePath, String instantTime) throws IOException {
     // This is to simulate a completed compaction commit in metadata table timeline,
     // so that the commits on data table timeline can be archived
     // Note that, if metadata table is enabled, instants in data table timeline,
@@ -226,7 +224,8 @@ public class HoodieTestUtils {
     // are not archived (HoodieTimelineArchiveLog::getInstantsToArchive)
     String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
     HoodieTestUtils.init(hadoopConf, metadataTableBasePath, HoodieTableType.MERGE_ON_READ);
-    HoodieTestDataGenerator.createCommitFile(metadataTableBasePath, instantTime + "001", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(metadataTableBasePath, instantTime + "001",
+        hadoopConf);
   }
 
   public static int getJavaVersion() {

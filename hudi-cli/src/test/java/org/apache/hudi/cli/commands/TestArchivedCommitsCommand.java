@@ -100,8 +100,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
     // Simulate a compaction commit in metadata table timeline
     // so the archival in data table can happen
-    HoodieTestUtils.createCompactionCommitInMetadataTable(
-        hadoopConf(), metaClient.getFs(), tablePath, "105");
+    HoodieTestUtils.createCompactionCommitInMetadataTable(hadoopConf(), tablePath, "105");
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // reload the timeline and get all the commits before archive

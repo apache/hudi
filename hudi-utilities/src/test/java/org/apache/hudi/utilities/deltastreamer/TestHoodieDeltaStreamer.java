@@ -70,6 +70,8 @@ import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieIndexer;
@@ -101,9 +103,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -246,7 +246,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Test
   public void testProps() {
     TypedProperties props =
-        new DFSPropertiesConfiguration(fs.getConf(), new Path(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
     assertEquals(2, props.getInteger("hoodie.upsert.shuffle.parallelism"));
     assertEquals("_row_key", props.getString("hoodie.datasource.write.recordkey.field"));
     assertEquals("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator",
@@ -375,7 +375,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String checkpointProviderClass = "org.apache.hudi.utilities.checkpointing.KafkaConnectHdfsProvider";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeDropAllConfig(tableBasePath, WriteOperationType.UPSERT);
     TypedProperties props =
-        new DFSPropertiesConfiguration(fs.getConf(), new Path(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
     props.put("hoodie.streamer.checkpoint.provider.path", bootstrapPath);
     cfg.initialCheckpointProvider = checkpointProviderClass;
     // create regular kafka connect hdfs dirs
@@ -636,8 +636,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // clean up and reinit
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
-    UtilitiesTestBase.Helpers.deleteFileFromDfs(HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration()), basePath + "/" + PROPS_FILENAME_TEST_SOURCE);
-    writeCommonPropsToFile(fs, basePath);
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(
+        HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration()),
+        basePath + "/" + PROPS_FILENAME_TEST_SOURCE);
+    writeCommonPropsToFile(storage, basePath);
     defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   }
 
@@ -925,11 +927,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Step 3 : Based to replacedFileIDs , get the corresponding complete path.
     ArrayList<String> replacedFilePaths = new ArrayList<>();
-    Path partitionPath = new Path(meta.getBasePath(), partitionName);
-    RemoteIterator<LocatedFileStatus> hoodieFiles = meta.getFs().listFiles(partitionPath, true);
-    while (hoodieFiles.hasNext()) {
-      LocatedFileStatus f = hoodieFiles.next();
-      String file = f.getPath().toUri().toString();
+    StoragePath partitionPath = new StoragePath(meta.getBasePath(), partitionName);
+    List<StoragePathInfo> hoodieFiles = meta.getStorage().listFiles(partitionPath);
+    for (StoragePathInfo pathInfo : hoodieFiles) {
+      String file = pathInfo.getPath().toUri().toString();
       for (Object replacedFileID : replacedFileIDs) {
         if (file.contains(String.valueOf(replacedFileID))) {
           replacedFilePaths.add(file);
@@ -987,7 +988,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Step 6 : All the replaced files in firstReplaceHoodieInstant should be deleted through sync/async cleaner.
     for (String replacedFilePath : replacedFilePaths) {
-      assertFalse(meta.getFs().exists(new Path(replacedFilePath)));
+      assertFalse(meta.getStorage().exists(new StoragePath(replacedFilePath)));
     }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
@@ -1839,11 +1840,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     }
     orcProps.setProperty("hoodie.streamer.source.dfs.root", ORC_SOURCE_ROOT);
-    UtilitiesTestBase.Helpers.savePropsToDFS(orcProps, fs, basePath + "/" + PROPS_FILENAME_TEST_ORC);
+    UtilitiesTestBase.Helpers.savePropsToDFS(orcProps, storage, basePath + "/" + PROPS_FILENAME_TEST_ORC);
 
     String tableBasePath = basePath + "/test_orc_source_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-        TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ORCDFSSource.class.getName(),
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
+            ORCDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_ORC, false,
             useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
     deltaStreamer.sync();
@@ -1872,8 +1874,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     if (extraProps != null && !extraProps.isEmpty()) {
       extraProps.forEach(props::setProperty);
     }
-    props.setProperty(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(), Boolean.toString(shouldAddOffsets));
-    UtilitiesTestBase.Helpers.savePropsToDFS(props, fs, basePath + "/" + propsFileName);
+    props.setProperty(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(),
+        Boolean.toString(shouldAddOffsets));
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, basePath + "/" + propsFileName);
   }
 
   /**
@@ -2284,7 +2287,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       csvProps.setProperty("hoodie.streamer.csv.header", Boolean.toString(hasHeader));
     }
 
-    UtilitiesTestBase.Helpers.savePropsToDFS(csvProps, fs, basePath + "/" + PROPS_FILENAME_TEST_CSV);
+    UtilitiesTestBase.Helpers.savePropsToDFS(csvProps, storage,
+        basePath + "/" + PROPS_FILENAME_TEST_CSV);
 
     String path = sourceRoot + "/1.csv";
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
@@ -2404,7 +2408,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     sqlSourceProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
     sqlSourceProps.setProperty("hoodie.streamer.source.sql.sql.query", "select * from test_sql_table");
 
-    UtilitiesTestBase.Helpers.savePropsToDFS(sqlSourceProps, fs, basePath + "/" + PROPS_FILENAME_TEST_SQL_SOURCE);
+    UtilitiesTestBase.Helpers.savePropsToDFS(sqlSourceProps, storage,
+        basePath + "/" + PROPS_FILENAME_TEST_SQL_SOURCE);
 
     // Data generation
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
@@ -2444,7 +2449,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
       props.setProperty("hoodie.datasource.write.recordkey.field", "ID");
 
-      UtilitiesTestBase.Helpers.savePropsToDFS(props, fs, basePath + "/test-jdbc-source.properties");
+      UtilitiesTestBase.Helpers.savePropsToDFS(props, storage,
+          basePath + "/test-jdbc-source.properties");
 
       int numRecords = 1000;
       int sourceLimit = 100;
@@ -2566,7 +2572,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Test
   public void testToSortedTruncatedStringSecretsMasked() {
     TypedProperties props =
-        new DFSPropertiesConfiguration(fs.getConf(), new Path(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
     props.put("ssl.trustore.location", "SSL SECRET KEY");
     props.put("sasl.jaas.config", "SASL SECRET KEY");
     props.put("auth.credentials", "AUTH CREDENTIALS");
@@ -2721,8 +2727,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     LOG.info("old props: {}", hoodieProps);
     hoodieProps.put("hoodie.table.type", HoodieTableType.MERGE_ON_READ.name());
     LOG.info("new props: {}", hoodieProps);
-    Path metaPathDir = new Path(metaClient.getBasePathV2(), METAFOLDER_NAME);
-    HoodieTableConfig.create(metaClient.getFs(), metaPathDir, hoodieProps);
+    StoragePath metaPathDir = new StoragePath(metaClient.getBasePathV2(), METAFOLDER_NAME);
+    HoodieTableConfig.create(metaClient.getStorage(), metaPathDir, hoodieProps);
 
     // continue deltastreamer
     cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
@@ -2792,8 +2798,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     LOG.info("old props: " + hoodieProps);
     hoodieProps.put("hoodie.table.type", HoodieTableType.COPY_ON_WRITE.name());
     LOG.info("new props: " + hoodieProps);
-    Path metaPathDir = new Path(metaClient.getBasePathV2(), ".hoodie");
-    HoodieTableConfig.create(metaClient.getFs(), metaPathDir, hoodieProps);
+    StoragePath metaPathDir = new StoragePath(metaClient.getBasePathV2(), ".hoodie");
+    HoodieTableConfig.create(metaClient.getStorage(), metaPathDir, hoodieProps);
 
     // continue deltastreamer
     cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
