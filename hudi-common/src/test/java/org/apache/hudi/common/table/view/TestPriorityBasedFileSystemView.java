@@ -741,7 +741,7 @@ public class TestPriorityBasedFileSystemView {
 
     @Override
     public void append(LogEvent event) {
-      log.add(event);
+      log.add(event.toImmutable());
     }
 
     public List<LogEvent> getLog() {
