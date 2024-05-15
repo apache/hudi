@@ -69,7 +69,7 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 /**
  * Utility functions for ORC files.
  */
-public class OrcUtils extends BaseFileUtils {
+public class OrcUtils extends FileFormatUtils {
 
   /**
    * Provides a closable iterator for reading the given ORC file.
@@ -302,5 +302,14 @@ public class OrcUtils extends BaseFileUtils {
         writer.addUserMetadata(key, ByteBuffer.wrap(getUTF8Bytes(props.getProperty(key))));
       }
     }
+  }
+
+  @Override
+  public byte[] serializeRecordsToLogBlock(StorageConfiguration<?> storageConf,
+                                           List<HoodieRecord> records,
+                                           Schema writerSchema,
+                                           Schema readerSchema, String keyFieldName,
+                                           Map<String, String> paramsMap) throws IOException {
+    throw new UnsupportedOperationException("Hudi log blocks do not support ORC format yet");
   }
 }

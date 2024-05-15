@@ -19,7 +19,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -174,7 +174,7 @@ public class ColumnStatsIndexHelper {
       colMinMaxInfos =
           jsc.parallelize(baseFilesPaths, numParallelism)
               .mapPartitions(paths -> {
-                ParquetUtils utils = (ParquetUtils) BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
+                ParquetUtils utils = (ParquetUtils) FileFormatUtils.getInstance(HoodieFileFormat.PARQUET);
                 Iterable<String> iterable = () -> paths;
                 return StreamSupport.stream(iterable.spliterator(), false)
                     .flatMap(path ->

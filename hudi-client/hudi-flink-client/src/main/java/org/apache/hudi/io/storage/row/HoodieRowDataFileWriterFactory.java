@@ -33,6 +33,7 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
@@ -73,7 +74,7 @@ public class HoodieRowDataFileWriterFactory {
     return new HoodieRowDataParquetWriter(
         convertToStoragePath(path), new HoodieParquetConfig<>(
         writeSupport,
-        writeConfig.getParquetCompressionCodec(),
+        getCompressionCodecName(writeConfig.getParquetCompressionCodec()),
         writeConfig.getParquetBlockSize(),
         writeConfig.getParquetPageSize(),
         writeConfig.getParquetMaxFileSize(),

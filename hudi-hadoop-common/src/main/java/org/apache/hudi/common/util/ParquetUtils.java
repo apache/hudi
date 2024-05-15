@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -28,6 +29,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
+import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -59,6 +62,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -74,10 +78,14 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_BLOCK_SIZE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE_SIZE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_PAGE_SIZE;
+
 /**
  * Utility functions involving with parquet.
  */
-public class ParquetUtils extends BaseFileUtils {
+public class ParquetUtils extends FileFormatUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(ParquetUtils.class);
 
@@ -146,6 +154,14 @@ public class ParquetUtils extends BaseFileUtils {
     }
     // ignore
     return rowKeys;
+  }
+
+  /**
+   * @param codecName codec name in String.
+   * @return {@link CompressionCodecName} Enum.
+   */
+  public static CompressionCodecName getCompressionCodecName(String codecName) {
+    return CompressionCodecName.fromConf(StringUtils.isNullOrEmpty(codecName) ? null : codecName);
   }
 
   /**
@@ -356,6 +372,41 @@ public class ParquetUtils extends BaseFileUtils {
         writeSupport.addFooterMetadata(key, props.getProperty(key));
       }
     }
+  }
+
+  @Override
+  public byte[] serializeRecordsToLogBlock(StorageConfiguration<?> storageConf,
+                                           List<HoodieRecord> records,
+                                           Schema writerSchema,
+                                           Schema readerSchema,
+                                           String keyFieldName,
+                                           Map<String, String> paramsMap) throws IOException {
+    if (records.size() == 0) {
+      return new byte[0];
+    }
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    HoodieConfig config = new HoodieConfig();
+    paramsMap.entrySet().stream().forEach(entry -> config.setValue(entry.getKey(), entry.getValue()));
+    config.setValue(PARQUET_BLOCK_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_BLOCK_SIZE));
+    config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
+    config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
+    HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
+    HoodieFileWriter parquetWriter = null;
+    try {
+      parquetWriter = HoodieFileWriterFactory.getFileWriter(
+          HoodieFileFormat.PARQUET, outputStream, storageConf, config, writerSchema, recordType);
+      for (HoodieRecord<?> record : records) {
+        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
+        parquetWriter.write(recordKey, record, writerSchema);
+      }
+      outputStream.flush();
+    } finally {
+      if (parquetWriter != null) {
+        parquetWriter.close();
+      }
+    }
+    return outputStream.toByteArray();
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {

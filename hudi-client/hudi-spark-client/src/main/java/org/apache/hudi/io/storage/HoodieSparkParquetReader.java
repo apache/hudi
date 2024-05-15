@@ -18,24 +18,24 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.api.ReadSupport;
 import org.apache.parquet.schema.MessageType;
@@ -60,7 +60,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   private final StoragePath path;
   private final StorageConfiguration<?> conf;
-  private final BaseFileUtils parquetUtils;
+  private final FileFormatUtils parquetUtils;
   private List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
   public HoodieSparkParquetReader(StorageConfiguration<?> conf, StoragePath path) {
@@ -68,7 +68,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     this.conf = conf.newInstance();
     // Avoid adding record in list element when convert parquet schema to avro schema
     conf.set(ADD_LIST_ELEMENT_RECORDS, "false");
-    this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
+    this.parquetUtils = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET);
   }
 
   @Override

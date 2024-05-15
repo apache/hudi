@@ -36,7 +36,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.Transformations;
-import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -205,14 +205,14 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path filePath = allFiles[0].getPath();
-    BloomFilter filter = BaseFileUtils.getInstance(table.getBaseFileFormat())
+    BloomFilter filter = FileFormatUtils.getInstance(table.getBaseFileFormat())
         .readBloomFilterFromMetadata(storageConf, new StoragePath(filePath.toUri()));
     for (HoodieRecord record : records) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
 
     // Read the base file, check the record content
-    List<GenericRecord> fileRecords = BaseFileUtils.getInstance(table.getBaseFileFormat())
+    List<GenericRecord> fileRecords = FileFormatUtils.getInstance(table.getBaseFileFormat())
         .readAvroRecords(storageConf, new StoragePath(filePath.toUri()));
     GenericRecord newRecord;
     int index = 0;
@@ -248,7 +248,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     // Check whether the record has been updated
     Path updatedFilePath = allFiles[0].getPath();
     BloomFilter updatedFilter =
-        BaseFileUtils.getInstance(metaClient).readBloomFilterFromMetadata(storageConf, new StoragePath(updatedFilePath.toUri()));
+        FileFormatUtils.getInstance(metaClient).readBloomFilterFromMetadata(storageConf, new StoragePath(updatedFilePath.toUri()));
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));
