@@ -39,8 +39,8 @@ import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -506,7 +506,7 @@ public class InputFormatTestUtil {
 
       HoodiePartitionMetadata partitionMetadata =
           new HoodiePartitionMetadata(
-              HoodieStorageUtils.getStorage(new LocalFileSystem(lfs)),
+              new HoodieHadoopStorage(new LocalFileSystem(lfs)),
               "0",
               new StoragePath(basePath.toAbsolutePath().toString()),
               new StoragePath(partitionPath.toAbsolutePath().toString()),

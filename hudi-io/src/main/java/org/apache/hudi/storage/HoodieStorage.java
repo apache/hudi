@@ -280,6 +280,12 @@ public abstract class HoodieStorage implements Closeable {
   public abstract Object unwrapConf();
 
   /**
+   * @return the raw storage.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract HoodieStorage getRawStorage();
+
+  /**
    * Creates a new file with overwrite set to false. This ensures files are created
    * only once and never rewritten, also, here we take care if the content is not
    * empty, will first write the content to a temp file if {needCreateTempFile} is

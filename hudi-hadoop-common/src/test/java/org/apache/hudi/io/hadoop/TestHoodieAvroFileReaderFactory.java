@@ -50,7 +50,7 @@ public class TestHoodieAvroFileReaderFactory {
     final StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(new Configuration());
     final StoragePath parquetPath = new StoragePath("/partition/path/f1_1-0-1_000.parquet");
     HoodieFileReader parquetReader = HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, storageConf, parquetPath);
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, parquetPath);
     assertTrue(parquetReader instanceof HoodieAvroParquetReader);
 
     // log file format.
@@ -58,7 +58,7 @@ public class TestHoodieAvroFileReaderFactory {
         "/partition/path/f.b51192a8-574b-4a85-b246-bcfec03ac8bf_100.log.2_1-0-1");
     final Throwable thrown = assertThrows(UnsupportedOperationException.class, () -> {
       HoodieFileReader logWriter = HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, storageConf, logPath);
+          .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, logPath);
     }, "should fail since log storage reader is not supported yet.");
     assertTrue(thrown.getMessage().contains("format not supported yet."));
 
@@ -66,7 +66,7 @@ public class TestHoodieAvroFileReaderFactory {
     final StoragePath orcPath = new StoragePath("/partition/path/f1_1-0-1_000.orc");
     HoodieFileReader orcReader = HoodieIOFactory.getIOFactory(storageConf)
         .getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, storageConf, orcPath);
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, orcPath);
     assertTrue(orcReader instanceof HoodieAvroOrcReader);
   }
 }

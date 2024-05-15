@@ -65,6 +65,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -302,9 +303,7 @@ public class HoodieTableMetaClient implements Serializable {
           consistencyGuardConfig)
           : new NoOpConsistencyGuard();
 
-      storage = HoodieStorageUtils.getStorage(
-          metaPath,
-          getStorageConf(),
+      storage = getIOFactory(getStorageConf()).getStorage(metaPath,
           fileSystemRetryConfig.isFileSystemActionRetryEnable(),
           fileSystemRetryConfig.getMaxRetryIntervalMs(),
           fileSystemRetryConfig.getMaxRetryNumbers(),
@@ -320,7 +319,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public HoodieStorage getRawHoodieStorage() {
-    return HoodieStorageUtils.getRawStorage(getStorage());
+    return getStorage().getRawStorage();
   }
 
   public StorageConfiguration<?> getStorageConf() {

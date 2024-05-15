@@ -447,7 +447,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (basefile.isPresent()) {
       StoragePath baseFilePath = basefile.get().getStoragePath();
       baseFileReader = (HoodieSeekingFileReader<?>) HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, getStorageConf(), baseFilePath);
+          .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, baseFilePath);
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", baseFilePath,
           basefile.get().getCommitTime(), baseFileOpenMs));

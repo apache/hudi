@@ -462,9 +462,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
 
     long oldNumWrites = 0;
-    try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(storage.getConf())
+    try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(hoodieTable.getStorageConf())
         .getReaderFactory(this.recordMerger.getRecordType())
-        .getFileReader(config, hoodieTable.getStorageConf(), oldFilePath)) {
+        .getFileReader(config, oldFilePath)) {
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);

@@ -544,8 +544,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
-        HoodieIOFactory.getIOFactory(context.getStorageConf()).getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-            writeConfig, context.getStorageConf(), new StoragePath(baseFile.getPath()));
+        HoodieIOFactory.getIOFactory(context.getStorageConf()).getReaderFactory(HoodieRecordType.AVRO)
+            .getFileReader(writeConfig, new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (populateMetaFields) {
@@ -971,8 +971,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     final HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
 
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
-        HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-            table.getConfig(), context.getStorageConf(), new StoragePath(baseFile.getPath()));
+        HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecordType.AVRO)
+            .getFileReader(table.getConfig(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (enableMetaFields) {

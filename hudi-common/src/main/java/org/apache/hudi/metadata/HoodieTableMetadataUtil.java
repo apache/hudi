@@ -505,8 +505,7 @@ public class HoodieTableMetadataUtil {
 
       final StoragePath writeFilePath = new StoragePath(dataMetaClient.getBasePathV2(), pathWithPartition);
       try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(dataMetaClient.getStorageConf())
-          .getReaderFactory(HoodieRecordType.AVRO).getFileReader(hoodieConfig,
-              dataMetaClient.getStorageConf(), writeFilePath)) {
+          .getReaderFactory(HoodieRecordType.AVRO).getFileReader(hoodieConfig, writeFilePath)) {
         try {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
@@ -927,7 +926,7 @@ public class HoodieTableMetadataUtil {
   private static ByteBuffer readBloomFilter(StorageConfiguration<?> conf, StoragePath filePath) throws IOException {
     HoodieConfig hoodieConfig = getReaderConfigs(conf);
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(conf).getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(hoodieConfig, conf, filePath)) {
+        .getFileReader(hoodieConfig, filePath)) {
       final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
       if (fileBloomFilter == null) {
         return null;
@@ -1782,7 +1781,7 @@ public class HoodieTableMetadataUtil {
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
       HoodieFileReader reader = HoodieIOFactory.getIOFactory(configuration).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-          .getFileReader(config, configuration, dataFilePath);
+          .getFileReader(config, dataFilePath);
       return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime);
     });
   }
@@ -1843,7 +1842,7 @@ public class HoodieTableMetadataUtil {
       final String instantTime = baseFile.getCommitTime();
       HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
       HoodieFileReader reader = HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-          .getFileReader(hoodieConfig, storageConf, dataFilePath);
+          .getFileReader(hoodieConfig, dataFilePath);
       return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime);
     });
   }

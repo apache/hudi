@@ -42,6 +42,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.avro.generic.GenericRecord;
@@ -313,7 +314,7 @@ public class HoodieClientTestUtils {
    * @return a new {@link HoodieTableMetaClient} instance.
    */
   public static HoodieTableMetaClient createMetaClient(JavaSparkContext jsc, String basePath) {
-    return HoodieTestUtils.createMetaClient(jsc.hadoopConfiguration(), basePath);
+    return HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(jsc.hadoopConfiguration()), basePath);
   }
 
   /**
@@ -322,7 +323,7 @@ public class HoodieClientTestUtils {
    * @return a new {@link HoodieTableMetaClient} instance.
    */
   public static HoodieTableMetaClient createMetaClient(SparkSession spark, String basePath) {
-    return HoodieTestUtils.createMetaClient(spark.sessionState().newHadoopConf(), basePath);
+    return HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(spark.sessionState().newHadoopConf()), basePath);
   }
 
   private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {

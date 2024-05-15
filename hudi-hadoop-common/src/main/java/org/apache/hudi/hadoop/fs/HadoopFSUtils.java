@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -453,7 +452,7 @@ public class HadoopFSUtils {
       List<String> subPaths) {
     Map<String, T> result = new HashMap<>();
     if (subPaths.size() > 0) {
-      StorageConfiguration<Configuration> conf = HoodieStorageUtils.getStorageConfWithCopy(fs.getConf());
+      StorageConfiguration<Configuration> conf = new HadoopStorageConfiguration(fs.getConf(), true);
       int actualParallelism = Math.min(subPaths.size(), parallelism);
 
       hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),

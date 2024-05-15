@@ -310,7 +310,7 @@ public class HoodieRealtimeRecordReaderUtils {
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
     HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
     return HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-        .getFileReader(hoodieConfig, HadoopFSUtils.getStorageConf(conf), convertToStoragePath(path));
+        .getFileReader(hoodieConfig, convertToStoragePath(path));
   }
 
   private static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {

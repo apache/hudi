@@ -276,7 +276,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             ? Option.empty()
             : Option.of(HoodieIOFactory.getIOFactory(table.getStorageConf())
             .getReaderFactory(table.getConfig().getRecordMerger().getRecordType())
-            .getFileReader(table.getConfig(), table.getStorageConf(), new StoragePath(clusteringOp.getDataFilePath())));
+            .getFileReader(table.getConfig(), new StoragePath(clusteringOp.getDataFilePath())));
         HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
             .withStorage(table.getMetaClient().getStorage())
             .withBasePath(table.getMetaClient().getBasePath())
@@ -325,7 +325,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
           HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getStorageConf())
               .getReaderFactory(table.getConfig().getRecordMerger().getRecordType());
           HoodieAvroFileReader fileReader = (HoodieAvroFileReader) fileReaderFactory.getFileReader(
-              table.getConfig(), table.getStorageConf(), new StoragePath(clusteringOp.getDataFilePath()));
+              table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()));
 
           return new CloseableMappingIterator<>(fileReader.getRecordIterator(readerSchema), HoodieRecord::getData);
         } catch (IOException e) {

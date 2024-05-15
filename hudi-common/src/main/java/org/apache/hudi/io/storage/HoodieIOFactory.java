@@ -20,25 +20,30 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 /**
  * Base class to get HoodieFileReaderFactory and HoodieFileWriterFactory
  */
 public abstract class HoodieIOFactory {
+  protected final StorageConfiguration<?> storageConf;
+
+  public HoodieIOFactory(StorageConfiguration<?> storageConf) {
+    this.storageConf = storageConf;
+  }
 
   public static HoodieIOFactory getIOFactory(StorageConfiguration<?> storageConf) {
     String ioFactoryClass = storageConf.getString(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key())
         .orElse(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.defaultValue());
-    return getIOFactory(ioFactoryClass);
-  }
-
-  private static HoodieIOFactory getIOFactory(String ioFactoryClass) {
     try {
-      return ReflectionUtils.loadClass(ioFactoryClass);
+      return (HoodieIOFactory) ReflectionUtils
+          .loadClass(ioFactoryClass, new Class<?>[] {StorageConfiguration.class}, storageConf);
     } catch (Exception e) {
       throw new HoodieException("Unable to create " + ioFactoryClass, e);
     }
@@ -48,4 +53,13 @@ public abstract class HoodieIOFactory {
 
   public abstract HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType);
 
+  public abstract HoodieStorage getStorage(StoragePath storagePath);
+
+  public abstract HoodieStorage getStorage(StoragePath path,
+                                           boolean enableRetry,
+                                           long maxRetryIntervalMs,
+                                           int maxRetryNumbers,
+                                           long initialRetryIntervalMs,
+                                           String retryExceptions,
+                                           ConsistencyGuard consistencyGuard);
 }

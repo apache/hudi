@@ -38,8 +38,8 @@ import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
@@ -152,7 +152,7 @@ public class UtilitiesTestBase {
       fs = FileSystem.getLocal(hadoopConf);
       basePath = sharedTempDir.toUri().toString();
     }
-    storage = HoodieStorageUtils.getStorage(fs);
+    storage = new HoodieHadoopStorage(fs);
 
     hadoopConf.set("hive.exec.scratchdir", basePath + "/.tmp/hive");
     if (needsHive) {

@@ -148,7 +148,7 @@ public class GenericRecordValidationTestUtils {
       StorageConfiguration storageConf = HadoopFSUtils.getStorageConf(conf);
       try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
           HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-              .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, storageConf, new StoragePath(path), HoodieFileFormat.HFILE)) {
+              .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(path), HoodieFileFormat.HFILE)) {
         valuesAsList.addAll(HoodieAvroHFileReaderImplBase.readAllRecords(reader)
             .stream().map(e -> (GenericRecord) e).collect(Collectors.toList()));
       } catch (IOException e) {
