@@ -289,7 +289,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         "Delta commit should be specified value");
 
     Option<HoodieInstant> commit =
-        reloadedMetaClient.getActiveTimeline().getCommitTimeline().lastInstant();
+        reloadedMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant();
     assertFalse(commit.isPresent());
 
     List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
@@ -337,7 +337,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         "Latest Delta commit should match specified time");
 
     Option<HoodieInstant> commit =
-        reloadedMetaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+        reloadedMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
     assertFalse(commit.isPresent());
   }
 

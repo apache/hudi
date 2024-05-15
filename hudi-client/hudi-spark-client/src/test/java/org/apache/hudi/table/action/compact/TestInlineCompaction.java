@@ -270,7 +270,7 @@ public class TestInlineCompaction extends CompactionTestBase {
     // Then: 1 delta commit is done, the failed compaction is retried
     metaClient = createMetaClient(cfg.getBasePath());
     assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
-    assertEquals(instantTime2, metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().firstInstant().get().getTimestamp());
+    assertEquals(instantTime2, metaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().firstInstant().get().getTimestamp());
   }
 
   @Test
@@ -308,7 +308,7 @@ public class TestInlineCompaction extends CompactionTestBase {
     metaClient = createMetaClient(cfg.getBasePath());
     // 2 delta commits at the beginning. 1 compaction, 1 delta commit following it.
     assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
-    assertEquals(instantTime, metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().firstInstant().get().getTimestamp());
+    assertEquals(instantTime, metaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().firstInstant().get().getTimestamp());
   }
 
   @Test
@@ -345,6 +345,6 @@ public class TestInlineCompaction extends CompactionTestBase {
     // Then: 1 delta commit is done, the failed compaction is retried
     metaClient = createMetaClient(cfg.getBasePath());
     assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
-    assertEquals(instantTime, metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().firstInstant().get().getTimestamp());
+    assertEquals(instantTime, metaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().firstInstant().get().getTimestamp());
   }
 }

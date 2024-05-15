@@ -86,7 +86,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   @Test
   public void checkCommitTimeline() {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
@@ -95,12 +95,12 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
     // Commit timeline should not auto-reload every time getActiveCommitTimeline(), it should be cached
     activeTimeline = metaClient.getActiveTimeline();
-    activeCommitTimeline = activeTimeline.getCommitTimeline();
+    activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
-    HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
     activeTimeline = activeTimeline.reload();
-    activeCommitTimeline = activeTimeline.getCommitTimeline();
+    HoodieInstant completedInstant = activeTimeline.getCommitsTimeline().getInstantsAsStream().findFirst().get();
+    activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
     assertEquals(completedInstant, activeCommitTimeline.getInstantsAsStream().findFirst().get(),
         "Commit should be 1");

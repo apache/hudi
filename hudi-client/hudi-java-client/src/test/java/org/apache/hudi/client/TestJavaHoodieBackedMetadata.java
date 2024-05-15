@@ -1716,7 +1716,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000004")));
 
     // Compaction may occur if the commits completed in order
-    assertTrue(metadataMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants() <= 1);
+    assertTrue(metadataMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants() <= 1);
 
     // Validation
     validateMetadata(writeClients[0]);
@@ -1763,7 +1763,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // 6 commits and 2 cleaner commits.
       assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 8);
-      assertTrue(metadataMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants() <= 1);
+      assertTrue(metadataMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants() <= 1);
       // Validation
       validateMetadata(writeClient);
     }
@@ -2034,7 +2034,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // There should not be any compaction yet and we have not performed more than maxDeltaCommitsBeforeCompaction
       // deltacommits (1 will be due to bootstrap)
       HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-      assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 0);
+      assertEquals(metadataTimeline.getCommitAndReplaceTimeline().filterCompletedInstants().countInstants(), 0);
       assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), maxDeltaCommitsBeforeCompaction - 1);
       assertEquals(datasetMetaClient.getArchivedTimeline().reload().countInstants(), 0);
 
@@ -2044,7 +2044,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.startCommitWithTime(newCommitTime);
       client.insert(records, newCommitTime);
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-      assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 1);
+      assertEquals(metadataTimeline.getCommitAndReplaceTimeline().filterCompletedInstants().countInstants(), 1);
       assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), maxDeltaCommitsBeforeCompaction + 1);
       assertEquals(datasetMetaClient.getArchivedTimeline().reload().countInstants(), 0);
 
@@ -2065,7 +2065,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Ensure no more compactions took place due to the leftover inflight commit
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-      assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 1);
+      assertEquals(metadataTimeline.getCommitAndReplaceTimeline().filterCompletedInstants().countInstants(), 1);
       assertEquals(metadataTimeline.getDeltaCommitTimeline().filterCompletedInstants().countInstants(),
           ((2 * maxDeltaCommitsBeforeCompaction) + (maxDeltaCommitsBeforeCompaction /* clean from dataset */) + 1)/* clean in metadata table */);
 
@@ -2080,7 +2080,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Ensure compactions took place
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-      assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 2);
+      assertEquals(metadataTimeline.getCommitAndReplaceTimeline().filterCompletedInstants().countInstants(), 2);
       assertEquals(metadataTimeline.getDeltaCommitTimeline().filterCompletedInstants().countInstants(),
           ((2 * maxDeltaCommitsBeforeCompaction) + (maxDeltaCommitsBeforeCompaction + 1 /* clean from dataset */) + 2 /* clean in metadata table */));
       assertTrue(datasetMetaClient.getArchivedTimeline().reload().countInstants() > 0);
@@ -2428,7 +2428,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         client.upsert(records, newCommitTime);
       }
     }
-    assertEquals(metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants(), 3);
+    assertEquals(metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants(), 3);
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
       // Perform a clean

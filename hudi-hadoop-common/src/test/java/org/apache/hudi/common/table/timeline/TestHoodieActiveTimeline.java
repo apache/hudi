@@ -120,12 +120,16 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertStreamEquals(
         Stream.of(instant1Complete, instant2Complete, instant3Complete, instant4Complete, instant5),
         timeline.getCommitTimeline().getInstantsAsStream(), "Check the instants stream");
+
+    assertStreamEquals(
+        Stream.of(instant1Complete, instant2Complete, instant3Complete, instant4Complete, instant5),
+        timeline.getCommitAndReplaceTimeline().getInstantsAsStream(), "Check the instants stream");
     assertStreamEquals(
         Stream.of(instant1Complete, instant2Complete, instant3Complete, instant4Complete),
-        timeline.getCommitTimeline().filterCompletedInstants().getInstantsAsStream(),
+        timeline.getCommitAndReplaceTimeline().filterCompletedInstants().getInstantsAsStream(),
         "Check the instants stream");
     assertStreamEquals(Stream.of(instant5),
-        timeline.getCommitTimeline().filterPendingExcludingMajorAndMinorCompaction().getInstantsAsStream(),
+        timeline.getCommitAndReplaceTimeline().filterPendingExcludingMajorAndMinorCompaction().getInstantsAsStream(),
         "Check the instants stream");
 
     // Backwards compatibility testing for reading compaction plans
@@ -174,23 +178,23 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline = new MockHoodieTimeline(Stream.of("01", "03", "05", "07", "09", "11", "13", "15", "17", "19"),
         Stream.of("21", "23"));
     assertStreamEquals(Stream.of("05", "07", "09", "11"),
-        timeline.getCommitTimeline().filterCompletedInstants().findInstantsInRange("04", "11")
+        timeline.getCommitAndReplaceTimeline().filterCompletedInstants().findInstantsInRange("04", "11")
             .getInstantsAsStream().map(HoodieInstant::getTimestamp),
         "findInstantsInRange should return 4 instants");
     assertStreamEquals(Stream.of("03", "05", "07", "09", "11"),
-        timeline.getCommitTimeline().filterCompletedInstants().findInstantsInClosedRange("03", "11")
+        timeline.getCommitAndReplaceTimeline().filterCompletedInstants().findInstantsInClosedRange("03", "11")
             .getInstantsAsStream().map(HoodieInstant::getTimestamp),
         "findInstantsInClosedRange should return 5 instants");
     assertStreamEquals(Stream.of("09", "11"),
-        timeline.getCommitTimeline().filterCompletedInstants().findInstantsAfter("07", 2)
+        timeline.getCommitAndReplaceTimeline().filterCompletedInstants().findInstantsAfter("07", 2)
             .getInstantsAsStream().map(HoodieInstant::getTimestamp),
         "findInstantsAfter 07 should return 2 instants");
     assertStreamEquals(Stream.of("01", "03", "05"),
-        timeline.getCommitTimeline().filterCompletedInstants().findInstantsBefore("07")
+        timeline.getCommitAndReplaceTimeline().filterCompletedInstants().findInstantsBefore("07")
             .getInstantsAsStream().map(HoodieInstant::getTimestamp),
         "findInstantsBefore 07 should return 3 instants");
     assertFalse(timeline.empty());
-    assertFalse(timeline.getCommitTimeline().filterPendingExcludingMajorAndMinorCompaction().empty());
+    assertFalse(timeline.getCommitAndReplaceTimeline().filterPendingExcludingMajorAndMinorCompaction().empty());
     assertEquals(12, timeline.countInstants());
     assertEquals("01", timeline.firstInstant(
         HoodieTimeline.COMMIT_ACTION, State.COMPLETED).get().getTimestamp());
@@ -201,7 +205,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertFalse(timeline.firstInstant(
         HoodieTimeline.REPLACE_COMMIT_ACTION, State.COMPLETED).isPresent());
     
-    HoodieTimeline activeCommitTimeline = timeline.getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline activeCommitTimeline = timeline.getCommitAndReplaceTimeline().filterCompletedInstants();
     assertEquals(10, activeCommitTimeline.countInstants());
 
     assertEquals("01", activeCommitTimeline.firstInstant().get().getTimestamp());
@@ -346,7 +350,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
     checkTimeline.accept(timeline.getWriteTimeline(), CollectionUtils.createSet(
         HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
-    checkTimeline.accept(timeline.getCommitTimeline(),  CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
+    checkTimeline.accept(timeline.getCommitAndReplaceTimeline(),  CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
     checkTimeline.accept(timeline.getDeltaCommitTimeline(), Collections.singleton(HoodieTimeline.DELTA_COMMIT_ACTION));
     checkTimeline.accept(timeline.getCleanerTimeline(), Collections.singleton(HoodieTimeline.CLEAN_ACTION));
     checkTimeline.accept(timeline.getRollbackTimeline(), Collections.singleton(HoodieTimeline.ROLLBACK_ACTION));
@@ -551,12 +555,12 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   public void testReplaceActionsTimeline() {
     int instantTime = 1;
     List<HoodieInstant> allInstants = new ArrayList<>();
-    HoodieInstant instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
-    allInstants.add(instant);
-    instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
-    allInstants.add(instant);
-    instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, String.format("%03d", instantTime++));
-    allInstants.add(instant);
+    HoodieInstant instant1 = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
+    allInstants.add(instant1);
+    HoodieInstant instant2 = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
+    allInstants.add(instant2);
+    HoodieInstant instant3 = new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, String.format("%03d", instantTime++));
+    allInstants.add(instant3);
 
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.setInstants(allInstants);
@@ -564,8 +568,16 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         timeline.getCompletedReplaceTimeline().getInstants();
 
     assertEquals(1, validReplaceInstants.size());
-    assertEquals(instant.getTimestamp(), validReplaceInstants.get(0).getTimestamp());
+    assertEquals(instant3.getTimestamp(), validReplaceInstants.get(0).getTimestamp());
     assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, validReplaceInstants.get(0).getAction());
+
+    assertStreamEquals(
+        Stream.of(instant1, instant2, instant3),
+        timeline.getCommitAndReplaceTimeline().getInstantsAsStream(), "Check the instants stream");
+
+    assertStreamEquals(
+        Stream.of(instant1, instant2),
+        timeline.getCommitTimeline().getInstantsAsStream(), "Check the instants stream");
   }
 
   @Test
