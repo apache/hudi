@@ -65,6 +65,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -145,11 +146,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @BeforeAll
   public static void setUpClass() throws IOException {
     if (shouldUseExternalHdfs()) {
-      storage = HoodieStorageUtils.getStorage(useExternalHdfs());
+      storage = new HoodieHadoopStorage(useExternalHdfs());
     } else {
       // Append is not supported in LocalFileSystem. HDFS needs to be setup.
       hdfsTestService = new HdfsTestService();
-      storage = HoodieStorageUtils.getStorage(hdfsTestService.start(true).getFileSystem());
+      storage = new HoodieHadoopStorage(hdfsTestService.start(true).getFileSystem());
     }
   }
 

@@ -75,9 +75,9 @@ import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.JavaScalaConverters;
@@ -291,7 +291,7 @@ public class StreamSync implements Serializable, Closeable {
                     TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
     this(cfg, sparkSession, props, new HoodieSparkEngineContext(jssc),
-        HoodieStorageUtils.getStorage(fs), conf, onInitializingHoodieWriteClient,
+        new HoodieHadoopStorage(fs), conf, onInitializingHoodieWriteClient,
         new DefaultStreamContext(schemaProvider, Option.empty()));
   }
 

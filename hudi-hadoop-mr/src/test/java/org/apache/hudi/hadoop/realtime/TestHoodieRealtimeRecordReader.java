@@ -47,8 +47,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -120,7 +120,7 @@ public class TestHoodieRealtimeRecordReader {
     baseJobConf = new JobConf(storageConf.unwrap());
     baseJobConf.set(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1024 * 1024));
     fs = HadoopFSUtils.getFs(basePath.toUri().toString(), baseJobConf);
-    storage = HoodieStorageUtils.getStorage(fs);
+    storage = new HoodieHadoopStorage(fs);
   }
 
   @AfterEach

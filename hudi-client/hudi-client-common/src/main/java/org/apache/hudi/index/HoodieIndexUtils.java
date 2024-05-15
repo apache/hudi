@@ -188,7 +188,7 @@ public class HoodieIndexUtils {
     List<String> foundRecordKeys = new ArrayList<>();
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(configuration)
         .getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, configuration, filePath)) {
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();

@@ -28,8 +28,8 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -103,7 +103,7 @@ public class TestHoodieLogFormatAppendFailure {
     // Use some fs like LocalFileSystem, that does not support appends
     String uuid = UUID.randomUUID().toString();
     StoragePath localPartitionPath = new StoragePath("/tmp/");
-    HoodieStorage storage = HoodieStorageUtils.getStorage(cluster.getFileSystem());
+    HoodieStorage storage = new HoodieHadoopStorage(cluster.getFileSystem());
     StoragePath testPath = new StoragePath(localPartitionPath, uuid);
     storage.createDirectory(testPath);
 

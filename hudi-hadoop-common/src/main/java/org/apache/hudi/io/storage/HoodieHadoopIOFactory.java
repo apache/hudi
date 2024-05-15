@@ -19,11 +19,16 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.hadoop.HoodieAvroFileReaderFactory;
 import org.apache.hudi.io.hadoop.HoodieAvroFileWriterFactory;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 /**
  * Creates readers and writers for AVRO record payloads.
@@ -32,15 +37,21 @@ import org.apache.hudi.io.hadoop.HoodieAvroFileWriterFactory;
  */
 public class HoodieHadoopIOFactory extends HoodieIOFactory {
 
+  public HoodieHadoopIOFactory(StorageConfiguration<?> storageConf) {
+    super(storageConf);
+  }
+
   @Override
   public HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (recordType) {
       case AVRO:
-        return new HoodieAvroFileReaderFactory();
+        return new HoodieAvroFileReaderFactory(storageConf);
       case SPARK:
         //TODO: remove this case [HUDI-7746]
         try {
-          return ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory");
+          return (HoodieFileReaderFactory) ReflectionUtils
+              .loadClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory",
+                  new Class<?>[] {StorageConfiguration.class}, storageConf);
         } catch (Exception e) {
           throw new HoodieException("Unable to create HoodieSparkFileReaderFactory", e);
         }
@@ -53,16 +64,35 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
   public HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (recordType) {
       case AVRO:
-        return new HoodieAvroFileWriterFactory();
+        return new HoodieAvroFileWriterFactory(storageConf);
       case SPARK:
         //TODO: remove this case [HUDI-7746]
         try {
-          return ReflectionUtils.loadClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory");
+          return (HoodieFileWriterFactory) ReflectionUtils
+              .loadClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory",
+                  new Class<?>[] {StorageConfiguration.class}, storageConf);
         } catch (Exception e) {
           throw new HoodieException("Unable to create HoodieSparkFileWriterFactory", e);
         }
       default:
         throw new UnsupportedOperationException(recordType + " record type not supported");
     }
+  }
+
+  @Override
+  public HoodieStorage getStorage(StoragePath storagePath) {
+    return new HoodieHadoopStorage(storagePath, storageConf);
+  }
+
+  @Override
+  public HoodieStorage getStorage(StoragePath path,
+                                  boolean enableRetry,
+                                  long maxRetryIntervalMs,
+                                  int maxRetryNumbers,
+                                  long initialRetryIntervalMs,
+                                  String retryExceptions,
+                                  ConsistencyGuard consistencyGuard) {
+    return new HoodieHadoopStorage(path, storageConf, enableRetry, maxRetryIntervalMs,
+        maxRetryNumbers, maxRetryIntervalMs, retryExceptions, consistencyGuard);
   }
 }

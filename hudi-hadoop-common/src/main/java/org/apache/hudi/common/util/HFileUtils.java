@@ -104,7 +104,6 @@ public class HFileUtils extends BaseFileUtils {
                  .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
                  .getFileReader(
                      ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
-                     configuration,
                      filePath)) {
       return fileReader.getSchema();
     } catch (IOException e) {

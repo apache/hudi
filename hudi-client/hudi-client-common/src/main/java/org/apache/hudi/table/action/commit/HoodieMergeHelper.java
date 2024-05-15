@@ -82,7 +82,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
     HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(storageConf)
         .getReaderFactory(recordType)
-        .getFileReader(writeConfig, storageConf, mergeHandle.getOldFilePath());
+        .getFileReader(writeConfig, mergeHandle.getOldFilePath());
     HoodieFileReader bootstrapFileReader = null;
 
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
@@ -112,10 +112,10 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         StoragePath bootstrapFilePath = baseFile.getBootstrapBaseFile().get().getStoragePath();
         StorageConfiguration<?> bootstrapFileConfig = table.getStorageConf().newInstance();
-        bootstrapFileReader = HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(recordType).newBootstrapFileReader(
+        bootstrapFileReader = HoodieIOFactory.getIOFactory(bootstrapFileConfig).getReaderFactory(recordType).newBootstrapFileReader(
             baseFileReader,
-            HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(recordType)
-                .getFileReader(writeConfig, bootstrapFileConfig, bootstrapFilePath),
+            HoodieIOFactory.getIOFactory(bootstrapFileConfig).getReaderFactory(recordType)
+                .getFileReader(writeConfig, bootstrapFilePath),
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();

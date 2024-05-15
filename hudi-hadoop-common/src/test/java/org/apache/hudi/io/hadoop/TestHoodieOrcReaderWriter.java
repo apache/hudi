@@ -79,7 +79,7 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
   protected HoodieAvroFileReader createReader(
       StorageConfiguration<?> conf) throws Exception {
     return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(conf).getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, conf, getFilePath());
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, getFilePath());
   }
 
   @Override

@@ -34,8 +34,8 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 
@@ -92,7 +92,7 @@ public class TestCommitMetadataUtils extends HoodieCommonTestHarness {
     when(table.getMetaClient()).thenReturn(metaClient);
     Mockito.when(table.getConfig()).thenReturn(writeConfig);
     when(metaClient.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
-    when(metaClient.getStorage()).thenReturn(HoodieStorageUtils.getStorage(fileSystem));
+    when(metaClient.getStorage()).thenReturn(new HoodieHadoopStorage(fileSystem));
     when(metaClient.getBasePath()).thenReturn(basePath);
     when(metaClient.getMarkerFolderPath(any())).thenReturn(basePath + ".hoodie/.temp");
     when(table.getContext()).thenReturn(context);
