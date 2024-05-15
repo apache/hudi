@@ -41,6 +41,8 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+
 /**
  * Metadata log-block records reading implementation, internally relying on
  * {@link HoodieMergedLogRecordScanner} to merge corresponding Metadata Table's delta log-blocks
@@ -58,8 +60,8 @@ public class HoodieMetadataLogRecordReader implements Closeable {
   /**
    * Returns the builder for {@code HoodieMetadataMergedLogRecordScanner}.
    */
-  public static HoodieMetadataLogRecordReader.Builder newBuilder() {
-    return new HoodieMetadataLogRecordReader.Builder();
+  public static HoodieMetadataLogRecordReader.Builder newBuilder(String partitionName) {
+    return new HoodieMetadataLogRecordReader.Builder(partitionName);
   }
 
   @SuppressWarnings("unchecked")
@@ -151,14 +153,20 @@ public class HoodieMetadataLogRecordReader implements Closeable {
    * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
    */
   public static class Builder {
-    private final HoodieMetadataMergedLogRecordScanner.Builder scannerBuilder =
-        new HoodieMetadataMergedLogRecordScanner.Builder()
-            .withKeyFieldOverride(HoodieMetadataPayload.KEY_FIELD_NAME)
-            // NOTE: Merging of Metadata Table's records is currently handled using {@code HoodiePreCombineAvroRecordMerger}
-            //       for compatibility purposes; In the future it {@code HoodieMetadataPayload} semantic
-            //       will be migrated to its own custom instance of {@code RecordMerger}
-            .withReverseReader(false)
-            .withOperationField(false);
+    private final HoodieMergedLogRecordScanner.Builder scannerBuilder;
+    private final String partitionName;
+
+    public Builder(String partitionName) {
+      this.partitionName = partitionName;
+      this.scannerBuilder = shouldUseMetadataMergedLogRecordScanner() ? new HoodieMetadataMergedLogRecordScanner.Builder() : new HoodieMergedLogRecordScanner.Builder();
+      scannerBuilder
+          .withKeyFieldOverride(HoodieMetadataPayload.KEY_FIELD_NAME)
+          // NOTE: Merging of Metadata Table's records is currently handled using {@code HoodiePreCombineAvroRecordMerger}
+          //       for compatibility purposes; In the future it {@code HoodieMetadataPayload} semantic
+          //       will be migrated to its own custom instance of {@code RecordMerger}
+          .withReverseReader(false)
+          .withOperationField(false);
+    }
 
     public Builder withStorage(HoodieStorage storage) {
       scannerBuilder.withStorage(storage);
@@ -240,6 +248,10 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
     public HoodieMetadataLogRecordReader build() {
       return new HoodieMetadataLogRecordReader(scannerBuilder.build());
+    }
+
+    private boolean shouldUseMetadataMergedLogRecordScanner() {
+      return PARTITION_NAME_SECONDARY_INDEX.equals(partitionName);
     }
   }
 }

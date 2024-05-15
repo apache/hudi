@@ -92,7 +92,7 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
   /**
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
-  public static class Builder extends AbstractHoodieLogRecordReader.Builder {
+  public static class Builder extends HoodieMergedLogRecordScanner.Builder {
     private HoodieStorage storage;
     private String basePath;
     private List<String> logFilePaths;
