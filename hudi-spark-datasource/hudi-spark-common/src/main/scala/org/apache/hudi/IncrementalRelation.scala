@@ -161,7 +161,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
           fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().flatMap { entry =>
           entry.getValue.map { e =>
-            val fullPath = FSUtils.getPartitionPath(basePath, entry.getKey).toString
+            val fullPath = FSUtils.constructAbsolutePath(basePath, entry.getKey).toString
             (e, fullPath)
           }
         }

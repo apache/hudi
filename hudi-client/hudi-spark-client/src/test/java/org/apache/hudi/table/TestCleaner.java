@@ -861,9 +861,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition1).size());
     assertEquals(version1Plan.getFilesToBeDeletedPerPartition().get(partition2).size(),
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition2).size());
-    assertEquals(new Path(FSUtils.getPartitionPathInHadoopPath(metaClient.getBasePath(), partition1), fileName1).toString(),
+    assertEquals(new Path(FSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePath(), partition1), fileName1).toString(),
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition1).get(0).getFilePath());
-    assertEquals(new Path(FSUtils.getPartitionPathInHadoopPath(metaClient.getBasePath(), partition2), fileName2).toString(),
+    assertEquals(new Path(FSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePath(), partition2), fileName2).toString(),
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition2).get(0).getFilePath());
 
     // Downgrade and verify version 1 plan

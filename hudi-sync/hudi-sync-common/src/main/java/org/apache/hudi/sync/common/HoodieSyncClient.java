@@ -161,7 +161,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : allPartitionsOnStorage) {
       Path storagePartitionPath =
-          FSUtils.getPartitionPathInHadoopPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
+          FSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
@@ -205,7 +205,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : writtenPartitionsOnStorage) {
       Path storagePartitionPath =
-          FSUtils.getPartitionPathInHadoopPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
+          FSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);

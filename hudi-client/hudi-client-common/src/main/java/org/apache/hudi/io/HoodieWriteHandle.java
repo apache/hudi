@@ -114,7 +114,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   }
 
   public StoragePath makeNewPath(String partitionPath) {
-    StoragePath path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
+    StoragePath path = FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath);
     try {
       if (!storage.exists(path)) {
         storage.createDirectory(path); // create a new partition as needed.
@@ -247,7 +247,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         : Option.empty();
 
     return HoodieLogFormat.newWriterBuilder()
-        .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+        .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
         .withFileId(fileId)
         .overBaseCommit(baseCommitTime)
         .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))

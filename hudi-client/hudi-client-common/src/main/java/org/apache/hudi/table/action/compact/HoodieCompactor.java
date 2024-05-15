@@ -186,7 +186,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
 
     List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
-            new StoragePath(FSUtils.getPartitionPath(
+            new StoragePath(FSUtils.constructAbsolutePath(
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()

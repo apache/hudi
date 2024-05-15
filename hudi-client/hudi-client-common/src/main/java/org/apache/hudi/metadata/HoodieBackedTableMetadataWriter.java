@@ -713,7 +713,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         final HoodieDeleteBlock block = new HoodieDeleteBlock(new DeleteRecord[0], blockHeader);
 
         try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
+            .onParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
             .withFileId(fileGroupFileId)
             .overBaseCommit(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)

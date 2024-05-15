@@ -189,7 +189,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
       if (!isCommitFilePresent) {
         StoragePath metadataPath =
-            FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), p);
+            FSUtils.constructAbsolutePath(table.getMetaClient().getHashingMetadataPath(), p);
         try {
           table.getMetaClient().getStorage().listDirectEntries(metadataPath).forEach(fl -> {
             if (fl.getPath().getName()
