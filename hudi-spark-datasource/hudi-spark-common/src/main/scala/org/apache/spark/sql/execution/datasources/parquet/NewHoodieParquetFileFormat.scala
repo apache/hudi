@@ -41,8 +41,8 @@ import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.util.SerializableConfiguration
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 /**
  * This class does bootstrap and MOR merging so that we can use hadoopfs relation.

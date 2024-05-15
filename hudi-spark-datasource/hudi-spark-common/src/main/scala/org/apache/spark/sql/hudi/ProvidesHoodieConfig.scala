@@ -576,6 +576,6 @@ object ProvidesHoodieConfig {
     opts.filter { case (_, v) => v != null }
 
   private def filterHoodieConfigs(opts: Map[String, String]): Map[String, String] =
-    opts.filterKeys(isHoodieConfigKey)
+    opts.filterKeys(isHoodieConfigKey).toMap
 
 }

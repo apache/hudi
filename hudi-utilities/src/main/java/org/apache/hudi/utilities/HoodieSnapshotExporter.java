@@ -40,6 +40,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.JavaScalaConverters;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
 
 import com.beust.jcommander.IValueValidator;
@@ -68,8 +69,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import scala.collection.JavaConversions;
 
 import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
@@ -176,7 +175,7 @@ public class HoodieSnapshotExporter {
   private void exportAsNonHudi(JavaSparkContext jsc, FileSystem sourceFs,
                                Config cfg, List<String> partitions, String latestCommitTimestamp) {
     Partitioner defaultPartitioner = dataset -> {
-      Dataset<Row> hoodieDroppedDataset = dataset.drop(JavaConversions.asScalaIterator(HoodieRecord.HOODIE_META_COLUMNS.iterator()).toSeq());
+      Dataset<Row> hoodieDroppedDataset = dataset.drop(JavaScalaConverters.convertJavaIteratorToScalaIterator(HoodieRecord.HOODIE_META_COLUMNS.iterator()).toSeq());
       return StringUtils.isNullOrEmpty(cfg.outputPartitionField)
           ? hoodieDroppedDataset.write()
           : hoodieDroppedDataset.repartition(new Column(cfg.outputPartitionField)).write().partitionBy(cfg.outputPartitionField);
@@ -196,7 +195,7 @@ public class HoodieSnapshotExporter {
             .map(HoodieBaseFile::getPath).iterator())
         .toLocalIterator();
 
-    Dataset<Row> sourceDataset = new SQLContext(jsc).read().parquet(JavaConversions.asScalaIterator(exportingFilePaths).toSeq());
+    Dataset<Row> sourceDataset = new SQLContext(jsc).read().parquet(JavaScalaConverters.convertJavaIteratorToScalaIterator(exportingFilePaths).toSeq());
     partitioner.partition(sourceDataset)
         .format(cfg.outputFormat)
         .mode(SaveMode.ErrorIfExists)

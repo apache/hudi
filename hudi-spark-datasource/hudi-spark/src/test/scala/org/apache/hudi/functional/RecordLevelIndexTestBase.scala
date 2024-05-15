@@ -175,7 +175,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     } else {
       latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 5)).asScala
     }
-    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 2))
+    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()
     latestBatchDf.write.format("org.apache.hudi")
       .options(hudiOpts)

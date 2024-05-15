@@ -53,6 +53,7 @@ import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 import java.io.Closeable
 import java.util.Properties
 import java.util.stream.Collectors
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -469,23 +470,23 @@ class HoodieCDCRDD(
     private def resetRecordFormat(): Unit = {
       recordToLoad = currentCDCFileSplit.getCdcInferCase match {
         case BASE_FILE_INSERT =>
-          InternalRow.fromSeq(Array(
+          InternalRow.fromSeq(Seq(
             CDCRelation.CDC_OPERATION_INSERT, convertToUTF8String(currentInstant),
             null, null))
         case BASE_FILE_DELETE =>
-          InternalRow.fromSeq(Array(
+          InternalRow.fromSeq(Seq(
             CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
             null, null))
         case LOG_FILE =>
-          InternalRow.fromSeq(Array(
+          InternalRow.fromSeq(Seq(
             null, convertToUTF8String(currentInstant),
             null, null))
         case AS_IS =>
-          InternalRow.fromSeq(Array(
+          InternalRow.fromSeq(Seq(
             null, convertToUTF8String(currentInstant),
             null, null))
         case REPLACE_COMMIT =>
-          InternalRow.fromSeq(Array(
+          InternalRow.fromSeq(Seq(
             CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
             null, null))
       }
