@@ -62,7 +62,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
-import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
 import static org.apache.hudi.hadoop.testutils.InputFormatTestUtil.writeDataBlockToLogFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,7 +89,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
     baseJobConf.set(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1024 * 1024));
     baseJobConf.set(serdeConstants.LIST_COLUMNS, COLUMNS);
     baseJobConf.set(serdeConstants.LIST_COLUMN_TYPES, COLUMN_TYPES);
-    storage = HoodieStorageUtils.getStorage(getFs(basePath.toUri().toString(), baseJobConf));
+    storage = HoodieStorageUtils.getStorage(basePath.toUri().toString(), baseJobConf);
   }
 
   @AfterEach
@@ -114,7 +113,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
   private void testReaderInternal(boolean partitioned, HoodieLogBlock.HoodieLogBlockType logBlockType) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(HadoopFSUtils.getStorageConf(hadoopConf), basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(HoodieStorageUtils.getStorageConf(hadoopConf), basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, TOTAL_RECORDS, baseInstant,
         HoodieTableType.MERGE_ON_READ)

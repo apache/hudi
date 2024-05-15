@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileReader;
@@ -45,7 +44,6 @@ import org.apache.hudi.util.Lazy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -261,7 +259,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     if (path.isPresent()) {
       HoodieStorage storage = HoodieStorageUtils.getStorage(path.get(), conf);
       fileSize = storage.getPathInfo(path.get()).getLength();
-      inputStream = new HadoopSeekableDataInputStream((FSDataInputStream) storage.open(path.get()));
+      inputStream = storage.openSeekable(path.get(), false);
     } else {
       fileSize = bytesContent.get().length;
       inputStream = new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(bytesContent.get()));

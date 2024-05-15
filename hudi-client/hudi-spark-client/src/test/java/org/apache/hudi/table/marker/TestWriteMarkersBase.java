@@ -21,7 +21,6 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.MarkerUtils;
@@ -38,6 +37,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestTable.listRecursive;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
@@ -107,7 +107,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     createSomeMarkers(isTablePartitioned);
     // add invalid file
     createInvalidFile(isTablePartitioned ? "2020/06/01" : "", "invalid_file3");
-    long fileSize = FileSystemTestUtils.listRecursive(storage, markerFolderPath).stream()
+    long fileSize = listRecursive(storage, markerFolderPath).stream()
         .filter(fileStatus -> !fileStatus.getPath().getName().contains(MarkerUtils.MARKER_TYPE_FILENAME))
         .count();
     assertEquals(fileSize, 4);
@@ -128,7 +128,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     createSomeMarkers(isTablePartitioned);
     // add invalid file
     createInvalidFile(isTablePartitioned ? "2020/06/01" : "", "invalid_file3");
-    long fileSize = FileSystemTestUtils.listRecursive(storage, markerFolderPath).stream()
+    long fileSize = listRecursive(storage, markerFolderPath).stream()
         .filter(fileStatus -> !fileStatus.getPath().getName().contains(MarkerUtils.MARKER_TYPE_FILENAME))
         .count();
     assertEquals(fileSize, 4);
