@@ -60,6 +60,18 @@ public abstract class HoodieStorage implements Closeable {
   public abstract int getDefaultBlockSize(StoragePath path);
 
   /**
+   * @return the default buffer size.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract int getDefaultBufferSize();
+
+  /**
+   * @return the default block replication
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract short getDefaultReplication(StoragePath path);
+
+  /**
    * Returns a URI which identifies this HoodieStorage.
    *
    * @return the URI of this storage instance.
@@ -78,6 +90,21 @@ public abstract class HoodieStorage implements Closeable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract OutputStream create(StoragePath path, boolean overwrite) throws IOException;
+
+  /**
+   * Creates an OutputStream at the indicated path.
+   *
+   * @param path          the file to create
+   * @param overwrite     if a file with this name already exists, then if {@code true},
+   *                      the file will be overwritten, and if {@code false} an exception will be thrown.
+   * @param bufferSize    the size of the buffer to be used
+   * @param replication   required block replication for the file
+   * @param sizeThreshold block size
+   * @return the OutputStream to write to.
+   * @throws IOException IO error.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract OutputStream create(StoragePath path, boolean overwrite, Integer bufferSize, Short replication, Long sizeThreshold) throws IOException;
 
   /**
    * Opens an InputStream at the indicated path.
