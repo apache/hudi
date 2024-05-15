@@ -59,14 +59,13 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   private HoodieTableMetaClient metaClient;
 
   public FileBasedInternalSchemaStorageManager(StorageConfiguration<?> conf, StoragePath baseTablePath) {
-    StoragePath metaPath = new StoragePath(baseTablePath, ".hoodie");
+    StoragePath metaPath = new StoragePath(baseTablePath, HoodieTableMetaClient.METAFOLDER_NAME);
     this.baseSchemaPath = new StoragePath(metaPath, SCHEMA_NAME);
     this.conf = conf;
   }
 
   public FileBasedInternalSchemaStorageManager(HoodieTableMetaClient metaClient) {
-    StoragePath metaPath = new StoragePath(metaClient.getBasePath(), ".hoodie");
-    this.baseSchemaPath = new StoragePath(metaPath, SCHEMA_NAME);
+    this.baseSchemaPath = new StoragePath(metaClient.getMetaPath(), SCHEMA_NAME);
     this.conf = metaClient.getStorageConf();
     this.metaClient = metaClient;
   }

@@ -321,7 +321,7 @@ public class StreamerUtil {
     StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     try {
       if (storage.exists(new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))) {
-        return Option.of(new HoodieTableConfig(storage, metaPath.toString(), null, null));
+        return Option.of(new HoodieTableConfig(storage, metaPath, null, null));
       }
     } catch (IOException e) {
       throw new HoodieIOException("Get table config error", e);

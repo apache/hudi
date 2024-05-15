@@ -46,7 +46,7 @@ public class HoodieHeartbeatUtils {
   public static Long getLastHeartbeatTime(HoodieStorage storage, String basePath,
                                           String instantTime) throws IOException {
     StoragePath heartbeatFilePath = new StoragePath(
-        HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + StoragePath.SEPARATOR + instantTime);
+        HoodieTableMetaClient.getHeartbeatFolderPath(basePath), instantTime);
     if (storage.exists(heartbeatFilePath)) {
       return storage.getPathInfo(heartbeatFilePath).getModificationTime();
     } else {

@@ -273,12 +273,12 @@ public class HoodieTableConfig extends HoodieConfig {
   // Delay between retries while reading the properties file
   private static final int READ_RETRY_DELAY_MSEC = 1000;
 
-  public HoodieTableConfig(HoodieStorage storage, String metaPath, String payloadClassName, String recordMergerStrategyId) {
+  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
-      this.props = fetchConfigs(storage, metaPath);
+      this.props = fetchConfigs(storage, metaPath.toString());
       boolean needStore = false;
       if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
           && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
@@ -782,7 +782,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
-    update(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()), getProps());
+    update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
     LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePathV2(), partitionType.name(), enabled ? "enabled" : "disabled"));
   }
 
@@ -800,7 +800,7 @@ public class HoodieTableConfig extends HoodieConfig {
     });
 
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
-    update(metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()), getProps());
+    update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
     LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionTypes));
   }
 

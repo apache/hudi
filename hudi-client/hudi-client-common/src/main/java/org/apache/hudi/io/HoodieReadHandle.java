@@ -25,7 +25,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
@@ -71,11 +70,11 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
 
   protected HoodieFileReader createNewFileReader() throws IOException {
     return HoodieFileReaderFactory.getReaderFactory(this.config.getRecordMerger().getRecordType())
-        .getFileReader(config, hoodieTable.getStorageConf(), new StoragePath(getLatestBaseFile().getPath()));
+        .getFileReader(config, hoodieTable.getStorageConf(), getLatestBaseFile().getStoragePath());
   }
 
   protected HoodieFileReader createNewFileReader(HoodieBaseFile hoodieBaseFile) throws IOException {
     return HoodieFileReaderFactory.getReaderFactory(this.config.getRecordMerger().getRecordType())
-        .getFileReader(config, hoodieTable.getStorageConf(), new StoragePath(hoodieBaseFile.getPath()));
+        .getFileReader(config, hoodieTable.getStorageConf(), hoodieBaseFile.getStoragePath());
   }
 }

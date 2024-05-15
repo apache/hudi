@@ -44,7 +44,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
@@ -194,7 +193,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
 
     // build fileGroup from fsView
     List<StoragePathInfo> affectedPathInfoList = HoodieInputFormatUtils
-        .listAffectedFilesForCommits(job, new StoragePath(tableMetaClient.getBasePath()),
+        .listAffectedFilesForCommits(job, tableMetaClient.getBasePathV2(),
             metadataList);
     // step3
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(

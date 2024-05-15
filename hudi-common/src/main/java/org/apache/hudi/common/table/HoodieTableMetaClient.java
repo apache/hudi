@@ -132,7 +132,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
     this.storage = getStorage();
     TableNotFoundException.checkTableValidity(storage, this.basePath, metaPath);
-    this.tableConfig = new HoodieTableConfig(storage, metaPath.toString(), payloadClassName, recordMergerStrategy);
+    this.tableConfig = new HoodieTableConfig(storage, metaPath, payloadClassName, recordMergerStrategy);
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
@@ -212,8 +212,8 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * @return Meta path
    */
-  public String getMetaPath() {
-    return metaPath.toString();  // this invocation is cached
+  public StoragePath getMetaPath() {
+    return metaPath;
   }
 
   /**

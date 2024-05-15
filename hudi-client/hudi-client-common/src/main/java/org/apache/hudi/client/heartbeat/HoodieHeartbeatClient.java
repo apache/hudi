@@ -227,7 +227,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
   public static Boolean heartbeatExists(HoodieStorage storage, String basePath, String instantTime) throws IOException {
     StoragePath heartbeatFilePath = new StoragePath(
-        HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + StoragePath.SEPARATOR + instantTime);
+        HoodieTableMetaClient.getHeartbeatFolderPath(basePath), instantTime);
     return storage.exists(heartbeatFilePath);
   }
 
@@ -255,7 +255,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       Long newHeartbeatTime = System.currentTimeMillis();
       OutputStream outputStream =
           this.storage.create(
-              new StoragePath(heartbeatFolderPath + StoragePath.SEPARATOR + instantTime), true);
+              new StoragePath(heartbeatFolderPath, instantTime), true);
       outputStream.close();
       Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
       if (heartbeat.getLastHeartbeatTime() != null && isHeartbeatExpired(instantTime)) {
