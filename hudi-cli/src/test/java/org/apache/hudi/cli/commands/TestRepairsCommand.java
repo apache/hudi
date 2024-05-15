@@ -41,10 +41,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.testutils.Assertions;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.Level;
@@ -107,7 +107,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   public void init() throws IOException {
     String tableName = tableName();
     tablePath = tablePath(tableName);
-    fs = HadoopFSUtils.getFs(tablePath, hadoopConf());
+    fs = HadoopFSUtils.getFs(tablePath, storageConf());
 
     // Create table and connect
     new TableCommand().createTable(
@@ -241,9 +241,9 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testRemoveCorruptedPendingCleanAction() throws IOException {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
-    Configuration conf = HoodieCLI.conf;
+    StorageConfiguration<?> conf = HoodieCLI.conf;
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -273,9 +273,9 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testShowFailedCommits() {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
-    Configuration conf = HoodieCLI.conf;
+    StorageConfiguration<?> conf = HoodieCLI.conf;
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -323,7 +323,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
-        .initTable(HoodieCLI.conf, tablePath);
+        .initTable(HoodieCLI.conf.newInstance(), tablePath);
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
@@ -391,7 +391,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
-        .initTable(HoodieCLI.conf, tablePath);
+        .initTable(HoodieCLI.conf.newInstance(), tablePath);
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();

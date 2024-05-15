@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -119,7 +120,7 @@ public class WriteProfiles {
       List<HoodieCommitMetadata> metadataList,
       HoodieTableType tableType,
       boolean ignoreMissingFiles) {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath.toString(), hadoopConf);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath.toString(), HadoopFSUtils.getStorageConf(hadoopConf));
     Map<String, StoragePathInfo> uniqueIdToInfoMap = new HashMap<>();
     // If a file has been touched multiple times in the given commits, the return value should keep the one
     // from the latest commit, so here we traverse in reverse order
@@ -147,9 +148,9 @@ public class WriteProfiles {
   ) {
     switch (tableType) {
       case COPY_ON_WRITE:
-        return metadata.getFileIdToInfo(hadoopConf, basePath);
+        return metadata.getFileIdToInfo(HadoopFSUtils.getStorageConf(hadoopConf), basePath);
       case MERGE_ON_READ:
-        return metadata.getFullPathToInfo(hadoopConf, basePath);
+        return metadata.getFullPathToInfo(HadoopFSUtils.getStorageConf(hadoopConf), basePath);
       default:
         throw new AssertionError();
     }

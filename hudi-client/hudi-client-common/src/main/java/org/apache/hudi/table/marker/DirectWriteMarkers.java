@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.marker;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.conflict.detection.DirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -35,8 +34,10 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
@@ -120,11 +121,11 @@ public class DirectWriteMarkers extends WriteMarkers {
 
     if (subDirectories.size() > 0) {
       parallelism = Math.min(subDirectories.size(), parallelism);
-      SerializableConfiguration serializedConf = new SerializableConfiguration((Configuration) storage.unwrapConf());
+      StorageConfiguration<?> storageConf = storage.getConf();
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
       dataFiles.addAll(context.flatMap(subDirectories, directory -> {
         Path path = new Path(directory);
-        FileSystem fileSystem = HadoopFSUtils.getFs(path, serializedConf.get());
+        FileSystem fileSystem = HadoopFSUtils.getFs(path, storageConf.unwrapAs(Configuration.class));
         RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
         List<String> result = new ArrayList<>();
         while (itr.hasNext()) {
@@ -147,7 +148,7 @@ public class DirectWriteMarkers extends WriteMarkers {
 
     if (subDirectories.size() > 0) {
       parallelism = Math.min(subDirectories.size(), parallelism);
-      SerializableConfiguration serializedConf = new SerializableConfiguration((Configuration) storage.getConf().unwrap());
+      StorageConfiguration<Configuration> storageConf = new HadoopStorageConfiguration((Configuration) storage.getConf().unwrap(), true);
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
       logFiles.addAll(context.flatMap(subDirectories, directory -> {
         Queue<Path> candidatesDirs = new LinkedList<>();
@@ -155,7 +156,7 @@ public class DirectWriteMarkers extends WriteMarkers {
         List<String> result = new ArrayList<>();
         while (!candidatesDirs.isEmpty()) {
           Path path = candidatesDirs.remove();
-          FileSystem fileSystem = HadoopFSUtils.getFs(path, serializedConf.get());
+          FileSystem fileSystem = HadoopFSUtils.getFs(path, storageConf);
           RemoteIterator<FileStatus> itr = fileSystem.listStatusIterator(path);
           while (itr.hasNext()) {
             FileStatus status = itr.next();

@@ -113,7 +113,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected void refreshFsView() throws IOException {
-    metaClient = HoodieTestUtils.createMetaClient(metaClient.getHadoopConf(), basePath);
+    metaClient = HoodieTestUtils.createMetaClient(metaClient.getStorageConf(), basePath);
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) throws IOException {

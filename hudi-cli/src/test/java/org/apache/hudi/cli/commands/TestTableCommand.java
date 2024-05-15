@@ -80,7 +80,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
    */
   @BeforeEach
   public void init() {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
     tableName = tableName();
     tablePath = tablePath(tableName);
     metaPath = Paths.get(tablePath, METAFOLDER_NAME).toString();
@@ -185,7 +185,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
 
   private void testRefreshCommand(String command) throws IOException {
     // clean table matedata
-    FileSystem fs = FileSystem.get(hadoopConf());
+    FileSystem fs = FileSystem.get(storageConf().unwrap());
     fs.delete(new Path(tablePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME), true);
 
     // Create table
@@ -198,7 +198,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     // generate four savepoints
     for (int i = 100; i < 104; i++) {
       String instantTime = String.valueOf(i);
-      HoodieTestDataGenerator.createCommitFile(tablePath, instantTime, hadoopConf());
+      HoodieTestDataGenerator.createCommitFile(tablePath, instantTime, storageConf());
     }
 
     // Before refresh, no instant
@@ -219,7 +219,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
   @Test
   public void testFetchTableSchema() throws Exception {
     // Create table and connect
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");

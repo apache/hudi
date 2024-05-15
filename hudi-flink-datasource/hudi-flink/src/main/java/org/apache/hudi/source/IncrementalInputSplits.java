@@ -211,7 +211,8 @@ public class IncrementalInputSplits implements Serializable {
         return Result.EMPTY;
       }
       List<StoragePathInfo> files = WriteProfiles.getFilesFromMetadata(
-          path, metaClient.getHadoopConf(), metadataList, metaClient.getTableType(), false);
+          path, (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap(),
+          metadataList, metaClient.getTableType(), false);
       if (files == null) {
         LOG.warn("Found deleted files in metadata, fall back to full table scan.");
         // fallback to full table scan
@@ -268,7 +269,8 @@ public class IncrementalInputSplits implements Serializable {
     // we call c1 a 'hollow' instant which has lower version number but greater completion time,
     // filtering the timeline using just c2 could cause data loss,
     // check these hollow instants first.
-    Result hollowSplits = getHollowInputSplits(metaClient, metaClient.getHadoopConf(), issuedInstant, issuedOffset, commitTimeline, cdcEnabled);
+    Result hollowSplits = getHollowInputSplits(metaClient,
+        metaClient.getStorageConf().unwrapAs(org.apache.hadoop.conf.Configuration.class), issuedInstant, issuedOffset, commitTimeline, cdcEnabled);
 
     List<HoodieInstant> instants = filterInstantsWithRange(commitTimeline, issuedInstant);
     // get the latest instant that satisfies condition
@@ -310,7 +312,9 @@ public class IncrementalInputSplits implements Serializable {
 
       return Result.instance(inputSplits, endInstant, offsetToIssue);
     } else {
-      List<MergeOnReadInputSplit> inputSplits = getIncInputSplits(metaClient, metaClient.getHadoopConf(), commitTimeline, instants, instantRange, endInstant, cdcEnabled);
+      List<MergeOnReadInputSplit> inputSplits = getIncInputSplits(metaClient,
+          metaClient.getStorageConf().unwrapAs(org.apache.hadoop.conf.Configuration.class),
+          commitTimeline, instants, instantRange, endInstant, cdcEnabled);
       return Result.instance(mergeList(hollowSplits.getInputSplits(), inputSplits), endInstant, offsetToIssue);
     }
   }

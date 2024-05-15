@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
 

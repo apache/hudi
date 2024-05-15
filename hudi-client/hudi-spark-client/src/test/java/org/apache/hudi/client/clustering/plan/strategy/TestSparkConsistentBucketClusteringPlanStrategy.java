@@ -61,7 +61,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
     initPath();
     initSparkContexts();
     initHoodieStorage();
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
   }
 
   @AfterEach

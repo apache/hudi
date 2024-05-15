@@ -24,7 +24,6 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -289,7 +288,7 @@ public class MetadataCommand {
     }
 
     FileSystemBackedTableMetadata fsMetaReader = new FileSystemBackedTableMetadata(new HoodieLocalEngineContext(HoodieCLI.conf),
-            HoodieCLI.getTableMetaClient().getTableConfig(), new SerializableConfiguration(HoodieCLI.conf),
+            HoodieCLI.getTableMetaClient().getTableConfig(), HoodieCLI.conf,
         HoodieCLI.basePath, false);
     HoodieMetadataConfig fsConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
 

@@ -104,7 +104,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     initHoodieStorage();
     Properties props = getPropertiesForKeyGen(populateMetaFields);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, props);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ, props);
     config = getConfigBuilder()
         .withProperties(props)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
@@ -238,13 +238,14 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
         }).sum();
     Assertions.assertEquals(numFilesCreated, numberOfLogFiles);
     // The record number should be doubled if we disable the merge
-    hadoopConf.set("hoodie.realtime.merge.skip", "true");
+    storageConf.set("hoodie.realtime.merge.skip", "true");
     Assertions.assertEquals(totalRecords * 2, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
   }
 
   private int readRecordsNum(String[] partitions, boolean populateMetaFields) {
-    return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf,
-        Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()), basePath, new JobConf(hadoopConf), true, populateMetaFields).size();
+    return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf,
+        Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()), basePath,
+        new JobConf(storageConf.unwrap()), true, populateMetaFields).size();
   }
 
   /**
@@ -284,7 +285,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
   }
 
   private FileStatus[] listStatus(String p, boolean realtime) {
-    JobConf jobConf = new JobConf(hadoopConf);
+    JobConf jobConf = new JobConf(storageConf.unwrap());
     FileInputFormat.setInputPaths(jobConf, Paths.get(basePath, p).toString());
     FileInputFormat format = HoodieInputFormatUtils.getInputFormat(HoodieFileFormat.PARQUET, realtime, jobConf);
     try {

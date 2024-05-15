@@ -28,7 +28,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,8 +86,7 @@ public class ManifestFileWriter {
   public static Stream<String> fetchLatestBaseFilesForAllPartitions(HoodieTableMetaClient metaClient,
       boolean useFileListingFromMetadata, boolean assumeDatePartitioning, boolean useAbsolutePath) {
     try {
-      Configuration hadoopConf = metaClient.getHadoopConf();
-      HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
+      HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
       HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
           metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
           HoodieMetadataConfig.newBuilder().enable(useFileListingFromMetadata).withAssumeDatePartitioning(assumeDatePartitioning).build());
@@ -98,7 +96,7 @@ public class ManifestFileWriter {
         fsView.loadAllPartitions();
         allLatestBaseFiles = fsView.getLatestBaseFiles();
       } else {
-        List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getHadoopConf()),
+        List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getStorageConf()),
             metaClient.getBasePathV2().toString(), false, assumeDatePartitioning);
         LOG.info("Retrieve all partitions from fs: {}", partitions.size());
         allLatestBaseFiles =  partitions.parallelStream().flatMap(fsView::getLatestBaseFiles);

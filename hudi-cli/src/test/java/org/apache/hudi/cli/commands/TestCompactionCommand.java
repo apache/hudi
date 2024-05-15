@@ -161,7 +161,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     });
     // Simulate a compaction commit in metadata table timeline
     // so the archival in data table can happen
-    HoodieTestUtils.createCompactionCommitInMetadataTable(hadoopConf(), tablePath, "007");
+    HoodieTestUtils.createCompactionCommitInMetadataTable(storageConf(), tablePath, "007");
   }
 
   private void generateArchive() throws IOException {

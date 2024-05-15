@@ -38,13 +38,13 @@ import org.apache.hudi.io.hfile.KeyValue;
 import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,13 +69,13 @@ import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
 public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieNativeAvroHFileReader.class);
 
-  private final Configuration conf;
+  private final StorageConfiguration<?> conf;
   private final Option<StoragePath> path;
   private final Option<byte[]> bytesContent;
   private Option<HFileReader> sharedHFileReader;
   private final Lazy<Schema> schema;
 
-  public HoodieNativeAvroHFileReader(Configuration conf, StoragePath path, Option<Schema> schemaOption) {
+  public HoodieNativeAvroHFileReader(StorageConfiguration<?> conf, StoragePath path, Option<Schema> schemaOption) {
     this.conf = conf;
     this.path = Option.of(path);
     this.bytesContent = Option.empty();
@@ -84,7 +84,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         .orElseGet(() -> Lazy.lazily(() -> fetchSchema(getSharedHFileReader())));
   }
 
-  public HoodieNativeAvroHFileReader(Configuration conf, byte[] content, Option<Schema> schemaOption) {
+  public HoodieNativeAvroHFileReader(StorageConfiguration<?> conf, byte[] content, Option<Schema> schemaOption) {
     this.conf = conf;
     this.path = Option.empty();
     this.bytesContent = Option.of(content);

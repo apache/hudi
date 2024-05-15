@@ -31,11 +31,10 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.storage.{StoragePath, HoodieStorageUtils}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.PathUtils
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
@@ -101,7 +100,8 @@ class DefaultSource extends RelationProvider
     val readPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
     val allPaths = path.map(p => Seq(p)).getOrElse(Seq()) ++ readPaths
 
-    val storage = HoodieStorageUtils.getStorage(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
+    val storage = HoodieStorageUtils.getStorage(
+      allPaths.head, HadoopFSUtils.getStorageConf(sqlContext.sparkContext.hadoopConfiguration))
 
     val globPaths = if (path.exists(_.contains("*")) || readPaths.nonEmpty) {
       PathUtils.checkAndGlobPathIfNecessary(allPaths, storage)
@@ -127,7 +127,7 @@ class DefaultSource extends RelationProvider
     log.info("Obtained hudi table path: " + tablePath)
 
     val metaClient = HoodieTableMetaClient.builder().setMetaserverConfig(parameters.asJava)
-      .setConf(storage.unwrapConf.asInstanceOf[Configuration])
+      .setConf(storage.getConf.newInstance())
       .setBasePath(tablePath).build()
 
     DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
@@ -207,7 +207,8 @@ class DefaultSource extends RelationProvider
       throw new HoodieException(s"'path'  must be specified.")
     }
     val metaClient = HoodieTableMetaClient.builder().setConf(
-      sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
+      HadoopFSUtils.getStorageConf(sqlContext.sparkSession.sessionState.newHadoopConf()))
+      .setBasePath(path.get).build()
 
     val sqlSchema = DefaultSource.resolveSchema(metaClient, parameters, schema)
     (shortName(), sqlSchema)

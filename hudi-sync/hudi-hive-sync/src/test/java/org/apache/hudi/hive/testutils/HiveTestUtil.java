@@ -48,6 +48,7 @@ import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
@@ -178,7 +179,7 @@ public class HiveTestUtil {
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(configuration, basePath);
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(configuration), basePath);
 
     for (String tableName : createdTablesSet) {
       ddlExecutor.runSQL("drop table if exists " + tableName);
@@ -270,7 +271,7 @@ public class HiveTestUtil {
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(tableName)
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(configuration, basePath);
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(configuration), basePath);
 
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);
@@ -363,7 +364,7 @@ public class HiveTestUtil {
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(configuration, basePath);
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(configuration), basePath);
 
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);
@@ -399,7 +400,7 @@ public class HiveTestUtil {
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(configuration, basePath);
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(configuration), basePath);
 
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);

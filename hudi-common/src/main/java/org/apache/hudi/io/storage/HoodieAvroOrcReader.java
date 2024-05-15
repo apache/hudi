@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.OrcReaderIterator;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -48,10 +49,10 @@ import java.util.Set;
 public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
 
   private final StoragePath path;
-  private final Configuration conf;
+  private final StorageConfiguration<?> conf;
   private final BaseFileUtils orcUtils;
 
-  public HoodieAvroOrcReader(Configuration configuration, StoragePath path) {
+  public HoodieAvroOrcReader(StorageConfiguration<?> configuration, StoragePath path) {
     this.conf = configuration;
     this.path = path;
     this.orcUtils = BaseFileUtils.getInstance(HoodieFileFormat.ORC);
@@ -78,9 +79,10 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
       throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
     }
 
-    try (Reader reader = OrcFile.createReader(new Path(path.toUri()), OrcFile.readerOptions(conf))) {
+    Configuration hadoopConf = conf.unwrapAs(Configuration.class);
+    try (Reader reader = OrcFile.createReader(new Path(path.toUri()), OrcFile.readerOptions(hadoopConf))) {
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readerSchema);
-      RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
+      RecordReader recordReader = reader.rows(new Options(hadoopConf).schema(orcSchema));
       return new OrcReaderIterator<>(recordReader, readerSchema, orcSchema);
     } catch (IOException io) {
       throw new HoodieIOException("Unable to create an ORC reader.", io);

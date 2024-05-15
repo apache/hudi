@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.view;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,6 +30,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StorageConfiguration;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,7 +63,7 @@ public class FileSystemViewManager {
 
   private static final String HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS = "org.apache.hudi.common.table.view.HoodieMetaserverFileSystemView";
 
-  private final SerializableConfiguration conf;
+  private final StorageConfiguration<?> conf;
   // The View Storage config used to store file-system views
   private final FileSystemViewStorageConfig viewStorageConfig;
   // Factory Map to create file-system views
@@ -74,7 +75,7 @@ public class FileSystemViewManager {
       HoodieEngineContext context,
       FileSystemViewStorageConfig viewStorageConfig,
       Function2<HoodieTableMetaClient, FileSystemViewStorageConfig, SyncableFileSystemView> viewCreator) {
-    this.conf = context.getHadoopConf();
+    this.conf = context.getStorageConf();
     this.viewStorageConfig = viewStorageConfig;
     this.viewCreator = viewCreator;
     this.globalViewMap = new ConcurrentHashMap<>();
@@ -100,7 +101,7 @@ public class FileSystemViewManager {
    */
   public SyncableFileSystemView getFileSystemView(String basePath) {
     return globalViewMap.computeIfAbsent(basePath, (path) -> {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(conf.newCopy()).setBasePath(path).build();
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(conf.newInstance()).setBasePath(path).build();
       return viewCreator.apply(metaClient, viewStorageConfig);
     });
   }

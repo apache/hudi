@@ -64,7 +64,7 @@ class InitMetadataTableProcedure extends BaseProcedure with ProcedureBuilder wit
     val timer = HoodieTimer.start
     if (!readOnly) {
       val writeConfig = getWriteConfig(basePath)
-      SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf, writeConfig, new HoodieSparkEngineContext(jsc))
+      SparkHoodieBackedTableMetadataWriter.create(metaClient.getStorageConf, writeConfig, new HoodieSparkEngineContext(jsc))
     }
 
     val action = if (readOnly) "Opened" else "Initialized"

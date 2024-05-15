@@ -383,7 +383,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
   private Set<String> getFilePathsInPartition(String partition) throws IOException {
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(hadoopConf),
+        new HoodieLocalEngineContext(storageConf),
         HoodieMetadataConfig.newBuilder().enable(true).build(),
         basePath);
     return tableMetadata.getAllFilesInPartition(new StoragePath(basePath, partition))
@@ -531,7 +531,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-            table.getConfig(), context.getHadoopConf().get(), new StoragePath(baseFile.getPath()));
+            table.getConfig(), context.getStorageConf(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       assertNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));

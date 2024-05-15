@@ -28,8 +28,11 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -83,7 +86,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
    */
   lazy val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder()
     .setBasePath(tableLocation)
-    .setConf(hadoopConf)
+    .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
     .build()
 
   /**
@@ -206,7 +209,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         .fromProperties(properties)
         .setDatabaseName(catalogDatabaseName)
         .setTableCreateSchema(SchemaConverters.toAvroType(dataSchema, recordName = recordName).toString())
-        .initTable(hadoopConf, tableLocation)
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), tableLocation)
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(dataSchema, nullable = false, recordName, namespace)
@@ -222,7 +225,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         .setTableName(table.identifier.table)
         .setTableCreateSchema(schema.toString())
         .setPartitionFields(partitionColumns)
-        .initTable(hadoopConf, tableLocation)
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), tableLocation)
     }
   }
 

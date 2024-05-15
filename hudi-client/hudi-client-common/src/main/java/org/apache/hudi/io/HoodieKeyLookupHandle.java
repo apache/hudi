@@ -102,7 +102,7 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
 
     HoodieBaseFile baseFile = getLatestBaseFile();
     List<String> matchingKeys = HoodieIndexUtils.filterKeysFromFile(new StoragePath(baseFile.getPath()), candidateRecordKeys,
-        hoodieTable.getHadoopConf());
+        hoodieTable.getStorageConf());
     LOG.info(
         String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)", totalKeysChecked,
             candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));

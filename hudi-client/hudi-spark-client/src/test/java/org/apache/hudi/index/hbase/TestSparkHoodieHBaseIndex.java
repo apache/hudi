@@ -42,7 +42,9 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -109,7 +111,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   private static HBaseTestingUtility utility;
   private static Configuration hbaseConfig;
 
-  private Configuration hadoopConf;
+  private StorageConfiguration<Configuration> storageConf;
   private HoodieTestDataGenerator dataGen;
   private HoodieTableMetaClient metaClient;
   private HoodieSparkEngineContext context;
@@ -139,12 +141,12 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
 
   @BeforeEach
   public void setUp() throws Exception {
-    hadoopConf = jsc().hadoopConfiguration();
-    hadoopConf.addResource(utility.getConfiguration());
+    storageConf = HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration());
+    (storageConf.unwrap()).addResource(utility.getConfiguration());
     // reInit the context here to keep the hadoopConf the same with that in this class
     context = new HoodieSparkEngineContext(jsc());
     basePath = utility.getDataTestDirOnTestFS(TABLE_NAME).toString();
-    metaClient = getHoodieMetaClient(hadoopConf, basePath);
+    metaClient = getHoodieMetaClient(storageConf, basePath);
     dataGen = new HoodieTestDataGenerator();
   }
 
@@ -156,7 +158,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testSimpleTagLocationAndUpdate(HoodieTableType tableType) throws Exception {
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, tableType);
 
     final String newCommitTime = "001";
     final int numRecords = 10;

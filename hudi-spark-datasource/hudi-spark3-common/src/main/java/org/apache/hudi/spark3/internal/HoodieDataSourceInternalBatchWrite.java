@@ -23,8 +23,8 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.DataSourceInternalWriterHelper;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.connector.write.BatchWrite;
 import org.apache.spark.sql.connector.write.DataWriterFactory;
@@ -53,7 +53,7 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
   private Map<String, String> extraMetadata = new HashMap<>();
 
   public HoodieDataSourceInternalBatchWrite(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-      SparkSession jss, Configuration hadoopConfiguration, Map<String, String> properties, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
+                                            SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
@@ -61,7 +61,7 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.extraMetadata = DataSourceUtils.getExtraMetadata(properties);
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
-        jss, hadoopConfiguration, extraMetadata);
+        jss, storageConf, extraMetadata);
   }
 
   @Override

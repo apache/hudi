@@ -40,6 +40,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Lazy;
@@ -47,7 +48,6 @@ import org.apache.hudi.util.Lazy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -500,9 +500,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * Returns the files added as part of this record.
    */
-  public List<StoragePathInfo> getFileList(Configuration hadoopConf, StoragePath partitionPath)
+  public List<StoragePathInfo> getFileList(StorageConfiguration<?> storageConf, StoragePath partitionPath)
       throws IOException {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(partitionPath, hadoopConf);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(partitionPath, storageConf);
     return getFileList(storage, partitionPath);
   }
 

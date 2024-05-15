@@ -117,7 +117,7 @@ public class TableCommand {
 
     boolean existing = false;
     try {
-      HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(path).build();
+      HoodieTableMetaClient.builder().setConf(HoodieCLI.conf.newInstance()).setBasePath(path).build();
       existing = true;
     } catch (TableNotFoundException dfe) {
       // expected
@@ -134,7 +134,7 @@ public class TableCommand {
         .setArchiveLogFolder(archiveFolder)
         .setPayloadClassName(payloadClass)
         .setTimelineLayoutVersion(layoutVersion)
-        .initTable(HoodieCLI.conf, path);
+        .initTable(HoodieCLI.conf.newInstance(), path);
     // Now connect to ensure loading works
     return connect(path, layoutVersion, false, 0, 0, 0);
   }

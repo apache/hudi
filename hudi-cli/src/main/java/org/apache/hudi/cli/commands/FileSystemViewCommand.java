@@ -32,9 +32,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
@@ -238,7 +238,7 @@ public class FileSystemViewCommand {
                                                         boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(client.getHadoopConf())
+        .setConf(client.getStorageConf().newInstance())
         .setBasePath(client.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
     HoodieStorage storage = HoodieCLI.storage;
     String globPath = String.format("%s/%s/*", client.getBasePath(), globRegex);

@@ -63,7 +63,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
   public void init() throws IOException {
     tableName = tableName();
     tablePath = tablePath(tableName);
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
   }
 
   @Test
@@ -77,7 +77,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
-        .initTable(HoodieCLI.conf, tablePath);
+        .initTable(HoodieCLI.conf.newInstance(), tablePath);
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();

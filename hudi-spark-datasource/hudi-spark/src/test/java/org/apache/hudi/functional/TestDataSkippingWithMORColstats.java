@@ -91,7 +91,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
     Properties props = new Properties();
     props.putAll(options);
     try {
-      metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath.toString(), props);
+      metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath.toString(), props);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

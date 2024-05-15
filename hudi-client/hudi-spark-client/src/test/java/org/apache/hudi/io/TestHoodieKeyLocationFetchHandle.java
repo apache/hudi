@@ -87,7 +87,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testFetchHandle(boolean populateMetaFields) throws Exception {
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties() : getPropertiesForKeyGen());
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties() : getPropertiesForKeyGen());
     config = getConfigBuilder()
         .withProperties(getPropertiesForKeyGen())
         .withIndexConfig(HoodieIndexConfig.newBuilder()

@@ -24,13 +24,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -172,11 +172,11 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit.
    *
-   * @param hadoopConf
-   * @param basePath The base path
+   * @param storageConf storage configuration.
+   * @param basePath    The base path
    * @return the file full path to file status mapping
    */
-  public Map<String, StoragePathInfo> getFullPathToInfo(Configuration hadoopConf,
+  public Map<String, StoragePathInfo> getFullPathToInfo(StorageConfiguration<?> storageConf,
                                                         String basePath) {
     Map<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
@@ -187,7 +187,7 @@ public class HoodieCommitMetadata implements Serializable {
             ? FSUtils.constructAbsolutePath(basePath, relativeFilePath) : null;
         if (fullPath != null) {
           long blockSize =
-              HoodieStorageUtils.getStorage(fullPath.toString(), hadoopConf).getDefaultBlockSize(fullPath);
+              HoodieStorageUtils.getStorage(fullPath.toString(), storageConf).getDefaultBlockSize(fullPath);
           StoragePathInfo pathInfo = new StoragePathInfo(
               fullPath, stat.getFileSizeInBytes(), false, (short) 0, blockSize, 0);
           fullPathToInfoMap.put(fullPath.getName(), pathInfo);
@@ -202,15 +202,15 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit by file group ID.
    *
-   * <p>Note: different with {@link #getFullPathToInfo(Configuration, String)},
+   * <p>Note: different with {@link #getFullPathToInfo(StorageConfiguration, String)},
    * only the latest commit file for a file group is returned,
    * this is an optimization for COPY_ON_WRITE table to eliminate legacy files for filesystem view.
    *
-   * @param hadoopConf
-   * @param basePath The base path
+   * @param storageConf storage configuration.
+   * @param basePath    The base path
    * @return the file ID to file status mapping
    */
-  public Map<String, StoragePathInfo> getFileIdToInfo(Configuration hadoopConf,
+  public Map<String, StoragePathInfo> getFileIdToInfo(StorageConfiguration<?> storageConf,
                                                       String basePath) {
     Map<String, StoragePathInfo> fileIdToInfoMap = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {

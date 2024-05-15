@@ -34,7 +34,6 @@ import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -52,7 +51,6 @@ import org.apache.flink.table.catalog.exceptions.PartitionNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.factories.FactoryUtil;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -346,8 +344,7 @@ public class TestHoodieHiveCatalog {
 
     catalog.dropTable(tablePath, false);
     StoragePath path = new StoragePath(table1.getParameters().get(FlinkOptions.PATH.key()));
-    boolean created = StreamerUtil.fileExists(
-        HoodieStorageUtils.getStorage(path, new Configuration()), path);
+    boolean created = StreamerUtil.fileExists(HoodieTestUtils.getStorage(path), path);
     assertTrue(created, "Table should have been created");
   }
 
@@ -387,8 +384,7 @@ public class TestHoodieHiveCatalog {
 
     catalog.dropTable(tablePath, false);
     StoragePath path = new StoragePath(table.getParameters().get(FlinkOptions.PATH.key()));
-    boolean existing = StreamerUtil.fileExists(
-        HoodieStorageUtils.getStorage(path, new Configuration()), path);
+    boolean existing = StreamerUtil.fileExists(HoodieTestUtils.getStorage(path), path);
     assertEquals(external, existing);
   }
 

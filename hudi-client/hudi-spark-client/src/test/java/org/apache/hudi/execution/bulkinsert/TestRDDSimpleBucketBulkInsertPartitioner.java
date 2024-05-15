@@ -66,7 +66,7 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientT
   @ParameterizedTest
   @MethodSource("configParams")
   public void testSimpleBucketPartitioner(String tableType, boolean partitionSort) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, HoodieTableType.valueOf(tableType));
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath, HoodieTableType.valueOf(tableType));
     int bucketNum = 10;
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()

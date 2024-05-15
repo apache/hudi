@@ -113,7 +113,7 @@ public class UpgradeDowngrade {
       try {
         if (metaClient.getStorage().exists(new StoragePath(metadataTablePath))) {
           HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-              .setConf(metaClient.getHadoopConf()).setBasePath(metadataTablePath).build();
+              .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metadataTablePath).build();
           HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
               config, HoodieFailedWritesCleaningPolicy.EAGER);
           new UpgradeDowngrade(mdtMetaClient, mdtWriteConfig, context, upgradeDowngradeHelper)
