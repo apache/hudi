@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -291,7 +292,7 @@ public class BaseRollbackHelper implements Serializable {
         // lets map each log file to partition path and log file name
         .mapToPair((SerializablePairFunction<String, String, String>) t -> {
           Path logFilePath = new Path(basePathStr, t);
-          String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePathStr), logFilePath.getParent());
+          String partitionPath = HadoopFSUtils.getRelativePartitionPath(new Path(basePathStr), logFilePath.getParent());
           return Pair.of(partitionPath, logFilePath.getName());
         })
         // lets group by partition path and collect it as log file list per partition path
@@ -356,7 +357,7 @@ public class BaseRollbackHelper implements Serializable {
       String basePath = metaClient.getBasePathV2().toString();
       try {
         Path fullDeletePath = new Path(fileToDelete);
-        String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullDeletePath.getParent());
+        String partitionPath = HadoopFSUtils.getRelativePartitionPath(new Path(basePath), fullDeletePath.getParent());
         boolean isDeleted = true;
         if (doDelete) {
           try {

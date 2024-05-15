@@ -47,6 +47,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -368,7 +369,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       // inject a fake log file to test marker file for log file
       HoodieDeltaWriteStat correctWriteStat =
           (HoodieDeltaWriteStat) statuses.map(WriteStatus::getStat).take(1).get(0);
-      assertTrue(FSUtils.isLogFile(new Path(correctWriteStat.getPath())));
+      assertTrue(HadoopFSUtils.isLogFile(new Path(correctWriteStat.getPath())));
       HoodieLogFile correctLogFile = new HoodieLogFile(correctWriteStat.getPath());
       String correctWriteToken = FSUtils.getWriteTokenFromLogPath(correctLogFile.getPath());
 

@@ -19,11 +19,10 @@
 package org.apache.hudi.table.action.bootstrap;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -67,9 +66,9 @@ public class BootstrapUtils {
 
     for (FileStatus topLevelStatus: topLevelStatuses) {
       if (topLevelStatus.isFile() && filePathFilter.accept(topLevelStatus.getPath())) {
-        String relativePath = FSUtils.getRelativePartitionPath(basePath, topLevelStatus.getPath().getParent());
+        String relativePath = HadoopFSUtils.getRelativePartitionPath(basePath, topLevelStatus.getPath().getParent());
         Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
-        HoodieFileStatus hoodieFileStatus = FileStatusUtils.fromFileStatus(topLevelStatus);
+        HoodieFileStatus hoodieFileStatus = HadoopFSUtils.fromFileStatus(topLevelStatus);
         result.add(Pair.of(hoodieFileStatus, Pair.of(level, relativePath)));
       } else if (topLevelStatus.isDirectory() && metaPathFilter.accept(topLevelStatus.getPath())) {
         subDirectories.add(topLevelStatus.getPath().toString());
@@ -86,9 +85,9 @@ public class BootstrapUtils {
         while (itr.hasNext()) {
           FileStatus status = itr.next();
           if (pathFilter.accept(status.getPath())) {
-            String relativePath = FSUtils.getRelativePartitionPath(new Path(basePathStr), status.getPath().getParent());
+            String relativePath = HadoopFSUtils.getRelativePartitionPath(new Path(basePathStr), status.getPath().getParent());
             Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
-            HoodieFileStatus hoodieFileStatus = FileStatusUtils.fromFileStatus(status);
+            HoodieFileStatus hoodieFileStatus = HadoopFSUtils.fromFileStatus(status);
             res.add(Pair.of(hoodieFileStatus, Pair.of(level, relativePath)));
           }
         }

@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.config.ConfigProperty;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -28,7 +30,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestConfigUtils {
-
+  public static final ConfigProperty<String> TEST_BOOLEAN_CONFIG_PROPERTY = ConfigProperty
+      .key("hoodie.test.boolean.config")
+      .defaultValue("true")
+      .withAlternatives("hudi.test.boolean.config")
+      .markAdvanced()
+      .withDocumentation("Testing boolean config.");
+  
   @Test
   public void testToMapSucceeds() {
     Map<String, String> expectedMap = new HashMap<>();

@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
@@ -80,17 +81,17 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
         IOType type = IOType.valueOf(typeStr);
         String fileNameWithPartitionToRollback = WriteMarkers.stripMarkerSuffix(markerFilePath);
         Path fullFilePathToRollback = new Path(basePath, fileNameWithPartitionToRollback);
-        String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullFilePathToRollback.getParent());
+        String partitionPath = HadoopFSUtils.getRelativePartitionPath(new Path(basePath), fullFilePathToRollback.getParent());
         switch (type) {
           case MERGE:
           case CREATE:
             String fileId = null;
             String baseInstantTime = null;
-            if (FSUtils.isBaseFile(fullFilePathToRollback)) {
+            if (HadoopFSUtils.isBaseFile(fullFilePathToRollback)) {
               HoodieBaseFile baseFileToDelete = new HoodieBaseFile(fullFilePathToRollback.toString());
               fileId = baseFileToDelete.getFileId();
               baseInstantTime = baseFileToDelete.getCommitTime();
-            } else if (FSUtils.isLogFile(fullFilePathToRollback)) {
+            } else if (HadoopFSUtils.isLogFile(fullFilePathToRollback)) {
               throw new HoodieRollbackException("Log files should have only APPEND as IOTypes " + fullFilePathToRollback);
             }
             Objects.requireNonNull(fileId, "Cannot find valid fileId from path: " + fullFilePathToRollback);
