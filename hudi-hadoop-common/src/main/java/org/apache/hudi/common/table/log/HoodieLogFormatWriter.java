@@ -7,23 +7,24 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieLogFormat.WriterBuilder;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageSchemes;
 
@@ -62,8 +63,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
-  HoodieLogFormatWriter(HoodieStorage storage, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold,
-                        String rolloverLogWriteToken, HoodieLogFileWriteCallback logFileWriteCallback) {
+  public HoodieLogFormatWriter(HoodieStorage storage, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold,
+                               String rolloverLogWriteToken, HoodieLogFileWriteCallback logFileWriteCallback) {
     this.storage = storage;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
@@ -334,7 +335,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       // data node is going down. Note that we can only try to recover lease for a DistributedFileSystem.
       // ViewFileSystem unfortunately does not support this operation
       LOG.warn("Trying to recover log on path " + path);
-      if (FSUtils.recoverDFSFileLease((DistributedFileSystem) fs, path)) {
+      if (HadoopFSUtils.recoverDFSFileLease((DistributedFileSystem) fs, path)) {
         LOG.warn("Recovered lease on path " + path);
         // try again
         this.output = fs.append(path, bufferSize);

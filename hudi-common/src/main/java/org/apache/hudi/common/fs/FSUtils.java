@@ -43,8 +43,6 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +80,6 @@ public class FSUtils {
       Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
 
-  private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final String LOG_FILE_EXTENSION = ".log";
 
   private static final StoragePathFilter ALLOW_ALL_FILTER = file -> true;
@@ -729,29 +726,6 @@ public class FSUtils {
       }
     }
     return pathInfoList;
-  }
-
-  /**
-   * When a file was opened and the task died without closing the stream, another task executor cannot open because the
-   * existing lease will be active. We will try to recover the lease, from HDFS. If a data node went down, it takes
-   * about 10 minutes for the lease to be recovered. But if the client dies, this should be instant.
-   */
-  public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
-      throws IOException, InterruptedException {
-    LOG.info("Recover lease on dfs file {}", p);
-    // initiate the recovery
-    boolean recovered = false;
-    for (int nbAttempt = 0; nbAttempt < MAX_ATTEMPTS_RECOVER_LEASE; nbAttempt++) {
-      LOG.info("Attempt {} to recover lease on dfs file {}", nbAttempt, p);
-      recovered = dfs.recoverLease(p);
-      if (recovered) {
-        break;
-      }
-      // Sleep for 1 second before trying again. Typically it takes about 2-3 seconds to recover
-      // under default settings
-      Thread.sleep(1000);
-    }
-    return recovered;
   }
 
   /**
