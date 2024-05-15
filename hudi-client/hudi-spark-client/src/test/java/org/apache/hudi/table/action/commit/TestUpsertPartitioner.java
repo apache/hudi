@@ -469,9 +469,9 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     assertEquals(3, partitioner.numPartitions());
     assertEquals(
         Arrays.asList(
-            new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath),
+            new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath),
             new BucketInfo(BucketType.UPDATE, "fg-2", partitionPath),
-            new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath)
+            new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath)
         ),
         partitioner.getBucketInfos());
   }
