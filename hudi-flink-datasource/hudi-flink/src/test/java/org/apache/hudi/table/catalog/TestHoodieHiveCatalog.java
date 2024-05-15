@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
@@ -256,6 +257,45 @@ public class TestHoodieHiveCatalog {
     metaClient = StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(nonPartitionPath, nonPartitionTable), createHiveConf());
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
+  }
+
+  @Test
+  void testCreateTableWithIndexType() throws TableNotExistException, TableAlreadyExistException, DatabaseNotExistException {
+    Map<String, String> options = new HashMap<>();
+    options.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    // hoodie.index.type
+    options.put(HoodieIndexConfig.INDEX_TYPE.key(), "BUCKET");
+    CatalogTable table =
+        new CatalogTableImpl(schema, partitions, options, "hudi table");
+    hoodieCatalog.createTable(tablePath, table, false);
+    Map<String, String> params = hoodieCatalog.getHiveTable(tablePath).getParameters();
+    assertResult(params, "BUCKET");
+    options.remove(HoodieIndexConfig.INDEX_TYPE.key());
+
+    // index.type
+    options.put(FlinkOptions.INDEX_TYPE.key(), FlinkOptions.INDEX_TYPE.defaultValue());
+    table =
+        new CatalogTableImpl(schema, partitions, options, "hudi table");
+    ObjectPath newTablePath1 = new ObjectPath("default", "test" + System.currentTimeMillis());
+    hoodieCatalog.createTable(newTablePath1, table, false);
+
+    params = hoodieCatalog.getHiveTable(newTablePath1).getParameters();
+    assertResult(params, FlinkOptions.INDEX_TYPE.defaultValue());
+
+    // index.type + hoodie.index.type
+    options.put(HoodieIndexConfig.INDEX_TYPE.key(), "BUCKET");
+    table = new CatalogTableImpl(schema, partitions, options, "hudi table");
+    ObjectPath newTablePath2 = new ObjectPath("default", "test" + System.currentTimeMillis());
+    hoodieCatalog.createTable(newTablePath2, table, false);
+
+    params = hoodieCatalog.getHiveTable(newTablePath2).getParameters();
+    assertResult(params, "BUCKET");
+  }
+
+  private void assertResult(Map<String, String> params, String index) {
+    assertTrue(params.containsKey(HoodieIndexConfig.INDEX_TYPE.key()));
+    assertFalse(params.containsKey(FlinkOptions.INDEX_TYPE.key()));
+    assertThat(params.get(HoodieIndexConfig.INDEX_TYPE.key()), is(index));
   }
 
   @Test
