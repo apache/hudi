@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
 import org.apache.hudi.storage.StoragePath;

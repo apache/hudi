@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
@@ -79,7 +80,7 @@ public class HoodieInternalRowFileWriterFactory {
             writeConfig.getParquetBlockSize(),
             writeConfig.getParquetPageSize(),
             writeConfig.getParquetMaxFileSize(),
-            writeSupport.getHadoopConf(),
+            new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled()
         ));

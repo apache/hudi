@@ -18,7 +18,8 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.storage.StorageConfiguration;
+
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 /**
@@ -31,18 +32,18 @@ public class HoodieParquetConfig<T> {
   private final int blockSize;
   private final int pageSize;
   private final long maxFileSize;
-  private final Configuration hadoopConf;
+  private final StorageConfiguration<?> storageConf;
   private final double compressionRatio;
   private final boolean dictionaryEnabled;
 
-  public HoodieParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
-                             int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio, boolean dictionaryEnabled) {
+  public HoodieParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize, int pageSize,
+                             long maxFileSize, StorageConfiguration<?> storageConf, double compressionRatio, boolean dictionaryEnabled) {
     this.writeSupport = writeSupport;
     this.compressionCodecName = compressionCodecName;
     this.blockSize = blockSize;
     this.pageSize = pageSize;
     this.maxFileSize = maxFileSize;
-    this.hadoopConf = hadoopConf;
+    this.storageConf = storageConf;
     this.compressionRatio = compressionRatio;
     this.dictionaryEnabled = dictionaryEnabled;
   }
@@ -63,8 +64,8 @@ public class HoodieParquetConfig<T> {
     return maxFileSize;
   }
 
-  public Configuration getHadoopConf() {
-    return hadoopConf;
+  public StorageConfiguration<?> getStorageConf() {
+    return storageConf;
   }
 
   public double getCompressionRatio() {

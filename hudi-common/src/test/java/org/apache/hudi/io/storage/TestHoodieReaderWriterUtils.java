@@ -44,7 +44,7 @@ import static org.apache.hudi.io.hfile.TestHFileReader.DUMMY_BLOOM_FILTER;
  * Utils for reader and writer tests.
  */
 public class TestHoodieReaderWriterUtils {
-  static void writeHFileForTesting(String fileLocation,
+  public static void writeHFileForTesting(String fileLocation,
                                    int blockSize,
                                    Compression.Algorithm compressionAlgo,
                                    int numEntries,
