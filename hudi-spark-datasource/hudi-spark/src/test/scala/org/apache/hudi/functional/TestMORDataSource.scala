@@ -50,7 +50,6 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
-
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
@@ -1156,10 +1155,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf)
-      .build()
+    metaClient = createMetaClient(spark, basePath)
     val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
 
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
@@ -1423,10 +1419,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), mergerStrategyName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf)
-      .build()
+    metaClient = createMetaClient(spark, basePath)
     assertEquals(metaClient.getTableConfig.getRecordMergerStrategy, mergerStrategyName)
   }
 }

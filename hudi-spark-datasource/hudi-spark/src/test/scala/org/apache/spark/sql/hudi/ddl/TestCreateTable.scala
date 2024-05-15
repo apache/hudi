@@ -20,11 +20,13 @@ package org.apache.spark.sql.hudi.ddl
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.SimpleKeyGenerator
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
@@ -78,10 +80,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertFalse(table.properties.contains(OPERATION.key()))
 
     val tablePath = table.storage.properties("path")
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(tablePath)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
+    val metaClient = createMetaClient(spark, tablePath)
     val tableConfig = metaClient.getTableConfig
     assertResult(databaseName)(tableConfig.getDatabaseName)
     assertResult(tableName)(tableConfig.getTableName)
@@ -136,10 +135,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertFalse(table.properties.contains(OPERATION.key()))
 
     val tablePath = table.storage.properties("path")
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(tablePath)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
+    val metaClient = createMetaClient(spark, tablePath)
     val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
     assertResult(true)(tableConfig.contains(HoodieTableConfig.CREATE_SCHEMA.key))
     assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
@@ -797,10 +793,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertFalse(table.properties.contains(OPERATION.key()))
 
       val tablePath = table.storage.properties("path")
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(tablePath)
-        .setConf(spark.sessionState.newHadoopConf())
-        .build()
+      val metaClient = createMetaClient(spark, tablePath)
       val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
       assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
       assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
@@ -836,10 +829,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertFalse(table.properties.contains(OPERATION.key()))
 
       val tablePath = table.storage.properties("path")
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(tablePath)
-        .setConf(spark.sessionState.newHadoopConf())
-        .build()
+      val metaClient = createMetaClient(spark, tablePath)
       val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
       assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
       assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
@@ -916,10 +906,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 10, 1000, partitionValue)
         )
         // Check the missing properties for spark sql
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(tablePath)
-          .setConf(spark.sessionState.newHadoopConf())
-          .build()
+        val metaClient = createMetaClient(spark, tablePath)
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
@@ -990,10 +977,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 10, 1000, day, 12)
         )
         // Check the missing properties for spark sql
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(tablePath)
-          .setConf(spark.sessionState.newHadoopConf())
-          .build()
+        val metaClient = createMetaClient(spark, tablePath)
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
@@ -1061,10 +1045,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10, 1000)
       )
       // Check the missing properties for spark sql
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(tmp.getCanonicalPath)
-        .setConf(spark.sessionState.newHadoopConf())
-        .build()
+      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
       val properties = metaClient.getTableConfig.getProps.asScala.toMap
       assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
       assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
@@ -1203,10 +1184,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
   test("Test Infer KegGenClazz") {
     def checkKeyGenerator(targetGenerator: String, tableName: String) = {
       val tablePath = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).location.getPath
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(tablePath)
-        .setConf(spark.sessionState.newHadoopConf())
-        .build()
+      val metaClient = createMetaClient(spark, tablePath)
       val realKeyGenerator =
         metaClient.getTableConfig.getProps.asScala.toMap.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key).get
       assertResult(targetGenerator)(realKeyGenerator)
@@ -1385,9 +1363,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       // drop the table without purging hdfs directory
       spark.sql(s"drop table $tableName".stripMargin)
 
-      val tableSchemaAfterCreate1 = HoodieTableMetaClient.builder()
-        .setConf(spark.sparkContext.hadoopConfiguration)
-        .setBasePath(tablePath).build().getTableConfig.getTableCreateSchema
+      val tableSchemaAfterCreate1 = createMetaClient(spark, tablePath).getTableConfig.getTableCreateSchema
 
       // avro schema name and namespace should not change should not change
       spark.newSession().sql(
@@ -1406,9 +1382,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | )
        """.stripMargin)
 
-      val tableSchemaAfterCreate2 = HoodieTableMetaClient.builder()
-        .setConf(spark.sparkContext.hadoopConfiguration)
-        .setBasePath(tablePath).build().getTableConfig.getTableCreateSchema
+      val tableSchemaAfterCreate2 = createMetaClient(spark, tablePath).getTableConfig.getTableCreateSchema
 
       assertResult(tableSchemaAfterCreate1.get)(tableSchemaAfterCreate2.get)
     }

@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -78,6 +79,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
 import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -262,8 +264,8 @@ public class TestHoodieCatalog {
         () -> catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, false));
 
     // validate key generator for partitioned table
-    HoodieTableMetaClient metaClient =
-        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, tablePath), new org.apache.hadoop.conf.Configuration());
+    HoodieTableMetaClient metaClient = createMetaClient(
+        catalog.inferTablePath(catalogPathStr, tablePath));
     String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
 
@@ -279,8 +281,8 @@ public class TestHoodieCatalog {
     );
 
     catalog.createTable(singleKeyMultiplePartitionPath, singleKeyMultiplePartitionTable, false);
-    metaClient =
-        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath), new org.apache.hadoop.conf.Configuration());
+    metaClient = createMetaClient(
+        catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertThat(keyGeneratorClassName, is(ComplexAvroKeyGenerator.class.getName()));
 
@@ -296,8 +298,8 @@ public class TestHoodieCatalog {
     );
 
     catalog.createTable(multipleKeySinglePartitionPath, multipleKeySinglePartitionTable, false);
-    metaClient =
-        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath), new org.apache.hadoop.conf.Configuration());
+    metaClient = createMetaClient(
+        catalog.inferTablePath(catalogPathStr, singleKeyMultiplePartitionPath));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertThat(keyGeneratorClassName, is(ComplexAvroKeyGenerator.class.getName()));
 
@@ -314,8 +316,7 @@ public class TestHoodieCatalog {
 
     catalog.createTable(nonPartitionPath, nonPartitionCatalogTable, false);
 
-    metaClient =
-        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, nonPartitionPath), new org.apache.hadoop.conf.Configuration());
+    metaClient = createMetaClient(catalog.inferTablePath(catalogPathStr, nonPartitionPath));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
   }
@@ -423,7 +424,7 @@ public class TestHoodieCatalog {
 
     String tablePathStr = catalog.inferTablePath(catalogPathStr, tablePath);
     Configuration flinkConf = TestConfigurations.getDefaultConf(tablePathStr);
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tablePathStr, HadoopConfigurations.getHadoopConf(flinkConf));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HadoopConfigurations.getHadoopConf(flinkConf), tablePathStr);
     TestData.writeData(TestData.DATA_SET_INSERT, flinkConf);
     assertTrue(catalog.partitionExists(tablePath, partitionSpec));
 

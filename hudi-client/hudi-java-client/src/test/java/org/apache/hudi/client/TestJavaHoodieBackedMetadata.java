@@ -68,6 +68,7 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
@@ -354,7 +355,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     // The earliest deltacommit in the metadata table should be "0000001",
     // and the "00000000000000" init deltacommit should be archived.
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieTableMetaClient metadataMetaClient = createMetaClientForMetadataTable();
     HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
     assertEquals("0000001", metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
 
@@ -366,7 +367,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     getHoodieWriteClient(writeConfig);
     // Trigger a regular write operation. data set timeline archival should kick in.
     doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
-    archiveDataTable(writeConfig, HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build());
+    archiveDataTable(writeConfig, createMetaClient());
     assertEquals("0000004",
         metaClient.reloadActiveTimeline().getCommitsTimeline().firstInstant().get().getTimestamp());
     metadataTimeline = metadataMetaClient.reloadActiveTimeline();
@@ -405,13 +406,13 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // The earliest deltacommit in the metadata table should be "0000001",
     // and the "00000000000000" init deltacommit should be archived.
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieTableMetaClient metadataMetaClient = createMetaClientForMetadataTable();
     HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
     assertEquals("0000001", metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
 
     getHoodieWriteClient(writeConfig);
     // Trigger data table archive, should archive "0000001", "0000002"
-    archiveDataTable(writeConfig, HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build());
+    archiveDataTable(writeConfig, createMetaClient());
     // Trigger a regular write operation. metadata timeline archival should kick in and catch up with data table.
     doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
     metadataTimeline = metadataMetaClient.reloadActiveTimeline();
@@ -537,7 +538,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
     assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000003001");
 
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieTableMetaClient metadataMetaClient = createMetaClientForMetadataTable();
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
     metadataMetaClient.reloadActiveTimeline();
 
@@ -783,10 +784,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     // 2nd commit
     doWriteOperation(testTable, "0000001", INSERT);
 
-    final HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf)
-        .setBasePath(metadataTableBasePath)
-        .build();
+    final HoodieTableMetaClient metadataMetaClient = createMetaClientForMetadataTable();
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
     metadataMetaClient.reloadActiveTimeline();
     final HoodieTable table = HoodieJavaTable.create(metadataTableWriteConfig, context, metadataMetaClient);
@@ -1543,9 +1541,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertNoWriteErrors(writeStatuses);
 
     // ensure that 000003 is after rollback of the partially failed 2nd commit.
-    HoodieTableMetaClient metadataMetaClient =
-        HoodieTableMetaClient.builder().setBasePath(metaClient.getMetaPath() + "/metadata/")
-            .setConf(metaClient.getHadoopConf()).build();
+    HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(
+        metaClient.getHadoopConf(), metaClient.getMetaPath() + "/metadata/");
     HoodieInstant rollbackInstant =
         metadataMetaClient.getActiveTimeline().getRollbackTimeline().getInstants().get(0);
 
@@ -1716,7 +1713,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     // Ensure all commits were synced to the Metadata Table
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieTableMetaClient metadataMetaClient = createMetaClientForMetadataTable();
     assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 5);
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000002")));
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000003")));
@@ -1765,7 +1762,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
 
       // Ensure all commits were synced to the Metadata Table
-      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+      HoodieTableMetaClient metadataMetaClient = createMetaClientForMetadataTable();
       LOG.warn("total commits in metadata table " + metadataMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
 
       // 6 commits and 2 cleaner commits.
@@ -2035,8 +2032,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         client.insert(records, newCommitTime);
       }
 
-      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
-      HoodieTableMetaClient datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(config.getBasePath()).build();
+      HoodieTableMetaClient metadataMetaClient = createMetaClientForMetadataTable();
+      HoodieTableMetaClient datasetMetaClient = createMetaClient();
 
       // There should not be any compaction yet and we have not performed more than maxDeltaCommitsBeforeCompaction
       // deltacommits (1 will be due to bootstrap)
@@ -2640,7 +2637,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Execute compaction on metadata table.
     try (JavaHoodieBackedTableMetadataWriter metadataWriter =
-        (JavaHoodieBackedTableMetadataWriter) JavaHoodieBackedTableMetadataWriter.create(hadoopConf, client.getConfig(), context, Option.empty())) {
+             (JavaHoodieBackedTableMetadataWriter) JavaHoodieBackedTableMetadataWriter.create(hadoopConf, client.getConfig(), context, Option.empty())) {
       Properties metadataProps = metadataWriter.getWriteConfig().getProps();
       metadataProps.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3");
       HoodieWriteConfig metadataWriteConfig = HoodieWriteConfig.newBuilder()
@@ -2796,7 +2793,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertFalse(metadataWriteConfig.isMetadataTableEnabled(), "No metadata table for metadata table");
 
       // Metadata table should be in sync with the dataset
-      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+      HoodieTableMetaClient metadataMetaClient = createMetaClientForMetadataTable();
 
       // Metadata table is MOR
       assertEquals(metadataMetaClient.getTableType(), HoodieTableType.MERGE_ON_READ, "Metadata Table should be MOR");

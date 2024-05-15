@@ -17,16 +17,17 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
 
 import org.apache.spark.sql._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
@@ -84,7 +85,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
       .map(_.get(0).toString).sorted
     assert(Array("2015/03/16", "2015/03/17", "2016/03/15").sameElements(partitionsForCommit1))
 
-    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build()
+    val metaClient: HoodieTableMetaClient = createMetaClient(basePath)
     var activeTimeline = metaClient.getActiveTimeline
 
     // check that get the latest parquet file
@@ -154,7 +155,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
       .save(basePath)
     val commit1Time = HoodieDataSourceHelpers.latestCommit(storage, basePath)
 
-    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build()
+    val metaClient: HoodieTableMetaClient = createMetaClient(basePath)
     var activeTimeline = metaClient.getActiveTimeline
 
     // check that get the latest parquet file

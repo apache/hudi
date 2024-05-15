@@ -17,18 +17,18 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieSparkRecordMerger
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
-import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
+import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
@@ -233,19 +233,13 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 object HoodieSparkSqlTestBase {
 
   def getLastCommitMetadata(spark: SparkSession, tablePath: String) = {
-    val metaClient = HoodieTableMetaClient.builder()
-      .setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(tablePath)
-      .build()
+    val metaClient = createMetaClient(spark, tablePath)
 
     metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getRight
   }
 
   def getLastCleanMetadata(spark: SparkSession, tablePath: String) = {
-    val metaClient = HoodieTableMetaClient.builder()
-      .setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(tablePath)
-      .build()
+    val metaClient = createMetaClient(spark, tablePath)
 
     val cleanInstant = metaClient.reloadActiveTimeline().getCleanerTimeline.filterCompletedInstants().lastInstant().get()
     TimelineMetadataUtils.deserializeHoodieCleanMetadata(metaClient

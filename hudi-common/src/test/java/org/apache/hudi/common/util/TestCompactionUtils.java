@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
 import org.apache.hudi.common.testutils.CompactionTestUtils.DummyHoodieBaseFile;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePath;
 
@@ -216,7 +217,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     // schedule similar plan again so that there will be duplicates
     plan1.getOperations().get(0).setDataFilePath("bla");
     scheduleCompaction(metaClient, "005", plan1);
-    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+    metaClient = HoodieTestUtils.createMetaClient(metaClient.getHadoopConf(), basePath);
     assertThrows(IllegalStateException.class, () -> {
       CompactionUtils.getAllPendingCompactionOperations(metaClient);
     });

@@ -130,10 +130,9 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
 
       if (config.isMetadataTableEnabled() && simulateMetadataFailure) {
         // Simulate the failure of corresponding instant in the metadata table
-        HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-            .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))
-            .setConf(metaClient.getHadoopConf())
-            .build();
+        HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(
+            metaClient.getHadoopConf(),
+            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()));
         HoodieInstant deltaCommit = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, cleanInstantTs);
         metadataMetaClient.reloadActiveTimeline().revertToInflight(deltaCommit);
       }

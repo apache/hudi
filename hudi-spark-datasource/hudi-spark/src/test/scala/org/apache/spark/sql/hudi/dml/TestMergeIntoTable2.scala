@@ -18,7 +18,8 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -155,10 +156,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |select 1 as id, 'a1' as name
            |""".stripMargin
       )
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(tmp.getCanonicalPath)
-        .setConf(spark.sessionState.newHadoopConf())
-        .build()
+      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
       // check record key in hoodie.properties
       assertResult("id")(metaClient.getTableConfig.getRecordKeyFields.get().mkString(","))
 

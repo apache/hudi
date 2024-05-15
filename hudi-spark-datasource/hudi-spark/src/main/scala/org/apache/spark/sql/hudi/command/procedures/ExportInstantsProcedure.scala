@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.{StoragePath, HoodieStorage, HoodieStorageUtils}
+import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.specific.SpecificData
@@ -40,7 +40,6 @@ import java.io.File
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.break
 
@@ -76,7 +75,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val archivePath = new Path(basePath + "/.hoodie/.commits_.archive*")
     val actionSet: util.Set[String] = Set(actions.split(","): _*).asJava
     val numExports = if (limit == -1) Integer.MAX_VALUE else limit
