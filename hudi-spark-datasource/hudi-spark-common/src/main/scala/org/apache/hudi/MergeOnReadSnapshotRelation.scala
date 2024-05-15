@@ -23,6 +23,7 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.{createPartitionedFile, isPro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
