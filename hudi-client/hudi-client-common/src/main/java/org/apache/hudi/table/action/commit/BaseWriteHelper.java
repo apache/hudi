@@ -29,9 +29,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.time.Duration;
-import java.time.Instant;
-
 public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
 
   protected BaseWriteHelper(SerializableFunctionUnchecked<I, Integer> partitionNumberExtractor) {
@@ -51,17 +48,14 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       I dedupedRecords =
           combineOnCondition(shouldCombine, inputRecords, configuredShuffleParallelism, table);
 
-      Instant lookupBegin = Instant.now();
       I taggedRecords = dedupedRecords;
       if (table.getIndex().requiresTagging(operationType)) {
         // perform index loop up to get existing location of records
         context.setJobStatus(this.getClass().getSimpleName(), "Tagging: " + table.getConfig().getTableName());
         taggedRecords = tag(dedupedRecords, context, table);
       }
-      Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
 
       HoodieWriteMetadata<O> result = executor.execute(taggedRecords);
-      result.setIndexLookupDuration(indexLookupDuration);
       return result;
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {
