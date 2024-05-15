@@ -70,9 +70,10 @@ import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
@@ -82,8 +83,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -318,9 +317,9 @@ public class HoodieTableMetadataUtil {
    */
   public static boolean metadataPartitionExists(String basePath, HoodieEngineContext context, MetadataPartitionType partitionType) {
     final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    FileSystem fs = HadoopFSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
+    HoodieStorage storage = HoodieStorageUtils.getStorage(metadataTablePath, context.getHadoopConf().get());
     try {
-      return fs.exists(new Path(metadataTablePath, partitionType.getPartitionPath()));
+      return storage.exists(new StoragePath(metadataTablePath, partitionType.getPartitionPath()));
     } catch (Exception e) {
       throw new HoodieIOException(String.format("Failed to check metadata partition %s exists.", partitionType.getPartitionPath()));
     }
@@ -500,11 +499,11 @@ public class HoodieTableMetadataUtil {
       }
 
       String fileName = FSUtils.getFileName(pathWithPartition, partition);
-      if (!FSUtils.isBaseFile(new Path(fileName))) {
+      if (!FSUtils.isBaseFile(new StoragePath(fileName))) {
         return Collections.emptyListIterator();
       }
 
-      final Path writeFilePath = new Path(dataMetaClient.getBasePathV2(), pathWithPartition);
+      final StoragePath writeFilePath = new StoragePath(dataMetaClient.getBasePathV2(), pathWithPartition);
       try (HoodieFileReader fileReader =
                HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
                    hoodieConfig, dataMetaClient.getHadoopConf(), writeFilePath)) {
@@ -648,7 +647,7 @@ public class HoodieTableMetadataUtil {
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       deletedFiles.forEach(entry -> {
-        final Path deletedFilePath = new Path(entry);
+        final StoragePath deletedFilePath = new StoragePath(entry);
         if (FSUtils.isBaseFile(deletedFilePath)) {
           deleteFileList.add(Pair.of(partition, deletedFilePath.getName()));
         }
@@ -766,13 +765,13 @@ public class HoodieTableMetadataUtil {
 
         // Extract appended file name from the absolute paths saved in getAppendFiles()
         pm.getRollbackLogFiles().forEach((path, size) -> {
-          String fileName = new Path(path).getName();
+          String fileName = new StoragePath(path).getName();
           partitionToAppendedFiles.get(partitionId).merge(fileName, size, fileMergeFn);
         });
 
         // Extract original log files from failed commit
         pm.getLogFilesFromFailedCommit().forEach((path, size) -> {
-          String fileName = new Path(path).getName();
+          String fileName = new StoragePath(path).getName();
           partitionToAppendedFiles.get(partitionId).merge(fileName, size, fileMergeFn);
         });
       }
@@ -860,7 +859,7 @@ public class HoodieTableMetadataUtil {
       final String partitionName = partitionFileFlagTuple.f0;
       final String filename = partitionFileFlagTuple.f1;
       final boolean isDeleted = partitionFileFlagTuple.f2;
-      if (!FSUtils.isBaseFile(new Path(filename))) {
+      if (!FSUtils.isBaseFile(new StoragePath(filename))) {
         LOG.warn("Ignoring file {} as it is not a base file", filename);
         return Stream.<HoodieRecord>empty().iterator();
       }
@@ -869,7 +868,7 @@ public class HoodieTableMetadataUtil {
       ByteBuffer bloomFilterBuffer = ByteBuffer.allocate(0);
       if (!isDeleted) {
         final String pathWithPartition = partitionName + "/" + filename;
-        final Path addedFilePath = new Path(dataMetaClient.getBasePathV2(), pathWithPartition);
+        final StoragePath addedFilePath = new StoragePath(dataMetaClient.getBasePathV2(), pathWithPartition);
         bloomFilterBuffer = readBloomFilter(dataMetaClient.getHadoopConf(), addedFilePath);
 
         // If reading the bloom filter failed then do not add a record for this file
@@ -915,7 +914,7 @@ public class HoodieTableMetadataUtil {
       final String partitionName = partitionFileFlagTuple.f0;
       final String filename = partitionFileFlagTuple.f1;
       final boolean isDeleted = partitionFileFlagTuple.f2;
-      if (!FSUtils.isBaseFile(new Path(filename)) || !filename.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+      if (!FSUtils.isBaseFile(new StoragePath(filename)) || !filename.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         LOG.warn("Ignoring file {} as it is not a PARQUET file", filename);
         return Stream.<HoodieRecord>empty().iterator();
       }
@@ -925,7 +924,7 @@ public class HoodieTableMetadataUtil {
     });
   }
 
-  private static ByteBuffer readBloomFilter(Configuration conf, Path filePath) throws IOException {
+  private static ByteBuffer readBloomFilter(Configuration conf, StoragePath filePath) throws IOException {
     HoodieConfig hoodieConfig = getReaderConfigs(conf);
     try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, conf, filePath)) {
@@ -937,8 +936,9 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  private static List<Tuple3<String, String, Boolean>> fetchPartitionFileInfoTriplets(Map<String, List<String>> partitionToDeletedFiles,
-                                                                                      Map<String, Map<String, Long>> partitionToAppendedFiles) {
+  private static List<Tuple3<String, String, Boolean>> fetchPartitionFileInfoTriplets(
+      Map<String, List<String>> partitionToDeletedFiles,
+      Map<String, Map<String, Long>> partitionToAppendedFiles) {
     // Total number of files which are added or deleted
     final int totalFiles = partitionToDeletedFiles.values().stream().mapToInt(List::size).sum()
         + partitionToAppendedFiles.values().stream().mapToInt(Map::size).sum();
@@ -947,7 +947,8 @@ public class HoodieTableMetadataUtil {
         .flatMap(entry -> entry.getValue().stream().map(deletedFile -> Tuple3.of(entry.getKey(), deletedFile, true)))
         .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
     partitionToAppendedFiles.entrySet().stream()
-        .flatMap(entry -> entry.getValue().keySet().stream().map(addedFile -> Tuple3.of(entry.getKey(), addedFile, false)))
+        .flatMap(
+            entry -> entry.getValue().keySet().stream().map(addedFile -> Tuple3.of(entry.getKey(), addedFile, false)))
         .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
     return partitionFileFlagTupleList;
   }
@@ -1174,7 +1175,7 @@ public class HoodieTableMetadataUtil {
                                                                                          List<String> columnsToIndex) {
     try {
       if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        Path fullFilePath = new Path(datasetMetaClient.getBasePathV2(), filePath);
+        StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePathV2(), filePath);
         return
             new ParquetUtils().readRangeFromParquetMetadata(datasetMetaClient.getHadoopConf(), fullFilePath, columnsToIndex);
       }
@@ -1447,11 +1448,13 @@ public class HoodieTableMetadataUtil {
    * @return The backup directory if backup was requested
    */
   public static String deleteMetadataTable(HoodieTableMetaClient dataMetaClient, HoodieEngineContext context, boolean backup) {
-    final Path metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2());
-    FileSystem fs = HadoopFSUtils.getFs(metadataTablePath.toString(), context.getHadoopConf().get());
+    final StoragePath metadataTablePath =
+        HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2());
+    HoodieStorage storage = HoodieStorageUtils.getStorage(metadataTablePath.toString(),
+        context.getHadoopConf().get());
     dataMetaClient.getTableConfig().clearMetadataPartitions(dataMetaClient);
     try {
-      if (!fs.exists(metadataTablePath)) {
+      if (!storage.exists(metadataTablePath)) {
         return null;
       }
     } catch (FileNotFoundException e) {
@@ -1462,10 +1465,10 @@ public class HoodieTableMetadataUtil {
     }
 
     if (backup) {
-      final Path metadataBackupPath = new Path(metadataTablePath.getParent(), ".metadata_" + HoodieActiveTimeline.createNewInstantTime());
+      final StoragePath metadataBackupPath = new StoragePath(metadataTablePath.getParent(), ".metadata_" + HoodieActiveTimeline.createNewInstantTime());
       LOG.info("Backing up metadata directory to " + metadataBackupPath + " before deletion");
       try {
-        if (fs.rename(metadataTablePath, metadataBackupPath)) {
+        if (storage.rename(metadataTablePath, metadataBackupPath)) {
           return metadataBackupPath.toString();
         }
       } catch (Exception e) {
@@ -1476,7 +1479,7 @@ public class HoodieTableMetadataUtil {
 
     LOG.info("Deleting metadata table from {}", metadataTablePath);
     try {
-      fs.delete(metadataTablePath, true);
+      storage.deleteDirectory(metadataTablePath);
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to delete metadata table from path " + metadataTablePath, e);
     }
@@ -1502,11 +1505,11 @@ public class HoodieTableMetadataUtil {
       return deleteMetadataTable(dataMetaClient, context, backup);
     }
 
-    final Path metadataTablePartitionPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePath()), partitionType.getPartitionPath());
-    FileSystem fs = HadoopFSUtils.getFs(metadataTablePartitionPath.toString(), context.getHadoopConf().get());
+    final StoragePath metadataTablePartitionPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePath()), partitionType.getPartitionPath());
+    HoodieStorage storage = HoodieStorageUtils.getStorage(metadataTablePartitionPath.toString(), context.getHadoopConf().get());
     dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, false);
     try {
-      if (!fs.exists(metadataTablePartitionPath)) {
+      if (!storage.exists(metadataTablePartitionPath)) {
         return null;
       }
     } catch (FileNotFoundException e) {
@@ -1518,11 +1521,11 @@ public class HoodieTableMetadataUtil {
     }
 
     if (backup) {
-      final Path metadataPartitionBackupPath = new Path(metadataTablePartitionPath.getParent().getParent(),
+      final StoragePath metadataPartitionBackupPath = new StoragePath(metadataTablePartitionPath.getParent().getParent(),
           String.format(".metadata_%s_%s", partitionType.getPartitionPath(), HoodieActiveTimeline.createNewInstantTime()));
       LOG.info(String.format("Backing up MDT partition %s to %s before deletion", partitionType, metadataPartitionBackupPath));
       try {
-        if (fs.rename(metadataTablePartitionPath, metadataPartitionBackupPath)) {
+        if (storage.rename(metadataTablePartitionPath, metadataPartitionBackupPath)) {
           return metadataPartitionBackupPath.toString();
         }
       } catch (Exception e) {
@@ -1532,7 +1535,7 @@ public class HoodieTableMetadataUtil {
     } else {
       LOG.info("Deleting metadata table partition from {}", metadataTablePartitionPath);
       try {
-        fs.delete(metadataTablePartitionPath, true);
+        storage.deleteDirectory(metadataTablePartitionPath);
       } catch (Exception e) {
         throw new HoodieMetadataException("Failed to delete metadata table partition from path " + metadataTablePartitionPath, e);
       }
@@ -1774,7 +1777,7 @@ public class HoodieTableMetadataUtil {
       final String partition = partitionAndBaseFile.getKey();
       final HoodieBaseFile baseFile = partitionAndBaseFile.getValue();
       final String filename = baseFile.getFileName();
-      Path dataFilePath = new Path(basePath, StringUtils.isNullOrEmpty(partition) ? filename : (partition + Path.SEPARATOR) + filename);
+      StoragePath dataFilePath = new StoragePath(basePath, StringUtils.isNullOrEmpty(partition) ? filename : (partition + StoragePath.SEPARATOR) + filename);
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
@@ -1808,7 +1811,7 @@ public class HoodieTableMetadataUtil {
         List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
             .map(l -> l.getPath().toString()).collect(toList());
         HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
-            .withFileSystem(metaClient.getFs())
+            .withStorage(metaClient.getStorage())
             .withBasePath(basePath)
             .withLogFilePaths(logFilePaths)
             .withReaderSchema(HoodieAvroUtils.getRecordKeySchema())
@@ -1834,7 +1837,7 @@ public class HoodieTableMetadataUtil {
       }
       final HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
       final String filename = baseFile.getFileName();
-      Path dataFilePath = new Path(basePath, partition + Path.SEPARATOR + filename);
+      StoragePath dataFilePath = new StoragePath(basePath, partition + StoragePath.SEPARATOR + filename);
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
@@ -1845,11 +1848,11 @@ public class HoodieTableMetadataUtil {
     });
   }
 
-  private static Path filePath(String basePath, String partition, String filename) {
+  private static StoragePath filePath(String basePath, String partition, String filename) {
     if (partition.isEmpty()) {
-      return new Path(basePath, filename);
+      return new StoragePath(basePath, filename);
     } else {
-      return new Path(basePath, partition + StoragePath.SEPARATOR + filename);
+      return new StoragePath(basePath, partition + StoragePath.SEPARATOR + filename);
     }
   }
 

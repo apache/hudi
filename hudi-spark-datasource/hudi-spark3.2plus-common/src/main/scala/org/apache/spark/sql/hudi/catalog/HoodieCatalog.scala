@@ -18,11 +18,12 @@
 
 package org.apache.spark.sql.hudi.catalog
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.HoodieSpark3CatalogUtils.MatchBucketTransform
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
@@ -41,6 +42,7 @@ import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 
 import java.net.URI
 import java.util
+
 import scala.collection.JavaConverters.{mapAsJavaMapConverter, mapAsScalaMapConverter}
 import scala.collection.mutable
 

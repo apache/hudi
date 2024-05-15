@@ -39,14 +39,14 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -113,27 +113,27 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     return FSUtils.makeWriteToken(getPartitionId(), getStageId(), getAttemptId());
   }
 
-  public Path makeNewPath(String partitionPath) {
-    Path path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
+  public StoragePath makeNewPath(String partitionPath) {
+    StoragePath path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
     try {
-      if (!fs.exists(path)) {
-        fs.mkdirs(path); // create a new partition as needed.
+      if (!storage.exists(path)) {
+        storage.createDirectory(path); // create a new partition as needed.
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
 
-    return new Path(path.toString(), FSUtils.makeBaseFileName(instantTime, writeToken, fileId,
+    return new StoragePath(path.toString(), FSUtils.makeBaseFileName(instantTime, writeToken, fileId,
         hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().getFileExtension()));
   }
 
   /**
    * Make new file path with given file name.
    */
-  protected Path makeNewFilePath(String partitionPath, String fileName) {
-    String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
+  protected StoragePath makeNewFilePath(String partitionPath, String fileName) {
+    String relativePath = new StoragePath((partitionPath.isEmpty() ? "" : partitionPath + "/")
         + fileName).toString();
-    return new Path(config.getBasePath(), relativePath);
+    return new StoragePath(config.getBasePath(), relativePath);
   }
 
   /**
@@ -203,8 +203,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   public abstract IOType getIOType();
 
   @Override
-  public FileSystem getFileSystem() {
-    return hoodieTable.getMetaClient().getFs();
+  public HoodieStorage getStorage() {
+    return hoodieTable.getMetaClient().getStorage();
   }
 
   public HoodieWriteConfig getConfig() {
@@ -253,7 +253,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
         .withFileSize(latestLogFile.map(HoodieLogFile::getFileSize).orElse(0L))
         .withSizeThreshold(config.getLogFileMaxSize())
-        .withFs(fs)
+        .withStorage(storage)
         .withRolloverLogWriteToken(writeToken)
         .withLogWriteToken(latestLogFile.map(HoodieLogFile::getLogWriteToken).orElse(writeToken))
         .withSuffix(suffix)

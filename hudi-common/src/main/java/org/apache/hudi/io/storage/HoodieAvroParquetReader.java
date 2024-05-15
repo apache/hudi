@@ -28,12 +28,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.avro.HoodieAvroParquetReaderBuilder;
@@ -52,12 +52,12 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
  */
 public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
-  private final Path path;
+  private final StoragePath path;
   private final Configuration conf;
   private final BaseFileUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
-  public HoodieAvroParquetReader(Configuration configuration, Path path) {
+  public HoodieAvroParquetReader(Configuration configuration, StoragePath path) {
     // We have to clone the Hadoop Config as it might be subsequently modified
     // by the Reader (for proper config propagation to Parquet components)
     this.conf = tryOverrideDefaultConfigs(new Configuration(configuration));
@@ -165,7 +165,8 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
       AvroReadSupport.setAvroReadSchema(conf, requestedSchema.get());
       AvroReadSupport.setRequestedProjection(conf, requestedSchema.get());
     }
-    ParquetReader<IndexedRecord> reader = new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(conf).build();
+    ParquetReader<IndexedRecord> reader =
+        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(conf).build();
     ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;

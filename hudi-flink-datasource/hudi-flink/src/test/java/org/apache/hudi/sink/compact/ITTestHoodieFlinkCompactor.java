@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
@@ -53,6 +53,7 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -422,15 +423,17 @@ public class ITTestHoodieFlinkCompactor {
   private void assertNoDuplicateFile(Configuration conf) {
     Set<Pair<String, String>> fileIdCommitTimeSet = new HashSet<>();
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-    HoodieWrapperFileSystem fs = metaClient.getFs();
+    HoodieStorage storage = metaClient.getStorage();
     FSUtils.getAllPartitionPaths(HoodieFlinkEngineContext.DEFAULT, metaClient.getBasePath(), false, false).forEach(
         partition -> {
           try {
-            Arrays.stream(fs.listStatus(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition)))
-                .filter(f -> FSUtils.isBaseFile(f.getPath()))
+            storage.listDirectEntries(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition))
+                .stream()
+                .filter(f -> FSUtils.isBaseFile(new Path(f.getPath().toUri())))
                 .forEach(f -> {
                   HoodieBaseFile baseFile = new HoodieBaseFile(f);
-                  assertFalse(fileIdCommitTimeSet.contains(Pair.of(baseFile.getFileId(), baseFile.getCommitTime())));
+                  assertFalse(fileIdCommitTimeSet.contains(
+                      Pair.of(baseFile.getFileId(), baseFile.getCommitTime())));
                   fileIdCommitTimeSet.add(Pair.of(baseFile.getFileId(), baseFile.getCommitTime()));
                 });
           } catch (IOException e) {

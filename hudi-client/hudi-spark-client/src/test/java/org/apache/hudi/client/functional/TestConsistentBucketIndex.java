@@ -44,8 +44,8 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
-import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -101,7 +101,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     } else {
       initTestDataGenerator(new String[] {""});
     }
-    initFileSystem();
+    initHoodieStorage();
     Properties props = getPropertiesForKeyGen(populateMetaFields);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, props);

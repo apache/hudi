@@ -59,13 +59,13 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -303,7 +303,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
           HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-              .withFileSystem(table.getMetaClient().getFs())
+              .withStorage(table.getMetaClient().getStorage())
               .withBasePath(table.getMetaClient().getBasePath())
               .withLogFilePaths(clusteringOp.getDeltaFilePaths())
               .withReaderSchema(readerSchema)
@@ -381,7 +381,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   private HoodieFileReader getBaseOrBootstrapFileReader(SerializableConfiguration hadoopConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp)
       throws IOException {
     HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType)
-        .getFileReader(writeConfig, hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
+        .getFileReader(writeConfig, hadoopConf.get(), new StoragePath(clusteringOp.getDataFilePath()));
     // handle bootstrap path
     if (StringUtils.nonEmpty(clusteringOp.getBootstrapFilePath()) && StringUtils.nonEmpty(bootstrapBasePath)) {
       String bootstrapFilePath = clusteringOp.getBootstrapFilePath();
@@ -394,7 +394,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
           baseFileReader,
           HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(
-              writeConfig, hadoopConf.get(), new Path(bootstrapFilePath)), partitionFields,
+              writeConfig, hadoopConf.get(), new StoragePath(bootstrapFilePath)), partitionFields,
           partitionValues);
     }
     return baseFileReader;
@@ -411,7 +411,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
     SQLContext sqlContext = new SQLContext(jsc.sc());
 
-    Path[] baseFilePaths = clusteringOps
+    StoragePath[] baseFilePaths = clusteringOps
         .stream()
         .map(op -> {
           ArrayList<String> readPaths = new ArrayList<>();
@@ -424,31 +424,32 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         })
         .flatMap(Collection::stream)
         .filter(path -> !path.isEmpty())
-        .map(Path::new)
-        .toArray(Path[]::new);
+        .map(StoragePath::new)
+        .toArray(StoragePath[]::new);
 
     HashMap<String, String> params = new HashMap<>();
     params.put("hoodie.datasource.query.type", "snapshot");
     params.put(TIMESTAMP_AS_OF.key(), instantTime);
 
-    Path[] paths;
+    StoragePath[] paths;
     if (hasLogFiles) {
       String compactionFractor = Option.ofNullable(getWriteConfig().getString("compaction.memory.fraction"))
           .orElse("0.75");
       params.put("compaction.memory.fraction", compactionFractor);
 
-      Path[] deltaPaths = clusteringOps
+      StoragePath[] deltaPaths = clusteringOps
           .stream()
           .filter(op -> !op.getDeltaFilePaths().isEmpty())
           .flatMap(op -> op.getDeltaFilePaths().stream())
-          .map(Path::new)
-          .toArray(Path[]::new);
+          .map(StoragePath::new)
+          .toArray(StoragePath[]::new);
       paths = CollectionUtils.combine(baseFilePaths, deltaPaths);
     } else {
       paths = baseFilePaths;
     }
 
-    String readPathString = String.join(",", Arrays.stream(paths).map(Path::toString).toArray(String[]::new));
+    String readPathString =
+        String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
     params.put("hoodie.datasource.read.paths", readPathString);
     // Building HoodieFileIndex needs this param to decide query path
     params.put("glob.paths", readPathString);

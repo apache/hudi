@@ -46,9 +46,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -466,8 +466,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private boolean hasPendingFiles(String partitionPath) {
     try {
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
-      Path fullPartitionPath = new Path(hoodieTable.getMetaClient().getBasePathV2(), partitionPath);
-      fsView.addFilesToView(FSUtils.getAllDataFilesInPartition(hoodieTable.getMetaClient().getFs(), fullPartitionPath));
+      StoragePath fullPartitionPath = new StoragePath(hoodieTable.getMetaClient().getBasePathV2(), partitionPath);
+      fsView.addFilesToView(FSUtils.getAllDataFilesInPartition(
+          hoodieTable.getMetaClient().getStorage(), fullPartitionPath));
       // use #getAllFileGroups(partitionPath) instead of #getAllFileGroups() to exclude the replaced file groups.
       return fsView.getAllFileGroups(partitionPath).findAny().isPresent();
     } catch (Exception ex) {

@@ -40,13 +40,14 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -119,8 +120,7 @@ public abstract class AbstractHoodieLogRecordReader {
   private final Option<InstantRange> instantRange;
   // Read the operation metadata field from the avro record
   private final boolean withOperationField;
-  // FileSystem
-  private final FileSystem fs;
+  private final HoodieStorage storage;
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
   // Internal schema, used to support full schema evolution.
@@ -148,7 +148,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
 
-  protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
+  protected AbstractHoodieLogRecordReader(HoodieStorage storage, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField, boolean forceFullScan,
@@ -160,7 +160,9 @@ public abstract class AbstractHoodieLogRecordReader {
                                           Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
-    this.hoodieTableMetaClient = hoodieTableMetaClientOption.orElseGet(() -> HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build());
+    this.hoodieTableMetaClient = hoodieTableMetaClientOption.orElseGet(
+        () -> HoodieTableMetaClient.builder()
+            .setConf((Configuration) storage.getConf()).setBasePath(basePath).build());
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
@@ -175,7 +177,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
-    this.fs = fs;
+    this.storage = storage;
     this.bufferSize = bufferSize;
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
@@ -240,8 +242,10 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReader(fs,
-          logFilePaths.stream().map(logFile -> new HoodieLogFile(new CachingPath(logFile))).collect(Collectors.toList()),
+      logFormatReaderWrapper = new HoodieLogFormatReader(storage,
+          logFilePaths.stream()
+              .map(filePath -> new HoodieLogFile(new StoragePath(filePath)))
+              .collect(Collectors.toList()),
           readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
@@ -547,8 +551,10 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReader(fs,
-          logFilePaths.stream().map(logFile -> new HoodieLogFile(new CachingPath(logFile))).collect(Collectors.toList()),
+      logFormatReaderWrapper = new HoodieLogFormatReader(storage,
+          logFilePaths.stream()
+              .map(logFile -> new HoodieLogFile(new StoragePath(logFile)))
+              .collect(Collectors.toList()),
           readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       /**
@@ -1003,7 +1009,7 @@ public abstract class AbstractHoodieLogRecordReader {
    */
   public abstract static class Builder {
 
-    public abstract Builder withFileSystem(FileSystem fs);
+    public abstract Builder withStorage(HoodieStorage storage);
 
     public abstract Builder withBasePath(String basePath);
 

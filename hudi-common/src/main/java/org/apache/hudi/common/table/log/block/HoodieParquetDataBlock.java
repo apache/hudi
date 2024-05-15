@@ -30,11 +30,11 @@ import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -151,7 +151,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     //       is appropriately carried over
     Configuration inlineConf = FSUtils.buildInlineConf(blockContentLoc.getHadoopConf());
 
-    Path inlineLogFilePath = InLineFSUtils.getInlineFilePath(
+    StoragePath inlineLogFilePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),

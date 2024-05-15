@@ -54,6 +54,9 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -118,6 +121,7 @@ public class HiveTestUtil {
   public static String basePath;
   public static TypedProperties hiveSyncProps;
   public static HiveTestService hiveTestService;
+  public static HoodieStorage storage;
   public static FileSystem fileSystem;
   public static QueryBasedDDLExecutor ddlExecutor;
 
@@ -157,6 +161,7 @@ public class HiveTestUtil {
 
     hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, hiveTestService.getHiveConf());
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
+    storage = HoodieStorageUtils.getStorage(fileSystem);
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     if (ddlExecutor != null) {
@@ -291,16 +296,16 @@ public class HiveTestUtil {
   }
 
   public static void removeCommitFromActiveTimeline(String instantTime, String actionType) {
-    List<Path> pathsToDelete = new ArrayList<>();
-    Path metaFolderPath = new Path(basePath, METAFOLDER_NAME);
+    List<StoragePath> pathsToDelete = new ArrayList<>();
+    StoragePath metaFolderPath = new StoragePath(basePath, METAFOLDER_NAME);
     String actionSuffix = "." + actionType;
-    pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix));
-    pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix + ".requested"));
-    pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix + ".inflight"));
+    pathsToDelete.add(new StoragePath(metaFolderPath, instantTime + actionSuffix));
+    pathsToDelete.add(new StoragePath(metaFolderPath, instantTime + actionSuffix + ".requested"));
+    pathsToDelete.add(new StoragePath(metaFolderPath, instantTime + actionSuffix + ".inflight"));
     pathsToDelete.forEach(path -> {
       try {
-        if (fileSystem.exists(path)) {
-          fileSystem.delete(path, false);
+        if (storage.exists(path)) {
+          storage.deleteFile(path);
         }
       } catch (IOException e) {
         LOG.warn("Error deleting file: ", e);
@@ -460,8 +465,8 @@ public class HiveTestUtil {
     for (Entry<String, List<HoodieWriteStat>> wEntry : partitionWriteStats.entrySet()) {
       String partitionPath = wEntry.getKey();
       for (HoodieWriteStat wStat : wEntry.getValue()) {
-        Path path = new Path(wStat.getPath());
-        HoodieBaseFile dataFile = new HoodieBaseFile(fileSystem.getFileStatus(path));
+        StoragePath path = new StoragePath(wStat.getPath());
+        HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(path));
         HoodieLogFile logFile = generateLogData(path, isLogSchemaSimple);
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
         writeStat.setFileId(dataFile.getFileId());
@@ -565,16 +570,18 @@ public class HiveTestUtil {
     writer.close();
   }
 
-  private static HoodieLogFile generateLogData(Path parquetFilePath, boolean isLogSchemaSimple)
+  private static HoodieLogFile generateLogData(StoragePath parquetFilePath,
+                                               boolean isLogSchemaSimple)
       throws IOException, InterruptedException, URISyntaxException {
     Schema schema = getTestDataSchema(isLogSchemaSimple);
-    HoodieBaseFile dataFile = new HoodieBaseFile(fileSystem.getFileStatus(parquetFilePath));
+    HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
     // Write a log file for this parquet file
     Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())
-        .overBaseCommit(dataFile.getCommitTime()).withFs(fileSystem).build();
+        .overBaseCommit(dataFile.getCommitTime()).withStorage(storage).build();
     List<HoodieRecord> records = (isLogSchemaSimple ? SchemaTestUtil.generateTestRecords(0, 100)
-        : SchemaTestUtil.generateEvolvedTestRecords(100, 100)).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
+        : SchemaTestUtil.generateEvolvedTestRecords(100, 100)).stream()
+        .map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());

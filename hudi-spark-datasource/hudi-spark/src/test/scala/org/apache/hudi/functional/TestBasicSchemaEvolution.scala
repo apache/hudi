@@ -17,10 +17,12 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.functional.TestBasicSchemaEvolution.{dropColumn, injectColumnAt}
@@ -29,6 +31,9 @@ import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport}
 
 import org.apache.hadoop.fs.FileSystem
+
+import org.apache.hadoop.fs.FileSystem
+import org.apache.spark.sql.{functions, HoodieUnsafeUtils, Row, SaveMode, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode, SparkSession, SparkSessionExtensions, functions}
@@ -61,7 +66,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
-  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
@@ -72,7 +77,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown(): Unit = {

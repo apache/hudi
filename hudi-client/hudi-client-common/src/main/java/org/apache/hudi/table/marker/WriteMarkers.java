@@ -26,8 +26,8 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,12 +46,12 @@ public abstract class WriteMarkers implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(WriteMarkers.class);
 
   protected final String basePath;
-  protected final transient Path markerDirPath;
+  protected final transient StoragePath markerDirPath;
   protected final String instantTime;
 
   public WriteMarkers(String basePath, String markerFolderPath, String instantTime) {
     this.basePath = basePath;
-    this.markerDirPath = new Path(markerFolderPath);
+    this.markerDirPath = new StoragePath(markerFolderPath);
     this.instantTime = instantTime;
   }
 
@@ -63,7 +63,7 @@ public abstract class WriteMarkers implements Serializable {
    * @param type          write IO type.
    * @return the marker path.
    */
-  public Option<Path> create(String partitionPath, String fileName, IOType type) {
+  public Option<StoragePath> create(String partitionPath, String fileName, IOType type) {
     return create(partitionPath, fileName, type, false);
   }
 
@@ -79,7 +79,7 @@ public abstract class WriteMarkers implements Serializable {
    * @param activeTimeline Active timeline for the write operation.
    * @return the marker path.
    */
-  public Option<Path> create(String partitionPath, String fileName, IOType type, HoodieWriteConfig writeConfig,
+  public Option<StoragePath> create(String partitionPath, String fileName, IOType type, HoodieWriteConfig writeConfig,
                              String fileId, HoodieActiveTimeline activeTimeline) {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
         && writeConfig.isEarlyConflictDetectionEnable()) {
@@ -104,7 +104,7 @@ public abstract class WriteMarkers implements Serializable {
    * @param type write IO type
    * @return the marker path or empty option if already exists
    */
-  public Option<Path> createIfNotExists(String partitionPath, String fileName, IOType type) {
+  public Option<StoragePath> createIfNotExists(String partitionPath, String fileName, IOType type) {
     return create(partitionPath, fileName, type, true);
   }
 
@@ -120,8 +120,8 @@ public abstract class WriteMarkers implements Serializable {
    * @param activeTimeline Active timeline for the write operation.
    * @return the marker path.
    */
-  public Option<Path> createIfNotExists(String partitionPath, String fileName, IOType type, HoodieWriteConfig writeConfig,
-                             String fileId, HoodieActiveTimeline activeTimeline) {
+  public Option<StoragePath> createIfNotExists(String partitionPath, String fileName, IOType type, HoodieWriteConfig writeConfig,
+                                               String fileId, HoodieActiveTimeline activeTimeline) {
     if (writeConfig.isEarlyConflictDetectionEnable()
         && writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
@@ -181,10 +181,10 @@ public abstract class WriteMarkers implements Serializable {
    * @param type          The IO type
    * @return path of the marker file
    */
-  protected Path getMarkerPath(String partitionPath, String fileName, IOType type) {
-    Path path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
+  protected StoragePath getMarkerPath(String partitionPath, String fileName, IOType type) {
+    StoragePath path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
     String markerFileName = getMarkerFileName(fileName, type);
-    return new Path(path, markerFileName);
+    return new StoragePath(path, markerFileName);
   }
 
   /**
@@ -227,13 +227,13 @@ public abstract class WriteMarkers implements Serializable {
   /**
    * Creates a marker.
    *
-   * @param partitionPath  partition path in the table
-   * @param fileName file name
-   * @param type write IO type
+   * @param partitionPath partition path in the table
+   * @param fileName      file name
+   * @param type          write IO type
    * @param checkIfExists whether to check if the marker already exists
    * @return the marker path or empty option if already exists and {@code checkIfExists} is true
    */
-  abstract Option<Path> create(String partitionPath, String fileName, IOType type, boolean checkIfExists);
+  abstract Option<StoragePath> create(String partitionPath, String fileName, IOType type, boolean checkIfExists);
 
   /**
    * Creates a marker with early conflict detection for multi-writers. If conflict is detected,
@@ -248,6 +248,6 @@ public abstract class WriteMarkers implements Serializable {
    * @param activeTimeline Active timeline for the write operation.
    * @return the marker path or empty option if already exists and {@code checkIfExists} is true.
    */
-  public abstract Option<Path> createWithEarlyConflictDetection(String partitionPath, String fileName, IOType type, boolean checkIfExists,
-                                                                HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline);
+  public abstract Option<StoragePath> createWithEarlyConflictDetection(String partitionPath, String fileName, IOType type, boolean checkIfExists,
+                                                                       HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline);
 }

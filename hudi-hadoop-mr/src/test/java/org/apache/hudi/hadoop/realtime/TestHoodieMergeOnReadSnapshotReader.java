@@ -38,10 +38,12 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.mapred.FileInputFormat;
@@ -58,8 +60,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
 import static org.apache.hudi.hadoop.testutils.InputFormatTestUtil.writeDataBlockToLogFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,7 +74,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
       "_hoodie_commit_time,_hoodie_commit_seqno,_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,field1,field2,name,favorite_number,favorite_color,favorite_movie";
   private static final String COLUMN_TYPES = "string,string,string,string,string,string,string,string,int,string,string";
   private JobConf baseJobConf;
-  private FileSystem fs;
+  private HoodieStorage storage;
   private Configuration hadoopConf;
 
   @TempDir
@@ -87,14 +89,14 @@ public class TestHoodieMergeOnReadSnapshotReader {
     baseJobConf.set(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1024 * 1024));
     baseJobConf.set(serdeConstants.LIST_COLUMNS, COLUMNS);
     baseJobConf.set(serdeConstants.LIST_COLUMN_TYPES, COLUMN_TYPES);
-    fs = getFs(basePath.toUri().toString(), baseJobConf);
+    storage = HoodieStorageUtils.getStorage(getFs(basePath.toUri().toString(), baseJobConf));
   }
 
   @AfterEach
   public void tearDown() throws Exception {
-    if (fs != null) {
-      fs.delete(new Path(basePath.toString()), true);
-      fs.close();
+    if (storage != null) {
+      storage.deleteDirectory(new StoragePath(basePath.toUri()));
+      storage.close();
     }
   }
 
@@ -132,7 +134,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
     FileSlice fileSlice = new FileSlice(
         new HoodieFileGroupId(partitionPath, FILE_ID),
         baseInstant,
-        new HoodieBaseFile(fs.getFileStatus(new Path(baseFilePath))),
+        new HoodieBaseFile(storage.getPathInfo(new StoragePath(baseFilePath))),
         new ArrayList<>());
     logVersionsWithAction.forEach(logVersionWithAction -> {
       try {
@@ -147,7 +149,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
 
         HoodieLogFormat.Writer writer = writeDataBlockToLogFile(
             partitionDir,
-            fs,
+            storage,
             schema,
             FILE_ID,
             baseInstant,

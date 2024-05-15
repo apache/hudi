@@ -26,7 +26,8 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.JsonDeserializationFunction;
@@ -51,7 +52,6 @@ import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
-import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -202,7 +202,8 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
         // ignored
       }
     }
-    FileSystem fs = HadoopFSUtils.getFs(tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
-    TestData.checkWrittenDataMOR(fs, tempFile, expected, 4);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+        tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
+    TestData.checkWrittenDataMOR(storage, tempFile, expected, 4);
   }
 }

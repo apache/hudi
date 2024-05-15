@@ -17,22 +17,24 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceWriteOptions, SparkDatasetMixin}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.util
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.{HoodieMetricsConfig, HoodieMetricsDatadogConfig}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceWriteOptions, SparkDatasetMixin}
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Test}
+import org.junit.jupiter.api.function.Executable
 import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
+
 import scala.collection.JavaConverters._
 
 /**
@@ -56,7 +58,7 @@ class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMix
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown() = {
@@ -65,7 +67,7 @@ class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMix
     cleanupFileSystem()
   }
 
-  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))

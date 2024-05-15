@@ -17,20 +17,19 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.{StoragePath, HoodieStorageUtils}
 
+import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getPartitionPathToDrop, normalizePartitionSpec}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 
 /**
  * Command for truncate hudi table.
@@ -67,10 +66,10 @@ case class TruncateHoodieTableCommand(
 
     // If we have not specified the partition, truncate will delete all the data in the table path
     if (partitionSpec.isEmpty) {
-      val targetPath = new Path(basePath)
+      val targetPath = new StoragePath(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
-      val fs = HadoopFSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
+      val storage = HoodieStorageUtils.getStorage(basePath, sparkSession.sparkContext.hadoopConfiguration)
+      FSUtils.deleteDir(engineContext, storage, targetPath, sparkSession.sparkContext.defaultParallelism)
 
       // ReInit hoodie.properties
       val metaClient = HoodieTableMetaClient.withPropertyBuilder()

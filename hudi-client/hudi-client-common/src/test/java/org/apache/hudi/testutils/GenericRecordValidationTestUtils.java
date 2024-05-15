@@ -30,11 +30,11 @@ import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.Text;
@@ -145,7 +145,7 @@ public class GenericRecordValidationTestUtils {
     for (String path : paths) {
       try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
           HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-              .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, conf, new Path(path), HoodieFileFormat.HFILE)) {
+              .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, conf, new StoragePath(path), HoodieFileFormat.HFILE)) {
         valuesAsList.addAll(HoodieAvroHFileReaderImplBase.readAllRecords(reader)
             .stream().map(e -> (GenericRecord) e).collect(Collectors.toList()));
       } catch (IOException e) {

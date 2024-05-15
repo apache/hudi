@@ -51,9 +51,12 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
                                                       HoodieWriteConfig cfg,
                                                       boolean commitSecondUpsert) throws IOException {
     //just generate two partitions
-    dataGen = new HoodieTestDataGenerator(new String[]{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
+    dataGen = new HoodieTestDataGenerator(
+        new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
     //1. prepare data
-    HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, new String[]{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH}, basePath);
+    HoodieTestDataGenerator.writePartitionMetadataDeprecated(
+        storage, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH},
+        basePath);
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     /**
      * Write 1 (only inserts)
@@ -106,8 +109,11 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
                                                             HoodieWriteConfig cfg,
                                                             boolean commitSecondInsertOverwrite) throws IOException {
     //just generate two partitions
-    dataGen = new HoodieTestDataGenerator(new String[]{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
-    HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, new String[]{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH}, basePath);
+    dataGen = new HoodieTestDataGenerator(
+        new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
+    HoodieTestDataGenerator.writePartitionMetadataDeprecated(
+        storage, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH},
+        basePath);
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     /**
      * Write 1 (upsert)

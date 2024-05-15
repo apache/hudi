@@ -17,7 +17,6 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -30,8 +29,10 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, not}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -39,6 +40,7 @@ import org.junit.jupiter.api._
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
 
@@ -64,7 +66,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   override def setUp() {
     initPath()
     initSparkContexts()
-    initFileSystem()
+    initHoodieStorage()
     initTestDataGenerator()
 
     setTableName("hoodie_test")
@@ -121,15 +123,16 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
     val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
     val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
-    assertTrue(fs.delete(new Path(metaClient.getMetaPath, lastInstant.getFileName), false))
-    assertTrue(fs.delete(new Path(metadataTableMetaClient.getMetaPath, metadataTableLastInstant.getFileName), false))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
+    assertTrue(storage.deleteFile(new StoragePath(
+      metadataTableMetaClient.getMetaPath, metadataTableLastInstant.getFileName)))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
   protected def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    assertTrue(fs.delete(new Path(metaClient.getMetaPath, lastInstant.getFileName), false))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 

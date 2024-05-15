@@ -28,9 +28,9 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
@@ -177,7 +177,7 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
 
   private HoodieMergedLogRecordScanner getMergedLogRecordScanner() {
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(HadoopFSUtils.getFs(split.getPath().toString(), jobConf))
+        .withStorage(HoodieStorageUtils.getStorage(split.getPath().toString(), jobConf))
         .withBasePath(tableBasePath)
         .withLogFilePaths(logFilePaths.stream().map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
         .withReaderSchema(readerSchema)

@@ -28,8 +28,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +82,7 @@ public class RollbackUtils {
     checkArgument(stat1.getPartitionPath().equals(stat2.getPartitionPath()));
     final List<String> successDeleteFiles = new ArrayList<>();
     final List<String> failedDeleteFiles = new ArrayList<>();
-    final Map<FileStatus, Long> commandBlocksCount = new HashMap<>();
+    final Map<StoragePathInfo, Long> commandBlocksCount = new HashMap<>();
     final Map<String, Long> logFilesFromFailedCommit = new HashMap<>();
     Option.ofNullable(stat1.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
     Option.ofNullable(stat2.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);

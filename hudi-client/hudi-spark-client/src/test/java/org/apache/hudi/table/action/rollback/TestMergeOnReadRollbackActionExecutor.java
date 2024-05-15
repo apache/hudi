@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -38,7 +39,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -78,8 +78,9 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
   public void setUp() throws Exception {
     initPath();
     initSparkContexts();
-    dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
-    initFileSystem();
+    dataGen = new HoodieTestDataGenerator(
+        new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
+    initHoodieStorage();
     initMetaClient();
   }
 
@@ -164,7 +165,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     // 1. ingest data to partition 3.
     //just generate two partitions
     HoodieTestDataGenerator dataGenPartition3 = new HoodieTestDataGenerator(new String[]{DEFAULT_THIRD_PARTITION_PATH});
-    HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, new String[]{DEFAULT_THIRD_PARTITION_PATH}, basePath);
+    HoodieTestDataGenerator.writePartitionMetadataDeprecated(storage,
+        new String[] {DEFAULT_THIRD_PARTITION_PATH}, basePath);
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
 
     /**
@@ -252,7 +254,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         .withRollbackUsingMarkers(false).withAutoCommit(false).build();
 
     //1. prepare data
-    new HoodieTestDataGenerator().writePartitionMetadata(fs, new String[] {DEFAULT_FIRST_PARTITION_PATH}, basePath);
+    new HoodieTestDataGenerator().writePartitionMetadata(storage,
+        new String[] {DEFAULT_FIRST_PARTITION_PATH}, basePath);
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     // Write 1 (only inserts)
     String newCommitTime = "001";

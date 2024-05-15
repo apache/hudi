@@ -18,32 +18,35 @@
 
 package org.apache.hudi.functional
 
-import java.util.function.Consumer
-
-import org.apache.hadoop.fs.FileSystem
+import org.apache.hudi.{DataSourceWriteOptions, QuickstartUtils}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.{DataSourceWriteOptions, QuickstartUtils}
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{DoubleType, StringType}
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+
+import java.util.function.Consumer
 
 import scala.collection.JavaConversions._
 
 class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
   var spark: SparkSession = null
 
-  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
@@ -54,7 +57,7 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown() = {
