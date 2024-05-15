@@ -216,7 +216,7 @@ public class HoodieSnapshotExporter {
       // also need to copy over partition metadata
       HoodieStorage storage = HoodieStorageUtils.getStorage(cfg.sourceBasePath, serConf.newCopy());
       StoragePath partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(storage,
-          FSUtils.getPartitionPath(cfg.sourceBasePath, partition)).get();
+          FSUtils.constructAbsolutePath(cfg.sourceBasePath, partition)).get();
       if (storage.exists(partitionMetaFile)) {
         filePaths.add(Pair.of(partition, partitionMetaFile.toString()));
       }
@@ -226,7 +226,7 @@ public class HoodieSnapshotExporter {
     context.foreach(partitionAndFileList, partitionAndFile -> {
       String partition = partitionAndFile.getLeft();
       Path sourceFilePath = new Path(partitionAndFile.getRight());
-      Path toPartitionPath = FSUtils.getPartitionPathInHadoopPath(cfg.targetOutputPath, partition);
+      Path toPartitionPath = FSUtils.constructAbsolutePathInHadoopPath(cfg.targetOutputPath, partition);
       FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
       FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
 

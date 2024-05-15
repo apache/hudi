@@ -225,7 +225,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       }
       return false;
     };
-    return fs.listStatus(FSUtils.getPartitionPathInHadoopPath(config.getBasePath(), partitionPath), filter);
+    return fs.listStatus(FSUtils.constructAbsolutePathInHadoopPath(config.getBasePath(), partitionPath), filter);
   }
 
   private FileStatus[] fetchFilesFromInstant(HoodieInstant instantToRollback, String partitionPath, String basePath,
@@ -286,7 +286,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
   }
 
   private static Path[] listFilesToBeDeleted(String basePath, String partitionPath) {
-    return new Path[] {FSUtils.getPartitionPathInHadoopPath(basePath, partitionPath)};
+    return new Path[] {FSUtils.constructAbsolutePathInHadoopPath(basePath, partitionPath)};
   }
 
   private static Path[] getFilesFromCommitMetadata(String basePath, HoodieCommitMetadata commitMetadata, String partitionPath) {
@@ -356,7 +356,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       FileSlice latestFileSlice = latestFileSlices.get(writeStat.getFileId());
       String fileId = writeStat.getFileId();
       String latestBaseInstant = latestFileSlice.getBaseInstantTime();
-      Path fullLogFilePath = FSUtils.getPartitionPathInHadoopPath(table.getConfig().getBasePath(), writeStat.getPath());
+      Path fullLogFilePath = FSUtils.constructAbsolutePathInHadoopPath(table.getConfig().getBasePath(), writeStat.getPath());
       Map<String, Long> logFilesWithBlocksToRollback = Collections.singletonMap(
           fullLogFilePath.toString(), writeStat.getTotalWriteBytes() > 0 ? writeStat.getTotalWriteBytes() : 1L);
       hoodieRollbackRequests.add(new HoodieRollbackRequest(partitionPath, fileId, latestBaseInstant,

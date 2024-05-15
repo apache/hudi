@@ -296,7 +296,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
           if (operation.getDataFileName().isPresent()) {
             String expPath = metaClient.getStorage()
                 .getPathInfo(new StoragePath(
-                    FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
+                    FSUtils.constructAbsolutePath(metaClient.getBasePath(), operation.getPartitionPath()),
                     operation.getDataFileName().get()))
                 .getPath().toString();
             ValidationUtils.checkArgument(df.isPresent(),
@@ -309,7 +309,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
             try {
               List<StoragePathInfo> pathInfoList = metaClient.getStorage()
                   .listDirectEntries(new StoragePath(
-                      FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), dp));
+                      FSUtils.constructAbsolutePath(metaClient.getBasePath(), operation.getPartitionPath()), dp));
               ValidationUtils.checkArgument(pathInfoList.size() == 1, "Expect only 1 file-status");
               return new HoodieLogFile(pathInfoList.get(0));
             } catch (FileNotFoundException fe) {

@@ -704,40 +704,40 @@ public class FSUtils {
     return sizeInBytes / (1024 * 1024);
   }
 
-  public static Path getPartitionPathInHadoopPath(String basePath, String partitionPath) {
-    if (StringUtils.isNullOrEmpty(partitionPath)) {
+  public static Path constructAbsolutePathInHadoopPath(String basePath, String relativePartitionPath) {
+    if (StringUtils.isNullOrEmpty(relativePartitionPath)) {
       return new Path(basePath);
     }
 
     // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
     //       absolute path
-    String properPartitionPath = partitionPath.startsWith("/")
-        ? partitionPath.substring(1)
-        : partitionPath;
-    return getPartitionPath(new CachingPath(basePath), properPartitionPath);
+    String properPartitionPath = relativePartitionPath.startsWith(PATH_SEPARATOR)
+        ? relativePartitionPath.substring(1)
+        : relativePartitionPath;
+    return constructAbsolutePath(new CachingPath(basePath), properPartitionPath);
   }
 
-  public static StoragePath getPartitionPath(String basePath, String partitionPath) {
-    if (StringUtils.isNullOrEmpty(partitionPath)) {
+  public static StoragePath constructAbsolutePath(String basePath, String relativePartitionPath) {
+    if (StringUtils.isNullOrEmpty(relativePartitionPath)) {
       return new StoragePath(basePath);
     }
 
     // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
     //       absolute path
-    String properPartitionPath = partitionPath.startsWith("/")
-        ? partitionPath.substring(1)
-        : partitionPath;
-    return getPartitionPath(new StoragePath(basePath), properPartitionPath);
+    String properPartitionPath = relativePartitionPath.startsWith(PATH_SEPARATOR)
+        ? relativePartitionPath.substring(1)
+        : relativePartitionPath;
+    return constructAbsolutePath(new StoragePath(basePath), properPartitionPath);
   }
 
-  public static Path getPartitionPath(Path basePath, String partitionPath) {
+  public static Path constructAbsolutePath(Path basePath, String relativePartitionPath) {
     // For non-partitioned table, return only base-path
-    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new CachingPath(basePath, partitionPath);
+    return StringUtils.isNullOrEmpty(relativePartitionPath) ? basePath : new CachingPath(basePath, relativePartitionPath);
   }
 
-  public static StoragePath getPartitionPath(StoragePath basePath, String partitionPath) {
+  public static StoragePath constructAbsolutePath(StoragePath basePath, String relativePartitionPath) {
     // For non-partitioned table, return only base-path
-    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new StoragePath(basePath, partitionPath);
+    return StringUtils.isNullOrEmpty(relativePartitionPath) ? basePath : new StoragePath(basePath, relativePartitionPath);
   }
 
   /**

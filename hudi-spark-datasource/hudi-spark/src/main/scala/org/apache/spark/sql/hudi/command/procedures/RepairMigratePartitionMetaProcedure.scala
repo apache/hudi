@@ -67,7 +67,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
 
     val rows = new util.ArrayList[Row](partitionPaths.size)
     for (partitionPath <- partitionPaths) {
-      val partition: StoragePath = FSUtils.getPartitionPath(tablePath, partitionPath)
+      val partition: StoragePath = FSUtils.constructAbsolutePath(tablePath, partitionPath)
       val textFormatFile: Option[StoragePath] = HoodiePartitionMetadata.textFormatMetaPathIfExists(
         metaClient.getStorage, partition)
       val baseFormatFile: Option[StoragePath] = HoodiePartitionMetadata.baseFormatMetaPathIfExists(

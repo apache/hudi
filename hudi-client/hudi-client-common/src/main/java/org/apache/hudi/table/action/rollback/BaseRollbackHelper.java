@@ -165,7 +165,7 @@ public class BaseRollbackHelper implements Serializable {
           WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instantTime);
 
           writer = HoodieLogFormat.newWriterBuilder()
-              .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePathV2().toString(), partitionPath))
+              .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2().toString(), partitionPath))
               .withFileId(fileId)
               .overBaseCommit(latestBaseInstant)
               .withStorage(metaClient.getStorage())
@@ -203,7 +203,7 @@ public class BaseRollbackHelper implements Serializable {
 
         // With listing based rollback, sometimes we only get the fileID of interest(so that we can add rollback command block) w/o the actual file name.
         // So, we want to ignore such invalid files from this list before we add it to the rollback stats.
-        String partitionFullPath = FSUtils.getPartitionPath(metaClient.getBasePathV2().toString(), rollbackRequest.getPartitionPath()).toString();
+        String partitionFullPath = FSUtils.constructAbsolutePath(metaClient.getBasePathV2().toString(), rollbackRequest.getPartitionPath()).toString();
         Map<String, Long> validLogBlocksToDelete = new HashMap<>();
         rollbackRequest.getLogBlocksToBeDeleted().entrySet().stream().forEach((kv) -> {
           String logFileFullPath = kv.getKey();

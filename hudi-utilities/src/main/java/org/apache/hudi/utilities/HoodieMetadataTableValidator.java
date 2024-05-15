@@ -664,7 +664,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   @VisibleForTesting
   Option<String> getPartitionCreationInstant(HoodieStorage storage, String basePath, String partition) {
     HoodiePartitionMetadata hoodiePartitionMetadata =
-        new HoodiePartitionMetadata(storage, FSUtils.getPartitionPath(basePath, partition));
+        new HoodiePartitionMetadata(storage, FSUtils.constructAbsolutePath(basePath, partition));
     return hoodiePartitionMetadata.readPartitionCreatedCommitTime();
   }
 
@@ -681,7 +681,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     // ignore partitions created by uncommitted ingestion.
     return allPartitionPathsFromFS.stream().parallel().filter(part -> {
       HoodiePartitionMetadata hoodiePartitionMetadata =
-          new HoodiePartitionMetadata(storage, FSUtils.getPartitionPath(basePath, part));
+          new HoodiePartitionMetadata(storage, FSUtils.constructAbsolutePath(basePath, part));
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
         String instantTime = instantOption.get();
@@ -1403,7 +1403,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return baseFileNameList.stream().flatMap(filename ->
                 new ParquetUtils().readRangeFromParquetMetadata(
                     metaClient.getHadoopConf(),
-                    new StoragePath(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath), filename),
+                    new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath), filename),
                     allColumnNameList).stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
@@ -1445,7 +1445,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
       StoragePath path = new StoragePath(
-          FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath).toString(), filename);
+          FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath).toString(), filename);
       BloomFilter bloomFilter;
       HoodieConfig hoodieConfig = new HoodieConfig();
       hoodieConfig.setValue(HoodieReaderConfig.USE_NATIVE_HFILE_READER,

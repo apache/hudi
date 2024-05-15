@@ -78,6 +78,6 @@ public class CompactionV1MigrationHandler extends AbstractMigratorBase<HoodieCom
       return fileName;
     }
 
-    return new Path(FSUtils.getPartitionPath(basePath, partitionPath), fileName).toString();
+    return new Path(FSUtils.constructAbsolutePath(basePath, partitionPath), fileName).toString();
   }
 }

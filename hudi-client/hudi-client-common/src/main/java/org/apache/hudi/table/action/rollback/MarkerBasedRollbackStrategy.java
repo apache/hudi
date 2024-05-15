@@ -121,7 +121,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       LOG.warn("Find old marker type for log file: " + fileNameWithPartitionToRollback);
       fileId = FSUtils.getFileIdFromFilePath(fullLogFilePath);
       baseCommitTime = FSUtils.getCommitTime(fullLogFilePath.getName());
-      StoragePath partitionPath = FSUtils.getPartitionPath(config.getBasePath(), relativePartitionPath);
+      StoragePath partitionPath = FSUtils.constructAbsolutePath(config.getBasePath(), relativePartitionPath);
 
       // NOTE: Since we're rolling back incomplete Delta Commit, it only could have appended its
       //       block to the latest log-file
