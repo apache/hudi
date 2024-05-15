@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -44,14 +45,14 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * Utils for Hudi base file.
+ * Utils for file format used in Hudi.
  */
-public abstract class BaseFileUtils {
+public abstract class FileFormatUtils {
   public static final String PARQUET_UTILS = "org.apache.hudi.common.util.ParquetUtils";
   public static final String ORC_UTILS = "org.apache.hudi.common.util.OrcUtils";
   public static final String HFILE_UTILS = "org.apache.hudi.common.util.HFileUtils";
 
-  public static BaseFileUtils getInstance(StoragePath path) {
+  public static FileFormatUtils getInstance(StoragePath path) {
     if (path.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())) {
       return ReflectionUtils.loadClass(PARQUET_UTILS);
     } else if (path.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension())) {
@@ -62,7 +63,7 @@ public abstract class BaseFileUtils {
     throw new UnsupportedOperationException("The format for file " + path + " is not supported yet.");
   }
 
-  public static BaseFileUtils getInstance(HoodieFileFormat fileFormat) {
+  public static FileFormatUtils getInstance(HoodieFileFormat fileFormat) {
     if (HoodieFileFormat.PARQUET.equals(fileFormat)) {
       return ReflectionUtils.loadClass(PARQUET_UTILS);
     } else if (HoodieFileFormat.ORC.equals(fileFormat)) {
@@ -73,7 +74,7 @@ public abstract class BaseFileUtils {
     throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
   }
 
-  public static BaseFileUtils getInstance(HoodieTableMetaClient metaClient) {
+  public static FileFormatUtils getInstance(HoodieTableMetaClient metaClient) {
     return getInstance(metaClient.getTableConfig().getBaseFileFormat());
   }
 
@@ -268,4 +269,22 @@ public abstract class BaseFileUtils {
   public abstract void writeMetaFile(HoodieStorage storage,
                                      StoragePath filePath,
                                      Properties props) throws IOException;
+
+  /**
+   * Serializes Hudi records to the log block.
+   *
+   * @param storageConf  storage configuration.
+   * @param records      a list of {@link HoodieRecord}.
+   * @param writerSchema writer schema string from the log block header.
+   * @param readerSchema
+   * @param keyFieldName
+   * @param paramsMap    additional params for serialization.
+   * @return byte array after serialization.
+   * @throws IOException upon serialization error.
+   */
+  public abstract byte[] serializeRecordsToLogBlock(StorageConfiguration<?> storageConf,
+                                                    List<HoodieRecord> records,
+                                                    Schema writerSchema,
+                                                    Schema readerSchema, String keyFieldName,
+                                                    Map<String, String> paramsMap) throws IOException;
 }

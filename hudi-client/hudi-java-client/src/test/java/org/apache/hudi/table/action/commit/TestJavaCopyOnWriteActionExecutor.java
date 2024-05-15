@@ -34,7 +34,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.Transformations;
-import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -131,7 +131,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    FileFormatUtils fileUtils = FileFormatUtils.getInstance(metaClient);
 
     String partitionPath = "2016/01/31";
 
@@ -480,7 +480,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    FileFormatUtils fileUtils = FileFormatUtils.getInstance(metaClient);
 
     String partitionPath = "2022/04/09";
 

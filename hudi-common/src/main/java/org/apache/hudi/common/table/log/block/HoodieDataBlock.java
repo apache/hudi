@@ -20,8 +20,6 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockContentLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
@@ -117,6 +115,10 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     return serializeRecords(records.get(), storageConf);
+  }
+
+  public String getKeyFieldName() {
+    return keyFieldName;
   }
 
   protected static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {
