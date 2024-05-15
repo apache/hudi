@@ -52,7 +52,6 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private FSDataOutputStream output;
 
   private final HoodieStorage storage;
-  private final FileSystem fs;
   private final long sizeThreshold;
   private final Integer bufferSize;
   private final Short replication;
@@ -66,19 +65,13 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   HoodieLogFormatWriter(HoodieStorage storage, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold,
                         String rolloverLogWriteToken, HoodieLogFileWriteCallback logFileWriteCallback) {
     this.storage = storage;
-    this.fs = (FileSystem) storage.getFileSystem();
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
-    this.bufferSize = bufferSize != null ? bufferSize : FSUtils.getDefaultBufferSize(fs);
-    this.replication = replication != null ? replication
-        : FSUtils.getDefaultReplication(fs, new Path(logFile.getPath().getParent().toString()));
+    this.bufferSize = bufferSize != null ? bufferSize : storage.getDefaultBufferSize();
+    this.replication = replication != null ? replication : storage.getDefaultReplication(logFile.getPath().getParent());
     this.rolloverLogWriteToken = rolloverLogWriteToken;
     this.logFileWriteCallback = logFileWriteCallback;
     addShutDownHook();
-  }
-
-  public FileSystem getFs() {
-    return (FileSystem) storage.getFileSystem();
   }
 
   @Override
@@ -99,6 +92,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private FSDataOutputStream getOutputStream() throws IOException, InterruptedException {
     if (this.output == null) {
       Path path = new Path(logFile.getPath().toUri());
+      FileSystem fs = (FileSystem) storage.getFileSystem();
       if (fs.exists(path)) {
         boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
         // here we use marker file to fence concurrent append to the same file. So it is safe to use speculation in spark now.
@@ -155,7 +149,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     long startPos = originalOutputStream.getPos();
     long sizeWritten = 0;
     // HUDI-2655. here we wrap originalOutputStream to ensure huge blocks can be correctly written
-    FSDataOutputStream outputStream = new FSDataOutputStream(originalOutputStream, new FileSystem.Statistics(fs.getScheme()), startPos);
+    FSDataOutputStream outputStream = new FSDataOutputStream(originalOutputStream, new FileSystem.Statistics(storage.getScheme()), startPos);
     for (HoodieLogBlock block: blocks) {
       long startSize = outputStream.size();
 
@@ -227,8 +221,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private void rolloverIfNeeded() throws IOException {
     // Roll over if the size is past the threshold
     if (getCurrentSize() > sizeThreshold) {
-      LOG.info("CurrentSize " + getCurrentSize() + " has reached threshold " + sizeThreshold
-          + ". Rolling over to the next version");
+      LOG.info("CurrentSize {} has reached threshold {}. Rolling over to the next version", getCurrentSize(), sizeThreshold);
       rollOver();
     }
   }
@@ -241,12 +234,14 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void createNewFile() throws IOException {
     logFileWriteCallback.preLogFileCreate(logFile);
-    this.output =
-        ((FileSystem) storage.getFileSystem()).create(
-            new Path(this.logFile.getPath().toUri()), false,
+    this.output = new FSDataOutputStream(
+        storage.create(
+            this.logFile.getPath(), false,
             bufferSize,
             replication,
-            WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
+            WriterBuilder.DEFAULT_SIZE_THRESHOLD),
+        new FileSystem.Statistics(storage.getScheme())
+    );
   }
 
   @Override
@@ -305,7 +300,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
             closeStream();
           }
         } catch (Exception e) {
-          LOG.warn("unable to close output stream for log file " + logFile, e);
+          LOG.warn(String.format("unable to close output stream for log file %s", logFile), e);
           // fail silently for any sort of exception
         }
       }
@@ -315,6 +310,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void handleAppendExceptionOrRecoverLease(Path path, RemoteException e)
       throws IOException, InterruptedException {
+    FileSystem fs = (FileSystem) storage.getFileSystem();
     if (e.getMessage().contains(APPEND_UNAVAILABLE_EXCEPTION_MESSAGE)) {
       // This issue happens when all replicas for a file are down and/or being decommissioned.
       // The fs.append() API could append to the last block for a file. If the last block is full, a new block is
