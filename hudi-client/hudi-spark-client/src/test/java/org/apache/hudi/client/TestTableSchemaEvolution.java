@@ -309,7 +309,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, true, numRecords, 3 * numRecords, 6, false);
 
     // new commit
-    HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("006"));
     checkReadRecords("000", 3 * numRecords);
 
@@ -333,7 +333,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
   private void checkReadRecords(String instantTime, int numExpectedRecords) throws IOException {
     if (tableType == HoodieTableType.COPY_ON_WRITE) {
-      HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitTimeline();
+      HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline();
       assertEquals(numExpectedRecords, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of(instantTime)));
     } else {
       // TODO: This code fails to read records under the following conditions:

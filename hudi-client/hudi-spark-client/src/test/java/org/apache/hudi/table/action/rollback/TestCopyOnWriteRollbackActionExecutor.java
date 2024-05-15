@@ -289,7 +289,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     //2. rollback
     HoodieInstant commitInstant;
     if (isUsingMarkers) {
-      commitInstant = table.getActiveTimeline().getCommitTimeline().filterInflights().lastInstant().get();
+      commitInstant = table.getActiveTimeline().getCommitAndReplaceTimeline().filterInflights().lastInstant().get();
     } else {
       commitInstant = table.getCompletedCommitTimeline().lastInstant().get();
     }

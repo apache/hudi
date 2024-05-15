@@ -318,11 +318,18 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   /**
+   * Get only pure commit and replace commits (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getCommitAndReplaceTimeline() {
+    //TODO: Make sure this change does not break existing functionality.
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+  }
+
+  /**
    * Get only pure commits (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getCommitTimeline() {
-    //TODO: Make sure this change does not break existing functionality.
-    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION));
   }
 
   /**

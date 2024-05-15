@@ -143,7 +143,7 @@ public class ConsistentBucketIndexUtils {
           && maxCommitMetaFileTs.equals(HoodieConsistentHashingMetadata.getTimestampFromFile(maxMetadataFile.getPath().getName()))) {
         return loadMetadataFromGivenFile(table, maxMetadataFile);
       }
-      HoodieTimeline completedCommits = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+      HoodieTimeline completedCommits = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
 
       // fix the in-consistency between un-committed and committed hashing metadata files.
       List<FileStatus> fixed = new ArrayList<>();
