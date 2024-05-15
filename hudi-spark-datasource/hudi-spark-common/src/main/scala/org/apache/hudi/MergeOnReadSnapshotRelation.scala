@@ -20,10 +20,9 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.{createPartitionedFile, isProjectionCompatible}
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -162,7 +161,7 @@ object MergeOnReadSnapshotRelation extends SparkAdapterSupport {
    * columns required for merging, such as primary-key, pre-combine key, etc)
    */
   private val projectionCompatiblePayloadClasses: Set[String] = Seq(
-    classOf[OverwriteWithLatestAvroPayload]
+    classOf[OverwriteWithLatestAvroPayload], classOf[DefaultHoodieRecordPayload]
   ).map(_.getName).toSet
 
   def isProjectionCompatible(tableState: HoodieTableState): Boolean =
