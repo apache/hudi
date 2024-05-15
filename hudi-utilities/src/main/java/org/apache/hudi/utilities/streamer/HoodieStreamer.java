@@ -56,9 +56,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -691,7 +691,7 @@ public class HoodieStreamer implements Serializable {
       if (this.storage.exists(new StoragePath(cfg.targetBasePath))) {
         try {
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-              .setConf((Configuration) this.storage.getConf().newCopy())
+              .setConf((Configuration) this.storage.getConf().unwrapCopy())
               .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
           tableType = meta.getTableType();
           // This will guarantee there is no surprise with table type
