@@ -456,6 +456,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Create an empty directory which is not a partition directory (lacks partition metadata)
     final String nonPartitionDirectory = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0] + "-nonpartition";
     Files.createDirectories(Paths.get(basePath, nonPartitionDirectory));
+    // Write random file to assert it is not added to the view
+    Files.createFile(Paths.get(basePath, nonPartitionDirectory, "randomFile.parquet"));
 
     // Three directories which are partitions but will be ignored due to filter
     final String filterDirRegex = ".*-filterDir\\d|\\..*";
