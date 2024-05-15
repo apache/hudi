@@ -71,6 +71,7 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -861,9 +862,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition1).size());
     assertEquals(version1Plan.getFilesToBeDeletedPerPartition().get(partition2).size(),
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition2).size());
-    assertEquals(new Path(FSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePath(), partition1), fileName1).toString(),
+    assertEquals(new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partition1), fileName1).toString(),
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition1).get(0).getFilePath());
-    assertEquals(new Path(FSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePath(), partition2), fileName2).toString(),
+    assertEquals(new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partition2), fileName2).toString(),
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition2).get(0).getFilePath());
 
     // Downgrade and verify version 1 plan
@@ -1341,7 +1342,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       String fileName = Paths.get(fullPath).getFileName().toString();
       return Pair.of(FSUtils.getFileId(fileName), FSUtils.getCommitTime(fileName));
     });
-    Stream<Pair<String, String>> stream2 = paths.stream().filter(rtFilePredicate).map(path -> Pair.of(FSUtils.getFileIdFromLogPath(new Path(path)),
+    Stream<Pair<String, String>> stream2 = paths.stream().filter(rtFilePredicate).map(path -> Pair.of(HadoopFSUtils.getFileIdFromLogPath(new Path(path)),
         FSUtils.getBaseCommitTimeFromLogPath(new StoragePath(path))));
     return Stream.concat(stream1, stream2);
   }

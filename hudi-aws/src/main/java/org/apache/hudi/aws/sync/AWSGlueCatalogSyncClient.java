@@ -301,7 +301,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       StorageDescriptor sd = table.storageDescriptor();
       List<PartitionInput> partitionInputList = partitionsToAdd.stream().map(partition -> {
-        String fullPartitionPath = FSUtils.constructAbsolutePathInHadoopPath(s3aToS3(getBasePath()), partition).toString();
+        String fullPartitionPath = FSUtils.constructAbsolutePath(s3aToS3(getBasePath()), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(fullPartitionPath));
         return PartitionInput.builder().values(partitionValues).storageDescriptor(partitionSD).build();
@@ -345,7 +345,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       StorageDescriptor sd = table.storageDescriptor();
       List<BatchUpdatePartitionRequestEntry> updatePartitionEntries = changedPartitions.stream().map(partition -> {
-        String fullPartitionPath = FSUtils.constructAbsolutePathInHadoopPath(s3aToS3(getBasePath()), partition).toString();
+        String fullPartitionPath = FSUtils.constructAbsolutePath(s3aToS3(getBasePath()), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(fullPartitionPath));
         PartitionInput partitionInput = PartitionInput.builder().values(partitionValues).storageDescriptor(partitionSD).build();

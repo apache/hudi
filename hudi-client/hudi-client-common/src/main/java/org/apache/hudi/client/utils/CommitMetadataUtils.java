@@ -151,7 +151,7 @@ public class CommitMetadataUtils {
     List<String> logFilePaths = new ArrayList<>(logFilesMarkerPath);
     HoodiePairData<String, List<String>> partitionPathLogFilePair = context.parallelize(logFilePaths).mapToPair(logFilePath -> {
       Path logFileFullPath = new Path(basePathStr, logFilePath);
-      String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePathStr), logFileFullPath.getParent());
+      String partitionPath = HadoopFSUtils.getRelativePartitionPath(new Path(basePathStr), logFileFullPath.getParent());
       return Pair.of(partitionPath, Collections.singletonList(logFileFullPath.getName()));
     });
     HoodiePairData<String, Map<String, List<String>>> partitionPathToFileIdAndLogFileList = partitionPathLogFilePair
@@ -169,7 +169,7 @@ public class CommitMetadataUtils {
           List<String> missingLogFiles = t.getValue();
           Map<String, List<String>> fileIdtologFiles = new HashMap<>();
           missingLogFiles.forEach(logFile -> {
-            String fileId = FSUtils.getFileIdFromLogPath(new Path(fullPartitionPath, logFile));
+            String fileId = HadoopFSUtils.getFileIdFromLogPath(new Path(fullPartitionPath, logFile));
             if (!fileIdtologFiles.containsKey(fileId)) {
               fileIdtologFiles.put(fileId, new ArrayList<>());
             }
