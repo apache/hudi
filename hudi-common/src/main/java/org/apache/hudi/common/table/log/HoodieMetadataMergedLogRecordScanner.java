@@ -20,22 +20,14 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieMetadataRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -45,9 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -58,8 +48,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordScanner {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataMergedLogRecordScanner.class);
-  // Map of compacted/merged records
-  private final ExternalSpillableMap<Serializable, HoodieRecord> records;
 
   private HoodieMetadataMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
                                                String latestInstantTime, Long maxMemorySizeInBytes,
@@ -74,21 +62,8 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
                                                boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
                                                Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, reverseReader, bufferSize, spillableMapBasePath, instantRange, diskMapType,
-        isBitCaskDiskMapCompressionEnabled, withOperationField, false, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
+        isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
         hoodieTableMetaClientOption);
-    try {
-      // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
-      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
-          new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
-    } catch (IOException e) {
-      throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
-    }
-  }
-
-  @Override
-  public Map<String, HoodieRecord> getRecords() {
-    return records.entrySet().stream().collect(
-        Collectors.toMap(entry -> entry.getKey().toString(), Map.Entry::getValue));
   }
 
   @Override
@@ -96,6 +71,7 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
     // Merge the new record with the existing record in the map
     HoodieRecord<T> oldRecord = (HoodieRecord<T>) records.get(newRecord.getRecordKey());
     if (oldRecord != null) {
+      LOG.debug("Merging new record with existing record in the map. Key: {}", newRecord.getRecordKey());
       recordMerger.fullOuterMerge(oldRecord, readerSchema, newRecord, readerSchema, this.getPayloadProps()).forEach(
           mergedRecord -> {
             HoodieRecord<T> combinedRecord = mergedRecord.getLeft();
@@ -110,37 +86,6 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
       records.put(newRecord.getRecordKey(), newRecord.copy());
-    }
-  }
-
-  @Override
-  protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
-    String key = deleteRecord.getRecordKey();
-    HoodieRecord oldRecord = records.get(key);
-    if (oldRecord != null) {
-      // Merge and store the merged record. The ordering val is taken to decide whether the same key record
-      // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
-      // For same ordering values, uses the natural order(arrival time semantics).
-
-      Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
-      Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
-      // Checks the ordering value does not equal to 0
-      // because we use 0 as the default value which means natural order
-      boolean choosePrev = !deleteOrderingVal.equals(0)
-          && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
-          && curOrderingVal.compareTo(deleteOrderingVal) > 0;
-      if (choosePrev) {
-        // The DELETE message is obsolete if the old message has greater orderingVal.
-        return;
-      }
-    }
-    // Put the DELETE record
-    if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
-      records.put(key, SpillableMapUtils.generateEmptyPayload(key,
-          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
-    } else {
-      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
-      records.put(key, record);
     }
   }
 

@@ -20,7 +20,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -37,16 +37,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Tests for {@link HoodieMetadataRecordMerger}.
  */
-public class TestHoodieMetadataRecordMerger extends HoodieCommonTestHarness {
+public class TestHoodieMetadataRecordMerger {
+
+  private HoodieTestDataGenerator dataGen;
 
   @BeforeEach
   public void setUp() {
-    initTestDataGenerator();
+    dataGen = new HoodieTestDataGenerator();
   }
 
   @AfterEach
   public void cleanUp() {
-    cleanupTestDataGenerator();
+    if (dataGen != null) {
+      dataGen = null;
+    }
   }
 
   @Test

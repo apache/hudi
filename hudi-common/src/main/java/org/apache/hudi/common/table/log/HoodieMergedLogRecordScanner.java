@@ -51,6 +51,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -81,7 +82,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
   // Map of compacted/merged records
-  private final ExternalSpillableMap<String, HoodieRecord> records;
+  protected final ExternalSpillableMap<Serializable, HoodieRecord> records;
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
   private final Set<String> scannedPrefixes;
   // count of merged records in log
@@ -91,18 +92,18 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
-  HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
-                                       String latestInstantTime, Long maxMemorySizeInBytes,
-                                       boolean reverseReader, int bufferSize, String spillableMapBasePath,
-                                       Option<InstantRange> instantRange,
-                                       ExternalSpillableMap.DiskMapType diskMapType,
-                                       boolean isBitCaskDiskMapCompressionEnabled,
-                                       boolean withOperationField, boolean forceFullScan,
-                                       Option<String> partitionName,
-                                       InternalSchema internalSchema,
-                                       Option<String> keyFieldOverride,
-                                       boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
-                                      Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+  protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
+                                         String latestInstantTime, Long maxMemorySizeInBytes,
+                                         boolean reverseReader, int bufferSize, String spillableMapBasePath,
+                                         Option<InstantRange> instantRange,
+                                         ExternalSpillableMap.DiskMapType diskMapType,
+                                         boolean isBitCaskDiskMapCompressionEnabled,
+                                         boolean withOperationField, boolean forceFullScan,
+                                         Option<String> partitionName,
+                                         InternalSchema internalSchema,
+                                         Option<String> keyFieldOverride,
+                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
         hoodieTableMetaClientOption);
@@ -222,7 +223,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   public Map<String, HoodieRecord> getRecords() {
-    return records;
+    return records.entrySet().stream().collect(
+        Collectors.toMap(entry -> entry.getKey().toString(), Map.Entry::getValue));
   }
 
   public HoodieRecordType getRecordType() {
@@ -266,7 +268,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
   }
 
-  static <T> HoodieRecord getLatestHoodieRecord(HoodieRecord<T> newRecord, HoodieRecord<T> combinedRecord, String key) {
+  protected static <T> HoodieRecord getLatestHoodieRecord(HoodieRecord<T> newRecord, HoodieRecord<T> combinedRecord, String key) {
     HoodieRecord latestHoodieRecord =
         combinedRecord.newInstance(new HoodieKey(key, newRecord.getPartitionPath()), newRecord.getOperation());
 

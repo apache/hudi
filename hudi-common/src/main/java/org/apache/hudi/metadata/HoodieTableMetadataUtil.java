@@ -1278,7 +1278,7 @@ public class HoodieTableMetadataUtil {
    * it could subsequently be used in column stats
    *
    * NOTE: This method has to stay compatible with the semantic of
-   *      {@link ParquetUtils#readColumnStatsFromMetadata} as they are used in tandem
+   *      {@link FileFormatUtils#readColumnStatsFromMetadata} as they are used in tandem
    */
   private static Comparable<?> coerceToComparable(Schema schema, Object val) {
     if (val == null) {
