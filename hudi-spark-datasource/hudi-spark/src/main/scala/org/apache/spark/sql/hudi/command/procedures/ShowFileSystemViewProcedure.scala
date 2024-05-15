@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.Row
@@ -30,6 +31,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.{Function, Supplier}
 import java.util.stream.Collectors
+
 import scala.collection.JavaConversions
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
@@ -162,7 +164,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     } else {
       fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, if (maxInstant.isEmpty) {
         val basePath = getBasePath(table)
-        val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+        val metaClient = HoodieTableMetaClient.builder.setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())).setBasePath(basePath).build
         metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant().get().getTimestamp
       } else {
         maxInstant

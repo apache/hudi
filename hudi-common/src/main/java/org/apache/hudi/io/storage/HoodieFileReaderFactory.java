@@ -27,10 +27,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 
@@ -60,7 +60,7 @@ public class HoodieFileReaderFactory {
     }
   }
 
-  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, Configuration conf, StoragePath path) throws IOException {
+  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StorageConfiguration<?> conf, StoragePath path) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
     if (PARQUET.getFileExtension().equals(extension)) {
       return getFileReader(hoodieConfig, conf, path, PARQUET, Option.empty());
@@ -74,13 +74,13 @@ public class HoodieFileReaderFactory {
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, Configuration conf, StoragePath path, HoodieFileFormat format)
+  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StorageConfiguration<?> conf, StoragePath path, HoodieFileFormat format)
       throws IOException {
     return getFileReader(hoodieConfig, conf, path, format, Option.empty());
   }
 
   public HoodieFileReader getFileReader(HoodieConfig hoodieConfig,
-                                        Configuration conf, StoragePath path, HoodieFileFormat format,
+                                        StorageConfiguration<?> conf, StoragePath path, HoodieFileFormat format,
                                         Option<Schema> schemaOption) throws IOException {
     switch (format) {
       case PARQUET:
@@ -95,7 +95,7 @@ public class HoodieFileReaderFactory {
   }
 
   public HoodieFileReader getContentReader(HoodieConfig hoodieConfig,
-                                           Configuration conf, StoragePath path, HoodieFileFormat format,
+                                           StorageConfiguration<?> conf, StoragePath path, HoodieFileFormat format,
                                            HoodieStorage storage, byte[] content,
                                            Option<Schema> schemaOption) throws IOException {
     switch (format) {
@@ -106,25 +106,25 @@ public class HoodieFileReaderFactory {
     }
   }
 
-  protected HoodieFileReader newParquetFileReader(Configuration conf, StoragePath path) {
+  protected HoodieFileReader newParquetFileReader(StorageConfiguration<?> conf, StoragePath path) {
     throw new UnsupportedOperationException();
   }
 
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
-                                                Configuration conf, StoragePath path,
+                                                StorageConfiguration<?> conf, StoragePath path,
                                                 Option<Schema> schemaOption) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
-                                                Configuration conf, StoragePath path,
+                                                StorageConfiguration<?> conf, StoragePath path,
                                                 HoodieStorage storage,
                                                 byte[] content, Option<Schema> schemaOption)
       throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  protected HoodieFileReader newOrcFileReader(Configuration conf, StoragePath path) {
+  protected HoodieFileReader newOrcFileReader(StorageConfiguration<?> conf, StoragePath path) {
     throw new UnsupportedOperationException();
   }
 

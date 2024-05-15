@@ -132,7 +132,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //validate that metadata table file listing matches reality
     metaClient = HoodieTableMetaClient.reload(metaClient);
     TestHoodieBackedMetadata.validateMetadata(getConfigToTestMDTRollbacks(true), Option.empty(), fs(), basePath, metaClient,
-        hadoopConf(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
+        storageConf().unwrap(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
   }
 
   /**
@@ -194,7 +194,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     updateRecords(client, dataGen, "004", records);
     //validate that metadata table file listing matches reality
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), fs(), basePath, metaClient, hadoopConf(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
+    TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), fs(), basePath, metaClient, storageConf().unwrap(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
   }
 
   private void copyOut(HoodieTableType tableType, String commitTime) throws IOException {
@@ -251,7 +251,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
 
     //Make the MDT appear to fail mid write by deleting the commit in the MDT timline. The MDT does not use markers so we do not need to recreate them
     String metadataBasePath = basePath + "/.hoodie/metadata";
-    HoodieTableMetaClient metadataMetaClient =  HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(metadataBasePath).build();
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(storageConf()).setBasePath(metadataBasePath).build();
     HoodieInstant latestCommitInstant = metadataMetaClient.getActiveTimeline().lastInstant().get();
     File metadatadeltacommit = new File(metadataBasePath + "/.hoodie/" + latestCommitInstant.getFileName());
     assertTrue(metadatadeltacommit.delete());
@@ -261,7 +261,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //validate that metadata table file listing matches reality
     metaClient = HoodieTableMetaClient.reload(metaClient);
     TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), fs(), basePath, metaClient,
-        hadoopConf(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
+        storageConf().unwrap(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
   }
 
   /**

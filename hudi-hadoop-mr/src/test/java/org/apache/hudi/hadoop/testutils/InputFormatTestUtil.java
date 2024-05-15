@@ -83,10 +83,10 @@ public class InputFormatTestUtil {
                                             String commitNumber, boolean useNonPartitionedKeyGen, boolean populateMetaFields, boolean injectData, Schema schema)
       throws IOException {
     if (useNonPartitionedKeyGen) {
-      HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+      HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
           baseFileFormat, true, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", populateMetaFields);
     } else {
-      HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+      HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
           baseFileFormat);
     }
 
@@ -112,7 +112,7 @@ public class InputFormatTestUtil {
   public static File prepareMultiPartitionTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
                                                 String commitNumber, String finalLevelPartitionName)
       throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
         baseFileFormat);
 
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", finalLevelPartitionName));
@@ -233,7 +233,7 @@ public class InputFormatTestUtil {
 
   public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
                                          int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
 
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     setupPartition(basePath, partitionPath);
@@ -255,7 +255,7 @@ public class InputFormatTestUtil {
 
   public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
                                                int numberOfRecords, String commitNumber, HoodieTableType tableType, String year, String month, String date) throws Exception {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
 
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get(year, month, date));
     setupPartition(basePath, partitionPath);
@@ -272,7 +272,7 @@ public class InputFormatTestUtil {
 
   public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
                                                        int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
     createData(schema, basePath, numberOfFiles, numberOfRecords, commitNumber);
     return basePath.toFile();
   }
@@ -280,7 +280,7 @@ public class InputFormatTestUtil {
   public static List<File> prepareMultiPartitionedParquetTable(java.nio.file.Path basePath, Schema schema,
                                                                int numberPartitions, int numberOfRecordsPerPartition, String commitNumber, HoodieTableType tableType) throws IOException {
     List<File> result = new ArrayList<>();
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
     for (int i = 0; i < numberPartitions; i++) {
       java.nio.file.Path partitionPath = basePath.resolve(Paths.get(2016 + i + "", "05", "01"));
       setupPartition(basePath, partitionPath);
@@ -450,7 +450,7 @@ public class InputFormatTestUtil {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
     String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
-    Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
+    Configuration conf = HoodieTestUtils.getDefaultStorageConf().unwrap();
 
     String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
         .map(Schema.Field::name).collect(Collectors.joining(","));
@@ -477,7 +477,7 @@ public class InputFormatTestUtil {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
     String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
-    Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
+    Configuration conf = HoodieTestUtils.getDefaultStorageConf().unwrap();
 
     String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
         .map(Schema.Field::name).collect(Collectors.joining(","));
@@ -502,7 +502,7 @@ public class InputFormatTestUtil {
 
     // Create partition metadata to properly setup table's partition
     try (RawLocalFileSystem lfs = new RawLocalFileSystem()) {
-      lfs.setConf(HoodieTestUtils.getDefaultHadoopConf());
+      lfs.setConf(HoodieTestUtils.getDefaultStorageConf().unwrap());
 
       HoodiePartitionMetadata partitionMetadata =
           new HoodiePartitionMetadata(

@@ -19,7 +19,6 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
@@ -36,6 +35,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 
@@ -58,6 +58,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -95,7 +96,8 @@ public class TestCommitMetadataUtils extends HoodieCommonTestHarness {
     when(metaClient.getBasePath()).thenReturn(basePath);
     when(metaClient.getMarkerFolderPath(any())).thenReturn(basePath + ".hoodie/.temp");
     when(table.getContext()).thenReturn(context);
-    when(context.getHadoopConf()).thenReturn(new SerializableConfiguration(new Configuration()));
+    StorageConfiguration storageConf = getDefaultStorageConf();
+    when(context.getStorageConf()).thenReturn(storageConf);
     when(writeConfig.getViewStorageConfig()).thenReturn(FileSystemViewStorageConfig.newBuilder().build());
     when(writeConfig.getMarkersType()).thenReturn(MarkerType.DIRECT);
     when(writeConfig.getBasePath()).thenReturn(basePath);
@@ -129,13 +131,12 @@ public class TestCommitMetadataUtils extends HoodieCommonTestHarness {
 
     // Mock filesystem and file status
     FileSystem fs = mock(FileSystem.class);
-    Configuration hadoopConf = new Configuration();
-    when(table.getHadoopConf()).thenReturn(hadoopConf);
+    when(table.getStorageConf()).thenReturn(storageConf);
     when(fs.exists(any())).thenReturn(true);
 
     // Call the method under test
     HoodieCommitMetadata reconciledMetadata = CommitMetadataUtils.reconcileMetadataForMissingFiles(
-        table, commitActionType, instantTime, commitMetadataWithLogFiles.getLeft(), writeConfig, context, hadoopConf, this.getClass().getSimpleName());
+        table, commitActionType, instantTime, commitMetadataWithLogFiles.getLeft(), writeConfig, context, new Configuration(), this.getClass().getSimpleName());
 
     // Assertions to verify if the missing files are added
     assertFalse(reconciledMetadata.getPartitionToWriteStats().isEmpty(), "CommitMetadata should not be empty after reconciliation");

@@ -45,7 +45,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -522,7 +521,7 @@ public class FileCreateUtils {
     Map<String, Long> toReturn = new HashMap<>();
     try {
       HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
-          (Configuration) storage.unwrapConf(), basePath);
+          storage.getConf(), basePath);
       for (String path : paths) {
         TableFileSystemView.BaseFileOnlyView fileSystemView =
             new HoodieTableFileSystemView(metaClient,

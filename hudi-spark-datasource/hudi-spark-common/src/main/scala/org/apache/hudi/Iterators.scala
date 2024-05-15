@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.common.util.HoodieRecordUtils
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
@@ -343,7 +344,7 @@ object LogFileIterator extends SparkAdapterSupport {
               hadoopConf: Configuration,
               internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): mutable.Map[String, HoodieRecord[_]] = {
     val tablePath = tableState.tablePath
-    val storage = HoodieStorageUtils.getStorage(tablePath, hadoopConf)
+    val storage = HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(hadoopConf))
 
     if (HoodieTableMetadata.isMetadataTable(tablePath)) {
       val metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -352,7 +353,7 @@ object LogFileIterator extends SparkAdapterSupport {
         .enable(true).build()
       val dataTableBasePath = getDataTableBasePathFromMetadataTable(tablePath)
       val metadataTable = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(hadoopConf), metadataConfig,
+        new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig,
         dataTableBasePath)
 
       // We have to force full-scan for the MT log record reader, to make sure

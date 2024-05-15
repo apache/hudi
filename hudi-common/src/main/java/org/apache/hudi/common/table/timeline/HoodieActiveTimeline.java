@@ -815,8 +815,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     StoragePath srcPath = new StoragePath(metaClient.getMetaPath(), instant.getFileName());
     StoragePath dstPath = new StoragePath(dstDir, instant.getFileName());
     try {
-      HoodieStorage srcStorage = HoodieStorageUtils.getStorage(srcPath, metaClient.getHadoopConf());
-      HoodieStorage dstStorage = HoodieStorageUtils.getStorage(dstPath, metaClient.getHadoopConf());
+      HoodieStorage srcStorage = HoodieStorageUtils.getStorage(srcPath, metaClient.getStorageConf());
+      HoodieStorage dstStorage = HoodieStorageUtils.getStorage(dstPath, metaClient.getStorageConf());
       dstStorage.createDirectory(dstDir);
       FileIOUtils.copy(srcStorage, srcPath, dstStorage, dstPath, false, true);
     } catch (IOException e) {

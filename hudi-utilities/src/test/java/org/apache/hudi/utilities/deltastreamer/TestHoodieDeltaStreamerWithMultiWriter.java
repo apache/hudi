@@ -58,6 +58,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.config.HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.config.HoodieWriteConfig.BULK_INSERT_SORT_MODE;
 import static org.apache.hudi.config.HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE;
@@ -141,7 +142,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     HoodieDeltaStreamer.Config cfgBackfillJob = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()));
     cfgBackfillJob.continuousMode = false;
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(tableBasePath).build();
+    HoodieTableMetaClient meta = createMetaClient(hadoopConf, tableBasePath);
     HoodieTimeline timeline = meta.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
@@ -202,14 +203,14 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     props = prepareMultiWriterProps(storage, basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider",
         "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
+    props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
     props.setProperty("hoodie.test.source.generate.inserts", "true");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, storage,
         basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER);
     HoodieDeltaStreamer.Config cfgBackfillJob2 = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.INSERT,
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TestIdentityTransformer.class.getName()));
     cfgBackfillJob2.continuousMode = false;
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(tableBasePath).build();
+    HoodieTableMetaClient meta = createMetaClient(hadoopConf, tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
@@ -276,7 +277,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     HoodieDeltaStreamer.Config cfgBackfillJob = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()));
     cfgBackfillJob.continuousMode = false;
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(tableBasePath).build();
+    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(storage.getConf()).setBasePath(tableBasePath).build();
 
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieCommitMetadata commitMetadataForFirstInstant = HoodieCommitMetadata
@@ -388,7 +389,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
       HoodieDeltaStreamer ingestionJob, HoodieDeltaStreamer.Config cfgIngestionJob, HoodieDeltaStreamer backfillJob,
       HoodieDeltaStreamer.Config cfgBackfillJob, boolean expectConflict, String jobId) throws Exception {
     ExecutorService service = Executors.newFixedThreadPool(2);
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(tableBasePath).build();
+    HoodieTableMetaClient meta = createMetaClient(hadoopConf, tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String lastSuccessfulCommit = timeline.lastInstant().get().getTimestamp();
     // Condition for parallel ingestion job
@@ -473,7 +474,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     GetCommitsAfterInstant(String basePath, String lastSuccessfulCommit) {
       this.basePath = basePath;
       this.lastSuccessfulCommit = lastSuccessfulCommit;
-      meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
+      meta = createMetaClient(storage, basePath);
     }
 
     long getCommitsAfterInstant() {

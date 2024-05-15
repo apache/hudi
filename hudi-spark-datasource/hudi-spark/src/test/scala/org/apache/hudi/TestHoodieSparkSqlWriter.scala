@@ -25,6 +25,7 @@ import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieW
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
@@ -44,7 +45,6 @@ import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
-import java.io.IOException
 import java.time.Instant
 import java.util.{Collections, Date, UUID}
 import scala.collection.JavaConversions._
@@ -590,7 +590,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
           .setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))
       }
     if (initBasePath) {
-      tableMetaClientBuilder.initTable(sc.hadoopConfiguration, tempBasePath)
+      tableMetaClientBuilder.initTable(HadoopFSUtils.getStorageConfWithCopy(sc.hadoopConfiguration), tempBasePath)
     }
   }
 

@@ -53,9 +53,9 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
   private List<HoodieKey> fetchHoodieKeys(HoodieBaseFile baseFile) {
     BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
     if (keyGeneratorOpt.isPresent()) {
-      return baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new StoragePath(baseFile.getPath()), keyGeneratorOpt);
+      return baseFileUtils.fetchHoodieKeys(hoodieTable.getStorageConf(), new StoragePath(baseFile.getPath()), keyGeneratorOpt);
     } else {
-      return baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new StoragePath(baseFile.getPath()));
+      return baseFileUtils.fetchHoodieKeys(hoodieTable.getStorageConf(), new StoragePath(baseFile.getPath()));
     }
   }
 

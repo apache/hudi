@@ -46,15 +46,14 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieAvroOrcReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
@@ -304,12 +303,12 @@ public class TableSchemaResolver {
   }
 
   private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {
-    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getHadoopConf());
+    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class));
     return avroSchemaConverter.convert(parquetSchema);
   }
 
   private MessageType convertAvroSchemaToParquet(Schema schema) {
-    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getHadoopConf());
+    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class));
     return avroSchemaConverter.convert(schema);
   }
 
@@ -331,19 +330,22 @@ public class TableSchemaResolver {
   private MessageType readSchemaFromParquetBaseFile(Path parquetFilePath) throws IOException {
     LOG.info("Reading schema from {}", parquetFilePath);
 
-    FileSystem fs = (FileSystem) metaClient.getRawHoodieStorage().getFileSystem();
     ParquetMetadata fileFooter =
-        ParquetFileReader.readFooter(fs.getConf(), parquetFilePath, ParquetMetadataConverter.NO_FILTER);
+        ParquetFileReader.readFooter(
+            metaClient.getRawHoodieStorage().unwrapConfAs(Configuration.class),
+            parquetFilePath, ParquetMetadataConverter.NO_FILTER);
     return fileFooter.getFileMetaData().getSchema();
   }
 
   private MessageType readSchemaFromHFileBaseFile(Path hFilePath) throws IOException {
     LOG.info("Reading schema from {}", hFilePath);
 
-    FileSystem fs = (FileSystem) metaClient.getRawHoodieStorage().getFileSystem();
     try (HoodieFileReader fileReader =
              HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-                 .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, fs.getConf(), new StoragePath(hFilePath.toUri()))) {
+                 .getFileReader(
+                     ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
+                     metaClient.getRawHoodieStorage().getConf(),
+                     new StoragePath(hFilePath.toUri()))) {
       return convertAvroSchemaToParquet(fileReader.getSchema());
     }
   }
@@ -351,8 +353,7 @@ public class TableSchemaResolver {
   private MessageType readSchemaFromORCBaseFile(StoragePath orcFilePath) throws IOException {
     LOG.info("Reading schema from {}", orcFilePath);
 
-    FileSystem fs = (FileSystem) metaClient.getRawHoodieStorage().getFileSystem();
-    HoodieAvroOrcReader orcReader = new HoodieAvroOrcReader(fs.getConf(), orcFilePath);
+    HoodieAvroOrcReader orcReader = new HoodieAvroOrcReader(metaClient.getRawHoodieStorage().getConf(), orcFilePath);
     return convertAvroSchemaToParquet(orcReader.getSchema());
   }
 

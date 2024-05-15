@@ -42,7 +42,7 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
 
   @Test
   public void testArchiving() throws Exception {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
     // Create table and connect
     String tableName = tableName();
@@ -57,7 +57,7 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
     // Create six commits
     for (int i = 100; i < 106; i++) {
       String timestamp = String.valueOf(i);
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath,timestamp, hadoopConf());
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, storageConf());
     }
 
     Object cmdResult = shell.evaluate(() -> "trigger archival --minCommits 2 --maxCommits 3 --commitsRetainedByCleaner 1 --enableMetadata false");

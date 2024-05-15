@@ -27,6 +27,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -67,7 +68,7 @@ public class HoodieRowDataFileWriterFactory {
         writeConfig.getDynamicBloomFilterMaxNumEntries(),
         writeConfig.getBloomFilterType());
     HoodieRowDataParquetWriteSupport writeSupport =
-        new HoodieRowDataParquetWriteSupport(table.getHadoopConf(), rowType, filter);
+        new HoodieRowDataParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), rowType, filter);
     return new HoodieRowDataParquetWriter(
         new StoragePath(path.toUri()), new HoodieParquetConfig<>(
         writeSupport,

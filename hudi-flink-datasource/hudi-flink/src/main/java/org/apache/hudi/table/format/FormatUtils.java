@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -151,7 +152,8 @@ public class FormatUtils {
       org.apache.flink.configuration.Configuration flinkConf,
       Configuration hadoopConf) {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(split.getTablePath(), hadoopConf);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+        split.getTablePath(), HadoopFSUtils.getStorageConf(hadoopConf));
     return HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(split.getTablePath())
@@ -195,8 +197,8 @@ public class FormatUtils {
           split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
       HoodieUnMergedLogRecordScanner.Builder scannerBuilder =
           HoodieUnMergedLogRecordScanner.newBuilder()
-              .withStorage(
-                  HoodieStorageUtils.getStorage(split.getTablePath(), hadoopConf))
+              .withStorage(HoodieStorageUtils.getStorage(
+                  split.getTablePath(), HadoopFSUtils.getStorageConf(hadoopConf)))
           .withBasePath(split.getTablePath())
           .withLogFilePaths(split.getLogPaths().get())
           .withReaderSchema(logSchema)
@@ -257,7 +259,8 @@ public class FormatUtils {
       Configuration hadoopConf) {
     String basePath = writeConfig.getBasePath();
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(HoodieStorageUtils.getStorage(basePath, hadoopConf))
+        .withStorage(HoodieStorageUtils.getStorage(
+            basePath, HadoopFSUtils.getStorageConf(hadoopConf)))
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)
         .withReaderSchema(logSchema)

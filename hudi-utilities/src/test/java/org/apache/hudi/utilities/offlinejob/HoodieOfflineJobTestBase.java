@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
@@ -107,7 +108,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
   // -------------------------------------------------------------------------
   static class TestHelpers {
     static void assertNCompletedCommits(int expected, String tablePath) {
-      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
+      HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getWriteTimeline().filterCompletedInstants();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
       int numCommits = timeline.countInstants();
@@ -115,7 +116,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     }
 
     static void assertNCleanCommits(int expected, String tablePath) {
-      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
+      HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
       int numCleanCommits = timeline.countInstants();
@@ -123,7 +124,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     }
 
     static void assertNClusteringCommits(int expected, String tablePath) {
-      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
+      HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
       int numCommits = timeline.countInstants();

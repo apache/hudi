@@ -338,7 +338,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
           .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
           .collect(Collectors.toList());
       List<GenericRecord> recordsRead =
-          HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths, basePath(), new JobConf(hadoopConf()), true, populateMetaFields);
+          HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths, basePath(), new JobConf(storageConf().unwrap()), true, populateMetaFields);
       // Wrote 20 records and deleted 20 records, so remaining 20-20 = 0
       assertEquals(0, recordsRead.size(), "Must contain 0 records");
     }

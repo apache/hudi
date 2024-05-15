@@ -73,7 +73,7 @@ public class TestSavepointsCommand extends CLIFunctionalTestHarness {
     // generate four savepoints
     for (int i = 100; i < 104; i++) {
       String instantTime = String.valueOf(i);
-      HoodieTestDataGenerator.createSavepointFile(tablePath, instantTime, hadoopConf());
+      HoodieTestDataGenerator.createSavepointFile(tablePath, instantTime, storageConf());
     }
 
     Object result = shell.evaluate(() -> "savepoints show");
@@ -100,7 +100,7 @@ public class TestSavepointsCommand extends CLIFunctionalTestHarness {
     // generate four savepoints
     for (int i = 100; i < 104; i++) {
       String instantTime = String.valueOf(i);
-      HoodieTestDataGenerator.createSavepointFile(tablePath, instantTime, hadoopConf());
+      HoodieTestDataGenerator.createSavepointFile(tablePath, instantTime, storageConf());
     }
 
     // Before refresh, no instant

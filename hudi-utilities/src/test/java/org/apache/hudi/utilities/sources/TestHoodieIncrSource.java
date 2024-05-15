@@ -38,13 +38,13 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -81,21 +81,21 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   }
 
   @Override
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException {
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
     props = HoodieTableMetaClient.withPropertyBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(tableType)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
         .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
+    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, props);
   }
 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testHoodieIncrSource(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
@@ -137,7 +137,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   @EnumSource(HoodieTableType.class)
   public void testHoodieIncrSourceInflightCommitBeforeCompletedCommit(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(2).build())
@@ -217,7 +217,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   @EnumSource(HoodieTableType.class)
   public void testHoodieIncrSourceWithPendingTableServices(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(10, 12).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(9).build())

@@ -30,11 +30,11 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -73,11 +73,11 @@ public abstract class BaseFileUtils {
   /**
    * Read the rowKey list from the given data file.
    *
-   * @param configuration configuration to build fs object.
+   * @param configuration configuration to build storage object.
    * @param filePath      the data file path.
    * @return set of row keys
    */
-  public Set<String> readRowKeys(Configuration configuration, StoragePath filePath) {
+  public Set<String> readRowKeys(StorageConfiguration<?> configuration, StoragePath filePath) {
     return filterRowKeys(configuration, filePath, new HashSet<>());
   }
 
@@ -88,7 +88,7 @@ public abstract class BaseFileUtils {
    * @param filePath      the data file path.
    * @return a BloomFilter object.
    */
-  public BloomFilter readBloomFilterFromMetadata(Configuration configuration, StoragePath filePath) {
+  public BloomFilter readBloomFilterFromMetadata(StorageConfiguration<?> configuration, StoragePath filePath) {
     Map<String, String> footerVals =
         readFooter(configuration, false, filePath,
             HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
@@ -118,7 +118,7 @@ public abstract class BaseFileUtils {
    * @param filePath      the data file path.
    * @return a array of two string where the first is min record key and the second is max record key.
    */
-  public String[] readMinMaxRecordKeys(Configuration configuration, StoragePath filePath) {
+  public String[] readMinMaxRecordKeys(StorageConfiguration<?> configuration, StoragePath filePath) {
     Map<String, String> minMaxKeys = readFooter(configuration, true, filePath,
         HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER, HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER);
     if (minMaxKeys.size() != 2) {
@@ -138,7 +138,7 @@ public abstract class BaseFileUtils {
    * @param filePath      the data file path.
    * @return a list of GenericRecord.
    */
-  public abstract List<GenericRecord> readAvroRecords(Configuration configuration, StoragePath filePath);
+  public abstract List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath);
 
   /**
    * Read the data file using the given schema
@@ -148,7 +148,7 @@ public abstract class BaseFileUtils {
    * @param filePath      the data file path.
    * @return a list of GenericRecord.
    */
-  public abstract List<GenericRecord> readAvroRecords(Configuration configuration, StoragePath filePath, Schema schema);
+  public abstract List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath, Schema schema);
 
   /**
    * Read the footer data of the given data file.
@@ -159,7 +159,7 @@ public abstract class BaseFileUtils {
    * @param footerNames   the footer names to read.
    * @return a map where the key is the footer name and the value is the footer value.
    */
-  public abstract Map<String, String> readFooter(Configuration configuration, boolean required, StoragePath filePath,
+  public abstract Map<String, String> readFooter(StorageConfiguration<?> configuration, boolean required, StoragePath filePath,
                                                  String... footerNames);
 
   /**
@@ -168,58 +168,58 @@ public abstract class BaseFileUtils {
    * @param configuration configuration.
    * @param filePath      the data file path.
    */
-  public abstract long getRowCount(Configuration configuration, StoragePath filePath);
+  public abstract long getRowCount(StorageConfiguration<?> configuration, StoragePath filePath);
 
   /**
    * Read the rowKey list matching the given filter, from the given data file.
    * If the filter is empty, then this will return all the row keys.
    *
-   * @param configuration configuration to build fs object.
+   * @param configuration configuration to build storage object.
    * @param filePath      the data file path.
    * @param filter        record keys filter.
    * @return set of row keys matching candidateRecordKeys.
    */
-  public abstract Set<String> filterRowKeys(Configuration configuration, StoragePath filePath, Set<String> filter);
+  public abstract Set<String> filterRowKeys(StorageConfiguration<?> configuration, StoragePath filePath, Set<String> filter);
 
   /**
    * Fetch {@link HoodieKey}s from the given data file.
    *
-   * @param configuration configuration to build fs object.
+   * @param configuration configuration to build storage object.
    * @param filePath      the data file path.
    * @return {@link List} of {@link HoodieKey}s fetched from the data file.
    */
-  public abstract List<HoodieKey> fetchHoodieKeys(Configuration configuration, StoragePath filePath);
+  public abstract List<HoodieKey> fetchHoodieKeys(StorageConfiguration<?> configuration, StoragePath filePath);
 
   /**
    * Provides a closable iterator for reading the given data file.
    *
-   * @param configuration   configuration to build fs object.
+   * @param configuration   configuration to build storage object.
    * @param filePath        the data file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file.
    */
-  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration,
+  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration,
                                                                    StoragePath filePath,
                                                                    Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Provides a closable iterator for reading the given data file.
    *
-   * @param configuration configuration to build fs object.
+   * @param configuration configuration to build storage object.
    * @param filePath      the data file path.
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file.
    */
-  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, StoragePath filePath);
+  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath);
 
   /**
    * Fetch {@link HoodieKey}s from the given data file.
    *
-   * @param configuration   configuration to build fs object.
+   * @param configuration   configuration to build storage object.
    * @param filePath        the data file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link List} of{@link HoodieKey}s fetched from the data file.
    */
-  public abstract List<HoodieKey> fetchHoodieKeys(Configuration configuration,
+  public abstract List<HoodieKey> fetchHoodieKeys(StorageConfiguration<?> configuration,
                                                                            StoragePath filePath,
                                                                            Option<BaseKeyGenerator> keyGeneratorOpt);
 
@@ -230,7 +230,7 @@ public abstract class BaseFileUtils {
    * @param filePath      the data file path.
    * @return the Avro schema of the data file.
    */
-  public abstract Schema readAvroSchema(Configuration configuration, StoragePath filePath);
+  public abstract Schema readAvroSchema(StorageConfiguration<?> configuration, StoragePath filePath);
 
   /**
    * @return The subclass's {@link HoodieFileFormat}.

@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodiePartitionMetadata
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.storage.StoragePath
@@ -59,9 +59,9 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
     val dryRun = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
     val tablePath = getBasePath(tableName)
 
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(tablePath).build
+    val metaClient = createMetaClient(jsc, tablePath)
 
-    val engineContext: HoodieLocalEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf)
+    val engineContext: HoodieLocalEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf)
     val partitionPaths: util.List[String] = FSUtils.getAllPartitionPaths(engineContext, tablePath, false, false)
     val basePath: StoragePath = new StoragePath(tablePath)
 

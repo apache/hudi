@@ -64,7 +64,7 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
     final TypedProperties props = new TypedProperties();
     props.put("hoodie.streamer.checkpoint.provider.path", topicPath.toString());
     final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
-    provider.init(HoodieTestUtils.getDefaultHadoopConf());
+    provider.init(HoodieTestUtils.getDefaultStorageConf().unwrap());
     assertEquals("topic1,0:300,1:200", provider.getCheckpoint());
   }
 
@@ -85,7 +85,7 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
     final TypedProperties props = new TypedProperties();
     props.put("hoodie.streamer.checkpoint.provider.path", topicPath.toString());
     final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
-    provider.init(HoodieTestUtils.getDefaultHadoopConf());
+    provider.init(HoodieTestUtils.getDefaultStorageConf().unwrap());
     assertThrows(HoodieException.class, provider::getCheckpoint);
   }
 }

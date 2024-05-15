@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -42,6 +41,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
@@ -278,11 +278,11 @@ public class BaseRollbackHelper implements Serializable {
         context.parallelize(originalRollbackStats)
             .mapToPair((SerializablePairFunction<HoodieRollbackStat, String, HoodieRollbackStat>) t -> Pair.of(t.getPartitionPath(), t));
 
-    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(context.getHadoopConf());
+    StorageConfiguration<?> storageConf = context.getStorageConf();
 
     // lets do left outer join and append missing log files to HoodieRollbackStat for each partition path.
     List<HoodieRollbackStat> finalRollbackStats = addMissingLogFilesAndGetRollbackStats(partitionPathToRollbackStatsHoodieData,
-        partitionPathToLogFilesHoodieData, basePathStr, serializableConfiguration);
+        partitionPathToLogFilesHoodieData, basePathStr, storageConf);
     return finalRollbackStats;
   }
 
@@ -310,12 +310,12 @@ public class BaseRollbackHelper implements Serializable {
    * @param partitionPathToRollbackStatsHoodieData HoodieRollbackStat by partition path
    * @param partitionPathToLogFilesHoodieData list of missing log files by partition path
    * @param basePathStr base path
-   * @param serializableConfiguration hadoop configuration
+   * @param storageConf storage configuration
    * @return
    */
   private List<HoodieRollbackStat> addMissingLogFilesAndGetRollbackStats(HoodiePairData<String, HoodieRollbackStat> partitionPathToRollbackStatsHoodieData,
                                                                          HoodiePairData<String, List<String>> partitionPathToLogFilesHoodieData,
-                                                                         String basePathStr, SerializableConfiguration serializableConfiguration) {
+                                                                         String basePathStr, StorageConfiguration<?> storageConf) {
     return partitionPathToRollbackStatsHoodieData
         .leftOuterJoin(partitionPathToLogFilesHoodieData)
         .map((SerializableFunction<Pair<String, Pair<HoodieRollbackStat, Option<List<String>>>>, HoodieRollbackStat>) v1 -> {
@@ -327,7 +327,7 @@ public class BaseRollbackHelper implements Serializable {
 
             // fetch file sizes.
             StoragePath fullPartitionPath = StringUtils.isNullOrEmpty(partition) ? new StoragePath(basePathStr) : new StoragePath(basePathStr, partition);
-            HoodieStorage storage = HoodieStorageUtils.getStorage(fullPartitionPath, serializableConfiguration.get());
+            HoodieStorage storage = HoodieStorageUtils.getStorage(fullPartitionPath, storageConf);
             List<Option<StoragePathInfo>> pathInfoOptList = FSUtils.getPathInfoUnderPartition(storage,
                 fullPartitionPath, new HashSet<>(missingLogFiles), true);
             List<StoragePathInfo> pathInfoList = pathInfoOptList.stream().filter(fileStatusOption -> fileStatusOption.isPresent())

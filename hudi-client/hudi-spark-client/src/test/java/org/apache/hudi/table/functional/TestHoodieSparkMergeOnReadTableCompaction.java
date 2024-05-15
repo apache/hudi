@@ -187,7 +187,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   }
 
   private long readTableTotalRecordsNum() {
-    return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(),
+    return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(),
         Arrays.stream(dataGen.getPartitionPaths()).map(p -> Paths.get(basePath(), p).toString()).collect(Collectors.toList()), basePath()).size();
   }
 

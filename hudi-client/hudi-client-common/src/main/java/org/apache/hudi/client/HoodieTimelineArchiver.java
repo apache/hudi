@@ -524,7 +524,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     if (table.isMetadataTable()) {
       HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
           .setBasePath(HoodieTableMetadata.getDatasetBasePath(config.getBasePath()))
-          .setConf(metaClient.getHadoopConf())
+          .setConf(metaClient.getStorageConf())
           .build();
       Option<HoodieInstant> qualifiedEarliestInstant =
           TimelineUtils.getEarliestInstantForMetadataArchival(

@@ -29,7 +29,6 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -510,7 +509,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   private void testTableOperationsForMetaIndexImpl(final HoodieWriteConfig writeConfig) throws Exception {
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
     testTableOperationsImpl(engineContext, writeConfig);
   }
 
@@ -548,7 +547,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-            writeConfig, context.getHadoopConf().get(), new StoragePath(baseFile.getPath()));
+            writeConfig, context.getStorageConf(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (populateMetaFields) {
@@ -698,7 +697,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
 
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
       // Write 1 (Bulk insert)
@@ -976,7 +975,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-            table.getConfig(), context.getHadoopConf().get(), new StoragePath(baseFile.getPath()));
+            table.getConfig(), context.getStorageConf(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (enableMetaFields) {
@@ -1208,7 +1207,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testFailedBootstrap() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     // Config with 5 fileGroups for record index
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
@@ -1296,7 +1295,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @EnumSource(HoodieTableType.class)
   public void testFirstCommitRollback(HoodieTableType tableType) throws Exception {
     init(tableType);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext,
         getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
@@ -1354,7 +1353,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   public void testTableOperationsWithRestore() throws Exception {
     this.tableType = COPY_ON_WRITE;
     init(tableType);
-    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withRollbackUsingMarkers(false).build();
     testTableOperationsImpl(engineContext, writeConfig);
@@ -1368,7 +1367,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   public void testTableOperationsWithRestoreforMOR() throws Exception {
     this.tableType = MERGE_ON_READ;
     init(tableType);
-    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withRollbackUsingMarkers(false).build();
     testTableOperationsImpl(engineContext, writeConfig);
@@ -1378,13 +1377,13 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   public void testColStatsPrefixLookup() throws IOException {
     this.tableType = COPY_ON_WRITE;
     initPath();
-    initFileSystem(basePath, hadoopConf);
+    initFileSystem(basePath, storageConf);
     storage.createDirectory(new StoragePath(basePath));
     initMetaClient(tableType);
     initTestDataGenerator();
     metadataTableBasePath = getMetadataTableBasePath(basePath);
 
-    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
     // disable small file handling so that every insert goes to a new file group.
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withRollbackUsingMarkers(false)
@@ -1512,7 +1511,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     tableType = MERGE_ON_READ;
     initPath();
     init(tableType);
-    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
     HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig);
     // Write 1 (Bulk insert)
     String commit1 = HoodieActiveTimeline.createNewInstantTime();
@@ -1542,7 +1541,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // ensure that 000003 is after rollback of the partially failed 2nd commit.
     HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(
-        metaClient.getHadoopConf(), metaClient.getMetaPath() + "/metadata/");
+        metaClient.getStorageConf(), metaClient.getMetaPath() + "/metadata/");
     HoodieInstant rollbackInstant =
         metadataMetaClient.getActiveTimeline().getRollbackTimeline().getInstants().get(0);
 
@@ -1662,7 +1661,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testMetadataMultiWriter() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
-    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     Properties properties = new Properties();
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
@@ -1734,7 +1733,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testMultiWriterForDoubleLocking() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
-    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     Properties properties = new Properties();
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
@@ -1785,7 +1784,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   public void testReattemptOfFailedClusteringCommit() throws Exception {
     tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
-    context = new HoodieJavaEngineContext(hadoopConf);
+    context = new HoodieJavaEngineContext(storageConf);
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
 
@@ -1859,7 +1858,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   public void testMDTCompactionWithFailedCommits() throws Exception {
     tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
-    context = new HoodieJavaEngineContext(hadoopConf);
+    context = new HoodieJavaEngineContext(storageConf);
     HoodieWriteConfig initialConfig = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProperties(initialConfig.getProps())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).build()).build();
@@ -1919,7 +1918,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testMetadataReadWithNoCompletedCommits() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     List<HoodieRecord> records;
     List<WriteStatus> writeStatuses;
@@ -1945,7 +1944,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testReader() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     List<HoodieRecord> records;
     List<WriteStatus> writeStatuses;
@@ -2005,7 +2004,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Disabled
   public void testCleaningArchivingAndCompaction() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE, false);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     final int maxDeltaCommitsBeforeCompaction = 3;
     HoodieWriteConfig config = getWriteConfigBuilder(true, true, false)
@@ -2100,7 +2099,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testRollbackDuringUpgradeForDoubleLocking() throws IOException {
     init(HoodieTableType.COPY_ON_WRITE, false);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     // Perform a commit. This should bootstrap the metadata table with latest version.
     List<HoodieRecord> records;
@@ -2173,7 +2172,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testRollbackOfPartiallyFailedCommitWithNewPartitions() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext,
         getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, false, false).build(),
@@ -2224,7 +2223,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testBootstrapWithTableNotFound() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
-    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     // create initial commit
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).build();
@@ -2280,7 +2279,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testErrorCases() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     // TESTCASE: If commit on the metadata table succeeds but fails on the dataset, then on next init the metadata table
     // should be rolled back to last valid commit.
@@ -2346,7 +2345,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testNonPartitioned() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE, false);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     HoodieTestDataGenerator nonPartitionedGenerator = new HoodieTestDataGenerator(new String[] {""});
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true))) {
@@ -2368,7 +2367,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testMetadataMetrics() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE, false);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, true).build();
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
@@ -2414,7 +2413,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testRepeatedActionWithSameInstantTime() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     Properties props = new Properties();
     props.put(HoodieCleanConfig.ALLOW_MULTIPLE_CLEANS.key(), "false");
@@ -2637,7 +2636,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Execute compaction on metadata table.
     try (JavaHoodieBackedTableMetadataWriter metadataWriter =
-             (JavaHoodieBackedTableMetadataWriter) JavaHoodieBackedTableMetadataWriter.create(hadoopConf, client.getConfig(), context, Option.empty())) {
+             (JavaHoodieBackedTableMetadataWriter) JavaHoodieBackedTableMetadataWriter.create(storageConf, client.getConfig(), context, Option.empty())) {
       Properties metadataProps = metadataWriter.getWriteConfig().getProps();
       metadataProps.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3");
       HoodieWriteConfig metadataWriteConfig = HoodieWriteConfig.newBuilder()
@@ -2684,11 +2683,11 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     HoodieTimer timer = HoodieTimer.start();
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     // Partitions should match
     FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(),
-        new SerializableConfiguration(hadoopConf), config.getBasePath(), config.shouldAssumeDatePartitioning());
+        storageConf.newInstance(), config.getBasePath(), config.shouldAssumeDatePartitioning());
     List<String> fsPartitions = fsBackedTableMetadata.getAllPartitionPaths();
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
 

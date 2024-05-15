@@ -76,7 +76,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
   @BeforeEach
   public void setUp() throws IOException {
     jsc = JavaSparkContext.fromSparkContext(spark().sparkContext());
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
   }
 
   private String generateS3EventMetadata(Long objectSize, String bucketName, String objectKey, String commitTime)

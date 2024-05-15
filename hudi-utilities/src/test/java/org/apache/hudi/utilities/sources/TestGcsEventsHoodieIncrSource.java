@@ -110,7 +110,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
   @BeforeEach
   public void setUp() throws IOException {
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     jsc = JavaSparkContext.fromSparkContext(spark().sparkContext());
     String schemaFilePath = TestGcsEventsHoodieIncrSource.class.getClassLoader().getResource("schema/sample_gcs_data.avsc").getPath();
     TypedProperties props = new TypedProperties();
