@@ -27,9 +27,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -99,7 +99,8 @@ public class ParquetUtils extends BaseFileUtils {
     ParquetMetadata footer;
     try {
       // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader.readFooter(HadoopFSUtils.getFs(parquetFileHadoopPath.toString(), conf).getConf(), parquetFileHadoopPath);
+      footer = ParquetFileReader.readFooter(HoodieStorageUtils.getStorage(
+          parquetFileHadoopPath.toString(), conf).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFileHadoopPath, e);
     }
@@ -123,7 +124,7 @@ public class ParquetUtils extends BaseFileUtils {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
     Configuration conf = configuration.unwrapCopyAs(Configuration.class);
-    conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
+    conf.addResource(HoodieStorageUtils.getStorage(filePath.toString(), configuration).getConf().unwrapAs(Configuration.class));
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
     Set<String> rowKeys = new HashSet<>();
@@ -175,7 +176,7 @@ public class ParquetUtils extends BaseFileUtils {
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       Configuration conf = configuration.unwrapCopyAs(Configuration.class);
-      conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
+      conf.addResource(HoodieStorageUtils.getStorage(filePath.toString(), configuration).getConf().unwrapAs(Configuration.class));
       Schema readSchema = keyGeneratorOpt
           .map(keyGenerator -> {
             List<String> fields = new ArrayList<>();

@@ -19,20 +19,19 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.hadoop.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -121,7 +120,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         parquetWriter = HoodieFileWriterFactory.getFileWriter(
             HoodieFileFormat.PARQUET,
             outputStream,
-            HadoopFSUtils.getStorageConf(new Configuration()),
+            HoodieStorageUtils.getStorageConf(new Configuration()),
             config,
             writerSchema,
             recordType);
@@ -151,7 +150,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
-    StorageConfiguration<?> inlineConf = FSUtils.buildInlineConf(blockContentLoc.getStorageConf());
+    StorageConfiguration<?> inlineConf = blockContentLoc.getStorageConf().getInline();
 
     StoragePath inlineLogFilePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),

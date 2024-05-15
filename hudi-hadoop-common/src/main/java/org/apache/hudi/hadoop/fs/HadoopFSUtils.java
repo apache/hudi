@@ -20,13 +20,11 @@
 package org.apache.hudi.hadoop.fs;
 
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BufferedFSInputStream;
@@ -41,8 +39,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
-
-import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Utility functions related to accessing the file storage on Hadoop.
@@ -88,7 +84,7 @@ public class HadoopFSUtils {
   }
 
   public static FileSystem getFs(StoragePath path, Configuration conf) {
-    return getFs(new Path(path.toUri()), conf);
+    return getFs(convertToHadoopPath(path), conf);
   }
 
   public static FileSystem getFs(Path path, Configuration conf) {
@@ -107,25 +103,6 @@ public class HadoopFSUtils {
       return getFs(addSchemeIfLocalPath(pathStr), conf);
     }
     return getFs(pathStr, conf);
-  }
-
-  public static HoodieStorage getStorageWithWrapperFS(StoragePath path,
-                                                      StorageConfiguration<?> conf,
-                                                      boolean enableRetry,
-                                                      long maxRetryIntervalMs,
-                                                      int maxRetryNumbers,
-                                                      long initialRetryIntervalMs,
-                                                      String retryExceptions,
-                                                      ConsistencyGuard consistencyGuard) {
-    FileSystem fileSystem = getFs(path, conf.unwrapCopyAs(Configuration.class));
-
-    if (enableRetry) {
-      fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
-          maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptions);
-    }
-    checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
-        "File System not expected to be that of HoodieWrapperFileSystem");
-    return new HoodieHadoopStorage(new HoodieWrapperFileSystem(fileSystem, consistencyGuard));
   }
 
   public static Path addSchemeIfLocalPath(String path) {
@@ -190,16 +167,22 @@ public class HadoopFSUtils {
    * @param fs         instance of {@link FileSystem} in use.
    * @param filePath   path of the file.
    * @param bufferSize buffer size to be used.
+   * @param wrapStream if false, don't attempt to wrap the stream
    * @return the right {@link FSDataInputStream} as required.
    */
   public static FSDataInputStream getFSDataInputStream(FileSystem fs,
                                                        StoragePath filePath,
-                                                       int bufferSize) {
+                                                       int bufferSize,
+                                                       boolean wrapStream) {
     FSDataInputStream fsDataInputStream = null;
     try {
       fsDataInputStream = fs.open(convertToHadoopPath(filePath), bufferSize);
     } catch (IOException e) {
       throw new HoodieIOException(String.format("Exception creating input stream from file: %s", filePath), e);
+    }
+
+    if (!wrapStream) {
+      return fsDataInputStream;
     }
 
     if (isGCSFileSystem(fs)) {
@@ -272,5 +255,13 @@ public class HadoopFSUtils {
 
   private static StorageConfiguration<Configuration> getStorageConf(Configuration conf, boolean copy) {
     return new HadoopStorageConfiguration(conf, copy);
+  }
+
+  public static Configuration registerFileSystem(StoragePath file, Configuration conf) {
+    Configuration returnConf = new Configuration(conf);
+    String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
+    returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
+        HoodieWrapperFileSystem.class.getName());
+    return returnConf;
   }
 }

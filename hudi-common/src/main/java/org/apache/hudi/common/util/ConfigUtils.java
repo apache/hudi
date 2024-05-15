@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.PropertiesConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -555,5 +556,9 @@ public class ConfigUtils {
     config.setValue(USE_NATIVE_HFILE_READER,
         Boolean.toString(storageConf.getBoolean(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue())));
     return config;
+  }
+
+  public static TypedProperties loadGlobalProperties() {
+    return ((PropertiesConfig) ReflectionUtils.loadClass("org.apache.hudi.common.config.DFSPropertiesConfiguration")).getGlobalProperties();
   }
 }
