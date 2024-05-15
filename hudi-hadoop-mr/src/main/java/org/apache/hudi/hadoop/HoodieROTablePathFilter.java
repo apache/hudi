@@ -187,7 +187,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
           HoodieTableMetaClient metaClient = metaClientCache.get(baseDir.toString());
           if (null == metaClient) {
             metaClient = HoodieTableMetaClient.builder().setConf(
-                (Configuration) storage.getConf()).setBasePath(baseDir.toString()).setLoadActiveTimelineOnLoad(true).build();
+                (Configuration) storage.unwrapConf()).setBasePath(baseDir.toString()).setLoadActiveTimelineOnLoad(true).build();
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 

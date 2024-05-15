@@ -522,7 +522,7 @@ public class FileCreateUtils {
     Map<String, Long> toReturn = new HashMap<>();
     try {
       HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
-          (Configuration) storage.getConf(), basePath);
+          (Configuration) storage.unwrapConf(), basePath);
       for (String path : paths) {
         TableFileSystemView.BaseFileOnlyView fileSystemView =
             new HoodieTableFileSystemView(metaClient,
