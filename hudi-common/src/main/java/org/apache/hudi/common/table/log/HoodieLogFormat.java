@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -57,6 +58,8 @@ public interface HoodieLogFormat {
   String UNKNOWN_WRITE_TOKEN = "1-0-1";
 
   String DEFAULT_WRITE_TOKEN = "0-0-0";
+
+  String DEFAULT_LOG_FORMAT_WRITER = "org.apache.hudi.common.table.log.HoodieLogFormatWriter";
 
   /**
    * Writer interface to allow appending block to this file format.
@@ -284,7 +287,10 @@ public interface HoodieLogFormat {
       if (sizeThreshold == null) {
         sizeThreshold = DEFAULT_SIZE_THRESHOLD;
       }
-      return new HoodieLogFormatWriter(storage, logFile, bufferSize, replication, sizeThreshold,
+      return (Writer) ReflectionUtils.loadClass(
+          DEFAULT_LOG_FORMAT_WRITER,
+          new Class[] {HoodieStorage.class, HoodieLogFile.class, Integer.class, Short.class, Long.class, String.class, HoodieLogFileWriteCallback.class},
+          storage, logFile, bufferSize, replication, sizeThreshold,
           rolloverLogWriteToken, logFileWriteCallback);
     }
   }
