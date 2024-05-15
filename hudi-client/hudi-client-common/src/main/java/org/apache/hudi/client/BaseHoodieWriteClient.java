@@ -517,9 +517,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Write Status
    */
   public O postWrite(HoodieWriteMetadata<O> result, String instantTime, HoodieTable hoodieTable) {
-    if (result.getIndexLookupDuration().isPresent()) {
-      metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
-    }
     if (result.isCommitted()) {
       // Perform post commit operations.
       if (result.getFinalizeDuration().isPresent()) {
