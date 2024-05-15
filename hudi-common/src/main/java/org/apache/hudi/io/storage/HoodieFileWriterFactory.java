@@ -25,10 +25,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -43,39 +40,18 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 public class HoodieFileWriterFactory {
 
-  private static HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType) {
-    switch (recordType) {
-      case AVRO:
-        try {
-          Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.hadoop.HoodieAvroFileWriterFactory");
-          return (HoodieFileWriterFactory) clazz.newInstance();
-        } catch (IllegalAccessException | IllegalArgumentException | InstantiationException e) {
-          throw new HoodieException("Unable to create HoodieAvroFileWriterFactory", e);
-        }
-      case SPARK:
-        try {
-          Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory");
-          return (HoodieFileWriterFactory) clazz.newInstance();
-        } catch (IllegalAccessException | IllegalArgumentException | InstantiationException e) {
-          throw new HoodieException("Unable to create HoodieSparkFileWriterFactory", e);
-        }
-      default:
-        throw new UnsupportedOperationException(recordType + " record type not supported yet.");
-    }
-  }
-
   public static <T, I, K, O> HoodieFileWriter getFileWriter(
       String instantTime, StoragePath path, StorageConfiguration<?> conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier, HoodieRecordType recordType) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
-    HoodieFileWriterFactory factory = getWriterFactory(recordType);
+    HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(conf).getWriterFactory(recordType);
     return factory.getFileWriterByFormat(extension, instantTime, path, conf, config, schema, taskContextSupplier);
   }
 
   public static <T, I, K, O> HoodieFileWriter getFileWriter(HoodieFileFormat format, OutputStream outputStream,
                                                             StorageConfiguration<?> conf, HoodieConfig config, Schema schema, HoodieRecordType recordType)
       throws IOException {
-    HoodieFileWriterFactory factory = getWriterFactory(recordType);
+    HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(conf).getWriterFactory(recordType);
     return factory.getFileWriterByFormat(format, outputStream, conf, config, schema);
   }
 

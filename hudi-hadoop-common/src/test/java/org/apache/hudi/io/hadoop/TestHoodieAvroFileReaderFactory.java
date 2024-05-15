@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -48,7 +49,7 @@ public class TestHoodieAvroFileReaderFactory {
     // parquet file format.
     final StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(new Configuration());
     final StoragePath parquetPath = new StoragePath("/partition/path/f1_1-0-1_000.parquet");
-    HoodieFileReader parquetReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
+    HoodieFileReader parquetReader = HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, storageConf, parquetPath);
     assertTrue(parquetReader instanceof HoodieAvroParquetReader);
 
@@ -56,14 +57,15 @@ public class TestHoodieAvroFileReaderFactory {
     final StoragePath logPath = new StoragePath(
         "/partition/path/f.b51192a8-574b-4a85-b246-bcfec03ac8bf_100.log.2_1-0-1");
     final Throwable thrown = assertThrows(UnsupportedOperationException.class, () -> {
-      HoodieFileReader logWriter = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
+      HoodieFileReader logWriter = HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, storageConf, logPath);
     }, "should fail since log storage reader is not supported yet.");
     assertTrue(thrown.getMessage().contains("format not supported yet."));
 
     // Orc file format.
     final StoragePath orcPath = new StoragePath("/partition/path/f1_1-0-1_000.orc");
-    HoodieFileReader orcReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
+    HoodieFileReader orcReader = HoodieIOFactory.getIOFactory(storageConf)
+        .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, storageConf, orcPath);
     assertTrue(orcReader instanceof HoodieAvroOrcReader);
   }
