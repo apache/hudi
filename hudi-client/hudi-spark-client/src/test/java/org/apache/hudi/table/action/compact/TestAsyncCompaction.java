@@ -45,11 +45,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -223,7 +221,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
         metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
     assertEquals(compactInstantTime, pendingCompactionInstant.getTimestamp(), "Pending Compaction instant has expected instant time");
 
-    assertDoesNotThrow(() -> {
+    assertThrows(IllegalArgumentException.class, () -> {
       runNextDeltaCommits(client, readClient, Collections.singletonList(failedInstantTime), records, cfg, false,
           Collections.singletonList(compactInstantTime));
     }, "Latest pending compaction instant time can be earlier than this instant time");
@@ -280,14 +278,23 @@ public class TestAsyncCompaction extends CompactionTestBase {
         new ArrayList<>());
 
     // Schedule compaction but do not run them
-    assertNull(tryScheduleCompaction(compactionInstantTime, client, cfg), "Compaction Instant can be scheduled with older timestamp");
+    assertThrows(IllegalArgumentException.class, () -> {
+      // Schedule compaction but do not run them
+      scheduleCompaction(compactionInstantTime, client, cfg);
+    }, "Compaction Instant to be scheduled cannot have older timestamp");
 
     // Schedule with timestamp same as that of committed instant
-    assertNull(tryScheduleCompaction(secondInstantTime, client, cfg), "Compaction Instant to be scheduled can have same timestamp as committed instant");
+    assertThrows(IllegalArgumentException.class, () -> {
+      // Schedule compaction but do not run them
+      scheduleCompaction(secondInstantTime, client, cfg);
+    }, "Compaction Instant to be scheduled cannot have same timestamp as committed instant");
 
-    final String compactionInstantTime2 = HoodieActiveTimeline.createNewInstantTime();
-    // Schedule compaction but do not run them
-    assertNotNull(tryScheduleCompaction(compactionInstantTime2, client, cfg), "Compaction Instant can be scheduled with greater timestamp");
+    final String compactionInstantTime2 = "006";
+    scheduleCompaction(compactionInstantTime2, client, cfg);
+    assertThrows(IllegalArgumentException.class, () -> {
+      // Schedule compaction with the same times as a pending compaction
+      scheduleCompaction(secondInstantTime, client, cfg);
+    }, "Compaction Instant to be scheduled cannot have same timestamp as a pending compaction");
   }
 
   @Test
