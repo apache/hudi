@@ -31,8 +31,8 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.Properties
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
-import scala.collection.JavaConverters.asScalaIteratorConverter
+
+import scala.collection.JavaConverters._
 
 class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -76,11 +76,11 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
     newProps = HoodieTableMetaClient.reload(metaClient).getTableConfig.getProps
 
     val allPropKeys = new util.TreeSet[String]
-    allPropKeys.addAll(newProps.keySet.stream.iterator().asScala.map(key => key.toString).toList)
+    allPropKeys.addAll(newProps.keySet.stream.iterator().asScala.map(key => key.toString).toList.asJava)
     allPropKeys.addAll(oldProps.keySet)
 
     val rows = new util.ArrayList[Row](allPropKeys.size)
-    for (propKey <- allPropKeys) {
+    for (propKey <- allPropKeys.asScala) {
       rows.add(Row(propKey, oldProps.getOrDefault(propKey, "null"),
         newProps.getOrDefault(propKey, "null").toString))
     }

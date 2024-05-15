@@ -18,9 +18,10 @@
 
 package org.apache.spark.sql.hudi.catalog
 
+import org.apache.hudi.DataSourceWriteOptions.RECORDKEY_FIELD
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions.RECORDKEY_FIELD
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
 import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, SupportsWrite, TableCapability}
@@ -30,7 +31,8 @@ import org.apache.spark.sql.types.StructType
 
 import java.net.URI
 import java.util
-import scala.jdk.CollectionConverters.{mapAsScalaMapConverter, setAsJavaSetConverter}
+
+import scala.collection.JavaConverters._
 
 case class HoodieStagedTable(ident: Identifier,
                              locUriAndTableType: (URI, CatalogTableType),

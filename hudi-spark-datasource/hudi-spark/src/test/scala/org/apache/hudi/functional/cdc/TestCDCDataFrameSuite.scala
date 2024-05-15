@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
@@ -63,7 +63,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     var allVisibleCDCData = spark.emptyDataFrame
 
     // Insert Operation
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(options)
@@ -86,7 +86,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     // Upsert Operation
     val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
-    val records2 = recordsToStrings(hoodieRecords2).toList
+    val records2 = recordsToStrings(hoodieRecords2).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(options)
@@ -115,7 +115,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalInsertedCnt += insertedCnt2
 
     // Delete Operation With Clustering Operation
-    val records3 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).toList
+    val records3 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).asScala.toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(options)
@@ -144,7 +144,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(cdcDataFrom2To3, insertedCnt2, updatedCnt2, 20)
 
     // Insert Overwrite Operation
-    val records4 = recordsToStrings(dataGen.generateInserts("003", 50)).toList
+    val records4 = recordsToStrings(dataGen.generateInserts("003", 50)).asScala.toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF4.write.format("org.apache.hudi")
       .options(options)
@@ -166,14 +166,14 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
-    val records5 = recordsToStrings(dataGen.generateInserts("005", 7)).toList
+    val records5 = recordsToStrings(dataGen.generateInserts("005", 7)).asScala.toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
     inputDF5.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val records6 = recordsToStrings(dataGen.generateInserts("006", 3)).toList
+    val records6 = recordsToStrings(dataGen.generateInserts("006", 3)).asScala.toList
     val inputDF6 = spark.read.json(spark.sparkContext.parallelize(records6, 2))
     inputDF6.write.format("org.apache.hudi")
       .options(options)
@@ -181,7 +181,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .save(basePath)
 
     // Upsert Operation With Clean Operation
-    val records7 = recordsToStrings(dataGen.generateUniqueUpdates("007", 30)).toList
+    val records7 = recordsToStrings(dataGen.generateUniqueUpdates("007", 30)).asScala.toList
     val inputDF7 = spark.read.json(spark.sparkContext.parallelize(records7, 2))
     inputDF7.write.format("org.apache.hudi")
       .options(options)
@@ -208,7 +208,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Bulk_Insert Operation With Clean Operation
-    val records8 = recordsToStrings(dataGen.generateInserts("008", 20)).toList
+    val records8 = recordsToStrings(dataGen.generateInserts("008", 20)).asScala.toList
     val inputDF8 = spark.read.json(spark.sparkContext.parallelize(records8, 2))
     inputDF8.write.format("org.apache.hudi")
       .options(options)
@@ -253,7 +253,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     var allVisibleCDCData = spark.emptyDataFrame
 
     // 1. Insert Operation
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(options)
@@ -275,9 +275,9 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
     // 2. Upsert Operation
-    val records2_1 = recordsToStrings(dataGen.generateUniqueUpdates("001", 30)).toList
+    val records2_1 = recordsToStrings(dataGen.generateUniqueUpdates("001", 30)).asScala.toList
     val inputDF2_1 = spark.read.json(spark.sparkContext.parallelize(records2_1, 2))
-    val records2_2 = recordsToStrings(dataGen.generateInserts("001", 20)).toList
+    val records2_2 = recordsToStrings(dataGen.generateInserts("001", 20)).asScala.toList
     val inputDF2_2 = spark.read.json(spark.sparkContext.parallelize(records2_2, 2))
     inputDF2_1.union(inputDF2_2).write.format("org.apache.hudi")
       .options(options)
@@ -304,7 +304,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalInsertedCnt += insertedCnt2
 
     // 3. Delete Operation With Compaction Operation
-    val records3 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).toList
+    val records3 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).asScala.toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(options)
@@ -329,7 +329,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // 4. Bulk_Insert Operation
-    val records4 = recordsToStrings(dataGen.generateInserts("003", 100)).toList
+    val records4 = recordsToStrings(dataGen.generateInserts("003", 100)).asScala.toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF4.write.format("org.apache.hudi")
       .options(options)
@@ -351,7 +351,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // 5. Upsert Operation With Clustering Operation
-    val records5 = recordsToStrings(dataGen.generateUniqueUpdates("004", 60)).toList
+    val records5 = recordsToStrings(dataGen.generateUniqueUpdates("004", 60)).asScala.toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
     inputDF5.write.format("org.apache.hudi")
       .options(options)
@@ -381,7 +381,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(cdcDataFrom3To4, insertedCnt4, 0, 20)
 
     // 6. Insert Overwrite Operation
-    val records6 = recordsToStrings(dataGen.generateInserts("005", 70)).toList
+    val records6 = recordsToStrings(dataGen.generateInserts("005", 70)).asScala.toList
     val inputDF6 = spark.read.json(spark.sparkContext.parallelize(records6, 2))
     inputDF6.write.format("org.apache.hudi")
       .options(options)
@@ -403,14 +403,14 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // 7,8. insert 10 records
-    val records7 = recordsToStrings(dataGen.generateInserts("006", 7)).toList
+    val records7 = recordsToStrings(dataGen.generateInserts("006", 7)).asScala.toList
     val inputDF7 = spark.read.json(spark.sparkContext.parallelize(records7, 2))
     inputDF7.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val records8 = recordsToStrings(dataGen.generateInserts("007", 3)).toList
+    val records8 = recordsToStrings(dataGen.generateInserts("007", 3)).asScala.toList
     val inputDF8 = spark.read.json(spark.sparkContext.parallelize(records8, 2))
     inputDF8.write.format("org.apache.hudi")
       .options(options)
@@ -420,7 +420,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val commitTime8 = instant8.getTimestamp
 
     // 8. Upsert Operation With Clean Operation
-    val records9 = recordsToStrings(dataGen.generateUniqueUpdates("008", 30)).toList
+    val records9 = recordsToStrings(dataGen.generateUniqueUpdates("008", 30)).asScala.toList
     val inputDF9 = spark.read.json(spark.sparkContext.parallelize(records9, 2))
     inputDF9.write.format("org.apache.hudi")
       .options(options)
@@ -473,7 +473,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     var allVisibleCDCData = spark.emptyDataFrame
 
     // Insert Operation
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(options)
@@ -497,7 +497,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
     // Insert Overwrite Partition Operation
-    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 30, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).toList
+    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 30, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(options)
@@ -545,7 +545,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Upsert Operation
-    val records4 = recordsToStrings(dataGen.generateUniqueUpdates("000", 50)).toList
+    val records4 = recordsToStrings(dataGen.generateUniqueUpdates("000", 50)).asScala.toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF4.write.format("org.apache.hudi")
       .options(options)
@@ -587,7 +587,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     )
 
     // Insert Operation
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(options)
@@ -602,7 +602,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     // Upsert Operation
     val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
-    val records2 = recordsToStrings(hoodieRecords2).toList
+    val records2 = recordsToStrings(hoodieRecords2).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(options)
@@ -655,7 +655,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       StructField("code", StringType)
     ))
 
-    val df = spark.createDataFrame(data.map(Row.fromTuple), schema)
+    val df = spark.createDataFrame(data.map(Row.fromTuple).asJava, schema)
     df.write
       .format("org.apache.hudi")
       .option("hoodie.datasource.write.operation", "upsert")
@@ -669,7 +669,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       ("3", "D", "2023-06-14 15:47:09.953746", "B")
     )
 
-    val newDf = spark.createDataFrame(newData.map(Row.fromTuple), schema)
+    val newDf = spark.createDataFrame(newData.map(Row.fromTuple).asJava, schema)
 
     newDf.write
       .format("org.apache.hudi")
@@ -699,7 +699,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     )
 
     // Insert Operation
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(options)
@@ -710,7 +710,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     // Upsert Operation
     val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
-    val records2 = recordsToStrings(hoodieRecords2).toList
+    val records2 = recordsToStrings(hoodieRecords2).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(options)
@@ -723,7 +723,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     // Upsert Operation
     val hoodieRecords3 = dataGen.generateUniqueUpdates("002", 50)
-    val records3 = recordsToStrings(hoodieRecords3).toList
+    val records3 = recordsToStrings(hoodieRecords3).asScala.toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(options)
@@ -733,7 +733,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     // Upsert Operation
     val hoodieRecords4 = dataGen.generateUniqueUpdates("003", 50)
-    val records4 = recordsToStrings(hoodieRecords4).toList
+    val records4 = recordsToStrings(hoodieRecords4).asScala.toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF4.write.format("org.apache.hudi")
       .options(options)

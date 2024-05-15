@@ -21,12 +21,12 @@ package org.apache.hudi
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
-import org.apache.hudi.LogFileIterator._
+import org.apache.hudi.LogFileIterator.{getPartitionPath, scanLog}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.model._
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieOperation, HoodieRecord, HoodieSparkRecord}
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.common.util.HoodieRecordUtils
 import org.apache.hudi.config.HoodiePayloadConfig
@@ -374,7 +374,7 @@ object LogFileIterator extends SparkAdapterSupport {
         logRecordReader.getRecords
       }
 
-      mutable.HashMap(recordList.asScala.map(r => (r.getRecordKey, r)): _*)
+      mutable.HashMap(recordList.asScala.map(r => (r.getRecordKey, r)).toSeq: _*)
     } else {
       val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)

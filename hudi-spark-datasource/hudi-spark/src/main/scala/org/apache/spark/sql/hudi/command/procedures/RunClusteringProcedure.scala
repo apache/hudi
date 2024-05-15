@@ -186,7 +186,7 @@ class RunClusteringProcedure extends BaseProcedure
       if (showInvolvedPartitions) {
         clusteringPlans.map { p =>
           Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
-            p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala))
+            p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala.toSeq))
         }
       } else {
         clusteringPlans.map { p =>

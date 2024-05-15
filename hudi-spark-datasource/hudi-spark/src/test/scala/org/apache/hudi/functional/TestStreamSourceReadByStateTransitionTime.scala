@@ -32,8 +32,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 
 import org.apache.spark.api.java.JavaRDD
 
-import scala.collection.JavaConversions.asScalaBuffer
-import scala.jdk.CollectionConverters.mapAsJavaMapConverter
+import scala.collection.JavaConverters._
 
 class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
 
@@ -67,8 +66,8 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
         val instantTime1 = makeNewCommitTime(1, "%09d")
         val instantTime2 = makeNewCommitTime(2,"%09d")
 
-        val records1 = sparkContext.parallelize(dataGen.generateInserts(instantTime1, 10).toSeq, 2)
-        val records2 = sparkContext.parallelize(dataGen.generateInserts(instantTime2, 15).toSeq, 2)
+        val records1 = sparkContext.parallelize(dataGen.generateInserts(instantTime1, 10).asScala.toSeq, 2)
+        val records2 = sparkContext.parallelize(dataGen.generateInserts(instantTime2, 15).asScala.toSeq, 2)
 
         writeClient.startCommitWithTime(instantTime1)
         writeClient.startCommitWithTime(instantTime2)

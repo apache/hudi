@@ -56,10 +56,10 @@ object HoodieCLIUtils {
 
     // Priority: defaults < catalog props < table config < sparkSession conf < specified conf
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
-      catalogProps ++
+      (catalogProps ++
         metaClient.getTableConfig.getProps.asScala.toMap ++
         sparkSession.sqlContext.getAllConfs.filterKeys(isHoodieConfigKey) ++
-        conf
+        conf).toMap
     )
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)

@@ -32,8 +32,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util.function.{Function, Supplier}
 import java.util.stream.Collectors
 
-import scala.collection.JavaConversions
-import scala.collection.JavaConverters.asScalaIteratorConverter
+import scala.collection.JavaConverters._
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS_ALL: Array[ProcedureParameter] = Array[ProcedureParameter](
@@ -127,7 +126,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     }
 
     val filteredTimeline = new HoodieDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
+      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
   }
 

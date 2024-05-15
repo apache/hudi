@@ -20,7 +20,7 @@ package org.apache.hudi.util
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 
-import scala.jdk.CollectionConverters.asScalaBufferConverter
+import scala.collection.JavaConverters._
 
 /**
  * TODO convert to Java, move to hudi-common
@@ -57,7 +57,7 @@ object PathUtils {
         leafPath.getName.equals(HoodieTableMetaClient.METAFOLDER_NAME)
       })
       nonMetaStatuses.map(e => e.getPath.makeQualified(storage.getUri))
-    }
+    }.toSeq
     }.getOrElse(Seq.empty[StoragePath])
   }
 

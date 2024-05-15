@@ -128,7 +128,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     } else {
       records1 = recordsToStrings(dataGen.generateInserts(getInstantTime(), 100)).asScala
     }
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1.toSeq, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(hudiOpts)
       .option(OPERATION.key, operation)

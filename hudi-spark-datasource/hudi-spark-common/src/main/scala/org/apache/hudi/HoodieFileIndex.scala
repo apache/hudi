@@ -112,7 +112,7 @@ case class HoodieFileIndex(spark: SparkSession,
     .map(_.trim)
     .contains("org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
 
-  override def rootPaths: Seq[Path] = getQueryPaths.asScala.map(e => new Path(e.toUri))
+  override def rootPaths: Seq[Path] = getQueryPaths.asScala.map(e => new Path(e.toUri)).toSeq
 
   var shouldEmbedFileSlices: Boolean = false
 
@@ -296,8 +296,8 @@ case class HoodieFileIndex(spark: SparkSession,
     } else {
       listMatchingPartitionPaths(partitionFilters)
     }
-    getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map(
-      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala) })
+    getInputFileSlices(prunedPartitions: _*).asScala.map(
+      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala.toSeq) }).toSeq
   }
 
   /**
