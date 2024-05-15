@@ -667,24 +667,6 @@ public class FSUtils {
     return fs.getUri() + fullPartitionPath.toUri().getRawPath();
   }
 
-  /**
-   * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
-   *
-   * @param fs fileSystem instance.
-   * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
-   */
-  public static boolean isGCSFileSystem(FileSystem fs) {
-    return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
-  }
-
-  /**
-   * Chdfs will throw {@code IOException} instead of {@code EOFException}. It will cause error in isBlockCorrupted().
-   * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
-   */
-  public static boolean isCHDFileSystem(FileSystem fs) {
-    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
-  }
-
   public static Configuration registerFileSystem(Path file, Configuration conf) {
     Configuration returnConf = new Configuration(conf);
     String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
