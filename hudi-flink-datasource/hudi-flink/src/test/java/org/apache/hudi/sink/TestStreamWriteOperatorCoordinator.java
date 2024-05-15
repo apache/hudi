@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -37,7 +38,6 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
 
@@ -314,7 +314,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertNotEquals("", instant);
 
     final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
-    HoodieTableMetaClient metadataTableMetaClient = StreamerUtil.createMetaClient(metadataTableBasePath, HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(HadoopConfigurations.getHadoopConf(conf), metadataTableBasePath);
     HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(1));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), startsWith(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
@@ -386,7 +386,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertNotEquals("", instant);
 
     final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
-    HoodieTableMetaClient metadataTableMetaClient = StreamerUtil.createMetaClient(metadataTableBasePath, HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(HadoopConfigurations.getHadoopConf(conf), metadataTableBasePath);
     HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(1));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), startsWith(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
@@ -431,7 +431,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertNotEquals("", instant);
 
     final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
-    HoodieTableMetaClient metadataTableMetaClient = StreamerUtil.createMetaClient(metadataTableBasePath, HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(HadoopConfigurations.getHadoopConf(conf), metadataTableBasePath);
     HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(1));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), startsWith(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
@@ -514,7 +514,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertNotEquals("", instant);
 
     final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
-    HoodieTableMetaClient metadataTableMetaClient = StreamerUtil.createMetaClient(metadataTableBasePath, HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(HadoopConfigurations.getHadoopConf(conf), metadataTableBasePath);
     HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(1));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), startsWith(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));

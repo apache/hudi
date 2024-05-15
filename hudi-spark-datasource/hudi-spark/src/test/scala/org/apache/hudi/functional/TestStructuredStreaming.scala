@@ -17,7 +17,6 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
@@ -25,28 +24,29 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
-import org.apache.hudi.storage.{StoragePath, HoodieStorage}
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
-import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
-import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 /**
  * Basic tests on the spark datasource for structured streaming sink
@@ -288,9 +288,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .start(destPath)
 
     query1.processAllAvailable()
-    var metaClient = HoodieTableMetaClient.builder
-      .setConf(storage.getConf.asInstanceOf[Configuration])
-      .setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+    var metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
 
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier1", "0")
 
@@ -335,9 +333,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
 
     query3.processAllAvailable()
     query3.stop()
-    metaClient = HoodieTableMetaClient.builder
-      .setConf(storage.getConf.asInstanceOf[Configuration])
-      .setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+    metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
 
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier1", "2")
     assertLatestCheckpointInfoMatched(metaClient, "streaming_identifier2", "0")
@@ -372,9 +368,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .start(destPath)
 
     query1.processAllAvailable()
-    val metaClient = HoodieTableMetaClient.builder
-      .setConf(storage.getConf.asInstanceOf[Configuration])
-      .setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
+    val metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
 
     assertLatestCheckpointInfoMatched(metaClient, STREAMING_CHECKPOINT_IDENTIFIER.defaultValue(), "0")
     query1.stop()
@@ -416,10 +410,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       currNumCommits = waitTillAtleastNCommits(storage, destPath, currNumCommits + 1, 120, 5)
 
       // Wait for the clustering to finish
-      this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(storage.getConf.asInstanceOf[Configuration])
-        .setBasePath(destPath)
-        .setLoadActiveTimelineOnLoad(true).build()
+      this.metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
       checkClusteringResult(destPath)
 
       assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").size())
@@ -473,9 +464,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   private def latestInstant(storage: HoodieStorage, basePath: String, instantAction: String): String = {
-    val metaClient = HoodieTableMetaClient.builder
-      .setConf(storage.getConf.asInstanceOf[Configuration])
-      .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build
+    val metaClient = HoodieTestUtils.createMetaClient(storage, basePath)
     metaClient.getActiveTimeline
       .getTimelineOfActions(CollectionUtils.createSet(instantAction))
       .filterCompletedInstants

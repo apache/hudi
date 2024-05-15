@@ -17,8 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.commons.io.FileUtils
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -28,7 +26,11 @@ import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
+
+import org.apache.avro.Schema
+import org.apache.commons.io.FileUtils
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{expr, lit}
@@ -1013,9 +1015,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
          | )
          | location '$tablePath1'
        """.stripMargin)
-    val tableConfig1 = HoodieTableMetaClient.builder()
-      .setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(tablePath1).build().getTableConfig
+    val tableConfig1 = createMetaClient(spark, tablePath1).getTableConfig
     assert(tableConfig1.getHiveStylePartitioningEnable == "true")
     assert(tableConfig1.getUrlEncodePartitioning == "false")
     assert(tableConfig1.getKeyGeneratorClassName == classOf[SimpleKeyGenerator].getName)
@@ -1034,9 +1034,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       .option(HoodieWriteConfig.TBL_NAME.key, tableName2)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "true")
       .mode(SaveMode.Overwrite).save(tablePath2)
-    val tableConfig2 = HoodieTableMetaClient.builder()
-      .setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(tablePath2).build().getTableConfig
+    val tableConfig2 = createMetaClient(spark, tablePath2).getTableConfig
     assert(tableConfig2.getHiveStylePartitioningEnable == "false")
     assert(tableConfig2.getUrlEncodePartitioning == "true")
     assert(tableConfig2.getKeyGeneratorClassName == classOf[SimpleKeyGenerator].getName)
@@ -1234,10 +1232,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   }
 
   private def fetchActualSchema(): Schema = {
-    val tableMetaClient = HoodieTableMetaClient.builder()
-      .setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(tempBasePath)
-      .build()
+    val tableMetaClient = createMetaClient(spark, tempBasePath)
     new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false)
   }
 }

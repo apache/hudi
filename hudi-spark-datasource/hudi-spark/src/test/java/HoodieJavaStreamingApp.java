@@ -30,6 +30,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -196,7 +197,7 @@ public class HoodieJavaStreamingApp {
       executor.shutdownNow();
     }
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(tablePath).build();
+    HoodieTableMetaClient metaClient = HoodieClientTestUtils.createMetaClient(jssc, tablePath);
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       // Ensure we have successfully completed one compaction commit
       ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().countInstants() == 1);

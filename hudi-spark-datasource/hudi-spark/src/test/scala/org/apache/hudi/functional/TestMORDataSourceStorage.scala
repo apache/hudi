@@ -20,16 +20,15 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
@@ -177,8 +176,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
         .save(basePath)
     }
     // compaction should have been completed
-    val metaClient = HoodieTableMetaClient.builder.setConf(fs.getConf).setBasePath(basePath)
-      .setLoadActiveTimelineOnLoad(true).build
+    val metaClient = HoodieTestUtils.createMetaClient(fs.getConf, basePath)
     assertEquals(1, metaClient.getActiveTimeline.getCommitTimeline.countInstants())
   }
 }

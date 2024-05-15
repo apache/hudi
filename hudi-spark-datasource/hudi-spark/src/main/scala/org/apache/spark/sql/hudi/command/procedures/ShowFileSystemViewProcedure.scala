@@ -91,7 +91,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
                                   excludeCompaction: Boolean
                                  ): HoodieTableFileSystemView = {
     val basePath = getBasePath(table)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val storage = metaClient.getStorage
     val statuses = if (globRegex == PARAMETERS_ALL.apply(6).default) {
       FSUtils.getAllDataPathInfo(storage, new StoragePath(basePath))

@@ -18,19 +18,20 @@
 
 package org.apache.hudi.functional.cdc
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.spark.sql.{Row, SaveMode}
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.{Row, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
@@ -69,10 +70,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf)
-      .build()
+    metaClient = createMetaClient(spark, basePath)
 
     val schemaResolver = new TableSchemaResolver(metaClient)
     val dataSchema = schemaResolver.getTableAvroSchema(false)
@@ -262,10 +260,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf)
-      .build()
+    metaClient = createMetaClient(spark, basePath)
 
     val schemaResolver = new TableSchemaResolver(metaClient)
     val dataSchema = schemaResolver.getTableAvroSchema(false)
@@ -491,10 +486,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assert(partitionToCnt.contains(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH))
 
     // init meta client
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf)
-      .build()
+    metaClient = createMetaClient(spark, basePath)
 
     totalInsertedCnt += 100
     val instant1 = metaClient.reloadActiveTimeline.lastInstant().get()
@@ -602,10 +594,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf)
-      .build()
+    metaClient = createMetaClient(spark, basePath)
 
     val schemaResolver = new TableSchemaResolver(metaClient)
     val dataSchema = schemaResolver.getTableAvroSchema(false)
@@ -717,10 +706,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf)
-      .build()
+    metaClient = createMetaClient(spark, basePath)
 
     // Upsert Operation
     val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
@@ -809,11 +795,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
         .mode(SaveMode.Append).save(basePath)
 
-      val hadoopConf = spark.sessionState.newHadoopConf()
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(basePath)
-        .setConf(hadoopConf)
-        .build()
+    val metaClient = createMetaClient(spark, basePath)
       val startTimeStamp = metaClient.reloadActiveTimeline().firstInstant().get.getTimestamp
       val latestTimeStamp = metaClient.reloadActiveTimeline().lastInstant().get.getTimestamp
 

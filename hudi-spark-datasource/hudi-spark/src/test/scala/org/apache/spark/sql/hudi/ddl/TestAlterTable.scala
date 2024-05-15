@@ -19,7 +19,9 @@ package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -79,9 +81,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
           spark.sessionState.catalog.tableExists(new TableIdentifier(newTableName))
         )
 
-        val hadoopConf = spark.sessionState.newHadoopConf()
-        val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
-          .setConf(hadoopConf).build()
+        val metaClient = createMetaClient(spark, tablePath)
         assertResult(newTableName) (metaClient.getTableConfig.getTableName)
         validateTableSchema(tablePath)
 
@@ -215,10 +215,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
   }
 
   def validateTableSchema(tablePath: String): Unit = {
-    val hadoopConf = spark.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
-      .setConf(hadoopConf).build()
-
+    val metaClient = createMetaClient(spark, tablePath)
     val schema = new TableSchemaResolver(metaClient).getTableAvroSchema(false)
     assertFalse(schema.getFields.asScala.exists(f => HoodieRecord.HOODIE_META_COLUMNS.contains(f.name())),
       "Metadata fields should be excluded from the table schema")
@@ -348,9 +345,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
           spark.sessionState.catalog.tableExists(new TableIdentifier(newTableName))
         )
 
-        val hadoopConf = spark.sessionState.newHadoopConf()
-        val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
-          .setConf(hadoopConf).build()
+        val metaClient = createMetaClient(spark, tablePath)
         assertResult(newTableName) (metaClient.getTableConfig.getTableName)
 
         // insert some data
@@ -415,10 +410,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
           spark.sql(s"alter table $tableName add columns(ext0 string)")
         }
 
-        val metaClient = HoodieTableMetaClient.builder
-          .setConf(spark.sqlContext.sessionState.newHadoopConf())
-          .setBasePath(tablePath)
-          .build
+        val metaClient = createMetaClient(spark, tablePath)
 
         val cnt = metaClient.getActiveTimeline.countInstants()
         if (cleanEnable) {
