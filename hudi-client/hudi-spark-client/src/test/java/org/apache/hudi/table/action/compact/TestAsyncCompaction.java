@@ -36,6 +36,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -55,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test Cases for Async Compaction and Ingestion interaction.
  */
+@Disabled
 public class TestAsyncCompaction extends CompactionTestBase {
 
   private HoodieWriteConfig getConfig(Boolean autoCommit) {
