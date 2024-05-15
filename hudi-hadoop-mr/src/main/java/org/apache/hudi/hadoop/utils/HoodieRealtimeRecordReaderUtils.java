@@ -25,7 +25,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -306,8 +307,9 @@ public class HoodieRealtimeRecordReaderUtils {
   }
 
   public static HoodieFileReader getBaseFileReader(Path path, JobConf conf) throws IOException {
-    HoodieConfig hoodieConfig = getReaderConfigs(HadoopFSUtils.getStorageConf(conf));
-    return HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+    StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
+    HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
+    return HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, HadoopFSUtils.getStorageConf(conf), convertToStoragePath(path));
   }
 

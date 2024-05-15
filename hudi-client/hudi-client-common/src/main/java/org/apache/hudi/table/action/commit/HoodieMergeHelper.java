@@ -37,7 +37,7 @@ import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -80,7 +80,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
     StorageConfiguration<?> storageConf = table.getStorageConf().newInstance();
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
-    HoodieFileReader baseFileReader = HoodieFileReaderFactory
+    HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(storageConf)
         .getReaderFactory(recordType)
         .getFileReader(writeConfig, storageConf, mergeHandle.getOldFilePath());
     HoodieFileReader bootstrapFileReader = null;
@@ -112,9 +112,10 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         StoragePath bootstrapFilePath = baseFile.getBootstrapBaseFile().get().getStoragePath();
         StorageConfiguration<?> bootstrapFileConfig = table.getStorageConf().newInstance();
-        bootstrapFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
+        bootstrapFileReader = HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(recordType).newBootstrapFileReader(
             baseFileReader,
-            HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(writeConfig, bootstrapFileConfig, bootstrapFilePath),
+            HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(recordType)
+                .getFileReader(writeConfig, bootstrapFileConfig, bootstrapFilePath),
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
