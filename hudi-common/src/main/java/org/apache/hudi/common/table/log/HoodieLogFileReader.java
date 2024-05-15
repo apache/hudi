@@ -37,20 +37,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.CorruptedLogFileException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.hadoop.fs.BoundedFsDataInputStream;
 import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
-import org.apache.hudi.hadoop.fs.SchemeAwareFSDataInputStream;
-import org.apache.hudi.hadoop.fs.TimedFSDataInputStream;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.util.IOUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.BufferedFSInputStream;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -67,6 +62,7 @@ import java.util.Objects;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFSDataInputStream;
 
 /**
  * Scans a log file and provides block level iterator on the log file Loads the entire block contents in memory Can emit
@@ -479,71 +475,6 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private static SeekableDataInputStream getDataInputStream(FileSystem fs,
                                                             HoodieLogFile logFile,
                                                             int bufferSize) {
-    return new HadoopSeekableDataInputStream(getFSDataInputStream(fs, logFile, bufferSize));
-  }
-
-  /**
-   * Fetch the right {@link FSDataInputStream} to be used by wrapping with required input streams.
-   *
-   * @param fs         instance of {@link FileSystem} in use.
-   * @param bufferSize buffer size to be used.
-   * @return the right {@link FSDataInputStream} as required.
-   */
-  private static FSDataInputStream getFSDataInputStream(FileSystem fs,
-                                                        HoodieLogFile logFile,
-                                                        int bufferSize) {
-    FSDataInputStream fsDataInputStream = null;
-    try {
-      fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
-    } catch (IOException e) {
-      throw new HoodieIOException("Exception creating input stream from file: " + logFile, e);
-    }
-
-    if (FSUtils.isGCSFileSystem(fs)) {
-      // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception
-      return new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCS(fsDataInputStream, logFile, bufferSize), true);
-    }
-
-    if (FSUtils.isCHDFileSystem(fs)) {
-      return new BoundedFsDataInputStream(fs, logFile.getPath(), fsDataInputStream);
-    }
-
-    if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      return new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
-    }
-
-    // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
-    // need to wrap in another BufferedFSInputStream the make bufferSize work?
-    return fsDataInputStream;
-  }
-
-  /**
-   * GCS FileSystem needs some special handling for seek and hence this method assists to fetch the right {@link FSDataInputStream} to be
-   * used by wrapping with required input streams.
-   * @param fsDataInputStream original instance of {@link FSDataInputStream}.
-   * @param bufferSize buffer size to be used.
-   * @return the right {@link FSDataInputStream} as required.
-   */
-  private static FSDataInputStream getFSDataInputStreamForGCS(FSDataInputStream fsDataInputStream,
-                                                              HoodieLogFile logFile,
-                                                              int bufferSize) {
-    // in case of GCS FS, there are two flows.
-    // a. fsDataInputStream.getWrappedStream() instanceof FSInputStream
-    // b. fsDataInputStream.getWrappedStream() not an instanceof FSInputStream, but an instance of FSDataInputStream.
-    // (a) is handled in the first if block and (b) is handled in the second if block. If not, we fallback to original fsDataInputStream
-    if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      return new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
-    }
-
-    if (fsDataInputStream.getWrappedStream() instanceof FSDataInputStream
-        && ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream() instanceof FSInputStream) {
-      FSInputStream inputStream = (FSInputStream)((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream();
-      return new TimedFSDataInputStream(logFile.getPath(),
-          new FSDataInputStream(new BufferedFSInputStream(inputStream, bufferSize)));
-    }
-
-    return fsDataInputStream;
+    return new HadoopSeekableDataInputStream(getFSDataInputStream(fs, new StoragePath(logFile.getPath().toUri()), bufferSize));
   }
 }
