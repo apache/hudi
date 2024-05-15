@@ -504,7 +504,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       streamingWrite(inputDF.schema, sourcePath, destPath, opts, id)
     }
     val metaClient = HoodieTableMetaClient.builder()
-      .setConf(storage.getConf.asInstanceOf[Configuration])
+      .setConf(storage.unwrapConf.asInstanceOf[Configuration])
       .setBasePath(destPath)
       .setLoadActiveTimelineOnLoad(true).build()
     assertTrue(metaClient.getActiveTimeline.getCommitTimeline.empty())

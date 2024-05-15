@@ -198,7 +198,7 @@ public class HoodieTestUtils {
    */
   public static HoodieTableMetaClient createMetaClient(HoodieStorage storage,
                                                        String basePath) {
-    return createMetaClient((Configuration) storage.getConf(), basePath);
+    return createMetaClient((Configuration) storage.unwrapConf(), basePath);
   }
 
   /**
