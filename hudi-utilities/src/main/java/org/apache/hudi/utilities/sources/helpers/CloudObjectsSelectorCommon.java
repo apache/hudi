@@ -44,6 +44,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -247,6 +249,12 @@ public class CloudObjectsSelectorCommon {
 
   public Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,
                                             String fileFormat, Option<SchemaProvider> schemaProviderOption, int numPartitions) {
+    return loadAsDataset(spark, cloudObjectMetadata, fileFormat, schemaProviderOption, numPartitions, false, null);
+  }
+
+  public Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,
+                                            String fileFormat, Option<SchemaProvider> schemaProviderOption, int numPartitions,
+                                            boolean addInputFileNameColumn, String inputFileNameColumn) {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Extracted distinct files " + cloudObjectMetadata.size()
           + " and some samples " + cloudObjectMetadata.stream().map(CloudObjectMetadata::getPath).limit(10).collect(Collectors.toList()));
@@ -260,7 +268,8 @@ public class CloudObjectsSelectorCommon {
     if (schemaProviderOption.isPresent()) {
       Schema sourceSchema = schemaProviderOption.get().getSourceSchema();
       if (sourceSchema != null && !sourceSchema.equals(InputBatch.NULL_SCHEMA)) {
-        reader = reader.schema(AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema));
+        StructType projectedSchema = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
+        reader = reader.schema(projectedSchema);
       }
     }
     if (StringUtils.isNullOrEmpty(datasourceOpts)) {
@@ -291,6 +300,9 @@ public class CloudObjectsSelectorCommon {
       dataset = reader.load(paths.toArray(new String[cloudObjectMetadata.size()]));
     }
 
+    if (addInputFileNameColumn) {
+      dataset = dataset.withColumn(inputFileNameColumn, functions.input_file_name());
+    }
     // add partition column from source path if configured
     if (containsConfigProperty(properties, PATH_BASED_PARTITION_FIELDS)) {
       String[] partitionKeysToAdd = getStringWithAltKeys(properties, PATH_BASED_PARTITION_FIELDS).split(",");

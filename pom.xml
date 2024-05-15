@@ -169,7 +169,7 @@
     <spark33.version>3.3.1</spark33.version>
     <spark34.version>3.4.1</spark34.version>
     <spark35.version>3.5.1</spark35.version>
-    <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
+    <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <!-- NOTE: Different Spark versions might require different number of shared
                modules being incorporated, hence we're creating multiple placeholders
                (hudi.spark.common.modules.*) -->
@@ -221,7 +221,7 @@
     <zk-curator.version>2.7.1</zk-curator.version>
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
-    <aws.sdk.version>2.18.40</aws.sdk.version>
+    <aws.sdk.version>2.25.20</aws.sdk.version>
     <proto.version>3.21.7</proto.version>
     <protoc.version>3.21.5</protoc.version>
     <dynamodb.lockclient.version>1.2.0</dynamodb.lockclient.version>
@@ -713,6 +713,8 @@
               <exclude>**/generated-sources/**</exclude>
               <exclude>.github/**</exclude>
               <exclude>**/banner.txt</exclude>
+              <exclude>**/person.proto</exclude>
+              <exclude>**/TestPersonProto.java</exclude>
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
               <exclude>.mvn/**</exclude>
@@ -2537,7 +2539,6 @@
         <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
       <activation>
-        <activeByDefault>true</activeByDefault>
         <property>
           <name>spark3.2</name>
         </property>
@@ -2694,6 +2695,7 @@
         </dependency>
       </dependencies>
       <activation>
+        <activeByDefault>true</activeByDefault>
         <property>
           <name>spark3.5</name>
         </property>

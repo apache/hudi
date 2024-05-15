@@ -1081,7 +1081,7 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   private void reInitWriteClient(Schema sourceSchema, Schema targetSchema, Option<JavaRDD<HoodieRecord>> recordsOpt) throws IOException {
-    LOG.info("Setting up new Hoodie Write Client");
+    LOG.info("Setting up new Hoodie Write Client. Source Schema :" + sourceSchema + ",\n Target Schema :" + targetSchema);
     if (HoodieStreamerUtils.isDropPartitionColumns(props)) {
       targetSchema = HoodieAvroUtils.removeFields(targetSchema, HoodieStreamerUtils.getPartitionColumns(props));
     }

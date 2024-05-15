@@ -40,7 +40,9 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_ADD_INPUT_FILE;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.INPUT_FILE_COLUMN;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SOURCE_MAX_BYTES_PER_PARTITION;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
 
@@ -83,7 +85,7 @@ public class CloudDataFetcher implements Serializable {
         : getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING);
   }
 
-  public Pair<Option<Dataset<Row>>, String> fetchPartitionedSource(
+  public Pair<Pair<Option<Dataset<Row>>, Option<Dataset<Row>>>, String> fetchPartitionedSource(
       CloudObjectsSelectorCommon.Type cloudType,
       CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint,
       Option<SourceProfileSupplier> sourceProfileSupplier,
@@ -107,7 +109,7 @@ public class CloudDataFetcher implements Serializable {
             filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
     if (!checkPointAndDataset.getRight().isPresent()) {
       LOG.info("Empty source, returning endpoint:" + checkPointAndDataset.getLeft());
-      return Pair.of(Option.empty(), checkPointAndDataset.getLeft().toString());
+      return Pair.of(Pair.of(Option.empty(), Option.empty()), checkPointAndDataset.getLeft().toString());
     }
     LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
 
@@ -124,20 +126,25 @@ public class CloudDataFetcher implements Serializable {
         bytesPerPartition = bytesPerPartitionFromProfile;
       }
     }
-    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition);
-    return Pair.of(datasetOption, checkPointAndDataset.getLeft().toString());
+    boolean addInputFile = getBooleanWithAltKeys(props, ENABLE_ADD_INPUT_FILE);
+    String inputFileColumn = getStringWithAltKeys(props, INPUT_FILE_COLUMN);
+    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition, addInputFile, inputFileColumn);
+    return Pair.of(Pair.of(datasetOption, checkPointAndDataset.getRight()), checkPointAndDataset.getLeft().toString());
   }
 
-  private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata, Option<SchemaProvider> schemaProviderOption, long bytesPerPartition) {
+  private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata, Option<SchemaProvider> schemaProviderOption,
+                                                    long bytesPerPartition, boolean addInputFile, String inputFileColumn) {
     long totalSize = 0;
     for (CloudObjectMetadata o : cloudObjectMetadata) {
       totalSize += o.getSize();
     }
     // inflate 10% for potential hoodie meta fields
     double totalSizeWithHoodieMetaFields = totalSize * 1.1;
+    LOG.info("Total Size=" + totalSize + ", with meta-fields, totalSize=" + totalSizeWithHoodieMetaFields);
     metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(totalSize);
     int numPartitions = (int) Math.max(Math.ceil(totalSizeWithHoodieMetaFields / bytesPerPartition), 1);
     metrics.updateStreamerSourceParallelism(numPartitions);
-    return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props), schemaProviderOption, numPartitions);
+    return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props),
+        schemaProviderOption, numPartitions, addInputFile, inputFileColumn);
   }
 }

@@ -62,12 +62,12 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
   private final String srcPath;
   private final int numInstantsPerFetch;
   private final IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy;
-  private final QueryRunner queryRunner;
-  private final CloudDataFetcher cloudDataFetcher;
+  protected final QueryRunner queryRunner;
+  protected final CloudDataFetcher cloudDataFetcher;
 
-  private final Option<SchemaProvider> schemaProvider;
+  protected final Option<SchemaProvider> schemaProvider;
 
-  private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
+  protected final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
 
   public S3EventsHoodieIncrSource(
       TypedProperties props,
@@ -126,6 +126,19 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       LOG.warn("Already caught up. No new data to process");
       return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
-    return cloudDataFetcher.fetchPartitionedSource(S3, cloudObjectIncrCheckpoint, this.sourceProfileSupplier, queryRunner.run(queryInfo, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);
+    return extractPartitionedSource(cloudDataFetcher, queryRunner, schemaProvider, snapshotLoadQuerySplitter,
+        cloudObjectIncrCheckpoint, queryInfo, sourceLimit);
+  }
+
+  protected Pair<Option<Dataset<Row>>, String> extractPartitionedSource(CloudDataFetcher cloudDataFetcher,
+                                                                        QueryRunner queryRunner,
+                                                                        Option<SchemaProvider> schemaProvider,
+                                                                        Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter,
+                                                                        CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint,
+                                                                        QueryInfo queryInfo, long sourceLimit) {
+    Pair<Pair<Option<Dataset<Row>>, Option<Dataset<Row>>>, String> res =
+        cloudDataFetcher.fetchPartitionedSource(S3, cloudObjectIncrCheckpoint, sourceProfileSupplier,
+            queryRunner.run(queryInfo, snapshotLoadQuerySplitter), schemaProvider, sourceLimit);
+    return Pair.of(res.getLeft().getLeft(), res.getRight());
   }
 }

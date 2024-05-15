@@ -293,6 +293,11 @@
 
     <dependency>
       <groupId>org.apache.spark</groupId>
+      <artifactId>spark-protobuf_${scala.binary.version}</artifactId>
+      <version>3.5.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.spark</groupId>
       <artifactId>spark-streaming_${scala.binary.version}</artifactId>
       <version>${spark.version}</version>
     </dependency>
@@ -494,6 +499,11 @@
 
     <!-- AWS Services -->
     <!-- https://mvnrepository.com/artifact/software.amazon.awssdk/aws-java-sdk-sqs -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sqs</artifactId>

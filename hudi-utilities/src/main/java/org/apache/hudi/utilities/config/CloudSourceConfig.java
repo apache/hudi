@@ -80,6 +80,21 @@ public class CloudSourceConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("If true, checks whether file exists before attempting to pull it");
 
+  public static final ConfigProperty<Boolean> ENABLE_ADD_INPUT_FILE = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.add.input.file")
+      .defaultValue(false)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.add.input.file")
+      .markAdvanced()
+      .withDocumentation("If true, add source input filename to the dataset");
+
+  public static final ConfigProperty<String> INPUT_FILE_COLUMN = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.input.file.column")
+      .defaultValue("__cloud_data_fetcher_input_filepath")
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.input.file.column")
+      .markAdvanced()
+      .withDocumentation("If " + ENABLE_ADD_INPUT_FILE.key() + " is set to true, this configuration determines "
+          + "the column for storing the input file name");
+
   public static final ConfigProperty<String> SELECT_RELATIVE_PATH_PREFIX = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.select.relpath.prefix")
       .noDefaultValue()

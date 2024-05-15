@@ -107,6 +107,7 @@ public class ProtoConversionUtil {
     private final boolean wrappedPrimitivesAsRecords;
     private final int maxRecursionDepth;
     private final boolean timestampsAsRecords;
+    private final boolean treatAllFieldsAsNullable;
 
     /**
      * Configuration used when generating a schema for a proto class.
@@ -118,6 +119,14 @@ public class ProtoConversionUtil {
       this.wrappedPrimitivesAsRecords = wrappedPrimitivesAsRecords;
       this.maxRecursionDepth = maxRecursionDepth;
       this.timestampsAsRecords = timestampsAsRecords;
+      this.treatAllFieldsAsNullable = false;
+    }
+
+    public SchemaConfig(boolean wrappedPrimitivesAsRecords, int maxRecursionDepth, boolean timestampsAsRecords, boolean treatAllFieldsAsNullable) {
+      this.wrappedPrimitivesAsRecords = wrappedPrimitivesAsRecords;
+      this.maxRecursionDepth = maxRecursionDepth;
+      this.timestampsAsRecords = timestampsAsRecords;
+      this.treatAllFieldsAsNullable = treatAllFieldsAsNullable;
     }
 
     public static SchemaConfig fromProperties(TypedProperties props) {
@@ -137,6 +146,10 @@ public class ProtoConversionUtil {
 
     public int getMaxRecursionDepth() {
       return maxRecursionDepth;
+    }
+
+    public boolean isTreatAllFieldsAsNullable() {
+      return treatAllFieldsAsNullable;
     }
   }
 
@@ -177,10 +190,13 @@ public class ProtoConversionUtil {
     private final boolean wrappedPrimitivesAsRecords;
     private final int maxRecursionDepth;
     private final boolean timestampsAsRecords;
+    private final boolean treatAllFieldsAsNullable;
+
     private AvroSupport(SchemaConfig schemaConfig) {
       this.wrappedPrimitivesAsRecords = schemaConfig.isWrappedPrimitivesAsRecords();
       this.maxRecursionDepth = schemaConfig.getMaxRecursionDepth();
       this.timestampsAsRecords = schemaConfig.isTimestampsAsRecords();
+      this.treatAllFieldsAsNullable = schemaConfig.isTreatAllFieldsAsNullable();
     }
 
     static GenericRecord convert(Schema schema, Message message) {
@@ -244,7 +260,7 @@ public class ProtoConversionUtil {
       List<Schema.Field> fields = new ArrayList<>(descriptor.getFields().size());
       for (Descriptors.FieldDescriptor f : descriptor.getFields()) {
         // each branch of the schema traversal requires its own recursion depth tracking so copy the recursionDepths map
-        fields.add(new Schema.Field(f.getName(), getFieldSchema(f, new CopyOnWriteMap<>(recursionDepths), path), null, getDefault(f)));
+        fields.add(new Schema.Field(f.getName(), getFieldSchema(f, new CopyOnWriteMap<>(recursionDepths), path), null, getDefault(f, treatAllFieldsAsNullable)));
       }
       result.setFields(fields);
       return result;
@@ -253,65 +269,66 @@ public class ProtoConversionUtil {
     private Schema getFieldSchema(Descriptors.FieldDescriptor fieldDescriptor, CopyOnWriteMap<Descriptors.Descriptor, Integer> recursionDepths, String path) {
       switch (fieldDescriptor.getType()) {
         case BOOL:
-          return finalizeSchema(Schema.create(Schema.Type.BOOLEAN), fieldDescriptor);
+          return finalizeSchema(Schema.create(Schema.Type.BOOLEAN), fieldDescriptor, treatAllFieldsAsNullable);
         case FLOAT:
-          return finalizeSchema(Schema.create(Schema.Type.FLOAT), fieldDescriptor);
+          return finalizeSchema(Schema.create(Schema.Type.FLOAT), fieldDescriptor, treatAllFieldsAsNullable);
         case DOUBLE:
-          return finalizeSchema(Schema.create(Schema.Type.DOUBLE), fieldDescriptor);
+          return finalizeSchema(Schema.create(Schema.Type.DOUBLE), fieldDescriptor, treatAllFieldsAsNullable);
         case ENUM:
-          return finalizeSchema(getEnumSchema(fieldDescriptor.getEnumType()), fieldDescriptor);
+          return finalizeSchema(getEnumSchema(fieldDescriptor.getEnumType()), fieldDescriptor, treatAllFieldsAsNullable);
         case STRING:
           Schema stringSchema = Schema.create(Schema.Type.STRING);
           GenericData.setStringType(stringSchema, GenericData.StringType.String);
-          return finalizeSchema(stringSchema, fieldDescriptor);
+          return finalizeSchema(stringSchema, fieldDescriptor, treatAllFieldsAsNullable);
         case BYTES:
-          return finalizeSchema(Schema.create(Schema.Type.BYTES), fieldDescriptor);
+          return finalizeSchema(Schema.create(Schema.Type.BYTES), fieldDescriptor, treatAllFieldsAsNullable);
         case INT32:
         case SINT32:
         case FIXED32:
         case SFIXED32:
-          return finalizeSchema(Schema.create(Schema.Type.INT), fieldDescriptor);
+          return finalizeSchema(Schema.create(Schema.Type.INT), fieldDescriptor, treatAllFieldsAsNullable);
         case UINT32:
         case INT64:
         case SINT64:
         case FIXED64:
         case SFIXED64:
-          return finalizeSchema(Schema.create(Schema.Type.LONG), fieldDescriptor);
+          return finalizeSchema(Schema.create(Schema.Type.LONG), fieldDescriptor, treatAllFieldsAsNullable);
         case UINT64:
-          return finalizeSchema(UNSIGNED_LONG_SCHEMA, fieldDescriptor);
+          return finalizeSchema(UNSIGNED_LONG_SCHEMA, fieldDescriptor, treatAllFieldsAsNullable);
         case MESSAGE:
           String updatedPath = appendFieldNameToPath(path, fieldDescriptor.getName());
           if (!wrappedPrimitivesAsRecords && WRAPPER_DESCRIPTORS_TO_TYPE.contains(fieldDescriptor.getMessageType())) {
             // all wrapper types have a single field, so we can get the first field in the message's schema
             Schema nestedFieldSchema = getFieldSchema(fieldDescriptor.getMessageType().getFields().get(0), recursionDepths, updatedPath);
-            return finalizeSchema(makeSchemaNullable(nestedFieldSchema), fieldDescriptor);
+            return finalizeSchema(makeSchemaNullable(nestedFieldSchema), fieldDescriptor, treatAllFieldsAsNullable);
           }
           if (!timestampsAsRecords && Timestamp.getDescriptor().equals(fieldDescriptor.getMessageType())) {
             // Handle timestamps as long with logical type
             Schema timestampSchema = LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
-            return finalizeSchema(makeSchemaNullable(timestampSchema), fieldDescriptor);
+            return finalizeSchema(makeSchemaNullable(timestampSchema), fieldDescriptor, treatAllFieldsAsNullable);
           }
           // if message field is repeated (like a list), elements are non-null
           if (fieldDescriptor.isRepeated()) {
             Schema elementSchema = getMessageSchema(fieldDescriptor.getMessageType(), recursionDepths, updatedPath);
-            return finalizeSchema(elementSchema, fieldDescriptor);
+            return finalizeSchema(elementSchema, fieldDescriptor, treatAllFieldsAsNullable);
           }
           // otherwise we create a nullable field schema
           Schema fieldSchema = getMessageSchema(fieldDescriptor.getMessageType(), recursionDepths, updatedPath);
-          return finalizeSchema(makeSchemaNullable(fieldSchema), fieldDescriptor);
+          return finalizeSchema(makeSchemaNullable(fieldSchema), fieldDescriptor, treatAllFieldsAsNullable);
         case GROUP: // groups are deprecated
         default:
           throw new RuntimeException("Unexpected type: " + fieldDescriptor.getType());
       }
     }
 
-    private static Schema finalizeSchema(Schema schema, Descriptors.FieldDescriptor fieldDescriptor) {
+    private static Schema finalizeSchema(Schema schema, Descriptors.FieldDescriptor fieldDescriptor, boolean treatAllFieldsAsNullable) {
       Schema updatedSchema = schema;
       if (fieldDescriptor.isRepeated()) {
         updatedSchema = Schema.createArray(updatedSchema);
       }
       // all fields in the oneof will be treated as nullable
-      if (fieldDescriptor.getContainingOneof() != null && !(schema.getType() == Schema.Type.UNION && schema.getTypes().get(0).getType() == Schema.Type.NULL)) {
+      if (((fieldDescriptor.getContainingOneof() != null) || treatAllFieldsAsNullable)
+          && !(schema.getType() == Schema.Type.UNION && schema.getTypes().get(0).getType() == Schema.Type.NULL)) {
         updatedSchema = makeSchemaNullable(updatedSchema);
       }
       return updatedSchema;
@@ -321,15 +338,14 @@ public class ProtoConversionUtil {
       return Schema.createUnion(Arrays.asList(NULL_SCHEMA, schema));
     }
 
-    private Object getDefault(Descriptors.FieldDescriptor f) {
-      if (f.isRepeated()) { // empty array as repeated fields' default value
-        return Collections.emptyList();
-      }
-      if (f.getContainingOneof() != null) {
+    private Object getDefault(Descriptors.FieldDescriptor f, boolean treatAllFieldsAsNullable) {
+      if ((f.getContainingOneof() != null)  || treatAllFieldsAsNullable) {
         // fields inside oneof are nullable
         return Schema.Field.NULL_VALUE;
       }
-
+      if (f.isRepeated()) { // empty array as repeated fields' default value
+        return Collections.emptyList();
+      }
       switch (f.getType()) { // generate default for type
         case BOOL:
           return false;

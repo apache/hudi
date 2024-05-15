@@ -1,0 +1,45 @@
+
+Ï
+.ursa/public/sdk/proto/prediction_feature.protostack.protos"Œ
+PredictionFeatureMetadata
+vehicle_name (	
+log_canonical_id (	
+	iteration (
+timestamp_nanos (
+agent_count ("t
+
+ImageFrame
+timestamp_nanos (
+source (	
+data (
+height (
+width (
+encoding (	"’
+
+LidarFrame
+timestamp_nanos (
+source (	
+x (B
+y (B
+z (B
+reflectance (B
+	intensity (B"†
+SensorFrame
+timestamp_nanos (.
+image_frames (2.stack.protos.ImageFrame.
+lidar_frames (2.stack.protos.LidarFrame"ã
+PredictionFeature9
+metadata (2'.stack.protos.PredictionFeatureMetadata
+agent_id (B
+agent_class (B
+x (B
+y (B
+theta (B
+speed (B
+
+slip_angle (B
+ego_inferred_target_x	 (
+ego_inferred_target_y
+ (0
+sensor_frames (2.stack.protos.SensorFrame
+calibration_json (	bproto3

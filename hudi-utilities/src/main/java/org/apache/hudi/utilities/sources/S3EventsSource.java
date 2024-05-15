@@ -48,10 +48,10 @@ import java.util.List;
  */
 public class S3EventsSource extends RowSource implements Closeable {
 
-  private final S3EventsMetaSelector pathSelector;
-  private final SchemaProvider schemaProvider;
-  private final List<Message> processedMessages = new ArrayList<>();
-  SqsClient sqs;
+  private final transient S3EventsMetaSelector pathSelector;
+  private final transient SchemaProvider schemaProvider;
+  private final transient List<Message> processedMessages = new ArrayList<>();
+  transient SqsClient sqs;
 
   public S3EventsSource(
       TypedProperties props,

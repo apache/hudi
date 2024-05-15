@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
+
 import org.apache.hudi.utilities.test.proto.Parent;
 import org.apache.hudi.utilities.test.proto.Sample;
 import org.apache.hudi.utilities.test.proto.WithOneOf;

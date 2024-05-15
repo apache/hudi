@@ -31,4 +31,5 @@
   <suppress checks="IllegalImport" files="HoodieTableSource.java" />
   <suppress checks="IllegalTokenText" files="FilePathUtils.java"/>
   <suppress checks="IllegalTokenText" files="PartitionPathEncodeUtils.java"/>
+  <suppress checks="[a-zA-Z0-9]*" files="TestPersonProto.java"/>
 </suppressions>

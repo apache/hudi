@@ -181,6 +181,19 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
           + queryInfo.getStartInstant());
       return Pair.of(Option.empty(), queryInfo.getStartInstant());
     }
-    return cloudDataFetcher.fetchPartitionedSource(GCS, cloudObjectIncrCheckpoint, this.sourceProfileSupplier, queryRunner.run(queryInfo, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);
+    return extractPartitionedSource(cloudDataFetcher, queryRunner, schemaProvider, snapshotLoadQuerySplitter,
+        cloudObjectIncrCheckpoint, queryInfo, sourceLimit);
+  }
+
+  protected Pair<Option<Dataset<Row>>, String> extractPartitionedSource(CloudDataFetcher cloudDataFetcher,
+                                                                        QueryRunner queryRunner,
+                                                                        Option<SchemaProvider> schemaProvider,
+                                                                        Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter,
+                                                                        CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint,
+                                                                        QueryInfo queryInfo, long sourceLimit) {
+    Pair<Pair<Option<Dataset<Row>>, Option<Dataset<Row>>>, String> res =
+        cloudDataFetcher.fetchPartitionedSource(GCS, cloudObjectIncrCheckpoint, this.sourceProfileSupplier,
+            queryRunner.run(queryInfo, snapshotLoadQuerySplitter), schemaProvider, sourceLimit);
+    return Pair.of(res.getLeft().getLeft(), res.getRight());
   }
 }
