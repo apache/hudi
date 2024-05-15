@@ -211,6 +211,18 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     this(DEFAULT_PARTITION_PATHS);
   }
 
+  public static HoodieTestDataGenerator createTestGeneratorFirstPartition() {
+    return new HoodieTestDataGenerator(new String[]{DEFAULT_FIRST_PARTITION_PATH});
+  }
+
+  public static HoodieTestDataGenerator createTestGeneratorSecondPartition() {
+    return new HoodieTestDataGenerator(new String[]{DEFAULT_SECOND_PARTITION_PATH});
+  }
+
+  public static HoodieTestDataGenerator createTestGeneratorThirdPartition() {
+    return new HoodieTestDataGenerator(new String[]{DEFAULT_THIRD_PARTITION_PATH});
+  }
+
   public HoodieTestDataGenerator(boolean makeDatesAmbiguous) {
     this();
     this.makeDatesAmbiguous = makeDatesAmbiguous;
