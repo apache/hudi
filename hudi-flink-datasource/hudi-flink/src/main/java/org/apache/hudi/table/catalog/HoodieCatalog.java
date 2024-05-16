@@ -308,6 +308,7 @@ public class HoodieCatalog extends AbstractCatalog {
     Map<String, String> options = applyOptionsHook(tablePathStr, catalogTable.getOptions());
     Configuration conf = Configuration.fromMap(options);
     conf.setString(FlinkOptions.PATH, tablePathStr);
+    conf.setString(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
     ResolvedSchema resolvedSchema = resolvedTable.getResolvedSchema();
     if (!resolvedSchema.getPrimaryKey().isPresent() && !conf.containsKey(RECORD_KEY_FIELD.key())) {
       throw new CatalogException("Primary key definition is missing");
@@ -351,7 +352,7 @@ public class HoodieCatalog extends AbstractCatalog {
     } else {
       conf.setString(FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
     }
-    conf.setString(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
+
     try {
       StreamerUtil.initTableIfNotExists(conf);
       // prepare the non-table-options properties

@@ -484,6 +484,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   private void initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
     Configuration flinkConf = Configuration.fromMap(catalogTable.getOptions());
+    flinkConf.setString(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
     final String avroSchema = AvroSchemaConverter.convertToSchema(
         catalogTable.getSchema().toPersistedRowDataType().getLogicalType(),
         AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
@@ -516,8 +517,6 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     if (!flinkConf.getOptional(PATH).isPresent()) {
       flinkConf.setString(PATH, inferTablePath(tablePath, catalogTable));
     }
-
-    flinkConf.setString(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
 
     List<String> fields = new ArrayList<>();
     catalogTable.getUnresolvedSchema().getColumns().forEach(column -> fields.add(column.getName()));
