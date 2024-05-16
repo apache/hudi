@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import javax.management.MBeanServer;
 
 import java.lang.management.ManagementFactory;
+import java.rmi.server.ExportException;
 import java.util.Objects;
 import java.util.stream.IntStream;
 
@@ -80,7 +81,11 @@ public class JmxMetricsReporter extends MetricsReporter {
         LOG.info("Started JMX server on port " + port + ".");
         break;
       } catch (Exception e) {
-        LOG.info("Skip for initializing jmx port " + port + " because of already in use");
+        if (e.getCause() instanceof ExportException) {
+          LOG.info("Skip for initializing jmx port " + port + " because of already in use");
+        } else {
+          LOG.info("Failed to initialize jmx port " + port + ". " + e.getMessage());
+        }
       }
     }
   }
