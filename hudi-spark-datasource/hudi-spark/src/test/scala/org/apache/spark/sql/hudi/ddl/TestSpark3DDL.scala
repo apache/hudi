@@ -714,7 +714,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           val dataGen = new QuickstartUtils.DataGenerator
           val inserts = QuickstartUtils.convertToStringList(dataGen.generateInserts(10)).asScala.toSeq
           val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
-            .withColumn("ts", lit("20240404000000")) // to make test determinate for HOODIE_AVRO_DEFAULT payload
           df.write.format("hudi").
             options(QuickstartUtils.getQuickstartWriteConfigs).
             option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, tableType).
@@ -733,7 +732,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           val dfUpdate = spark.read.json(spark.sparkContext.parallelize(updates, 2))
             .withColumn("fare", expr("cast(fare as string)"))
             .withColumn("addColumn", lit("new"))
-            .withColumn("ts", lit("20240404000005")) // to make test determinate for HOODIE_AVRO_DEFAULT payload
           dfUpdate.drop("begin_lat").write.format("hudi").
             options(QuickstartUtils.getQuickstartWriteConfigs).
             option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, tableType).
@@ -764,7 +762,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           val dfOverWrite = spark.
             read.json(spark.sparkContext.parallelize(overwrite, 2)).
             filter("partitionpath = 'americas/united_states/san_francisco'")
-            .withColumn("ts", lit("20240404000010")) // to make test determinate for HOODIE_AVRO_DEFAULT payload
             .withColumn("fare", expr("cast(fare as string)")) // fare now in table is string type, we forbid convert string to double.
           dfOverWrite.write.format("hudi").
             options(QuickstartUtils.getQuickstartWriteConfigs).
@@ -781,9 +778,8 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.read.format("hudi").load(tablePath).show(false)
 
           val updatesAgain = QuickstartUtils.convertToStringList(dataGen.generateUpdates(10)).asScala.toSeq
-          val dfAgain = spark.read.json(spark.sparkContext.parallelize(updatesAgain, 2)).
-            withColumn("fare", expr("cast(fare as string)")).
-            withColumn("ts", lit("20240404000015")) // to make test determinate for HOODIE_AVRO_DEFAULT payload
+          val dfAgain = spark.read.json(spark.sparkContext.parallelize(updatesAgain, 2))
+            .withColumn("fare", expr("cast(fare as string)"))
           dfAgain.write.format("hudi").
             options(QuickstartUtils.getQuickstartWriteConfigs).
             option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, "ts").
