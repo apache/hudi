@@ -31,6 +31,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.SanityChecksUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -337,7 +338,7 @@ public class HoodieCatalog extends AbstractCatalog {
     }
 
     // check preCombine
-    StreamerUtil.checkPreCombineKey(conf, resolvedSchema.getColumnNames());
+    SanityChecksUtil.checkPreCombineKey(conf, resolvedSchema.getColumnNames());
 
     if (resolvedTable.isPartitioned()) {
       final String partitions = String.join(",", resolvedTable.getPartitionKeys());
@@ -346,7 +347,7 @@ public class HoodieCatalog extends AbstractCatalog {
 
       final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
       boolean complexHoodieKey = pks.length > 1 || resolvedTable.getPartitionKeys().size() > 1;
-      StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
+      SanityChecksUtil.checkKeygenGenerator(complexHoodieKey, conf);
     } else {
       conf.setString(FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
     }

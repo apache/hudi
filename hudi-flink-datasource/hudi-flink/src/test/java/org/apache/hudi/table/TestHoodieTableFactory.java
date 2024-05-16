@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -29,6 +30,7 @@ import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.SanityChecksUtil;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.SchemaBuilder;
 import org.apache.hudi.utils.TestConfigurations;
@@ -48,6 +50,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -99,7 +102,7 @@ public class TestHoodieTableFactory {
         .build();
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
 
-    // createDynamicTableSource doesn't call sanity check, will not throw exception
+    // the source table sanity checks does not verify PRECOMBINE_FIELD configuration.
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext1));
     // miss pk and precombine key will throw exception when create sink
     assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
@@ -192,7 +195,7 @@ public class TestHoodieTableFactory {
   }
 
   @Test
-  void testIndexTypeCheck() {
+  void testIndexTypeCheckForSink() {
     ResolvedSchema schema = SchemaBuilder.instance()
             .field("f0", DataTypes.INT().notNull())
             .field("f1", DataTypes.VARCHAR(20))
@@ -201,19 +204,27 @@ public class TestHoodieTableFactory {
             .primaryKey("f0")
             .build();
 
-    // Index type unset. The default value will be ok
+    // Append mode, no neet to check index
+    this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
 
-    // Invalid index type will throw exception
+    // Index type unset. The default value will be ok
+    this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.UPSERT.value());
+    this.conf.set(FlinkOptions.INDEX_TYPE, "FLINK_STATE");
+    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+
+    // Upsert mode, Invalid index type will throw exception
+    this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.UPSERT.value());
     this.conf.set(FlinkOptions.INDEX_TYPE, "BUCKET_AA");
     final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema, "f2");
-    assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
 
     // Valid index type will be ok
     this.conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
-    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema, "f2");
-    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+    final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext4));
   }
 
   @Test
@@ -228,18 +239,22 @@ public class TestHoodieTableFactory {
 
     // Table type unset. The default value will be ok
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext1));
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
 
     // Invalid table type will throw exception if the hoodie.properties does not exist.
     this.conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath() + "_NOT_EXIST_TABLE_PATH");
     this.conf.set(FlinkOptions.TABLE_TYPE, "INVALID_TABLE_TYPE");
+    this.conf.setBoolean(FlinkOptions.READ_AS_STREAMING, true);
     final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema, "f2");
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext2));
     assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
-    this.conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath());
 
     // Invalid table type will be ok if the hoodie.properties exists.
+    this.conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath());
     this.conf.set(FlinkOptions.TABLE_TYPE, "INVALID_TABLE_TYPE");
     final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext3));
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
 
     // Valid table type will be ok
@@ -248,6 +263,8 @@ public class TestHoodieTableFactory {
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext4));
 
     // Setup the table type correctly for hoodie.properties
+    HoodieTableSource hoodieTableSource = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext4);
+    assertThat(hoodieTableSource.getConf().get(FlinkOptions.TABLE_TYPE), is("COPY_ON_WRITE"));
     HoodieTableSink hoodieTableSink = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext4);
     assertThat(hoodieTableSink.getConf().get(FlinkOptions.TABLE_TYPE), is("COPY_ON_WRITE"));
 
@@ -255,6 +272,43 @@ public class TestHoodieTableFactory {
     this.conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
     final MockContext sourceContext5 = MockContext.getInstance(this.conf, schema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext5));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext5));
+  }
+
+  @Test
+  void testTableSchemaCheckForSource() {
+    // Queried column is consistent with the metadata, No exception will be thrown
+    List<String> lastestTableFields = Arrays.asList(new String[]{"f0", "f1", "f2", "ts"});
+    List<String> fieldsTest1 = Arrays.asList(new String[]{"f0", "f1", "f2", "ts"});
+    assertDoesNotThrow(() -> SanityChecksUtil.checkSchema(this.conf, fieldsTest1, lastestTableFields));
+    List<String> fieldsTest3 = Arrays.asList(new String[]{"f0", "f1", "ts"});
+    assertDoesNotThrow(() -> SanityChecksUtil.checkSchema(this.conf, fieldsTest3, lastestTableFields));
+
+    // Case mismatch will throw HoodieValidationException exception
+    List<String> fieldsTest2 = Arrays.asList(new String[]{"f0", "f1", "F2", "ts"});
+    assertThrows(HoodieValidationException.class, () -> SanityChecksUtil.checkSchema(this.conf, fieldsTest2, lastestTableFields));
+
+    // Columns that do not exist will throw HoodieValidationException exception
+    List<String> fieldsTest4 = Arrays.asList(new String[]{"f0", "f1", "f2", "f3", "ts"});
+    assertThrows(HoodieValidationException.class, () -> SanityChecksUtil.checkSchema(this.conf, fieldsTest4, lastestTableFields));
+  }
+
+  @Test
+  void testRecordKeysCheck() {
+    // The configuration column(s) for RECORD_KEY_FIELD is consistent with the metadata, and no exception will be thrown.
+    List<String> fields = Arrays.asList(new String[]{"f0", "f1", "f2", "ts"});
+    this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "f0");
+    assertDoesNotThrow(() -> SanityChecksUtil.checkRecordKey(this.conf, fields));
+    this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "f0,f1");
+    assertDoesNotThrow(() -> SanityChecksUtil.checkRecordKey(this.conf, fields));
+
+    // Case mismatch will throw HoodieValidationException exception
+    this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "F0");
+    assertThrows(HoodieValidationException.class, () -> SanityChecksUtil.checkRecordKey(this.conf, fields));
+
+    // Columns that do not exist will throw HoodieValidationException exception
+    this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "xxxx");
+    assertThrows(HoodieValidationException.class, () -> SanityChecksUtil.checkRecordKey(this.conf, fields));
   }
 
   @Test

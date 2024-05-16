@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -46,13 +45,11 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
@@ -78,6 +75,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
@@ -495,7 +493,17 @@ public class StreamerUtil {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
       return getTableAvroSchema(metaClient, false);
     } catch (Exception e) {
-      LOG.warn("Error while resolving the latest table schema", e);
+      LOG.warn("Error while resolving the latest table schema, will return null.", e);
+    }
+    return null;
+  }
+
+  public static List<String> getLatestTableFields(HoodieTableMetaClient metaClient) {
+    try {
+      Schema schema = getTableAvroSchema(metaClient, false);
+      return schema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+    } catch (Exception e) {
+      LOG.warn("Error while resolving the latest table schema, will return null.", e);
     }
     return null;
   }
@@ -519,35 +527,5 @@ public class StreamerUtil {
     return tableType == HoodieTableType.MERGE_ON_READ
         ? !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) // not a compaction
         : !ClusteringUtils.isCompletedClusteringInstant(instant, timeline);   // not a clustering
-  }
-
-  /**
-   * Validate pre_combine key.
-   */
-  public static void checkPreCombineKey(Configuration conf, List<String> fields) {
-    String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
-    if (!fields.contains(preCombineField)) {
-      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
-        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
-                + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
-      }
-      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
-        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
-      } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
-        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
-                + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
-      }
-    }
-  }
-
-  /**
-   * Validate keygen generator.
-   */
-  public static void checkKeygenGenerator(boolean isComplexHoodieKey, Configuration conf) {
-    if (isComplexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
-      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
-      LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
-          FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
-    }
   }
 }

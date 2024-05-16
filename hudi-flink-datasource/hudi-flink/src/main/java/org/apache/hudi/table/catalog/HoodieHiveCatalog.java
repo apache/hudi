@@ -40,6 +40,7 @@ import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.SanityChecksUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -505,7 +506,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       flinkConf.setString(FlinkOptions.PARTITION_PATH_FIELD, partitions);
       final String[] pks = flinkConf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
       boolean complexHoodieKey = pks.length > 1 || catalogTable.getPartitionKeys().size() > 1;
-      StreamerUtil.checkKeygenGenerator(complexHoodieKey, flinkConf);
+      SanityChecksUtil.checkKeygenGenerator(complexHoodieKey, flinkConf);
     }
 
     if (!catalogTable.isPartitioned()) {
@@ -520,7 +521,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     List<String> fields = new ArrayList<>();
     catalogTable.getUnresolvedSchema().getColumns().forEach(column -> fields.add(column.getName()));
-    StreamerUtil.checkPreCombineKey(flinkConf, fields);
+    SanityChecksUtil.checkPreCombineKey(flinkConf, fields);
 
     try {
       StreamerUtil.initTableIfNotExists(flinkConf, hiveConf);
