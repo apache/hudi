@@ -732,7 +732,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> MAINTAIN_BACKWARDS_COMPATIBLE_WRITES_WITH_0_14_0 = ConfigProperty
       .key("hoodie.maintain.backwards.compatible.writes.with.0.14.0")
-      .defaultValue(true)
+      .defaultValue(false)
       .markAdvanced()
       .withDocumentation("When enabled, writes will be backwards compatible. 0.12.x, athena will be able to read tables written with 0.14.0. ");
 
