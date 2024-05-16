@@ -217,6 +217,10 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           earliestInstantToRetainCandidates.add(
               completedCommitsTimeline.findInstantsModifiedAfterByCompletionTime(latestCompactionTime.get()).firstInstant());
         }
+      } catch (UnsupportedOperationException unsupportedOperationException) {
+        // If tableMetadata is FileSystemBackedTableMetadata would throw UnsupportedOperationException, should skip it to
+        // confirm next operation success
+        LOG.warn("tableMetadata is FileSystemBackedTableMetadata and skip limiting archiving of instants.");
       } catch (Exception e) {
         throw new HoodieException("Error limiting instant archival based on metadata table", e);
       }
