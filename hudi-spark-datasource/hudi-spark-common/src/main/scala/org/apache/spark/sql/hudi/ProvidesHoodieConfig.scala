@@ -21,7 +21,7 @@ import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, WriteOperationType}
+import org.apache.hudi.common.model.{OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{ReflectionUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
@@ -105,7 +105,7 @@ trait ProvidesHoodieConfig extends Logging {
       // Validate duplicate key for inserts to COW table when using strict insert mode.
       classOf[ValidateDuplicateKeyPayload].getCanonicalName
     } else {
-      classOf[DefaultHoodieRecordPayload].getCanonicalName
+      classOf[OverwriteWithLatestAvroPayload].getCanonicalName
     }
   }
 
@@ -279,7 +279,7 @@ trait ProvidesHoodieConfig extends Logging {
       if (insertDupPolicy == FAIL_INSERT_DUP_POLICY) {
         classOf[ValidateDuplicateKeyPayload].getCanonicalName
       } else {
-        classOf[DefaultHoodieRecordPayload].getCanonicalName
+        classOf[OverwriteWithLatestAvroPayload].getCanonicalName
       }
     }
 
