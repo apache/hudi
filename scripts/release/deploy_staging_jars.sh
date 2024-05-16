@@ -48,6 +48,15 @@ declare -a ALL_VERSION_OPTS=(
 # hudi-utilities-bundle_2.11
 # hudi-utilities-slim-bundle_2.11
 "-Dscala-2.11 -Dspark2.4 -pl hudi-spark-datasource/hudi-spark-common,hudi-spark-datasource/hudi-spark2,hudi-spark-datasource/hudi-spark,hudi-utilities,packaging/hudi-spark-bundle,packaging/hudi-cli-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am"
+# For Spark 3.5, Scala 2.13:
+# hudi-spark-common_2.13
+# hudi-spark_2.13
+# hudi-spark3.5.x_2.13
+# hudi-utilities_2.13
+# hudi-spark3.5-bundle_2.13
+# hudi-utilities-bundle_2.13
+# hudi-utilities-slim-bundle_2.13
+"-Dscala-2.13 -Dspark3.5 -pl hudi-spark-datasource/hudi-spark-common,hudi-spark-datasource/hudi-spark3.5.x,hudi-spark-datasource/hudi-spark,hudi-utilities,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am"
 # For Spark 2.4, Scala 2.12:
 # hudi-spark2.4-bundle_2.12
 "-Dscala-2.12 -Dspark2.4 -pl packaging/hudi-spark-bundle -am"
