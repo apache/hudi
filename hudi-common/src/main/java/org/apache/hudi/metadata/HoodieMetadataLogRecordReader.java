@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.BaseHoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieMetadataMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -51,9 +52,9 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SE
 @ThreadSafe
 public class HoodieMetadataLogRecordReader implements Closeable {
 
-  private final HoodieMergedLogRecordScanner logRecordScanner;
+  private final BaseHoodieMergedLogRecordScanner<String> logRecordScanner;
 
-  private HoodieMetadataLogRecordReader(HoodieMergedLogRecordScanner logRecordScanner) {
+  private HoodieMetadataLogRecordReader(BaseHoodieMergedLogRecordScanner logRecordScanner) {
     this.logRecordScanner = logRecordScanner;
   }
 
@@ -153,12 +154,12 @@ public class HoodieMetadataLogRecordReader implements Closeable {
    * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
    */
   public static class Builder {
-    private final HoodieMergedLogRecordScanner.Builder scannerBuilder;
+    private final BaseHoodieMergedLogRecordScanner.Builder scannerBuilder;
     private final String partitionName;
 
     public Builder(String partitionName) {
       this.partitionName = partitionName;
-      this.scannerBuilder = shouldUseMetadataMergedLogRecordScanner() ? new HoodieMetadataMergedLogRecordScanner.Builder() : new HoodieMergedLogRecordScanner.Builder();
+      this.scannerBuilder = shouldUseMetadataMergedLogRecordScanner() ? HoodieMetadataMergedLogRecordScanner.newBuilder() : HoodieMergedLogRecordScanner.newBuilder();
       scannerBuilder
           .withKeyFieldOverride(HoodieMetadataPayload.KEY_FIELD_NAME)
           // NOTE: Merging of Metadata Table's records is currently handled using {@code HoodiePreCombineAvroRecordMerger}

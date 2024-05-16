@@ -306,7 +306,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-          HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+          HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
               .withStorage(table.getMetaClient().getStorage())
               .withBasePath(table.getMetaClient().getBasePath())
               .withLogFilePaths(clusteringOp.getDeltaFilePaths())

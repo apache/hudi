@@ -1793,7 +1793,7 @@ public class HoodieTableMetadataUtil {
       if (!fileSlice.getBaseFile().isPresent()) {
         List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
             .map(l -> l.getPath().toString()).collect(toList());
-        HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
+        HoodieMergedLogRecordScanner mergedLogRecordScanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
             .withStorage(metaClient.getStorage())
             .withBasePath(basePath)
             .withLogFilePaths(logFilePaths)

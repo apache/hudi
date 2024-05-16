@@ -126,7 +126,7 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
   private HoodieMergedLogRecordScanner getLogRecordScanner(FileSlice fileSlice) {
     List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
         .map(l -> l.getPath().toString()).collect(toList());
-    return HoodieMergedLogRecordScanner.newBuilder()
+    return (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(hoodieTable.getMetaClient().getBasePathV2().toString())
         .withLogFilePaths(logFilePaths)

@@ -408,7 +408,7 @@ object LogFileIterator extends SparkAdapterSupport {
       logRecordScannerBuilder.withRecordMerger(
         HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.recordMergerImpls.asJava, tableState.recordMergerStrategy))
 
-      val scanner = logRecordScannerBuilder.build()
+      val scanner = logRecordScannerBuilder.build().asInstanceOf[HoodieMergedLogRecordScanner]
 
       closing(scanner) {
         // NOTE: We have to copy record-map (by default immutable copy is exposed)

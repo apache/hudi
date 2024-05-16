@@ -348,7 +348,7 @@ public class TestQuickstartData {
       List<String> logPaths,
       Schema readSchema,
       String instant) {
-    return HoodieMergedLogRecordScanner.newBuilder()
+    return (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)

@@ -19,12 +19,10 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieMetadataRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -38,14 +36,16 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
-public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordScanner {
+/**
+ * Merged log record scanner for metadata table using {@link HoodieMetadataRecordMerger}.
+ */
+public class HoodieMetadataMergedLogRecordScanner extends BaseHoodieMergedLogRecordScanner<String> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataMergedLogRecordScanner.class);
 
@@ -64,6 +64,11 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, reverseReader, bufferSize, spillableMapBasePath, instantRange, diskMapType,
         isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
         hoodieTableMetaClientOption);
+  }
+
+  @Override
+  public Map<String, HoodieRecord> getRecords() {
+    return records;
   }
 
   @Override
@@ -90,151 +95,26 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
   }
 
   /**
-   * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
+   * Returns the builder for {@code HoodieMetadataMergedLogRecordScanner}.
    */
-  public static class Builder extends HoodieMergedLogRecordScanner.Builder {
-    private HoodieStorage storage;
-    private String basePath;
-    private List<String> logFilePaths;
-    private Schema readerSchema;
-    private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
-    private String latestInstantTime;
-    private boolean reverseReader;
-    private int bufferSize;
-    // specific configurations
-    private Long maxMemorySizeInBytes;
-    private String spillableMapBasePath;
-    private ExternalSpillableMap.DiskMapType diskMapType = HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue();
-    private boolean isBitCaskDiskMapCompressionEnabled = HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue();
-    // incremental filtering
-    private Option<InstantRange> instantRange = Option.empty();
-    private String partitionName;
-    // operation field default false
-    private boolean withOperationField = false;
-    private String keyFieldOverride;
-    // By default, we're doing a full-scan
-    private boolean forceFullScan = true;
-    private boolean enableOptimizedLogBlocksScan = false;
+  public static HoodieMetadataMergedLogRecordScanner.Builder newBuilder() {
+    return new HoodieMetadataMergedLogRecordScanner.Builder();
+  }
+
+  /**
+   * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
+   */
+  public static class Builder extends BaseHoodieMergedLogRecordScanner.Builder {
     private HoodieRecordMerger recordMerger = HoodieMetadataRecordMerger.INSTANCE;
-    protected HoodieTableMetaClient hoodieTableMetaClient;
 
     @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withStorage(HoodieStorage storage) {
-      this.storage = storage;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withBasePath(String basePath) {
-      this.basePath = basePath;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withLogFilePaths(List<String> logFilePaths) {
-      this.logFilePaths = logFilePaths.stream()
-          .filter(p -> !p.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
-          .collect(Collectors.toList());
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withReaderSchema(Schema schema) {
-      this.readerSchema = schema;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withLatestInstantTime(String latestInstantTime) {
-      this.latestInstantTime = latestInstantTime;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withReverseReader(boolean reverseReader) {
-      this.reverseReader = reverseReader;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withBufferSize(int bufferSize) {
-      this.bufferSize = bufferSize;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withInstantRange(Option<InstantRange> instantRange) {
-      this.instantRange = instantRange;
-      return this;
-    }
-
-    public HoodieMetadataMergedLogRecordScanner.Builder withMaxMemorySizeInBytes(Long maxMemorySizeInBytes) {
-      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
-      return this;
-    }
-
-    public HoodieMetadataMergedLogRecordScanner.Builder withSpillableMapBasePath(String spillableMapBasePath) {
-      this.spillableMapBasePath = spillableMapBasePath;
-      return this;
-    }
-
-    public HoodieMetadataMergedLogRecordScanner.Builder withDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
-      this.diskMapType = diskMapType;
-      return this;
-    }
-
-    public HoodieMetadataMergedLogRecordScanner.Builder withBitCaskDiskMapCompressionEnabled(boolean isBitCaskDiskMapCompressionEnabled) {
-      this.isBitCaskDiskMapCompressionEnabled = isBitCaskDiskMapCompressionEnabled;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withInternalSchema(InternalSchema internalSchema) {
-      this.internalSchema = internalSchema;
-      return this;
-    }
-
-    public HoodieMetadataMergedLogRecordScanner.Builder withOperationField(boolean withOperationField) {
-      this.withOperationField = withOperationField;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withPartition(String partitionName) {
-      this.partitionName = partitionName;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
-      this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withRecordMerger(HoodieRecordMerger recordMerger) {
+    public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
       this.recordMerger = recordMerger;
       return this;
     }
 
-    public HoodieMetadataMergedLogRecordScanner.Builder withKeyFieldOverride(String keyFieldOverride) {
-      this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
-      return this;
-    }
-
-    public HoodieMetadataMergedLogRecordScanner.Builder withForceFullScan(boolean forceFullScan) {
-      this.forceFullScan = forceFullScan;
-      return this;
-    }
-
     @Override
-    public HoodieMetadataMergedLogRecordScanner.Builder withTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
-      this.hoodieTableMetaClient = hoodieTableMetaClient;
-      return this;
-    }
-
-    @Override
-    public HoodieMetadataMergedLogRecordScanner build() {
+    public HoodieMetadataMergedLogRecordScanner getScanner() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(
             new StoragePath(basePath), new StoragePath(this.logFilePaths.get(0)).getParent());

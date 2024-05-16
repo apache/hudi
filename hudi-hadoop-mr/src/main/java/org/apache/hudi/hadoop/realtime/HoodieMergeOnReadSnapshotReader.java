@@ -178,7 +178,7 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
   }
 
   private HoodieMergedLogRecordScanner getMergedLogRecordScanner() {
-    return HoodieMergedLogRecordScanner.newBuilder()
+    return (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(HoodieStorageUtils.getStorage(
             split.getPath().toString(), HadoopFSUtils.getStorageConf(jobConf)))
         .withBasePath(tableBasePath)
