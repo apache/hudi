@@ -101,6 +101,9 @@ public class SanityChecksUtil {
    * Validate the index type.
    */
   public static void checkIndexType(Configuration conf) {
+    if (OptionsResolver.isAppendMode(conf)) {
+      return;
+    }
     String indexType = conf.get(FlinkOptions.INDEX_TYPE);
     if (!StringUtils.isNullOrEmpty(indexType)) {
       try {
