@@ -45,6 +45,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -53,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Implementation of {@link HoodieTableMetadata} based file-system-backed table metadata.
@@ -163,8 +165,13 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
           "Listing all partitions with prefix " + relativePathPrefix);
       // Need to use serializable file status here, see HUDI-5936
       List<StoragePathInfo> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
-        HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
-        return storage.listDirectEntries(path).stream();
+        try {
+          HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
+          return storage.listDirectEntries(path).stream();
+        } catch (FileNotFoundException e) {
+          // The partition may have been cleaned.
+          return Stream.empty();
+        }
       }, listingParallelism);
       pathsToList.clear();
 
