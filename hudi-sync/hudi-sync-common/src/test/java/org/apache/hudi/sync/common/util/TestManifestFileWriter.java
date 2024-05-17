@@ -33,7 +33,6 @@ import java.util.stream.IntStream;
 import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.sync.common.util.ManifestFileWriter.fetchLatestBaseFilesForAllPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -50,7 +49,7 @@ public class TestManifestFileWriter extends HoodieCommonTestHarness {
     // Generate 10 files under each partition
     createTestDataForPartitionedTable(metaClient, 10);
     ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder().setMetaClient(metaClient).build();
-    assertEquals(30, fetchLatestBaseFilesForAllPartitions(metaClient, false, false, false).count());
+    assertEquals(30, manifestFileWriter.fetchLatestBaseFilesForAllPartitions(false).count());
   }
 
   @Test

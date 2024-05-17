@@ -54,7 +54,7 @@ public class ManifestFileWriter {
   private final boolean useFileListingFromMetadata;
   private final boolean assumeDatePartitioning;
 
-  private ManifestFileWriter(HoodieTableMetaClient metaClient, boolean useFileListingFromMetadata, boolean assumeDatePartitioning) {
+  protected ManifestFileWriter(HoodieTableMetaClient metaClient, boolean useFileListingFromMetadata, boolean assumeDatePartitioning) {
     this.metaClient = metaClient;
     this.useFileListingFromMetadata = useFileListingFromMetadata;
     this.assumeDatePartitioning = assumeDatePartitioning;
@@ -65,7 +65,7 @@ public class ManifestFileWriter {
    */
   public synchronized void writeManifestFile(boolean useAbsolutePath) {
     try {
-      List<String> baseFiles = fetchLatestBaseFilesForAllPartitions(metaClient, useFileListingFromMetadata, assumeDatePartitioning, useAbsolutePath)
+      List<String> baseFiles = fetchLatestBaseFilesForAllPartitions(useAbsolutePath)
           .collect(Collectors.toList());
       if (baseFiles.isEmpty()) {
         LOG.warn("No base file to generate manifest file.");
@@ -87,8 +87,7 @@ public class ManifestFileWriter {
   }
 
   @VisibleForTesting
-  public static Stream<String> fetchLatestBaseFilesForAllPartitions(HoodieTableMetaClient metaClient,
-      boolean useFileListingFromMetadata, boolean assumeDatePartitioning, boolean useAbsolutePath) {
+  public Stream<String> fetchLatestBaseFilesForAllPartitions(boolean useAbsolutePath) {
     try {
       Configuration hadoopConf = metaClient.getHadoopConf();
       HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
