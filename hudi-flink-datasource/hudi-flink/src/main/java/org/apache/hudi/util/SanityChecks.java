@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
@@ -41,23 +42,22 @@ import java.util.stream.Collectors;
 /**
  * Utilities for HoodieTableFactory sanity check.
  */
-public class SanityChecksUtil {
+public class SanityChecks {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SanityChecksUtil.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SanityChecks.class);
 
   /**
    * The sanity check.
-   * If the metaClient is not null, it means that this is a table source sanity check and the source table has
-   * already been initialized.
    *
-   * @param conf   The table options
-   * @param schema The table schema
-   * @param metaClient  The table meta client
+   * @param conf  The table options
+   * @param schema  The table schema
+   * @param checkMetaData  Weather to check metadata
    */
-  public static void sanitCheck(Configuration conf, ResolvedSchema schema, HoodieTableMetaClient metaClient) {
+  public static void sanitCheck(Configuration conf, ResolvedSchema schema, Boolean checkMetaData) {
     checkTableType(conf);
     List<String> schemaFields = schema.getColumnNames();
-    if (metaClient != null) {
+    if (checkMetaData) {
+      HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(conf, HadoopConfigurations.getHadoopConf(conf));
       List<String> latestTablefields = StreamerUtil.getLatestTableFields(metaClient);
       if (latestTablefields != null) {
         checkSchema(conf, schemaFields, latestTablefields);

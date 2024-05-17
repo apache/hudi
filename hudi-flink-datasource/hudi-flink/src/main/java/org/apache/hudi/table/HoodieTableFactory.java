@@ -20,7 +20,6 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -33,7 +32,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.SerializableSchema;
-import org.apache.hudi.util.SanityChecksUtil;
+import org.apache.hudi.util.SanityChecks;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -87,8 +86,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
-    HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(conf, HadoopConfigurations.getHadoopConf(conf));
-    SanityChecksUtil.sanitCheck(conf, schema, metaClient);
+    SanityChecks.sanitCheck(conf, schema, true);
     return new HoodieTableSource(
         SerializableSchema.create(schema),
         path,
@@ -106,7 +104,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
     setupSortOptions(conf, context.getConfiguration());
-    SanityChecksUtil.sanitCheck(conf, schema, null);
+    SanityChecks.sanitCheck(conf, schema, false);
     return new HoodieTableSink(conf, schema);
   }
 
@@ -256,7 +254,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       }
     }
     boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
-    SanityChecksUtil.checkKeygenGenerator(complexHoodieKey, conf);
+    SanityChecks.checkKeygenGenerator(complexHoodieKey, conf);
   }
 
   /**

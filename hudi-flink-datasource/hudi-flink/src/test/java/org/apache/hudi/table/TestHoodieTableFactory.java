@@ -30,7 +30,7 @@ import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
-import org.apache.hudi.util.SanityChecksUtil;
+import org.apache.hudi.util.SanityChecks;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.SchemaBuilder;
 import org.apache.hudi.utils.TestConfigurations;
@@ -280,17 +280,17 @@ public class TestHoodieTableFactory {
     // Queried column is consistent with the metadata, No exception will be thrown
     List<String> lastestTableFields = Arrays.asList(new String[]{"f0", "f1", "f2", "ts"});
     List<String> fieldsTest1 = Arrays.asList(new String[]{"f0", "f1", "f2", "ts"});
-    assertDoesNotThrow(() -> SanityChecksUtil.checkSchema(this.conf, fieldsTest1, lastestTableFields));
+    assertDoesNotThrow(() -> SanityChecks.checkSchema(this.conf, fieldsTest1, lastestTableFields));
     List<String> fieldsTest3 = Arrays.asList(new String[]{"f0", "f1", "ts"});
-    assertDoesNotThrow(() -> SanityChecksUtil.checkSchema(this.conf, fieldsTest3, lastestTableFields));
+    assertDoesNotThrow(() -> SanityChecks.checkSchema(this.conf, fieldsTest3, lastestTableFields));
 
     // Case mismatch will throw HoodieValidationException exception
     List<String> fieldsTest2 = Arrays.asList(new String[]{"f0", "f1", "F2", "ts"});
-    assertThrows(HoodieValidationException.class, () -> SanityChecksUtil.checkSchema(this.conf, fieldsTest2, lastestTableFields));
+    assertThrows(HoodieValidationException.class, () -> SanityChecks.checkSchema(this.conf, fieldsTest2, lastestTableFields));
 
     // Columns that do not exist will throw HoodieValidationException exception
     List<String> fieldsTest4 = Arrays.asList(new String[]{"f0", "f1", "f2", "f3", "ts"});
-    assertThrows(HoodieValidationException.class, () -> SanityChecksUtil.checkSchema(this.conf, fieldsTest4, lastestTableFields));
+    assertThrows(HoodieValidationException.class, () -> SanityChecks.checkSchema(this.conf, fieldsTest4, lastestTableFields));
   }
 
   @Test
@@ -298,17 +298,17 @@ public class TestHoodieTableFactory {
     // The configuration column(s) for RECORD_KEY_FIELD is consistent with the metadata, and no exception will be thrown.
     List<String> fields = Arrays.asList(new String[]{"f0", "f1", "f2", "ts"});
     this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "f0");
-    assertDoesNotThrow(() -> SanityChecksUtil.checkRecordKey(this.conf, fields));
+    assertDoesNotThrow(() -> SanityChecks.checkRecordKey(this.conf, fields));
     this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "f0,f1");
-    assertDoesNotThrow(() -> SanityChecksUtil.checkRecordKey(this.conf, fields));
+    assertDoesNotThrow(() -> SanityChecks.checkRecordKey(this.conf, fields));
 
     // Case mismatch will throw HoodieValidationException exception
     this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "F0");
-    assertThrows(HoodieValidationException.class, () -> SanityChecksUtil.checkRecordKey(this.conf, fields));
+    assertThrows(HoodieValidationException.class, () -> SanityChecks.checkRecordKey(this.conf, fields));
 
     // Columns that do not exist will throw HoodieValidationException exception
     this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "xxxx");
-    assertThrows(HoodieValidationException.class, () -> SanityChecksUtil.checkRecordKey(this.conf, fields));
+    assertThrows(HoodieValidationException.class, () -> SanityChecks.checkRecordKey(this.conf, fields));
   }
 
   @Test
