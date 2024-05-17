@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -861,6 +862,30 @@ public abstract class AbstractHoodieLogRecordReader {
     }
 
     public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withKeyFieldOverride(String keyFieldOverride) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withForceFullScan(boolean forceFullScan) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withMaxMemorySizeInBytes(Long maxMemorySizeInBytes) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withSpillableMapBasePath(String spillableMapBasePath) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withBitCaskDiskMapCompressionEnabled(boolean bitCaskDiskMapCompressionEnabled) {
       throw new UnsupportedOperationException();
     }
 
