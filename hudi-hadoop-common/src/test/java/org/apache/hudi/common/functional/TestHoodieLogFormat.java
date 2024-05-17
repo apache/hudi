@@ -682,7 +682,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     FileCreateUtils.createDeltaCommit(basePath, "100", storage);
     // scan all log blocks (across multiple log files)
-    HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(
@@ -726,7 +726,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.createDeltaCommit(basePath, "100", storage);
 
     // scan all log blocks (across multiple log files)
-    HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(
@@ -814,7 +814,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.createDeltaCommit(basePath, "100", storage);
 
     // scan all log blocks (across multiple log files)
-    HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(
@@ -1330,7 +1330,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.createDeltaCommit(basePath, "101", storage);
     FileCreateUtils.createDeltaCommit(basePath, "102", storage);
 
-    HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
@@ -1377,7 +1377,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     readKeys.clear();
     scanner.close();
-    scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
@@ -1489,7 +1489,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.createDeltaCommit(basePath, "102", storage);
 
     final List<String> readKeys = new ArrayList<>();
-    HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
@@ -1615,7 +1615,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.createDeltaCommit(basePath, "103", storage);
     FileCreateUtils.createDeltaCommit(basePath, "104", storage);
 
-    HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
@@ -1957,7 +1957,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtils.createDeltaCommit(basePath, "102", storage);
     FileCreateUtils.createDeltaCommit(basePath, "103", storage);
 
-    try (HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    try (HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
@@ -2313,7 +2313,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
@@ -2400,7 +2400,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       List<String> allLogFiles = FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1",
           HoodieLogFile.DELTA_EXTENSION, "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-      HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+      HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
           .withStorage(storage)
           .withBasePath(basePath)
           .withLogFilePaths(allLogFiles)
@@ -2923,7 +2923,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieMergedLogRecordScanner.Builder builder = (HoodieMergedLogRecordScanner.Builder) HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner.Builder builder = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
@@ -2936,7 +2936,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan);
-    try (HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) builder.build()) {
+    try (HoodieMergedLogRecordScanner scanner = builder.build()) {
       assertEquals(expectedTotalRecords, scanner.getTotalLogRecords(), "There should be " + expectedTotalRecords + " records");
       final Set<String> readKeys = new HashSet<>();
       scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));

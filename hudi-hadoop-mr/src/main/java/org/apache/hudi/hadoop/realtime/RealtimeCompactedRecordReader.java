@@ -85,7 +85,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
-    return (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    return HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(HoodieStorageUtils.getStorage(
             split.getPath().toString(), HadoopFSUtils.getStorageConf(jobConf)))
         .withBasePath(split.getBasePath())

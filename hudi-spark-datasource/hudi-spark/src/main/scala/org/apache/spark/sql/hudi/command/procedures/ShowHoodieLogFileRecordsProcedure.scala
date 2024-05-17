@@ -73,7 +73,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath)
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue)
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue)
-        .build.asInstanceOf[HoodieMergedLogRecordScanner]
+        .build
       scanner.asScala.foreach(hoodieRecord => {
         val record = hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema).get()
         if (allRecords.size() < limit) {

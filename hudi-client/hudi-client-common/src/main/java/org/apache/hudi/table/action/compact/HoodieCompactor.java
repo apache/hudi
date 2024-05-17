@@ -189,7 +189,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
             new StoragePath(FSUtils.constructAbsolutePath(
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
-    HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(metaClient.getBasePath())
         .withLogFilePaths(logFiles)

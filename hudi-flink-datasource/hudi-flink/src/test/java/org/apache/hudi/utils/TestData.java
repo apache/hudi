@@ -959,7 +959,7 @@ public class TestData {
       List<String> logPaths,
       Schema readSchema,
       String instant) {
-    return (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    return HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)

@@ -277,7 +277,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             : Option.of(HoodieIOFactory.getIOFactory(table.getStorageConf())
             .getReaderFactory(table.getConfig().getRecordMerger().getRecordType())
             .getFileReader(table.getConfig(), new StoragePath(clusteringOp.getDataFilePath())));
-        HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+        HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
             .withStorage(table.getMetaClient().getStorage())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(clusteringOp.getDeltaFilePaths())

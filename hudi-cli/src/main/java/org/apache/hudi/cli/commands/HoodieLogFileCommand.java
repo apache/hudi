@@ -225,7 +225,7 @@ public class HoodieLogFileCommand {
     if (shouldMerge) {
       System.out.println("===========================> MERGING RECORDS <===================");
       HoodieMergedLogRecordScanner scanner =
-          (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+          HoodieMergedLogRecordScanner.newBuilder()
               .withStorage(storage)
               .withBasePath(client.getBasePath())
               .withLogFilePaths(logFilePaths)

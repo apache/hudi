@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.AbstractHoodieLogRecordReader;
 import org.apache.hudi.common.table.log.BaseHoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieMetadataMergedLogRecordScanner;
@@ -154,7 +155,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
    * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
    */
   public static class Builder {
-    private final BaseHoodieMergedLogRecordScanner.Builder scannerBuilder;
+    private final AbstractHoodieLogRecordReader.Builder scannerBuilder;
     private final String partitionName;
 
     public Builder(String partitionName) {
@@ -248,7 +249,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     }
 
     public HoodieMetadataLogRecordReader build() {
-      return new HoodieMetadataLogRecordReader(scannerBuilder.build());
+      return new HoodieMetadataLogRecordReader((BaseHoodieMergedLogRecordScanner) scannerBuilder.build());
     }
 
     private boolean shouldUseMetadataMergedLogRecordScanner() {

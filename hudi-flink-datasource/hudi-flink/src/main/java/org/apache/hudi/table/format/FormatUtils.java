@@ -155,7 +155,7 @@ public class FormatUtils {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
     HoodieStorage storage = HoodieStorageUtils.getStorage(
         split.getTablePath(), HadoopFSUtils.getStorageConf(hadoopConf));
-    return (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    return HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(split.getTablePath())
         .withLogFilePaths(split.getLogPaths().get())
@@ -259,7 +259,7 @@ public class FormatUtils {
       HoodieWriteConfig writeConfig,
       Configuration hadoopConf) {
     String basePath = writeConfig.getBasePath();
-    return (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    return HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(HoodieStorageUtils.getStorage(
             basePath, HadoopFSUtils.getStorageConf(hadoopConf)))
         .withBasePath(basePath)

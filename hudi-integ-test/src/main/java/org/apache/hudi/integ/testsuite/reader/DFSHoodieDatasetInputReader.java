@@ -282,7 +282,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       return new CloseableMappingIterator<>(reader.getRecordIterator(schema), HoodieRecord::getData);
     } else {
       // If there is no data file, fall back to reading log files
-      HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+      HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
           .withStorage(metaClient.getStorage())
           .withBasePath(metaClient.getBasePath())
           .withLogFilePaths(

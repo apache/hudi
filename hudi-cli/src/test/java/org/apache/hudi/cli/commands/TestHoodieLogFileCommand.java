@@ -234,7 +234,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     List<String> logFilePaths = storage.globEntries(new StoragePath(partitionPath + "/*"))
         .stream()
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
-    HoodieMergedLogRecordScanner scanner = (HoodieMergedLogRecordScanner) HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(tablePath)
         .withLogFilePaths(logFilePaths)

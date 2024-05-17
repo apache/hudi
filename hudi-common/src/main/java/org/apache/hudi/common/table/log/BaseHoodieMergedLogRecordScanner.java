@@ -19,14 +19,12 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -49,7 +47,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -259,147 +256,5 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     if (records != null) {
       records.close();
     }
-  }
-
-  public abstract static class Builder extends AbstractHoodieLogRecordReader.Builder {
-    protected HoodieStorage storage;
-    protected String basePath;
-    protected List<String> logFilePaths;
-    protected Schema readerSchema;
-    protected InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
-    protected String latestInstantTime;
-    protected boolean reverseReader;
-    protected int bufferSize;
-    // specific configurations
-    protected Long maxMemorySizeInBytes;
-    protected String spillableMapBasePath;
-    protected ExternalSpillableMap.DiskMapType diskMapType = HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue();
-    protected boolean isBitCaskDiskMapCompressionEnabled = HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue();
-    // incremental filtering
-    protected Option<InstantRange> instantRange = Option.empty();
-    protected String partitionName;
-    // operation field default false
-    protected boolean withOperationField = false;
-    protected String keyFieldOverride;
-    // By default, we're doing a full-scan
-    protected boolean forceFullScan = true;
-    protected boolean enableOptimizedLogBlocksScan = false;
-    protected HoodieTableMetaClient hoodieTableMetaClient;
-
-    @Override
-    public Builder withStorage(HoodieStorage storage) {
-      this.storage = storage;
-      return this;
-    }
-
-    @Override
-    public Builder withBasePath(String basePath) {
-      this.basePath = basePath;
-      return this;
-    }
-
-    @Override
-    public Builder withLogFilePaths(List<String> logFilePaths) {
-      this.logFilePaths = logFilePaths.stream()
-          .filter(p -> !p.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
-          .collect(Collectors.toList());
-      return this;
-    }
-
-    @Override
-    public Builder withReaderSchema(Schema schema) {
-      this.readerSchema = schema;
-      return this;
-    }
-
-    @Override
-    public Builder withLatestInstantTime(String latestInstantTime) {
-      this.latestInstantTime = latestInstantTime;
-      return this;
-    }
-
-    @Override
-    public Builder withReverseReader(boolean reverseReader) {
-      this.reverseReader = reverseReader;
-      return this;
-    }
-
-    @Override
-    public Builder withBufferSize(int bufferSize) {
-      this.bufferSize = bufferSize;
-      return this;
-    }
-
-    @Override
-    public Builder withInstantRange(Option<InstantRange> instantRange) {
-      this.instantRange = instantRange;
-      return this;
-    }
-
-    public Builder withMaxMemorySizeInBytes(Long maxMemorySizeInBytes) {
-      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
-      return this;
-    }
-
-    public Builder withSpillableMapBasePath(String spillableMapBasePath) {
-      this.spillableMapBasePath = spillableMapBasePath;
-      return this;
-    }
-
-    public Builder withDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
-      this.diskMapType = diskMapType;
-      return this;
-    }
-
-    public Builder withBitCaskDiskMapCompressionEnabled(boolean isBitCaskDiskMapCompressionEnabled) {
-      this.isBitCaskDiskMapCompressionEnabled = isBitCaskDiskMapCompressionEnabled;
-      return this;
-    }
-
-    @Override
-    public Builder withInternalSchema(InternalSchema internalSchema) {
-      this.internalSchema = internalSchema;
-      return this;
-    }
-
-    public Builder withOperationField(boolean withOperationField) {
-      this.withOperationField = withOperationField;
-      return this;
-    }
-
-    @Override
-    public Builder withPartition(String partitionName) {
-      this.partitionName = partitionName;
-      return this;
-    }
-
-    @Override
-    public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
-      this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
-      return this;
-    }
-
-    public Builder withKeyFieldOverride(String keyFieldOverride) {
-      this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
-      return this;
-    }
-
-    public Builder withForceFullScan(boolean forceFullScan) {
-      this.forceFullScan = forceFullScan;
-      return this;
-    }
-
-    @Override
-    public Builder withTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
-      this.hoodieTableMetaClient = hoodieTableMetaClient;
-      return this;
-    }
-
-    @Override
-    public BaseHoodieMergedLogRecordScanner build() {
-      return getScanner();
-    }
-
-    public abstract BaseHoodieMergedLogRecordScanner getScanner();
   }
 }
