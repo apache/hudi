@@ -174,3 +174,11 @@ c29d62a70 [AUDIT-781]: Upgrade to version release-v1.14.1 (#692)
 ---[2024-05-14 11:28:25] [release-v1.14.4] Upgrade to version release-v1.14.4---
 c8336d5b0 [ENG-8631][MINOR] Use parent as the glob path when full file path specified (#706)
 5d7fd31f7 [AUDIT-784] Upgrade to version release-v1.14.3 (#696)
+
+---[2024-05-17 20:48:11] [release-v1.14.5] ---
+cc81d75927f [ENG-9689][INTERNAL] Properly resolve proto schemas in SchemaRegistryProvider (#711)
+00ea1c8fa7c [ENG-9687][INTERNAL] Make the getInstance of BigQuerySchemaResolver public (#718)
+8268e04637e [ENG-9687] [MINOR] Make the ManifestWriter Extendable (#710)
+7e9591051eb [ENG-8542][INTERNAL] Revert old log format by default to ensure all tables write in new log format with 0.14 (#715)
+458d1396b29 [ENG-9695][HUDI-7758] Only consider files in Hudi partitions when initializing MDT (#707)
+de5dd1ca2d0 [AUDIT-789] Upgrade to version release-v1.14.4 (#708)
