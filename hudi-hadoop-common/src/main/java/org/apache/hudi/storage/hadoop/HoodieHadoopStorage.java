@@ -221,12 +221,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
-  public StoragePath makeQualified(StoragePath path) {
-    return convertToStoragePath(
-        fs.makeQualified(convertToHadoopPath(path)));
-  }
-
-  @Override
   public Object getFileSystem() {
     return fs;
   }
@@ -234,11 +228,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public StorageConfiguration<Configuration> getConf() {
     return new HadoopStorageConfiguration(fs.getConf());
-  }
-
-  @Override
-  public Configuration unwrapConf() {
-    return fs.getConf();
   }
 
   @Override
