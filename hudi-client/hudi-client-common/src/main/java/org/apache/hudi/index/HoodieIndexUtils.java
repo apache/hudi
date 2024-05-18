@@ -233,7 +233,7 @@ public class HoodieIndexUtils {
    * @return {@link HoodieRecord}s that have the current location being set.
    */
   private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
-      HoodieData<HoodieRecordGlobalLocation> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
+      HoodieData<Pair<String, String>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
     final Option<String> instantTime = hoodieTable
         .getMetaClient()
         .getCommitsTimeline()
@@ -241,7 +241,7 @@ public class HoodieIndexUtils {
         .lastInstant()
         .map(HoodieInstant::getTimestamp);
     return partitionLocations.flatMap(p
-        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getPartitionPath(), p.getFileId()))
+        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getKey(), p.getValue()))
         .getMergedRecords().iterator());
   }
 
@@ -288,12 +288,9 @@ public class HoodieIndexUtils {
     // the tagging partitions and locations
     // NOTE: The incoming records may only differ in record position, however, for the purpose of
     //       merging in case of partition updates, it is safe to ignore the record positions.
-    HoodieData<HoodieRecordGlobalLocation> globalLocations = incomingRecordsAndLocations
+    HoodieData<Pair<String, String>> globalLocations = incomingRecordsAndLocations
         .filter(p -> p.getRight().isPresent())
-        .map(p -> new HoodieRecordGlobalLocation(
-            p.getRight().get().getPartitionPath(),
-            p.getRight().get().getInstantTime(),
-            p.getRight().get().getFileId()))
+        .map(p -> Pair.of(p.getRight().get().getPartitionPath(), p.getRight().get().getFileId()))
         .distinct(config.getGlobalIndexReconcileParallelism());
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, config, hoodieTable);
