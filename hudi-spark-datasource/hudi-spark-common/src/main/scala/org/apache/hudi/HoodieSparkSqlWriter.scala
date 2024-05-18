@@ -569,14 +569,22 @@ class HoodieSparkSqlWriterInternal {
    * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
    */
   private def resolvePartitionWildcards(partitions: List[String], jsc: JavaSparkContext, cfg: HoodieConfig, basePath: String): List[String] = {
+    if (partitions.isEmpty) {
+      return partitions;
+    }
+
     //find out if any of the input partitions have wildcards
     //note:spark-sql may url-encode special characters (* -> %2A)
     var (wildcardPartitions, fullPartitions) = partitions.partition(partition => partition.matches(".*(\\*|%2A).*"))
 
+    val allPartitions = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc): HoodieEngineContext,
+      HoodieMetadataConfig.newBuilder().fromProperties(cfg.getProps).build(), basePath)
+
+    if (fullPartitions.nonEmpty) {
+      fullPartitions = fullPartitions.filter(partition => allPartitions.contains(partition))
+    }
+
     if (wildcardPartitions.nonEmpty) {
-      //get list of all partitions
-      val allPartitions = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc): HoodieEngineContext,
-        HoodieMetadataConfig.newBuilder().fromProperties(cfg.getProps).build(), basePath)
       //go through list of partitions with wildcards and add all partitions that match to val fullPartitions
       wildcardPartitions.foreach(partition => {
         //turn wildcard into regex
