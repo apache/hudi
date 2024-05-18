@@ -35,6 +35,8 @@ import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
 import java.io.IOException;
 import java.net.URI;
@@ -86,8 +88,9 @@ public class JsonToAvroSchemaConverter implements SchemaRegistryProvider.SchemaC
     this.stripDefaultValueQuotes = ConfigUtils.getBooleanWithAltKeys(config, STRIP_DEFAULT_VALUE_QUOTES);
   }
 
-  public String convert(String jsonSchema) throws IOException {
-    JsonNode jsonNode = MAPPER.readTree(jsonSchema);
+  public String convert(ParsedSchema parsedSchema) throws IOException {
+    JsonSchema jsonSchema = (JsonSchema) parsedSchema;
+    JsonNode jsonNode = MAPPER.readTree(jsonSchema.canonicalString());
     ObjectNode avroRecord = convertJsonNodeToAvroNode(jsonNode, new AtomicInteger(1), new HashSet<>());
     return avroRecord.toString();
   }

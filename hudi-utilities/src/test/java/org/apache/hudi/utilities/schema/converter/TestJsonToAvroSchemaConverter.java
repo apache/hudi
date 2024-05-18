@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.schema.converter;
 
 import org.apache.hudi.common.config.TypedProperties;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -58,7 +59,7 @@ class TestJsonToAvroSchemaConverter {
     if ("_no_stripping_quotes".equals(avroSchemaFileSuffix)) {
       config.put(STRIP_DEFAULT_VALUE_QUOTES.key(), "false");
     }
-    String avroSchema = new JsonToAvroSchemaConverter(config).convert(jsonSchema);
+    String avroSchema = new JsonToAvroSchemaConverter(config).convert(new JsonSchema(jsonSchema));
     Schema schema = new Schema.Parser().parse(avroSchema);
     Schema expected = new Schema.Parser().parse(loadAvroSchema(inputCase, avroSchemaFileSuffix));
     assertEquals(expected, schema);

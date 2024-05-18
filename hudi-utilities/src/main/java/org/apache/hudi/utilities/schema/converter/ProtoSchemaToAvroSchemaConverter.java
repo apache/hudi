@@ -21,6 +21,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 
 import java.io.IOException;
@@ -36,8 +37,8 @@ public class ProtoSchemaToAvroSchemaConverter implements SchemaRegistryProvider.
   }
 
   @Override
-  public String convert(String schema) throws IOException {
-    ProtobufSchema protobufSchema = new ProtobufSchema(schema);
+  public String convert(ParsedSchema schema) throws IOException {
+    ProtobufSchema protobufSchema = (ProtobufSchema) schema;
     return ProtoConversionUtil.getAvroSchemaForMessageDescriptor(protobufSchema.toDescriptor(), schemaConfig).toString();
   }
 }

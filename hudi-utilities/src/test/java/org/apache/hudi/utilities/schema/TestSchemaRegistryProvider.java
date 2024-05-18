@@ -19,33 +19,30 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.util.Option;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.times;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class TestSchemaRegistryProvider {
 
   private static final String BASIC_AUTH = "foo:bar";
-
-  private static final String REGISTRY_RESPONSE = "{\"schema\":\"{\\\"type\\\": \\\"record\\\", \\\"namespace\\\": \\\"example\\\", "
-      + "\\\"name\\\": \\\"FullName\\\",\\\"fields\\\": [{ \\\"name\\\": \\\"first\\\", \\\"type\\\": "
-      + "\\\"string\\\" }]}\"}";
   private static final String RAW_SCHEMA = "{\"type\": \"record\", \"namespace\": \"example\", "
       + "\"name\": \"FullName\",\"fields\": [{ \"name\": \"first\", \"type\": "
       + "\"string\" }]}";
@@ -66,74 +63,94 @@ class TestSchemaRegistryProvider {
       {
         put("hoodie.deltastreamer.schemaprovider.registry.baseUrl", "http://" + BASIC_AUTH + "@localhost");
         put("hoodie.deltastreamer.schemaprovider.registry.urlSuffix", "-value");
-        put("hoodie.deltastreamer.schemaprovider.registry.url", "http://foo:bar@localhost");
+        put("hoodie.deltastreamer.schemaprovider.registry.url", "http://foo:bar@localhost/subjects/test/versions/latest");
         put("hoodie.deltastreamer.source.kafka.topic", "foo");
       }
     };
   }
 
-  private static SchemaRegistryProvider getUnderTest(TypedProperties props) throws IOException {
-    InputStream is = new ByteArrayInputStream(REGISTRY_RESPONSE.getBytes(StandardCharsets.UTF_8));
-    SchemaRegistryProvider spyUnderTest = Mockito.spy(new SchemaRegistryProvider(props, null));
-    Mockito.doReturn(is).when(spyUnderTest).getStream(Mockito.any());
-    return spyUnderTest;
+  private final SchemaRegistryProvider.SchemaConverter mockSchemaConverter = mock(SchemaRegistryProvider.SchemaConverter.class);
+  private final RestService mockRestService = mock(RestService.class);
+  private final SchemaRegistryClient mockRegistryClient = mock(SchemaRegistryClient.class);
+
+  private SchemaRegistryProvider getUnderTest(TypedProperties props, int version, boolean useConverter) throws Exception {
+    SerializableFunctionUnchecked<String, RestService> mockRestServiceFactory = mock(SerializableFunctionUnchecked.class);
+    when(mockRestServiceFactory.apply("http://localhost/")).thenReturn(mockRestService);
+    SerializableFunctionUnchecked<RestService, SchemaRegistryClient> mockRegistryClientFactory = mock(SerializableFunctionUnchecked.class);
+    when(mockRegistryClientFactory.apply(mockRestService)).thenReturn(mockRegistryClient);
+    SchemaRegistryProvider underTest = new SchemaRegistryProvider(props, null, useConverter ? Option.of(mockSchemaConverter) : Option.empty(),
+        mockRestServiceFactory, mockRegistryClientFactory);
+    SchemaMetadata metadata = new SchemaMetadata(1, 1, RAW_SCHEMA);
+    when(mockRegistryClient.getSchemaMetadata("test", version)).thenReturn(metadata);
+    ParsedSchema mockParsedSchema = mock(ParsedSchema.class);
+    when(mockRegistryClient.parseSchema("AVRO", RAW_SCHEMA, Collections.emptyList())).thenReturn(java.util.Optional.of(mockParsedSchema));
+    if (useConverter) {
+      when(mockSchemaConverter.convert(mockParsedSchema)).thenReturn(CONVERTED_SCHEMA);
+    } else {
+      when(mockParsedSchema.canonicalString()).thenReturn(RAW_SCHEMA);
+    }
+    return underTest;
   }
 
   @Test
-  public void testGetSourceSchemaShouldRequestSchemaWithCreds() throws IOException {
-    SchemaRegistryProvider spyUnderTest = getUnderTest(getProps());
-    Schema actual = spyUnderTest.getSourceSchema();
-    assertNotNull(actual);
-    assertEquals(getExpectedSchema(), actual);
-    verify(spyUnderTest, times(1)).setAuthorizationHeader(eq(BASIC_AUTH),
-        Mockito.any(HttpURLConnection.class));
-  }
-
-  @Test
-  public void testGetTargetSchemaShouldRequestSchemaWithCreds() throws IOException {
-    SchemaRegistryProvider spyUnderTest = getUnderTest(getProps());
-    Schema actual = spyUnderTest.getTargetSchema();
-    assertNotNull(actual);
-    assertEquals(getExpectedSchema(), actual);
-    verify(spyUnderTest, times(1)).setAuthorizationHeader(eq(BASIC_AUTH),
-        Mockito.any(HttpURLConnection.class));
-  }
-
-  @Test
-  public void testGetSourceSchemaShouldRequestSchemaWithoutCreds() throws IOException {
-    TypedProperties props = getProps();
-    props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost");
-    props.put("hoodie.deltastreamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
-    SchemaRegistryProvider spyUnderTest = getUnderTest(props);
-    Schema actual = spyUnderTest.getSourceSchema();
+  public void testGetSourceSchemaShouldRequestSchemaWithCreds() throws Exception {
+    SchemaRegistryProvider underTest = getUnderTest(getProps(), -1, true);
+    Schema actual = underTest.getSourceSchema();
     assertNotNull(actual);
     assertEquals(getExpectedConvertedSchema(), actual);
-    verify(spyUnderTest, times(0)).setAuthorizationHeader(Mockito.any(), Mockito.any());
+    verify(mockRestService).setHttpHeaders(Collections.singletonMap("Authorization", "Basic " + Base64.getEncoder().encodeToString(BASIC_AUTH.getBytes())));
   }
 
   @Test
-  public void testGetTargetSchemaShouldRequestSchemaWithoutCreds() throws IOException {
-    TypedProperties props = getProps();
-    props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost");
-    props.put("hoodie.deltastreamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
-    SchemaRegistryProvider spyUnderTest = getUnderTest(props);
-    Schema actual = spyUnderTest.getTargetSchema();
+  public void testGetTargetSchemaShouldRequestSchemaWithCreds() throws Exception {
+    SchemaRegistryProvider underTest = getUnderTest(getProps(), -1, true);
+    Schema actual = underTest.getTargetSchema();
     assertNotNull(actual);
     assertEquals(getExpectedConvertedSchema(), actual);
-    verify(spyUnderTest, times(0)).setAuthorizationHeader(Mockito.any(), Mockito.any());
+    verify(mockRestService).setHttpHeaders(Collections.singletonMap("Authorization", "Basic " + Base64.getEncoder().encodeToString(BASIC_AUTH.getBytes())));
   }
 
-  public static class DummySchemaConverter implements SchemaRegistryProvider.SchemaConverter {
+  @Test
+  public void testGetSourceSchemaShouldRequestSchemaWithoutCreds() throws Exception {
+    TypedProperties props = getProps();
+    props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost/subjects/test/versions/latest");
+    SchemaRegistryProvider underTest = getUnderTest(props, -1, true);
+    Schema actual = underTest.getSourceSchema();
+    assertNotNull(actual);
+    assertEquals(getExpectedConvertedSchema(), actual);
+    verify(mockRestService, never()).setHttpHeaders(any());
+  }
 
-    public DummySchemaConverter(TypedProperties properties) {
-    }
+  @Test
+  public void testGetTargetSchemaShouldRequestSchemaWithoutCreds() throws Exception {
+    TypedProperties props = getProps();
+    props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost/subjects/test/versions/latest");
+    SchemaRegistryProvider underTest = getUnderTest(props, -1, true);
+    Schema actual = underTest.getTargetSchema();
+    assertNotNull(actual);
+    assertEquals(getExpectedConvertedSchema(), actual);
+    verify(mockRestService, never()).setHttpHeaders(any());
+  }
 
-    @Override
-    public String convert(String schema) throws IOException {
-      return ((ObjectNode) new ObjectMapper()
-          .readTree(schema))
-          .set("namespace", TextNode.valueOf("com.example.hoodie"))
-          .toString();
-    }
+  @Test
+  public void testGetTargetSchemaWithoutConverter() throws Exception {
+    TypedProperties props = getProps();
+    props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost/subjects/test/versions/latest");
+    SchemaRegistryProvider underTest = getUnderTest(props, -1, false);
+    Schema actual = underTest.getTargetSchema();
+    assertNotNull(actual);
+    assertEquals(getExpectedSchema(), actual);
+    verify(mockRestService, never()).setHttpHeaders(any());
+  }
+
+  @Test
+  public void testUrlWithSpecificSchemaVerson() throws Exception {
+    TypedProperties props = getProps();
+    props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost/subjects/test/versions/3");
+    SchemaRegistryProvider underTest = getUnderTest(props, 3, false);
+    Schema actual = underTest.getTargetSchema();
+    assertNotNull(actual);
+    assertEquals(getExpectedSchema(), actual);
+    verify(mockRestService, never()).setHttpHeaders(any());
   }
 }

@@ -21,6 +21,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.test.proto.Parent;
 
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
@@ -37,7 +38,8 @@ class TestProtoSchemaToAvroSchemaConverter {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
     Schema.Parser parser = new Schema.Parser();
-    String actual = new ProtoSchemaToAvroSchemaConverter(properties).convert(getProtoSchemaString());
+    ProtobufSchema protobufSchema = new ProtobufSchema(getProtoSchemaString());
+    String actual = new ProtoSchemaToAvroSchemaConverter(properties).convert(protobufSchema);
     Schema actualSchema = new Schema.Parser().parse(actual);
 
     Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_default_limit.avsc"));

@@ -19,36 +19,45 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import org.apache.avro.Schema;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.spark.api.java.JavaSparkContext;
 
-import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,6 +70,8 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  * https://github.com/confluentinc/schema-registry
  */
 public class SchemaRegistryProvider extends SchemaProvider {
+  private static final Pattern URL_PATTERN = Pattern.compile("(.*/)subjects/(.*)/versions/(.*)");
+  private static final String LATEST = "latest";
 
   /**
    * Configs supported.
@@ -82,29 +93,53 @@ public class SchemaRegistryProvider extends SchemaProvider {
     public static final String SSL_KEY_PASSWORD_PROP = "schema.registry.ssl.key.password";
   }
 
+  private final Option<SchemaConverter> schemaConverter;
+  private final SerializableFunctionUnchecked<String, RestService> restServiceProvider;
+  private final SerializableFunctionUnchecked<RestService, SchemaRegistryClient> registryClientProvider;
+
+  public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
+    super(props, jssc);
+    checkRequiredConfigProperties(props, Collections.singletonList(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
+    if (config.containsKey(Config.SSL_KEYSTORE_LOCATION_PROP)
+        || config.containsKey(Config.SSL_TRUSTSTORE_LOCATION_PROP)) {
+      setUpSSLStores();
+    }
+    String schemaConverter = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SCHEMA_CONVERTER, true);
+    this.schemaConverter = !StringUtils.isNullOrEmpty(schemaConverter)
+        ? Option.of((SchemaConverter) ReflectionUtils.loadClass(
+        schemaConverter, new Class<?>[] {TypedProperties.class}, config))
+        : Option.empty();
+    this.restServiceProvider = RestService::new;
+    this.registryClientProvider = restService -> new CachedSchemaRegistryClient(restService, 100,
+        Arrays.asList(new ProtobufSchemaProvider(), new JsonSchemaProvider(), new AvroSchemaProvider()), null, null);
+  }
+
+  @VisibleForTesting
+  SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc,
+                         Option<SchemaConverter> schemaConverter,
+                         SerializableFunctionUnchecked<String, RestService> restServiceProvider,
+                         SerializableFunctionUnchecked<RestService, SchemaRegistryClient> registryClientProvider) {
+    super(props, jssc);
+    checkRequiredConfigProperties(props, Collections.singletonList(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
+    this.schemaConverter = schemaConverter;
+    this.restServiceProvider = restServiceProvider;
+    this.registryClientProvider = registryClientProvider;
+  }
+
   @FunctionalInterface
   public interface SchemaConverter {
     /**
      * Convert original schema string to avro schema string.
      *
-     * @param schema original schema string (e.g., JSON)
+     * @param schema original schema returned from the registry
      * @return avro schema string
      */
-    String convert(String schema) throws IOException;
+    String convert(ParsedSchema schema) throws IOException;
   }
 
   public Schema parseSchemaFromRegistry(String registryUrl) {
     String schema = fetchSchemaFromRegistry(registryUrl);
-    try {
-      String schemaConverter = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SCHEMA_CONVERTER, true);
-      SchemaConverter converter = !StringUtils.isNullOrEmpty(schemaConverter)
-          ? (SchemaConverter) ReflectionUtils.loadClass(
-          schemaConverter, new Class<?>[] {TypedProperties.class}, config)
-          : s -> s;
-      return new Schema.Parser().parse(converter.convert(schema));
-    } catch (Exception e) {
-      throw new HoodieSchemaException("Failed to parse schema from registry: " + schema, e);
-    }
+    return new Schema.Parser().parse(schema);
   }
 
   /**
@@ -118,53 +153,74 @@ public class SchemaRegistryProvider extends SchemaProvider {
    */
   public String fetchSchemaFromRegistry(String registryUrl) {
     try {
-      HttpURLConnection connection;
       Matcher matcher = Pattern.compile("://(.*?)@").matcher(registryUrl);
+      Triple<String, String, Integer> registryInfo;
+      String creds = null;
       if (matcher.find()) {
-        String creds = matcher.group(1);
+        creds = matcher.group(1);
         String urlWithoutCreds = registryUrl.replace(creds + "@", "");
-        connection = getConnection(urlWithoutCreds);
-        setAuthorizationHeader(matcher.group(1), connection);
+        registryInfo = getUrlSubjectAndVersion(urlWithoutCreds);
       } else {
-        connection = getConnection(registryUrl);
+        registryInfo = getUrlSubjectAndVersion(registryUrl);
       }
-      ObjectMapper mapper = new ObjectMapper();
-      JsonNode node = mapper.readTree(getStream(connection));
-      return node.get("schema").asText();
+      String url = registryInfo.getLeft();
+      RestService restService = getRestService(url);
+      if (creds != null) {
+        setAuthorizationHeader(creds, restService);
+      }
+      String subject = registryInfo.getMiddle();
+      Integer version = registryInfo.getRight();
+      SchemaRegistryClient registryClient = registryClientProvider.apply(restService);
+      SchemaMetadata schemaMetadata = registryClient.getSchemaMetadata(subject, version);
+      ParsedSchema parsedSchema = registryClient.parseSchema(schemaMetadata.getSchemaType(), schemaMetadata.getSchema(), schemaMetadata.getReferences())
+          .orElseThrow(() -> new HoodieSchemaException("Failed to parse schema from registry"));
+      if (schemaConverter.isPresent()) {
+        return schemaConverter.get().convert(parsedSchema);
+      } else {
+        return parsedSchema.canonicalString();
+      }
     } catch (Exception e) {
       throw new HoodieSchemaFetchException("Failed to fetch schema from registry", e);
     }
   }
 
+  private Triple<String, String, Integer> getUrlSubjectAndVersion(String registryUrl) {
+    // url may be list of urls
+    String[] splitRegistryUrls = registryUrl.split(",");
+    String subjectName = null;
+    Integer version = null;
+    List<String> urls = new ArrayList<>(splitRegistryUrls.length);
+    // url will end with /subjects/{subject}/versions/{version}
+    for (String url : splitRegistryUrls) {
+      Matcher matcher = URL_PATTERN.matcher(url);
+      if (!matcher.matches()) {
+        throw new HoodieSchemaFetchException("Failed to extract subject name and version from registry url");
+      }
+      urls.add(matcher.group(1));
+      subjectName = matcher.group(2);
+      String versionString = matcher.group(3);
+      version = versionString.equals(LATEST) ? -1 : Integer.parseInt(versionString);
+    }
+    if (subjectName == null) {
+      throw new HoodieSchemaFetchException("Failed to extract subject name from registry url");
+    }
+    return Triple.of(String.join(",", urls), subjectName, version);
+  }
+
   private SSLSocketFactory sslSocketFactory;
 
-  protected HttpURLConnection getConnection(String url) throws IOException {
-    URL registry = new URL(url);
+  protected RestService getRestService(String url) {
+    RestService restService = restServiceProvider.apply(url);
     if (sslSocketFactory != null) {
-      // we cannot cast to HttpsURLConnection if url is http so only cast when sslSocketFactory is set
-      HttpsURLConnection connection = (HttpsURLConnection) registry.openConnection();
-      connection.setSSLSocketFactory(sslSocketFactory);
-      return connection;
+      restService.setSslSocketFactory(sslSocketFactory);
+      return restService;
     }
-    return (HttpURLConnection) registry.openConnection();
+    return restService;
   }
 
-  protected void setAuthorizationHeader(String creds, HttpURLConnection connection) {
+  protected void setAuthorizationHeader(String creds, RestService restService) {
     String encodedAuth = Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
-    connection.setRequestProperty("Authorization", "Basic " + encodedAuth);
-  }
-
-  protected InputStream getStream(HttpURLConnection connection) throws IOException {
-    return connection.getInputStream();
-  }
-
-  public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
-    super(props, jssc);
-    checkRequiredConfigProperties(props, Collections.singletonList(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
-    if (config.containsKey(Config.SSL_KEYSTORE_LOCATION_PROP)
-        || config.containsKey(Config.SSL_TRUSTSTORE_LOCATION_PROP)) {
-      setUpSSLStores();
-    }
+    restService.setHttpHeaders(Collections.singletonMap("Authorization", "Basic " + encodedAuth));
   }
 
   private void setUpSSLStores() {
