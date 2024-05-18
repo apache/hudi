@@ -294,7 +294,7 @@ public class OrcUtils extends FileFormatUtils {
     // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
     // parameters are not important.
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
-    OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(storage.unwrapConfAs(Configuration.class))
+    OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(storage.getConf().unwrapAs(Configuration.class))
         .fileSystem((FileSystem) storage.getFileSystem())
         .setSchema(AvroOrcUtils.createOrcSchema(schema));
     try (Writer writer = OrcFile.createWriter(convertToHadoopPath(filePath), writerOptions)) {
