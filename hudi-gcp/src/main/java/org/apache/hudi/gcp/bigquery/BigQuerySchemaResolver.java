@@ -48,7 +48,7 @@ public class BigQuerySchemaResolver {
     this.tableSchemaResolverSupplier = tableSchemaResolverSupplier;
   }
 
-  static BigQuerySchemaResolver getInstance() {
+  public static BigQuerySchemaResolver getInstance() {
     return INSTANCE;
   }
 
