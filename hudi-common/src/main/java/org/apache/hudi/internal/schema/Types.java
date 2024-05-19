@@ -23,7 +23,6 @@ import org.apache.hudi.internal.schema.Type.PrimitiveType;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -516,7 +515,7 @@ public class Types {
 
     private RecordType(List<Field> fields, String name) {
       this.name = name;
-      this.fields = fields.stream().sorted(Comparator.comparing(Field::fieldId)).toArray(Field[]::new);
+      this.fields = fields.toArray(new Field[0]);
     }
 
     @Override

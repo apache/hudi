@@ -32,6 +32,7 @@ import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -39,6 +40,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static org.apache.avro.Schema.Type.UNION;
 
@@ -68,7 +70,18 @@ public class AvroInternalSchemaConverter {
    * @return an avro Schema.
    */
   public static Schema convert(InternalSchema internalSchema, String name) {
-    return buildAvroSchemaFromInternalSchema(internalSchema, name);
+    return buildAvroSchemaFromInternalSchema(internalSchema, name, true);
+  }
+
+  /**
+   * Convert internalSchema to avro Schema.
+   *
+   * @param internalSchema internal schema.
+   * @param name the record name.
+   * @return an avro Schema.
+   */
+  public static Schema convertWithInputFieldOrder(InternalSchema internalSchema, String name) {
+    return buildAvroSchemaFromInternalSchema(internalSchema, name, false);
   }
 
   /**
@@ -341,7 +354,7 @@ public class AvroInternalSchemaConverter {
    */
   public static Schema buildAvroSchemaFromType(Type type, String recordName) {
     Map<Type, Schema> cache = new HashMap<>();
-    return visitInternalSchemaToBuildAvroSchema(type, cache, recordName);
+    return visitInternalSchemaToBuildAvroSchema(type, cache, recordName, true);
   }
 
   /**
@@ -349,11 +362,12 @@ public class AvroInternalSchemaConverter {
    *
    * @param schema a hudi internal Schema.
    * @param recordName the record name
+   * @param orderFields whether to order fields in the record schema based on the fieldId
    * @return a Avro schema match hudi internal schema.
    */
-  public static Schema buildAvroSchemaFromInternalSchema(InternalSchema schema, String recordName) {
+  private static Schema buildAvroSchemaFromInternalSchema(InternalSchema schema, String recordName, boolean orderFields) {
     Map<Type, Schema> cache = new HashMap<>();
-    return visitInternalSchemaToBuildAvroSchema(schema.getRecord(), cache, recordName);
+    return visitInternalSchemaToBuildAvroSchema(schema.getRecord(), cache, recordName, orderFields);
   }
 
   /**
@@ -363,16 +377,18 @@ public class AvroInternalSchemaConverter {
    * @param cache use to cache intermediate convert result to save cost.
    * @param recordName auto-generated record name used as a fallback, in case
    * {@link org.apache.hudi.internal.schema.Types.RecordType} doesn't bear original record-name
+   * @param orderFields whether to order fields in the record schema based on the fieldId
    * @return an Avro schema match this type
    */
-  private static Schema visitInternalSchemaToBuildAvroSchema(Type type, Map<Type, Schema> cache, String recordName) {
+  private static Schema visitInternalSchemaToBuildAvroSchema(Type type, Map<Type, Schema> cache, String recordName, boolean orderFields) {
     switch (type.typeId()) {
       case RECORD:
         Types.RecordType record = (Types.RecordType) type;
         List<Schema> schemas = new ArrayList<>(record.fields().size());
-        record.fields().forEach(f -> {
+        List<Types.Field> fields = orderFields ? record.fields().stream().sorted(Comparator.comparing(Types.Field::fieldId)).collect(Collectors.toList()) : record.fields();
+        fields.forEach(f -> {
           String nestedRecordName = recordName + AVRO_NAME_DELIMITER + f.name();
-          Schema tempSchema = visitInternalSchemaToBuildAvroSchema(f.type(), cache, nestedRecordName);
+          Schema tempSchema = visitInternalSchemaToBuildAvroSchema(f.type(), cache, nestedRecordName, orderFields);
           // convert tempSchema
           Schema result = f.isOptional() ? AvroInternalSchemaConverter.nullableSchema(tempSchema) : tempSchema;
           schemas.add(result);
@@ -383,13 +399,13 @@ public class AvroInternalSchemaConverter {
         if (recordSchema != null) {
           return recordSchema;
         }
-        recordSchema = visitInternalRecordToBuildAvroRecord(record, schemas, recordName);
+        recordSchema = visitInternalRecordToBuildAvroRecord(record, fields, schemas, recordName);
         cache.put(record, recordSchema);
         return recordSchema;
       case ARRAY:
         Types.ArrayType array = (Types.ArrayType) type;
         Schema elementSchema;
-        elementSchema = visitInternalSchemaToBuildAvroSchema(array.elementType(), cache, recordName);
+        elementSchema = visitInternalSchemaToBuildAvroSchema(array.elementType(), cache, recordName, orderFields);
         Schema arraySchema;
         arraySchema = cache.get(array);
         if (arraySchema != null) {
@@ -402,8 +418,8 @@ public class AvroInternalSchemaConverter {
         Types.MapType map = (Types.MapType) type;
         Schema keySchema;
         Schema valueSchema;
-        keySchema = visitInternalSchemaToBuildAvroSchema(map.keyType(), cache, recordName);
-        valueSchema = visitInternalSchemaToBuildAvroSchema(map.valueType(), cache, recordName);
+        keySchema = visitInternalSchemaToBuildAvroSchema(map.keyType(), cache, recordName, orderFields);
+        valueSchema = visitInternalSchemaToBuildAvroSchema(map.valueType(), cache, recordName, orderFields);
         Schema mapSchema;
         mapSchema = cache.get(map);
         if (mapSchema != null) {
@@ -423,9 +439,8 @@ public class AvroInternalSchemaConverter {
    * Converts hudi RecordType to Avro RecordType.
    * this is auxiliary function used by visitInternalSchemaToBuildAvroSchema
    */
-  private static Schema visitInternalRecordToBuildAvroRecord(Types.RecordType recordType, List<Schema> fieldSchemas, String recordNameFallback) {
-    List<Types.Field> fields = recordType.fields();
-    List<Schema.Field> avroFields = new ArrayList<>();
+  private static Schema visitInternalRecordToBuildAvroRecord(Types.RecordType recordType, List<Types.Field> fields, List<Schema> fieldSchemas, String recordNameFallback) {
+    List<Schema.Field> avroFields = new ArrayList<>(fields.size());
     for (int i = 0; i < fields.size(); i++) {
       Types.Field f = fields.get(i);
       Schema.Field field = new Schema.Field(f.name(), fieldSchemas.get(i), f.doc(), f.isOptional() ? JsonProperties.NULL_VALUE : null);
