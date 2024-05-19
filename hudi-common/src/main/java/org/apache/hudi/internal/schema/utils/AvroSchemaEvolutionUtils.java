@@ -147,7 +147,7 @@ public class AvroSchemaEvolutionUtils {
     }
 
     InternalSchema targetInternalSchema = convert(targetSchema);
-    // Use existing fieldIds for consistent field ordering between commits
+    // Use existing fieldIds for consistent field ordering between commits when shouldReorderColumns is true
     InternalSchema sourceInternalSchema = convert(sourceSchema, shouldReorderColumns ? targetInternalSchema.getNameToId() : Collections.emptyMap());
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();

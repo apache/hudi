@@ -255,8 +255,7 @@ public class AvroInternalSchemaConverter {
         if (existingNameToIds.containsKey(elementPath)) {
           elementId = existingNameToIds.get(elementPath);
         } else {
-          elementId = nextId.get();
-          nextId.set(elementId + 1);
+          elementId = nextId.getAndIncrement();
         }
         Type elementType = visitAvroSchemaToBuildType(elementSchema, visited, elementPath + ".", nextId, existingNameToIds);
         return Types.ArrayType.get(elementId, AvroInternalSchemaConverter.isOptional(schema.getElementType()), elementType);
@@ -266,16 +265,14 @@ public class AvroInternalSchemaConverter {
         if (existingNameToIds.containsKey(keyPath)) {
           keyId = existingNameToIds.get(keyPath);
         } else {
-          keyId = nextId.get();
-          nextId.set(keyId + 1);
+          keyId = nextId.getAndIncrement();
         }
         int valueId;
         String valuePath = currentFieldPath + InternalSchema.MAP_VALUE;
         if (existingNameToIds.containsKey(valuePath)) {
           valueId = existingNameToIds.get(valuePath);
         } else {
-          valueId = keyId + 1;
-          nextId.set(valueId + 1);
+          valueId = nextId.getAndIncrement();
         }
         Type valueType = visitAvroSchemaToBuildType(schema.getValueType(),  visited, valuePath + ".", nextId, existingNameToIds);
         return Types.MapType.get(keyId, valueId, Types.StringType.get(), valueType, AvroInternalSchemaConverter.isOptional(schema.getValueType()));
