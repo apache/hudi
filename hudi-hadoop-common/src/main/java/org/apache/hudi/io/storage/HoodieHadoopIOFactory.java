@@ -26,7 +26,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.hadoop.HoodieAvroFileReaderFactory;
 import org.apache.hudi.io.hadoop.HoodieAvroFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
@@ -51,7 +50,7 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
         try {
           return (HoodieFileReaderFactory) ReflectionUtils
               .loadClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory",
-                  new Class<?>[] {StorageConfiguration.class}, storage);
+                  new Class<?>[] {HoodieStorage.class}, storage);
         } catch (Exception e) {
           throw new HoodieException("Unable to create HoodieSparkFileReaderFactory", e);
         }
@@ -70,7 +69,7 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
         try {
           return (HoodieFileWriterFactory) ReflectionUtils
               .loadClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory",
-                  new Class<?>[] {StorageConfiguration.class}, storage);
+                  new Class<?>[] {HoodieStorage.class}, storage);
         } catch (Exception e) {
           throw new HoodieException("Unable to create HoodieSparkFileWriterFactory", e);
         }
