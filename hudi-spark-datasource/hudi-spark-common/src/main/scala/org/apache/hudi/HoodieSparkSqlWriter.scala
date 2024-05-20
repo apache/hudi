@@ -569,10 +569,6 @@ class HoodieSparkSqlWriterInternal {
    * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
    */
   private def resolvePartitionWildcards(partitions: List[String], jsc: JavaSparkContext, cfg: HoodieConfig, basePath: String): List[String] = {
-    if (partitions.isEmpty) {
-      return partitions;
-    }
-
     //find out if any of the input partitions have wildcards
     //note:spark-sql may url-encode special characters (* -> %2A)
     var (wildcardPartitions, fullPartitions) = partitions.partition(partition => partition.matches(".*(\\*|%2A).*"))
