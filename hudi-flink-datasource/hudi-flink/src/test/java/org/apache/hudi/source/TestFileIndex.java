@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -37,7 +38,6 @@ import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionIdentifier;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -75,7 +75,7 @@ public class TestFileIndex {
     conf.setBoolean(METADATA_ENABLED, true);
     conf.setBoolean(HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    FileIndex fileIndex = FileIndex.builder().path(new Path(tempFile.getAbsolutePath())).conf(conf)
+    FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
         .rowType(TestConfigurations.ROW_TYPE).build();
     List<String> partitionKeys = Collections.singletonList("partition");
     List<Map<String, String>> partitions =
@@ -99,7 +99,7 @@ public class TestFileIndex {
     conf.setString(KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
     conf.setBoolean(METADATA_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    FileIndex fileIndex = FileIndex.builder().path(new Path(tempFile.getAbsolutePath())).conf(conf)
+    FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
         .rowType(TestConfigurations.ROW_TYPE).build();
     List<String> partitionKeys = Collections.singletonList("");
     List<Map<String, String>> partitions =
@@ -117,7 +117,7 @@ public class TestFileIndex {
   void testFileListingEmptyTable(boolean enableMetadata) {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(METADATA_ENABLED, enableMetadata);
-    FileIndex fileIndex = FileIndex.builder().path(new Path(tempFile.getAbsolutePath())).conf(conf)
+    FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
         .rowType(TestConfigurations.ROW_TYPE).build();
     List<String> partitionKeys = Collections.singletonList("partition");
     List<Map<String, String>> partitions =
@@ -140,7 +140,7 @@ public class TestFileIndex {
 
     FileIndex fileIndex =
         FileIndex.builder()
-            .path(new Path(tempFile.getAbsolutePath()))
+            .path(new StoragePath(tempFile.getAbsolutePath()))
             .conf(conf).rowType(TestConfigurations.ROW_TYPE_BIGINT)
             .dataPruner(DataPruner.newInstance(Collections.singletonList(new CallExpression(
                 FunctionIdentifier.of("greaterThan"),
