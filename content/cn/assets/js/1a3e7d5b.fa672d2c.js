@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[12389],{11052:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/apache-kyuubi","name":"apache kyuubi","count":1,"permalink":"/cn/videos/tags/apache-kyuubi"}')}}]);

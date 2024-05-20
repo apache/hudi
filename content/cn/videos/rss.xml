@@ -4,9 +4,111 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/cn/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Sun, 18 Feb 2024 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sat, 18 May 2024 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Learn How to use Cloudwatch metrics with Hudi AWS Glue Jobs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/05/18/Learn-How-to-use-Cloudwatch-metrics-with-Hudi-AWS-Glue-Jobs</link>
+            <guid>/2024/05/18/Learn-How-to-use-Cloudwatch-metrics-with-Hudi-AWS-Glue-Jobs</guid>
+            <pubDate>Sat, 18 May 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Unleashing the Power of Serverless: Serving Gold Hudi Tables with AWS Lambda]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/05/12/Unleashing-the-Power-of-Serverless-Serving-Gold-Hudi-Tables-with-AWS-Lambda</link>
+            <guid>/2024/05/12/Unleashing-the-Power-of-Serverless-Serving-Gold-Hudi-Tables-with-AWS-Lambda</guid>
+            <pubDate>Sun, 12 May 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to read Hudi Dataset Using AWS Glue Ray and Glue Notebooks (withouth Spark)]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/05/08/How-to-read-Hudi-Dataset-Using-AWS-Glue-Ray-and-Glue-Notebooks-(withouth-Spark)</link>
+            <guid>/2024/05/08/How-to-read-Hudi-Dataset-Using-AWS-Glue-Ray-and-Glue-Notebooks-(withouth-Spark)</guid>
+            <pubDate>Wed, 08 May 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Display Data From Hudi Tables to your Frontend with Flask and Daft (NO SPARK NEEDED)]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/05/04/Learn-How-to-Display-Data-From-Hudi-Tables-to-your-Frontend-with-Flask-and-Daft-NO-SPARK-NEEDED</link>
+            <guid>/2024/05/04/Learn-How-to-Display-Data-From-Hudi-Tables-to-your-Frontend-with-Flask-and-Daft-NO-SPARK-NEEDED</guid>
+            <pubDate>Sat, 04 May 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi with Kyuubi, a distributed & multi-tenant gateway, to provide serverless SQL on lakehouses]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/04/22/Hudi-with-Kyuubi-a-distributed-and-multi-tenant-gateway-to-provide-serverless-SQL-on-lakehouses</link>
+            <guid>/2024/04/22/Hudi-with-Kyuubi-a-distributed-and-multi-tenant-gateway-to-provide-serverless-SQL-on-lakehouses</guid>
+            <pubDate>Mon, 22 Apr 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build Universal Data lake with MySQL + Debezium+Kafka+DeltaSTreamer + Minio+HiveMetastore+Trino]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/04/10/Build-Universal-Data-lake-with-MySQL-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</link>
+            <guid>/2024/04/10/Build-Universal-Data-lake-with-MySQL-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</guid>
+            <pubDate>Wed, 10 Apr 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build Universal Data lake with Posgres + Debezium+Kafka+DeltaSTreamer + Minio+HiveMetastore+Trino]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/04/06/Build-Universal-Data-lake-with-Posgres-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</link>
+            <guid>/2024/04/06/Build-Universal-Data-lake-with-Posgres-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</guid>
+            <pubDate>Sat, 06 Apr 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Reading Data from Hudi INC & Joining with Delta Tables using HudiStreamer & SQL-Based Transformer]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/04/03/Reading-Data-from-Hudi-INC-and-Joining-with-Delta-Tables-using-HudiStreamer-and-SQL-Based-Transformer</link>
+            <guid>/2024/04/03/Reading-Data-from-Hudi-INC-and-Joining-with-Delta-Tables-using-HudiStreamer-and-SQL-Based-Transformer</guid>
+            <pubDate>Wed, 03 Apr 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Building DataLakeHouse: XTable, MinIO, StarRocks, DeltaStreamer - Interoperating Hudi, IceBerg,Delta]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/03/30/Building-DataLakeHouse-using-XTableMinIO-StarRocks-DeltaStreamer---Interoperating-Hudi-IceBerg-and-Delta</link>
+            <guid>/2024/03/30/Building-DataLakeHouse-using-XTableMinIO-StarRocks-DeltaStreamer---Interoperating-Hudi-IceBerg-and-Delta</guid>
+            <pubDate>Sat, 30 Mar 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Open Lakehouse Evolution: Powering the Future with YugabyteDB & Apache Hudi | Episode 102]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/03/29/Open-Lakehouse-Evolution-Powering-the-Future-with-YugabyteDB-and-Apache-Hudi-Episode-102</link>
+            <guid>/2024/03/29/Open-Lakehouse-Evolution-Powering-the-Future-with-YugabyteDB-and-Apache-Hudi-Episode-102</guid>
+            <pubDate>Fri, 29 Mar 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to perform Backfilling jobs with Hudi DeltaStreamer and Spark SQL using SqlSource Class]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/03/20/How-to-perform-Backfilling-jobs-with-Hudi-DeltaStreamer-and-Spark-SQL-using-SqlSource-Class</link>
+            <guid>/2024/03/20/How-to-perform-Backfilling-jobs-with-Hudi-DeltaStreamer-and-Spark-SQL-using-SqlSource-Class</guid>
+            <pubDate>Wed, 20 Mar 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Mastering Incremental ETL with DeltaStreamer and SQL-Based Transformer]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/03/18/Mastering-Incremental-ETL-with-DeltaStreamer-and-SQL-Based-Transformer</link>
+            <guid>/2024/03/18/Mastering-Incremental-ETL-with-DeltaStreamer-and-SQL-Based-Transformer</guid>
+            <pubDate>Mon, 18 Mar 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Managing Updates & Deletes in Glue Hudi Spark Jobs with CDC Data]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/03/12/Managing-Updates-&amp;-Deletes-in-Glue-Hudi-Spark-Jobs-with-CDC-Data:-Using-_hoodie_is_deleted-Flag</link>
+            <guid>/2024/03/12/Managing-Updates-&amp;-Deletes-in-Glue-Hudi-Spark-Jobs-with-CDC-Data:-Using-_hoodie_is_deleted-Flag</guid>
+            <pubDate>Tue, 12 Mar 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Getting Started Tutorial: Building a Data Lakehouse With StarRocks, Apache Hudi, and MinIO]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/03/11/Getting-Started-Tutorial-Building-a-Data-Lakehouse-With-StarRocks-Apache-Hudi-and-MinIO</link>
+            <guid>/2024/03/11/Getting-Started-Tutorial-Building-a-Data-Lakehouse-With-StarRocks-Apache-Hudi-and-MinIO</guid>
+            <pubDate>Mon, 11 Mar 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Query Apache Hudi tables from Glue Interactive Notebook for AdHoc Analysis]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/03/01/How-to-Query-Apache-Hudi-tables-from-Glue-Interactive-Notebook-for-AdHoc-Analysis</link>
+            <guid>/2024/03/01/How-to-Query-Apache-Hudi-tables-from-Glue-Interactive-Notebook-for-AdHoc-Analysis</guid>
+            <pubDate>Fri, 01 Mar 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How you can run DeltaStreamer Running on AWS Glue with Hudi 0.14 Step by Step Guide]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/02/27/Learn-How-you-can-run-DeltaStreamer-Running-on-AWS-Glue-with-Hudi-0.14-Step-by-Step-Guide</link>
+            <guid>/2024/02/27/Learn-How-you-can-run-DeltaStreamer-Running-on-AWS-Glue-with-Hudi-0.14-Step-by-Step-Guide</guid>
+            <pubDate>Tue, 27 Feb 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Getting Started with Open Data lineage | Marquez Project | Apache Hudi Spark jobs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/02/23/Getting-Started-with-Open-Data-lineage-Marquez-Project-Apache-Hudi-Spark-jobs</link>
+            <guid>/2024/02/23/Getting-Started-with-Open-Data-lineage-Marquez-Project-Apache-Hudi-Spark-jobs</guid>
+            <pubDate>Fri, 23 Feb 2024 00:00:00 GMT</pubDate>
+        </item>
         <item>
             <title><![CDATA[Build Incremental ETL pipeline with Hudi and Airflow and MinIO]]></title>
             <link>https://hudi.apache.org/cn/videos/2024/02/18/Build-Incremental-ETL-pipeline-with-Hudi-and-Airflow-and-MinIO</link>

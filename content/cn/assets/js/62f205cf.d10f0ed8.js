@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[81849],{76324:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/universal-lakehouse","name":"universal lakehouse","count":2,"permalink":"/cn/videos/tags/universal-lakehouse"}')}}]);

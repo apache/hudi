@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[28212],{87523:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/amazon-cloudwatch","name":"amazon cloudwatch","count":1,"permalink":"/videos/tags/amazon-cloudwatch"}')}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[95349],{82945:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/data-lineage","name":"data lineage","count":1,"permalink":"/videos/tags/data-lineage"}')}}]);

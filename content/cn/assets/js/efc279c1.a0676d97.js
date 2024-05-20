@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[21277],{14947:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/minio","name":"minio","count":6,"permalink":"/cn/videos/tags/minio"}')}}]);

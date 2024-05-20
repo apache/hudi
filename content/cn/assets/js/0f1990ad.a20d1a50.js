@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[20939],{36823:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/metrics","name":"metrics","count":1,"permalink":"/cn/videos/tags/metrics"}')}}]);

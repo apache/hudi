@@ -2,11 +2,167 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/videos</id>
     <title>Apache Hudi Blog</title>
-    <updated>2024-02-18T00:00:00.000Z</updated>
+    <updated>2024-05-18T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/videos"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Learn How to use Cloudwatch metrics with Hudi AWS Glue Jobs]]></title>
+        <id>/2024/05/18/Learn-How-to-use-Cloudwatch-metrics-with-Hudi-AWS-Glue-Jobs</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/05/18/Learn-How-to-use-Cloudwatch-metrics-with-Hudi-AWS-Glue-Jobs"/>
+        <updated>2024-05-18T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Unleashing the Power of Serverless: Serving Gold Hudi Tables with AWS Lambda]]></title>
+        <id>/2024/05/12/Unleashing-the-Power-of-Serverless-Serving-Gold-Hudi-Tables-with-AWS-Lambda</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/05/12/Unleashing-the-Power-of-Serverless-Serving-Gold-Hudi-Tables-with-AWS-Lambda"/>
+        <updated>2024-05-12T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to read Hudi Dataset Using AWS Glue Ray and Glue Notebooks (withouth Spark)]]></title>
+        <id>/2024/05/08/How-to-read-Hudi-Dataset-Using-AWS-Glue-Ray-and-Glue-Notebooks-(withouth-Spark)</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/05/08/How-to-read-Hudi-Dataset-Using-AWS-Glue-Ray-and-Glue-Notebooks-(withouth-Spark)"/>
+        <updated>2024-05-08T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn How to Display Data From Hudi Tables to your Frontend with Flask and Daft (NO SPARK NEEDED)]]></title>
+        <id>/2024/05/04/Learn-How-to-Display-Data-From-Hudi-Tables-to-your-Frontend-with-Flask-and-Daft-NO-SPARK-NEEDED</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/05/04/Learn-How-to-Display-Data-From-Hudi-Tables-to-your-Frontend-with-Flask-and-Daft-NO-SPARK-NEEDED"/>
+        <updated>2024-05-04T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi with Kyuubi, a distributed & multi-tenant gateway, to provide serverless SQL on lakehouses]]></title>
+        <id>/2024/04/22/Hudi-with-Kyuubi-a-distributed-and-multi-tenant-gateway-to-provide-serverless-SQL-on-lakehouses</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/04/22/Hudi-with-Kyuubi-a-distributed-and-multi-tenant-gateway-to-provide-serverless-SQL-on-lakehouses"/>
+        <updated>2024-04-22T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Build Universal Data lake with MySQL + Debezium+Kafka+DeltaSTreamer + Minio+HiveMetastore+Trino]]></title>
+        <id>/2024/04/10/Build-Universal-Data-lake-with-MySQL-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/04/10/Build-Universal-Data-lake-with-MySQL-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino"/>
+        <updated>2024-04-10T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Build Universal Data lake with Posgres + Debezium+Kafka+DeltaSTreamer + Minio+HiveMetastore+Trino]]></title>
+        <id>/2024/04/06/Build-Universal-Data-lake-with-Posgres-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/04/06/Build-Universal-Data-lake-with-Posgres-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino"/>
+        <updated>2024-04-06T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Reading Data from Hudi INC & Joining with Delta Tables using HudiStreamer & SQL-Based Transformer]]></title>
+        <id>/2024/04/03/Reading-Data-from-Hudi-INC-and-Joining-with-Delta-Tables-using-HudiStreamer-and-SQL-Based-Transformer</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/04/03/Reading-Data-from-Hudi-INC-and-Joining-with-Delta-Tables-using-HudiStreamer-and-SQL-Based-Transformer"/>
+        <updated>2024-04-03T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Building DataLakeHouse: XTable, MinIO, StarRocks, DeltaStreamer - Interoperating Hudi, IceBerg,Delta]]></title>
+        <id>/2024/03/30/Building-DataLakeHouse-using-XTableMinIO-StarRocks-DeltaStreamer---Interoperating-Hudi-IceBerg-and-Delta</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/03/30/Building-DataLakeHouse-using-XTableMinIO-StarRocks-DeltaStreamer---Interoperating-Hudi-IceBerg-and-Delta"/>
+        <updated>2024-03-30T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Open Lakehouse Evolution: Powering the Future with YugabyteDB & Apache Hudi | Episode 102]]></title>
+        <id>/2024/03/29/Open-Lakehouse-Evolution-Powering-the-Future-with-YugabyteDB-and-Apache-Hudi-Episode-102</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/03/29/Open-Lakehouse-Evolution-Powering-the-Future-with-YugabyteDB-and-Apache-Hudi-Episode-102"/>
+        <updated>2024-03-29T00:00:00.000Z</updated>
+        <author>
+            <name>Balachandar Seetharaman</name>
+        </author>
+        <author>
+            <name>Prasad Radhakrishnan</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to perform Backfilling jobs with Hudi DeltaStreamer and Spark SQL using SqlSource Class]]></title>
+        <id>/2024/03/20/How-to-perform-Backfilling-jobs-with-Hudi-DeltaStreamer-and-Spark-SQL-using-SqlSource-Class</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/03/20/How-to-perform-Backfilling-jobs-with-Hudi-DeltaStreamer-and-Spark-SQL-using-SqlSource-Class"/>
+        <updated>2024-03-20T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Mastering Incremental ETL with DeltaStreamer and SQL-Based Transformer]]></title>
+        <id>/2024/03/18/Mastering-Incremental-ETL-with-DeltaStreamer-and-SQL-Based-Transformer</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/03/18/Mastering-Incremental-ETL-with-DeltaStreamer-and-SQL-Based-Transformer"/>
+        <updated>2024-03-18T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Managing Updates & Deletes in Glue Hudi Spark Jobs with CDC Data]]></title>
+        <id>/2024/03/12/Managing-Updates-&amp;-Deletes-in-Glue-Hudi-Spark-Jobs-with-CDC-Data:-Using-_hoodie_is_deleted-Flag</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/03/12/Managing-Updates-&amp;-Deletes-in-Glue-Hudi-Spark-Jobs-with-CDC-Data:-Using-_hoodie_is_deleted-Flag"/>
+        <updated>2024-03-12T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Getting Started Tutorial: Building a Data Lakehouse With StarRocks, Apache Hudi, and MinIO]]></title>
+        <id>/2024/03/11/Getting-Started-Tutorial-Building-a-Data-Lakehouse-With-StarRocks-Apache-Hudi-and-MinIO</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/03/11/Getting-Started-Tutorial-Building-a-Data-Lakehouse-With-StarRocks-Apache-Hudi-and-MinIO"/>
+        <updated>2024-03-11T00:00:00.000Z</updated>
+        <author>
+            <name>Sida Shen</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to Query Apache Hudi tables from Glue Interactive Notebook for AdHoc Analysis]]></title>
+        <id>/2024/03/01/How-to-Query-Apache-Hudi-tables-from-Glue-Interactive-Notebook-for-AdHoc-Analysis</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/03/01/How-to-Query-Apache-Hudi-tables-from-Glue-Interactive-Notebook-for-AdHoc-Analysis"/>
+        <updated>2024-03-01T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn How you can run DeltaStreamer Running on AWS Glue with Hudi 0.14 Step by Step Guide]]></title>
+        <id>/2024/02/27/Learn-How-you-can-run-DeltaStreamer-Running-on-AWS-Glue-with-Hudi-0.14-Step-by-Step-Guide</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/02/27/Learn-How-you-can-run-DeltaStreamer-Running-on-AWS-Glue-with-Hudi-0.14-Step-by-Step-Guide"/>
+        <updated>2024-02-27T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Getting Started with Open Data lineage | Marquez Project | Apache Hudi Spark jobs]]></title>
+        <id>/2024/02/23/Getting-Started-with-Open-Data-lineage-Marquez-Project-Apache-Hudi-Spark-jobs</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/02/23/Getting-Started-with-Open-Data-lineage-Marquez-Project-Apache-Hudi-Spark-jobs"/>
+        <updated>2024-02-23T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Build Incremental ETL pipeline with Hudi and Airflow and MinIO]]></title>
         <id>/2024/02/18/Build-Incremental-ETL-pipeline-with-Hudi-and-Airflow-and-MinIO</id>

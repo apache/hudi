@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[38002],{47824:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/aws-lambda","name":"aws lambda","count":7,"permalink":"/videos/tags/aws-lambda"}')}}]);
