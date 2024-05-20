@@ -114,16 +114,16 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
     StorageConfiguration<?> inlineConf = blockContentLoc.getStorage().getConf().getInline();
-
     StoragePath inlineLogFilePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
+    HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(inlineLogFilePath, inlineConf);
     Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
-    ClosableIterator<HoodieRecord<T>> iterator = HoodieIOFactory.getIOFactory(blockContentLoc.getStorage())
+    ClosableIterator<HoodieRecord<T>> iterator = HoodieIOFactory.getIOFactory(inlineStorage)
         .getReaderFactory(type)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineLogFilePath, PARQUET, Option.empty())
         .getRecordIterator(writerSchema, readerSchema);
