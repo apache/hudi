@@ -192,7 +192,7 @@ public abstract class JavaExecutionStrategy<T>
 
         baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
-            : Option.of(HoodieIOFactory.getIOFactory(table.getStorageConf()).getReaderFactory(recordType)
+            : Option.of(HoodieIOFactory.getIOFactory(table.getMetaClient().getStorage()).getReaderFactory(recordType)
             .getFileReader(config, new StoragePath(clusteringOp.getDataFilePath())));
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
         Iterator<HoodieRecord<T>> fileSliceReader = new HoodieFileSliceReader(baseFileReader, scanner, readerSchema, tableConfig.getPreCombineField(), writeConfig.getRecordMerger(),
@@ -221,7 +221,8 @@ public abstract class JavaExecutionStrategy<T>
   private List<HoodieRecord<T>> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
     List<HoodieRecord<T>> records = new ArrayList<>();
     clusteringOps.forEach(clusteringOp -> {
-      try (HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(getHoodieTable().getStorageConf()).getReaderFactory(recordType)
+      try (HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(getHoodieTable().getMetaClient().getStorage())
+          .getReaderFactory(recordType)
           .getFileReader(getHoodieTable().getConfig(), new StoragePath(clusteringOp.getDataFilePath()))) {
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
         Iterator<HoodieRecord> recordIterator = baseFileReader.getRecordIterator(readerSchema);

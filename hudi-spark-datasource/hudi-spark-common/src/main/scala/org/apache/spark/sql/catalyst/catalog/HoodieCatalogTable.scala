@@ -172,7 +172,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   def getPartitionPaths: Seq[String] = {
     val droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty())
 
-    getAllPartitionPaths(spark, table)
+    getAllPartitionPaths(spark, table, metaClient.getStorage)
       .filter(!droppedPartitions.contains(_))
   }
 

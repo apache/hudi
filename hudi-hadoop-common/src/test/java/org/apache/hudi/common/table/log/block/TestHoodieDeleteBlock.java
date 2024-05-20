@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -125,7 +126,7 @@ public class TestHoodieDeleteBlock {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, new HashMap<>());
-    byte[] contentBytes = deleteBlock.getContentBytes(HoodieTestUtils.getDefaultStorageConf());
+    byte[] contentBytes = deleteBlock.getContentBytes(HoodieTestUtils.getStorage(DEFAULT_URI));
     HoodieDeleteBlock deserializeDeleteBlock = new HoodieDeleteBlock(
         Option.of(contentBytes), null, true, Option.empty(), new HashMap<>(), new HashMap<>());
     DeleteRecord[] deserializedDeleteRecords = deserializeDeleteBlock.getRecordsToDelete();

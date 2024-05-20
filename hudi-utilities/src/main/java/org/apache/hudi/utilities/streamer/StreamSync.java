@@ -75,7 +75,6 @@ import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
@@ -314,9 +313,9 @@ public class StreamSync implements Serializable, Closeable {
 
     HoodieWriteConfig hoodieWriteConfig = getHoodieClientConfig();
     this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass,
-        new Class<?>[] { HoodieMetricsConfig.class, StorageConfiguration.class},
-        hoodieWriteConfig.getMetricsConfig(), storage.getConf());
-    this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig, storage.getConf());
+        new Class<?>[] {HoodieMetricsConfig.class, HoodieStorage.class},
+        hoodieWriteConfig.getMetricsConfig(), storage);
+    this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig, storage);
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(
           cfg, sparkSession, props, hoodieSparkContext, fs);

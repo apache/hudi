@@ -24,8 +24,10 @@ import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.SparkContext;
@@ -177,13 +179,16 @@ public class ColumnStatsIndexHelper {
                 ParquetUtils utils = (ParquetUtils) FileFormatUtils.getInstance(HoodieFileFormat.PARQUET);
                 Iterable<String> iterable = () -> paths;
                 return StreamSupport.stream(iterable.spliterator(), false)
-                    .flatMap(path ->
-                        utils.readColumnStatsFromMetadata(
-                                storageConf,
-                                new StoragePath(path),
-                                columnNames
-                            )
-                            .stream()
+                    .flatMap(path -> {
+                          StoragePath storagePath = new StoragePath(path);
+                          HoodieStorage storage = new HoodieHadoopStorage(storagePath, storageConf);
+                          return utils.readColumnStatsFromMetadata(
+                                  storage,
+                                  new StoragePath(path),
+                                  columnNames
+                              )
+                              .stream();
+                        }
                     )
                     .iterator();
               })

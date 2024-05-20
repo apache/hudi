@@ -21,7 +21,6 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.UUID;
 
+import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
@@ -42,7 +42,6 @@ public class TestHoodieConsoleMetrics {
   HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
-  StorageConfiguration storageConf = HoodieTestUtils.getDefaultStorageConf();
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -52,7 +51,7 @@ public class TestHoodieConsoleMetrics {
     when(writeConfig.isMetricsOn()).thenReturn(true);
     when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CONSOLE);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
     metrics = hoodieMetrics.getMetrics();
   }
 

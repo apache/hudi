@@ -38,7 +38,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
@@ -145,7 +144,8 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     String basePath = hoodieTable.getMetaClient().getBasePath();
     int taskID = getRuntimeContext().getIndexOfThisSubtask();
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
-    for (String partitionPath : FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), metadataConfig(conf), basePath)) {
+    for (String partitionPath : FSUtils.getAllPartitionPaths(
+        new HoodieFlinkEngineContext(hadoopConf), hoodieTable.getMetaClient().getStorage(), metadataConfig(conf), basePath)) {
       if (pattern.matcher(partitionPath).matches()) {
         loadRecords(partitionPath);
       }
@@ -222,7 +222,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
             return;
           }
           try (ClosableIterator<HoodieKey> iterator = fileUtils.getHoodieKeyIterator(
-              HadoopFSUtils.getStorageConf(this.hadoopConf), baseFile.getStoragePath())) {
+              hoodieTable.getMetaClient().getStorage(), baseFile.getStoragePath())) {
             iterator.forEachRemaining(hoodieKey -> {
               output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
             });

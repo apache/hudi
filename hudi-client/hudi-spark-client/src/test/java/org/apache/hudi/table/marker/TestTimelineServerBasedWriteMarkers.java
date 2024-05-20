@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
@@ -59,7 +58,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     this.jsc = new JavaSparkContext(
         HoodieClientTestUtils.getSparkConfForTest(TestTimelineServerBasedWriteMarkers.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
-    this.storage = HoodieStorageUtils.getStorage(metaClient.getBasePathV2(), metaClient.getStorageConf());
+    this.storage = metaClient.getStorage();
     this.markerFolderPath = new StoragePath(metaClient.getMarkerFolderPath("000"));
 
     FileSystemViewStorageConfig storageConf =

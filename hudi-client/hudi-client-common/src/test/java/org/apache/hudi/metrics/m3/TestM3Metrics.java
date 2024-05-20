@@ -18,24 +18,26 @@
 
 package org.apache.hudi.metrics.m3;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.when;
-
-import java.util.UUID;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.UUID;
+
+import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class TestM3Metrics {
@@ -44,8 +46,6 @@ public class TestM3Metrics {
   HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
-  @Mock
-  StorageConfiguration storageConf;
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -66,7 +66,7 @@ public class TestM3Metrics {
     when(metricsConfig.getM3Service()).thenReturn("hoodie");
     when(metricsConfig.getM3Tags()).thenReturn("tag1=value1,tag2=value2");
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
-    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
     metrics = hoodieMetrics.getMetrics();
     metrics.registerGauge("metric1", 123L);
     assertEquals("123", metrics.getRegistry().getGauges().get("metric1").getValue().toString());
@@ -84,7 +84,7 @@ public class TestM3Metrics {
     when(metricsConfig.getM3Service()).thenReturn("hoodie");
     when(metricsConfig.getM3Tags()).thenReturn("");
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
-    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
     metrics = hoodieMetrics.getMetrics();
     metrics.registerGauge("metric1", 123L);
     assertEquals("123", metrics.getRegistry().getGauges().get("metric1").getValue().toString());
@@ -98,7 +98,7 @@ public class TestM3Metrics {
     when(writeConfig.isMetricsOn()).thenReturn(true);
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
     assertThrows(RuntimeException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
     });
   }
 }

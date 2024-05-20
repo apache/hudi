@@ -72,8 +72,9 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     HoodieLocalEngineContext localEngineContext =
         new HoodieLocalEngineContext(metaClient.getStorageConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
-        new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(),
-            metaClient.getStorageConf(), basePath);
+        new FileSystemBackedTableMetadata(localEngineContext,
+            metaClient.getTableConfig(),
+            metaClient.getStorage(), basePath);
     Assertions.assertEquals(0, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
     Assertions.assertEquals(10,
         fileSystemBackedTableMetadata.getAllFilesInPartition(new StoragePath(basePath)).size());
@@ -103,7 +104,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
         new HoodieLocalEngineContext(metaClient.getStorageConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
         new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(),
-            metaClient.getStorageConf(), basePath);
+            metaClient.getStorage(), basePath);
     Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
 
     List<String> fullPartitionPaths =
@@ -132,7 +133,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
         new HoodieLocalEngineContext(metaClient.getStorageConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
         new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(),
-            metaClient.getStorageConf(), basePath);
+            metaClient.getStorage(), basePath);
     Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
     Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartition(
         new StoragePath(basePath + "/" + ONE_LEVEL_PARTITIONS.get(0))).size());
@@ -163,7 +164,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
         new HoodieLocalEngineContext(metaClient.getStorageConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
         new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(),
-            metaClient.getStorageConf(), basePath);
+            metaClient.getStorage(), basePath);
     Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
     Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartition(
         new StoragePath(basePath + "/" + MULTI_LEVEL_PARTITIONS.get(0))).size());
@@ -193,7 +194,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
         new HoodieLocalEngineContext(metaClient.getStorageConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
         new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(),
-            metaClient.getStorageConf(), basePath);
+            metaClient.getStorage(), basePath);
     Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
     Assertions.assertEquals(0, fileSystemBackedTableMetadata.getAllFilesInPartition(
         new StoragePath(basePath + "/" + MULTI_LEVEL_PARTITIONS.get(0))).size());

@@ -91,7 +91,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
       // should support executor metrics
-      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), storageConf));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), dataMetaClient.getStorage()));
     } else {
       this.metrics = Option.empty();
     }

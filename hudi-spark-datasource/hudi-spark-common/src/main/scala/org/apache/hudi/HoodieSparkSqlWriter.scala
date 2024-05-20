@@ -54,6 +54,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.Metrics
+import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
@@ -396,20 +397,20 @@ class HoodieSparkSqlWriterInternal {
             }
 
             val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
+            // Create a HoodieWriteClient & issue the delete.
+            val tableMetaClient = HoodieTableMetaClient.builder
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
+              .setBasePath(basePath.toString).build()
             // Get list of partitions to delete
             val partitionsToDelete = if (parameters.contains(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
               java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).asScala.toList, jsc,
-                hoodieConfig, basePath.toString): _*)
+                tableMetaClient.getStorage, hoodieConfig, basePath.toString): _*)
             } else {
               val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
 
-            // Create a HoodieWriteClient & issue the delete.
-            val tableMetaClient = HoodieTableMetaClient.builder
-              .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
-              .setBasePath(basePath.toString).build()
             val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema.toString
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               schemaStr, path, tblName,
@@ -564,17 +565,19 @@ class HoodieSparkSqlWriterInternal {
    *
    * @param partitions   list of partitions that may contain wildcards
    * @param jsc          instance of java spark context
+   * @param storage      [[HoodieStorage]] instance
    * @param cfg          hoodie config
    * @param basePath     base path
    * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
    */
-  private def resolvePartitionWildcards(partitions: List[String], jsc: JavaSparkContext, cfg: HoodieConfig, basePath: String): List[String] = {
+  private def resolvePartitionWildcards(partitions: List[String], jsc: JavaSparkContext,
+                                        storage: HoodieStorage, cfg: HoodieConfig, basePath: String): List[String] = {
     //find out if any of the input partitions have wildcards
     //note:spark-sql may url-encode special characters (* -> %2A)
     var (wildcardPartitions, fullPartitions) = partitions.partition(partition => partition.matches(".*(\\*|%2A).*"))
 
     val allPartitions = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc): HoodieEngineContext,
-      HoodieMetadataConfig.newBuilder().fromProperties(cfg.getProps).build(), basePath)
+      storage, HoodieMetadataConfig.newBuilder().fromProperties(cfg.getProps).build(), basePath)
 
     if (fullPartitions.nonEmpty) {
       fullPartitions = fullPartitions.filter(partition => allPartitions.contains(partition))

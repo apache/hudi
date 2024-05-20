@@ -86,7 +86,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
-    this.metrics = new HoodieMetrics(config, table.getStorageConf());
+    this.metrics = new HoodieMetrics(config, metaClient.getStorage());
   }
 
   public int archiveIfRequired(HoodieEngineContext context) throws IOException {
@@ -207,7 +207,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // 4. If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
     if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
-      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getMetadataConfig(), config.getBasePath())) {
+      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
+          table.getContext(), table.getMetaClient().getStorage(), config.getMetadataConfig(), config.getBasePath())) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {
           LOG.info("Not archiving as there is no compaction yet on the metadata table");

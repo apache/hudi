@@ -69,12 +69,14 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
   }
 
   protected HoodieFileReader createNewFileReader() throws IOException {
-    return HoodieIOFactory.getIOFactory(hoodieTable.getStorageConf()).getReaderFactory(this.config.getRecordMerger().getRecordType())
+    return HoodieIOFactory.getIOFactory(hoodieTable.getMetaClient().getStorage())
+        .getReaderFactory(this.config.getRecordMerger().getRecordType())
         .getFileReader(config, getLatestBaseFile().getStoragePath());
   }
 
   protected HoodieFileReader createNewFileReader(HoodieBaseFile hoodieBaseFile) throws IOException {
-    return HoodieIOFactory.getIOFactory(hoodieTable.getStorageConf()).getReaderFactory(this.config.getRecordMerger().getRecordType())
+    return HoodieIOFactory.getIOFactory(hoodieTable.getMetaClient().getStorage())
+        .getReaderFactory(this.config.getRecordMerger().getRecordType())
         .getFileReader(config, hoodieBaseFile.getStoragePath());
   }
 }

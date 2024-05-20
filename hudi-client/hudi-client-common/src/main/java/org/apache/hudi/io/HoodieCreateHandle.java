@@ -105,7 +105,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       createMarkerFile(partitionPath,
           FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
       this.fileWriter =
-          HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getStorageConf(), config,
+          HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getMetaClient().getStorage(), config,
               writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);

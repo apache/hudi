@@ -66,7 +66,8 @@ public abstract class PartitionTTLStrategy implements TTLStrategy, Serializable 
     List<String> partitionsForTTL;
     if (StringUtils.isNullOrEmpty(partitionSelected)) {
       // Return All partition paths
-      partitionsForTTL = FSUtils.getAllPartitionPaths(hoodieTable.getContext(), writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      partitionsForTTL = FSUtils.getAllPartitionPaths(
+          hoodieTable.getContext(), hoodieTable.getMetaClient().getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath());
     } else {
       partitionsForTTL = Arrays.asList(partitionSelected.split(","));
     }

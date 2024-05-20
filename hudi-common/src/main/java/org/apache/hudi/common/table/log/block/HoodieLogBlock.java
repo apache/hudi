@@ -26,7 +26,7 @@ import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
@@ -88,7 +88,7 @@ public abstract class HoodieLogBlock {
   }
 
   // Return the bytes representation of the data belonging to a LogBlock
-  public byte[] getContentBytes(StorageConfiguration<?> storageConf) throws IOException {
+  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
     throw new HoodieException("No implementation was provided");
   }
 
@@ -200,7 +200,7 @@ public abstract class HoodieLogBlock {
    */
   public static final class HoodieLogBlockContentLocation {
     // Storage Config required to access the file
-    private final StorageConfiguration<?> storageConf;
+    private final HoodieStorage storage;
     // The logFile that contains this block
     private final HoodieLogFile logFile;
     // The filePosition in the logFile for the contents of this block
@@ -210,20 +210,20 @@ public abstract class HoodieLogBlock {
     // The final position where the complete block ends
     private final long blockEndPos;
 
-    public HoodieLogBlockContentLocation(StorageConfiguration<?> storageConf,
+    public HoodieLogBlockContentLocation(HoodieStorage storage,
                                          HoodieLogFile logFile,
                                          long contentPositionInLogFile,
                                          long blockSize,
                                          long blockEndPos) {
-      this.storageConf = storageConf;
+      this.storage = storage;
       this.logFile = logFile;
       this.contentPositionInLogFile = contentPositionInLogFile;
       this.blockSize = blockSize;
       this.blockEndPos = blockEndPos;
     }
 
-    public StorageConfiguration<?> getStorageConf() {
-      return storageConf;
+    public HoodieStorage getStorage() {
+      return storage;
     }
 
     public HoodieLogFile getLogFile() {

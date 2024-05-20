@@ -37,21 +37,21 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
  */
 public class HoodieHadoopIOFactory extends HoodieIOFactory {
 
-  public HoodieHadoopIOFactory(StorageConfiguration<?> storageConf) {
-    super(storageConf);
+  public HoodieHadoopIOFactory(HoodieStorage storage) {
+    super(storage);
   }
 
   @Override
   public HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (recordType) {
       case AVRO:
-        return new HoodieAvroFileReaderFactory(storageConf);
+        return new HoodieAvroFileReaderFactory(storage);
       case SPARK:
         //TODO: remove this case [HUDI-7746]
         try {
           return (HoodieFileReaderFactory) ReflectionUtils
               .loadClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory",
-                  new Class<?>[] {StorageConfiguration.class}, storageConf);
+                  new Class<?>[] {StorageConfiguration.class}, storage);
         } catch (Exception e) {
           throw new HoodieException("Unable to create HoodieSparkFileReaderFactory", e);
         }
@@ -64,13 +64,13 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
   public HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (recordType) {
       case AVRO:
-        return new HoodieAvroFileWriterFactory(storageConf);
+        return new HoodieAvroFileWriterFactory(storage);
       case SPARK:
         //TODO: remove this case [HUDI-7746]
         try {
           return (HoodieFileWriterFactory) ReflectionUtils
               .loadClass("org.apache.hudi.io.storage.HoodieSparkFileWriterFactory",
-                  new Class<?>[] {StorageConfiguration.class}, storageConf);
+                  new Class<?>[] {StorageConfiguration.class}, storage);
         } catch (Exception e) {
           throw new HoodieException("Unable to create HoodieSparkFileWriterFactory", e);
         }
@@ -81,7 +81,7 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
 
   @Override
   public HoodieStorage getStorage(StoragePath storagePath) {
-    return new HoodieHadoopStorage(storagePath, storageConf);
+    return storage.newInstance(storagePath, storage.getConf());
   }
 
   @Override
@@ -92,7 +92,7 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
                                   long initialRetryIntervalMs,
                                   String retryExceptions,
                                   ConsistencyGuard consistencyGuard) {
-    return new HoodieHadoopStorage(path, storageConf, enableRetry, maxRetryIntervalMs,
+    return new HoodieHadoopStorage(path, storage.getConf(), enableRetry, maxRetryIntervalMs,
         maxRetryNumbers, maxRetryIntervalMs, retryExceptions, consistencyGuard);
   }
 }

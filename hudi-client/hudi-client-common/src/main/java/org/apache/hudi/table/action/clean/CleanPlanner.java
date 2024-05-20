@@ -280,7 +280,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    return FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), config.getBasePath());
+    return FSUtils.getAllPartitionPaths(context, hoodieTable.getMetaClient().getStorage(), config.getMetadataConfig(), config.getBasePath());
   }
 
   /**

@@ -59,7 +59,20 @@ public class HoodieHadoopStorage extends HoodieStorage {
   private final FileSystem fs;
 
   public HoodieHadoopStorage(StoragePath path, StorageConfiguration<?> conf) {
-    this(HadoopFSUtils.getFs(path, conf.unwrapAs(Configuration.class)));
+    super(conf);
+    this.fs = HadoopFSUtils.getFs(path, conf.unwrapAs(Configuration.class));
+  }
+
+  public HoodieHadoopStorage(Path path, Configuration conf) {
+    this(convertToStoragePath(path), HadoopFSUtils.getStorageConf(conf));
+  }
+
+  public HoodieHadoopStorage(String path, Configuration conf) {
+    this(path, HadoopFSUtils.getStorageConf(conf));
+  }
+
+  public HoodieHadoopStorage(String path, StorageConfiguration<?> conf) {
+    this(new StoragePath(path), conf);
   }
 
   public HoodieHadoopStorage(StoragePath path,
@@ -70,6 +83,7 @@ public class HoodieHadoopStorage extends HoodieStorage {
                              long initialRetryIntervalMs,
                              String retryExceptions,
                              ConsistencyGuard consistencyGuard) {
+    super(conf);
     FileSystem fileSystem = getFs(path, conf.unwrapCopyAs(Configuration.class));
 
     if (enableRetry) {
@@ -82,7 +96,13 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   public HoodieHadoopStorage(FileSystem fs) {
+    super(new HadoopStorageConfiguration(fs.getConf()));
     this.fs = fs;
+  }
+
+  @Override
+  public HoodieStorage newInstance(StoragePath path, StorageConfiguration<?> storageConf) {
+    return new HoodieHadoopStorage(path, storageConf);
   }
 
   @Override
@@ -223,11 +243,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public Object getFileSystem() {
     return fs;
-  }
-
-  @Override
-  public StorageConfiguration<Configuration> getConf() {
-    return new HadoopStorageConfiguration(fs.getConf());
   }
 
   @Override

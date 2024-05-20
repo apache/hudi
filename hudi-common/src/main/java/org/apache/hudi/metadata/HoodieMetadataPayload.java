@@ -39,8 +39,6 @@ import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Lazy;
@@ -491,15 +489,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     return Option.of(columnStatMetadata);
-  }
-
-  /**
-   * Returns the files added as part of this record.
-   */
-  public List<StoragePathInfo> getFileList(StorageConfiguration<?> storageConf, StoragePath partitionPath)
-      throws IOException {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(partitionPath, storageConf);
-    return getFileList(storage, partitionPath);
   }
 
   /**

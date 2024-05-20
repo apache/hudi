@@ -121,7 +121,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       } else {
         registry = Registry.getRegistry("HoodieMetadata");
       }
-      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), storageConf));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), dataMetaClient.getStorage()));
     } else {
       this.metrics = Option.empty();
     }

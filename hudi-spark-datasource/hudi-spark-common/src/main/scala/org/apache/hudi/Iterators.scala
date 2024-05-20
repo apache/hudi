@@ -353,7 +353,7 @@ object LogFileIterator extends SparkAdapterSupport {
         .enable(true).build()
       val dataTableBasePath = getDataTableBasePathFromMetadataTable(tablePath)
       val metadataTable = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig,
+        new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf(hadoopConf)), storage, metadataConfig,
         dataTableBasePath)
 
       // We have to force full-scan for the MT log record reader, to make sure

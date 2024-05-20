@@ -243,7 +243,12 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("The fully-qualified class name of the factory class to return readers and writers of files used "
           + "by Hudi. The provided class should implement `org.apache.hudi.io.storage.HoodieIOFactory`.");
 
-
+  public static final ConfigProperty<String> HOODIE_STORAGE_CLASS = ConfigProperty
+      .key("hoodie.storage.class")
+      .defaultValue("org.apache.hudi.storage.hadoop.HoodieHadoopStorage")
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("The fully-qualified class name of the `HoodieStorage` implementation class to instantiate.");
 
   /**
    * @deprecated Use {@link #PARQUET_MAX_FILE_SIZE} and its methods instead

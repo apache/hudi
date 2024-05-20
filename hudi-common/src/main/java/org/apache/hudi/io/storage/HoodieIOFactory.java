@@ -25,25 +25,24 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 /**
  * Base class to get HoodieFileReaderFactory and HoodieFileWriterFactory
  */
 public abstract class HoodieIOFactory {
-  protected final StorageConfiguration<?> storageConf;
+  protected final HoodieStorage storage;
 
-  public HoodieIOFactory(StorageConfiguration<?> storageConf) {
-    this.storageConf = storageConf;
+  public HoodieIOFactory(HoodieStorage storage) {
+    this.storage = storage;
   }
 
-  public static HoodieIOFactory getIOFactory(StorageConfiguration<?> storageConf) {
-    String ioFactoryClass = storageConf.getString(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key())
+  public static HoodieIOFactory getIOFactory(HoodieStorage storage) {
+    String ioFactoryClass = storage.getConf().getString(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key())
         .orElse(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.defaultValue());
     try {
       return (HoodieIOFactory) ReflectionUtils
-          .loadClass(ioFactoryClass, new Class<?>[] {StorageConfiguration.class}, storageConf);
+          .loadClass(ioFactoryClass, new Class<?>[] {HoodieStorage.class}, storage);
     } catch (Exception e) {
       throw new HoodieException("Unable to create " + ioFactoryClass, e);
     }

@@ -227,7 +227,7 @@ public class RepairsCommand {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HoodieCLI.conf);
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     List<String> partitionPaths =
-        FSUtils.getAllPartitionPaths(engineContext, client.getBasePath(), false);
+        FSUtils.getAllPartitionPaths(engineContext, client.getStorage(), client.getBasePath(), false);
     StoragePath basePath = client.getBasePathV2();
 
     String[][] rows = new String[partitionPaths.size()][];
