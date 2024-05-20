@@ -102,6 +102,7 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   @transient private lazy val indicesSupport: List[SparkBaseIndexSupport] = List(
     new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
+    new BucketIndexSupport(spark, metadataConfig, metaClient),
     new PartitionStatsIndexSupport(spark, schema, metadataConfig, metaClient),
     new FunctionalIndexSupport(spark, metadataConfig, metaClient),
     new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
@@ -344,7 +345,7 @@ case class HoodieFileIndex(spark: SparkSession,
     //       and candidate files are obtained from these file slices.
 
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
-    if (isMetadataTableEnabled && isDataSkippingEnabled) {
+    if (isDataSkippingEnabled) {
       for(indexSupport: SparkBaseIndexSupport <- indicesSupport) {
         if (indexSupport.isIndexAvailable) {
           val prunedFileNames = indexSupport.computeCandidateFileNames(this, queryFilters, queryReferencedColumns,
