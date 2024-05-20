@@ -260,7 +260,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   }
 
   protected HoodieTableMetadata metadata(HoodieWriteConfig clientConfig, HoodieEngineContext engineContext) {
-    return HoodieTableMetadata.create(engineContext, storage, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
+    return HoodieTableMetadata.create(engineContext, metaClient.getStorage(), clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
   /**
