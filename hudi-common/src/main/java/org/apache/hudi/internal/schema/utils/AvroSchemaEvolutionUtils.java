@@ -59,7 +59,7 @@ public class AvroSchemaEvolutionUtils {
     if (incomingSchema.getType() == Schema.Type.NULL) {
       return oldTableSchema;
     }
-    InternalSchema inComingInternalSchema = convert(incomingSchema);
+    InternalSchema inComingInternalSchema = convert(incomingSchema, oldTableSchema.getNameToPosition());
     // check column add/missing
     List<String> colNamesFromIncoming = inComingInternalSchema.getAllColsFullName();
     List<String> colNamesFromOldSchema = oldTableSchema.getAllColsFullName();
@@ -148,7 +148,7 @@ public class AvroSchemaEvolutionUtils {
 
     InternalSchema targetInternalSchema = convert(targetSchema);
     // Use existing fieldIds for consistent field ordering between commits when shouldReorderColumns is true
-    InternalSchema sourceInternalSchema = convert(sourceSchema, shouldReorderColumns ? targetInternalSchema.getNameToId() : Collections.emptyMap());
+    InternalSchema sourceInternalSchema = convert(sourceSchema, shouldReorderColumns ? targetInternalSchema.getNameToPosition() : Collections.emptyMap());
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();

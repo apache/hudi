@@ -53,6 +53,7 @@ public class InternalSchema implements Serializable {
   private transient Map<Integer, Field> idToField = null;
   private transient Map<String, Integer> nameToId = null;
   private transient Map<Integer, String> idToName = null;
+  private transient Map<String, Integer> nameToPosition = null;
 
   public static InternalSchema getEmptyInternalSchema() {
     return EMPTY_SCHEMA;
@@ -271,8 +272,17 @@ public class InternalSchema implements Serializable {
     return buildNameToId().getOrDefault(name, -1);
   }
 
-  public Map<String, Integer> getNameToId() {
-    return buildNameToId();
+  /**
+   * Returns the full name of the field and its position in the schema.
+   * This differs from its ID in cases where new fields are not appended to the end of schemas.
+   * The output is used when reconciling the order of fields while ingesting.
+   * @return a mapping from full field name to a position
+   */
+  public Map<String, Integer> getNameToPosition() {
+    if (nameToPosition == null) {
+      nameToPosition = InternalSchemaBuilder.getBuilder().buildNameToPosition(record);
+    }
+    return nameToPosition;
   }
 
   @Override

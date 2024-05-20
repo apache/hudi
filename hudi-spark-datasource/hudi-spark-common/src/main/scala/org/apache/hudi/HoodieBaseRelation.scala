@@ -818,7 +818,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       case Right(internalSchema) =>
         checkState(!internalSchema.isEmptySchema)
         val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
-        val requiredAvroSchema = AvroInternalSchemaConverter.convertWithInputFieldOrder(prunedInternalSchema, "schema")
+        val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, "schema")
         val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
 
         (requiredAvroSchema, requiredStructSchema, prunedInternalSchema)
