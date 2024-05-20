@@ -180,7 +180,7 @@ public abstract class HoodieStorage implements Closeable {
    * @throws IOException           IO error.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract List<StoragePathInfo> listDirectEntries(StoragePath path) throws IOException;
+  public abstract List<StoragePathInfo> listDirectory(StoragePath path) throws IOException;
 
   /**
    * Lists the path info of all files under the give path recursively.
@@ -204,8 +204,8 @@ public abstract class HoodieStorage implements Closeable {
    * @throws IOException           IO error.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract List<StoragePathInfo> listDirectEntries(StoragePath path,
-                                                          StoragePathFilter filter) throws IOException;
+  public abstract List<StoragePathInfo> listDirectory(StoragePath path,
+                                                      StoragePathFilter filter) throws IOException;
 
   /**
    * Returns all the files that match the pathPattern and are not checksum files,
@@ -418,10 +418,10 @@ public abstract class HoodieStorage implements Closeable {
    * @throws IOException           IO error.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public List<StoragePathInfo> listDirectEntries(List<StoragePath> pathList) throws IOException {
+  public List<StoragePathInfo> listDirectory(List<StoragePath> pathList) throws IOException {
     List<StoragePathInfo> result = new ArrayList<>();
     for (StoragePath path : pathList) {
-      result.addAll(listDirectEntries(path));
+      result.addAll(listDirectory(path));
     }
     return result;
   }

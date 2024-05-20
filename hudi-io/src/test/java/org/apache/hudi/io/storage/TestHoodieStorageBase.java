@@ -85,7 +85,7 @@ public abstract class TestHoodieStorageBase {
   public void cleanUpTempDir() {
     HoodieStorage storage = getStorage();
     try {
-      for (StoragePathInfo pathInfo : storage.listDirectEntries(new StoragePath(getTempDir()))) {
+      for (StoragePathInfo pathInfo : storage.listDirectory(new StoragePath(getTempDir()))) {
         StoragePath path = pathInfo.getPath();
         if (pathInfo.isDirectory()) {
           storage.deleteDirectory(path);
@@ -212,7 +212,7 @@ public abstract class TestHoodieStorageBase {
             getStoragePathInfo("x/y", true),
             getStoragePathInfo("x/z", true)
         }).collect(Collectors.toList()),
-        storage.listDirectEntries(new StoragePath(getTempDir(), "x")));
+        storage.listDirectory(new StoragePath(getTempDir(), "x")));
 
     validatePathInfoList(
         Arrays.stream(new StoragePathInfo[] {
@@ -229,7 +229,7 @@ public abstract class TestHoodieStorageBase {
         Arrays.stream(new StoragePathInfo[] {
             getStoragePathInfo("x/2.file", false)
         }).collect(Collectors.toList()),
-        storage.listDirectEntries(
+        storage.listDirectory(
             new StoragePath(getTempDir(), "x"), e -> e.getName().contains("2")));
 
     validatePathInfoList(
@@ -239,13 +239,13 @@ public abstract class TestHoodieStorageBase {
             getStoragePathInfo("x/z/1.file", false),
             getStoragePathInfo("x/z/2.file", false)
         }).collect(Collectors.toList()),
-        storage.listDirectEntries(Arrays.stream(new StoragePath[] {
+        storage.listDirectory(Arrays.stream(new StoragePath[] {
             new StoragePath(getTempDir(), "w"),
             new StoragePath(getTempDir(), "x/z")
         }).collect(Collectors.toList())));
 
     assertThrows(FileNotFoundException.class,
-        () -> storage.listDirectEntries(new StoragePath(getTempDir(), "*")));
+        () -> storage.listDirectory(new StoragePath(getTempDir(), "*")));
 
     validatePathInfoList(
         Arrays.stream(new StoragePathInfo[] {
@@ -279,10 +279,10 @@ public abstract class TestHoodieStorageBase {
     assertFalse(storage.exists(filePath));
     assertThrows(FileNotFoundException.class, () -> storage.open(filePath));
     assertThrows(FileNotFoundException.class, () -> storage.getPathInfo(filePath));
-    assertThrows(FileNotFoundException.class, () -> storage.listDirectEntries(filePath));
-    assertThrows(FileNotFoundException.class, () -> storage.listDirectEntries(dirPath));
-    assertThrows(FileNotFoundException.class, () -> storage.listDirectEntries(dirPath, e -> true));
-    assertThrows(FileNotFoundException.class, () -> storage.listDirectEntries(
+    assertThrows(FileNotFoundException.class, () -> storage.listDirectory(filePath));
+    assertThrows(FileNotFoundException.class, () -> storage.listDirectory(dirPath));
+    assertThrows(FileNotFoundException.class, () -> storage.listDirectory(dirPath, e -> true));
+    assertThrows(FileNotFoundException.class, () -> storage.listDirectory(
         Arrays.stream(new StoragePath[] {dirPath}).collect(Collectors.toList())));
   }
 
