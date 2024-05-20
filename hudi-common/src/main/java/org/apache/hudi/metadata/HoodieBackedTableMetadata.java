@@ -128,7 +128,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     } else if (this.metadataMetaClient == null) {
       try {
-        this.metadataMetaClient = HoodieTableMetaClient.builder().setConf(getStorageConf().newInstance()).setBasePath(metadataBasePath).build();
+        this.metadataMetaClient = HoodieTableMetaClient.builder()
+            .setStorage(storage.newInstance(new StoragePath(metadataBasePath), storage.getConf().newInstance()))
+            .setBasePath(metadataBasePath)
+            .build();
         this.metadataFileSystemView = getFileSystemView(metadataMetaClient);
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
       } catch (TableNotFoundException e) {
