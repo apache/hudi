@@ -334,6 +334,11 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies when #recordIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
+  public static final ConfigProperty<Boolean> BUCKET_QUERY_INDEX = ConfigProperty
+      .key("hoodie.bucket.index.query.pruning")
+      .defaultValue(true)
+      .withDocumentation("Control if table with bucket index use bucket query or not");
+
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
    */
