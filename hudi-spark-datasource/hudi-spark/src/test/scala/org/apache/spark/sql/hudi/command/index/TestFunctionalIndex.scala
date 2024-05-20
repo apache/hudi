@@ -36,7 +36,9 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Tag
 
+@Tag("functional")
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
   test("Test Functional Index With Hive Sync Non Partitioned Table") {
