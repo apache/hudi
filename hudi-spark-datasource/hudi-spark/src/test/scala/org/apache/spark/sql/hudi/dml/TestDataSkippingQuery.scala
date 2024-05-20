@@ -113,4 +113,82 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
       )
     }
   }
+
+  test("bucket index query") {
+    // table bucket prop can not be read in the query sql now, so need to set these configs
+    withSQLConf("hoodie.enable.data.skipping" -> "true",
+      "hoodie.bucket.index.hash.field" -> "id",
+      "hoodie.bucket.index.num.buckets" -> "20",
+      "hoodie.index.type" -> "BUCKET") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             | primaryKey = 'id,name',
+             | preCombineField = 'ts',
+             | hoodie.index.type = 'BUCKET',
+             | hoodie.bucket.index.hash.field = 'id',
+             | hoodie.bucket.index.num.buckets = '20')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+        spark.sql(
+          s"""
+             | insert into $tableName values
+             | (1, 'a1', 10, 1000, "2021-01-05"),
+             | (2, 'a2', 20, 2000, "2021-01-06"),
+             | (3, 'a3', 30, 3000, "2021-01-07")
+              """.stripMargin)
+
+        checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 1")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05")
+        )
+        checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 1 and name = 'a1'")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05")
+        )
+        checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 2 or id = 5")(
+          Seq(2, "a2", 20.0, 2000, "2021-01-06")
+        )
+        checkAnswer(s"select id, name, price, ts, dt from $tableName where id in (2, 3)")(
+          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+          Seq(3, "a3", 30.0, 3000, "2021-01-07")
+        )
+        checkAnswer(s"select id, name, price, ts, dt from $tableName where id != 4")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+          Seq(3, "a3", 30.0, 3000, "2021-01-07")
+        )
+        spark.sql("set hoodie.bucket.index.query.pruning = false")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 1")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05")
+        )
+        checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 1 and name = 'a1'")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05")
+        )
+        checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 2 or id = 5")(
+          Seq(2, "a2", 20.0, 2000, "2021-01-06")
+        )
+        checkAnswer(s"select id, name, price, ts, dt from $tableName where id in (2, 3)")(
+          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+          Seq(3, "a3", 30.0, 3000, "2021-01-07")
+        )
+        checkAnswer(s"select id, name, price, ts, dt from $tableName where id != 4")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+          Seq(3, "a3", 30.0, 3000, "2021-01-07")
+        )
+        spark.sql("set hoodie.bucket.index.query.pruning = true")
+      }
+    }
+  }
 }
