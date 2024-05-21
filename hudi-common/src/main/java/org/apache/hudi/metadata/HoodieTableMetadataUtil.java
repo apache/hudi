@@ -2003,7 +2003,8 @@ public class HoodieTableMetadataUtil {
       // Presence of partition meta file implies this is a HUDI partition
       isHoodiePartition = pathInfos.stream().anyMatch(status -> status.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
       for (StoragePathInfo pathInfo : pathInfos) {
-        if (pathInfo.isDirectory()) {
+        // Do not attempt to search for more subdirectories inside directories that are partitions
+        if (!isHoodiePartition && pathInfo.isDirectory()) {
           // Ignore .hoodie directory as there cannot be any partitions inside it
           if (!pathInfo.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
             this.subDirectories.add(pathInfo.getPath());
