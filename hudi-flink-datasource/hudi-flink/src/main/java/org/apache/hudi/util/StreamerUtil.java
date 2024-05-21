@@ -498,9 +498,9 @@ public class StreamerUtil {
     return null;
   }
 
-  public static List<String> getLatestTableFields(HoodieTableMetaClient metaClient) {
+  public static List<String> getLatestTableFields(HoodieTableMetaClient metaClient, boolean includeMetadataFields) {
     try {
-      Schema schema = getTableAvroSchema(metaClient, false);
+      Schema schema = getTableAvroSchema(metaClient, includeMetadataFields);
       return schema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
     } catch (Exception e) {
       LOG.warn("Error while resolving the latest table schema, will return null.", e);

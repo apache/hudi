@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.mortbay.log.Log;
 import org.slf4j.Logger;
@@ -55,10 +56,15 @@ public class SanityChecks {
    */
   public static void sanitCheck(Configuration conf, ResolvedSchema schema, Boolean checkMetaData) {
     checkTableType(conf);
-    List<String> schemaFields = schema.getColumnNames();
+    // Remove ComputedColumn type column
+    List<String> schemaFields = schema.getColumns()
+        .stream()
+        .filter(column -> !(column instanceof Column.ComputedColumn))
+        .map(Column::getName)
+        .collect(Collectors.toList());
     if (checkMetaData) {
       HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(conf, HadoopConfigurations.getHadoopConf(conf));
-      List<String> latestTablefields = StreamerUtil.getLatestTableFields(metaClient);
+      List<String> latestTablefields = StreamerUtil.getLatestTableFields(metaClient, true);
       if (latestTablefields != null) {
         checkSchema(conf, schemaFields, latestTablefields);
         checkRecordKey(conf, latestTablefields);
