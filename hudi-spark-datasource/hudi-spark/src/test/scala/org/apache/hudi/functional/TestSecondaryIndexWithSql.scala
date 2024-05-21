@@ -39,17 +39,6 @@ class TestSecondaryIndexWithSql extends HoodieSparkSqlTestBase {
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
-          val columns = Seq("ts", "uuid", "rider", "driver", "fare", "city", "state")
-          val data = Seq(
-            (1695159649087L, "334e26e9-8355-45cc-97c6-c31daf0df330", "rider-A", "driver-K", 19.10, "san_francisco", "california"),
-            (1695091554787L, "e96c4396-3fad-413a-a942-4cb36106d720", "rider-B", "driver-M", 27.70, "sao_paulo", "texas"),
-            (1695091554788L, "e96c4396-3fad-413a-a942-4cb36106d721", "rider-C", "driver-K", 27.70, "san_francisco", "california"),
-            (1695046462179L, "9909a8b1-2d15-4d3d-8ec9-efc48c536a00", "rider-D", "driver-L", 33.90, "san_francisco", "california"),
-            (1695516137016L, "e3cf430c-889d-4015-bc98-59bdce1e530c", "rider-E", "driver-P", 34.15, "sao_paulo", "texas"),
-            (1695046462179L, "9909a8b1-2d15-4d3d-8ec9-efc48c536a01", "rider-D", "driver-L", 33.90, "los-angeles", "california"),
-            (1695516137016L, "e3cf430c-889d-4015-bc98-59bdce1e530b", "rider-E", "driver-P", 34.15, "bengaluru", "karnataka"),
-            (1695115999911L, "c8abbe79-8d89-47ea-b4ce-4d224bae5bfa", "rider-F", "driver-T", 17.85, "chennai", "tamil-nadu"))
-
           spark.sql(
             s"""
                |create table $tableName (
@@ -91,8 +80,8 @@ class TestSecondaryIndexWithSql extends HoodieSparkSqlTestBase {
             .setConf(HoodieTestUtils.getDefaultStorageConf)
             .build()
           assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
-          val createIndexSql = s"create index idx_city on $tableName using secondary_index(city)"
-          spark.sql(createIndexSql)
+          // create secondary index
+          spark.sql(s"create index idx_city on $tableName using secondary_index(city)")
           metaClient = HoodieTableMetaClient.builder()
             .setBasePath(basePath)
             .setConf(HoodieTestUtils.getDefaultStorageConf)
@@ -104,7 +93,6 @@ class TestSecondaryIndexWithSql extends HoodieSparkSqlTestBase {
             Seq("austin", "e96c4396-3fad-413a-a942-4cb36106d720"),
             Seq("san_francisco", "334e26e9-8355-45cc-97c6-c31daf0df330")
           )
-          metadataDF.show(false)
         }
       }
     }

@@ -41,7 +41,7 @@ class SecondaryIndexTestBase extends HoodieSparkClientTestBase {
   val commonOpts: Map[String, String] = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_si",
     RECORDKEY_FIELD.key -> "_row_key",
     PARTITIONPATH_FIELD.key -> "partition,trip_type",
     HIVE_STYLE_PARTITIONING.key -> "true",
@@ -56,7 +56,7 @@ class SecondaryIndexTestBase extends HoodieSparkClientTestBase {
     initHoodieStorage()
     initTestDataGenerator()
 
-    setTableName("hoodie_test")
+    setTableName("hoodie_test_si")
     initMetaClient()
 
     instantTime = new AtomicInteger(1)
