@@ -1,0 +1,53 @@
+on:
+  pull_request_review:
+    types: [ submitted ]
+    branch:
+      - 'hudi-internal-release-v*-spark3.4'
+
+env:
+  MVN_ARGS: -ntp -B -V -Pci-log -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
+  MODULES: "packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,hudi-aws,packaging/hudi-spark-bundle,hudi-sync/hudi-datahub-sync,packaging/hudi-aws-bundle,packaging/hudi-gcp-bundle,packaging/hudi-datahub-sync-bundle,packaging/hudi-hive-sync-bundle"
+  AWS: "aws"
+  SCALA_PROFILE: "scala-2.12"
+  SPARK_PROFILE: "spark3.4"
+  BRANCH: ${{ github.event.pull_request.head.ref }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    if: startsWith(github.event.pull_request.head.ref, 'hudi-internal-release-v') && endsWith(github.event.pull_request.head.ref, 'spark3.4') && github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: us-west-2
+          role-to-assume: arn:aws:iam::194159489498:role/GithubActionsPublishHudi-RepositoryPublisherRole-10H7ABJVFNSQ9
+          role-session-name: HudiPublishSession
+          role-duration-seconds: 900
+      - name: Set Env
+        run: echo "CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --domain onehouse --domain-owner 194159489498 --query authorizationToken --output text)" >> $GITHUB_ENV
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+          server-id: codeartifact
+          server-username: AWS
+          server-password: CODEARTIFACT_AUTH_TOKEN
+      - name: Set VERSION
+        run: echo "VERSION=$(echo $BRANCH | sed -e s/hudi-internal-release-v//)" >> $GITHUB_ENV
+      - name: Print Version
+        run: echo "$BRANCH $VERSION"
+      - name: Fail if version not set
+        if: env.VERSION == ''
+        run: exit 1
+      - name: Set java version
+        run: mvn versions:set -DnewVersion="$VERSION"-INTERNAL -T 4 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS
+      - name: Deploy
+        run: mvn deploy -am -pl $MODULES -DskipTests -T 4 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS
