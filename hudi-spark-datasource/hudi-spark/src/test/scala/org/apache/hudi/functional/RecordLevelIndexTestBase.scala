@@ -33,6 +33,7 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataU
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
 import org.apache.spark.sql._
+import org.apache.spark.sql.{DataFrame, _}
 import org.apache.spark.sql.functions.{col, not}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
@@ -188,10 +189,14 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     latestBatchDf
   }
 
+  protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String): DataFrame = {
+    calculateMergedDf(latestBatchDf, operation, false)
+  }
+
   /**
    * @return [[DataFrame]] that should not exist as of the latest instant; used for non-existence validation.
    */
-  protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String): DataFrame = {
+  protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String, globalIndexEnableUpdatePartitions: Boolean): DataFrame = {
     val prevDfOpt = mergedDfList.lastOption
     if (prevDfOpt.isEmpty) {
       mergedDfList = mergedDfList :+ latestBatchDf
@@ -214,10 +219,16 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
         prevDf.filter(col("partition").isInCollection(overwrittenPartitions))
       } else {
         val prevDf = prevDfOpt.get
-        val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key")
-          && prevDf("partition") === latestBatchDf("partition"), "leftanti")
-        val latestSnapshot = prevDfOld.union(latestBatchDf)
-        mergedDfList = mergedDfList :+ latestSnapshot
+        if (globalIndexEnableUpdatePartitions) {
+          val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key"), "leftanti")
+          val latestSnapshot = prevDfOld.union(latestBatchDf)
+          mergedDfList = mergedDfList :+ latestSnapshot
+        } else {
+          val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key")
+            && prevDf("partition") === latestBatchDf("partition"), "leftanti")
+          val latestSnapshot = prevDfOld.union(latestBatchDf)
+          mergedDfList = mergedDfList :+ latestSnapshot
+        }
         sparkSession.emptyDataFrame
       }
     }
