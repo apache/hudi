@@ -281,36 +281,37 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
-    this(key, type, filesystemMetadata, null, null, null);
+    this(key, type, filesystemMetadata, null, null, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
-    this(key, METADATA_TYPE_BLOOM_FILTER, null, metadataBloomFilter, null, null);
+    this(key, METADATA_TYPE_BLOOM_FILTER, null, metadataBloomFilter, null, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats) {
-    this(key, METADATA_TYPE_COLUMN_STATS, null, null, columnStats, null);
+    this(key, METADATA_TYPE_COLUMN_STATS, null, null, columnStats, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieRecordIndexInfo recordIndexMetadata) {
-    this(key, METADATA_TYPE_RECORD_INDEX, null, null, null, recordIndexMetadata);
+    this(key, METADATA_TYPE_RECORD_INDEX, null, null, null, recordIndexMetadata, null);
+  }
+
+  private HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
+    this(key, METADATA_TYPE_SECONDARY_INDEX, null, null, null, null, secondaryIndexMetadata);
   }
 
   protected HoodieMetadataPayload(String key, int type,
-      Map<String, HoodieMetadataFileInfo> filesystemMetadata,
-      HoodieMetadataBloomFilter metadataBloomFilter,
-      HoodieMetadataColumnStats columnStats,
-      HoodieRecordIndexInfo recordIndexMetadata) {
+                                  Map<String, HoodieMetadataFileInfo> filesystemMetadata,
+                                  HoodieMetadataBloomFilter metadataBloomFilter,
+                                  HoodieMetadataColumnStats columnStats,
+                                  HoodieRecordIndexInfo recordIndexMetadata,
+                                  HoodieSecondaryIndexInfo secondaryIndexMetadata) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
     this.bloomFilterMetadata = metadataBloomFilter;
     this.columnStatMetadata = columnStats;
     this.recordIndexMetadata = recordIndexMetadata;
-  }
-
-  public HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
-    this(key, METADATA_TYPE_SECONDARY_INDEX, null, null, null, null);
     this.secondaryIndexMetadata = secondaryIndexMetadata;
   }
 

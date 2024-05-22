@@ -1119,7 +1119,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         if (writeStat instanceof HoodieDeltaWriteStat) {
           partitionFilePairs.add(Pair.of(dataPartition, Pair.of(((HoodieDeltaWriteStat) writeStat).getBaseFile(), ((HoodieDeltaWriteStat) writeStat).getLogFiles())));
         } else {
-          partitionFilePairs.add(Pair.of(dataPartition, Pair.of(writeStat.getPath(), new ArrayList<>())));
+          partitionFilePairs.add(Pair.of(dataPartition, Pair.of(writeStat.getPath(), Collections.emptyList())));
         }
       });
     });
