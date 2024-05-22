@@ -19,13 +19,14 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
 
@@ -33,20 +34,38 @@ class BloomFiltersIndexSupport(spark: SparkSession,
                                metadataConfig: HoodieMetadataConfig,
                                metaClient: HoodieTableMetaClient) extends RecordLevelIndexSupport(spark, metadataConfig, metaClient) {
 
-  override def getCandidateFiles(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
-    val fileToBloomFilterMap = allFiles.map { file =>
+  override def getIndexName: String = BloomFiltersIndexSupport.INDEX_NAME
+
+  override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
+                                         queryFilters: Seq[Expression],
+                                         queryReferencedColumns: Seq[String],
+                                         prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                         shouldPushDownFilesFilter: Boolean
+                                        ): Option[Set[String]] = {
+    lazy val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
+    val allFiles = getPrunedFileNames(prunedPartitionsAndFileSlices).map(new StoragePath(_) ).toSeq
+    if (recordKeys.nonEmpty) {
+      Option.apply(getCandidateFilesForRecordKeys(allFiles, recordKeys))
+    } else {
+      Option.empty
+    }
+  }
+
+  override def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
+    val candidateFiles = allFiles.filter { file =>
       val relativePartitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePathV2, file)
       val fileName = FSUtils.getFileName(file.getName, relativePartitionPath)
-      val bloomFilter = metadataTable.getBloomFilter(relativePartitionPath, fileName)
-      file -> bloomFilter
-    }.toMap
+      val bloomFilterOpt = toScalaOption(metadataTable.getBloomFilter(relativePartitionPath, fileName))
 
-    recordKeys.flatMap { recordKey =>
-      fileToBloomFilterMap.filter { case (_, bloomFilter) =>
-        // If bloom filter is empty, we assume conservatively that the file might contain the record key
-        bloomFilter.isEmpty || bloomFilter.get.mightContain(recordKey)
-      }.keys
+      bloomFilterOpt match {
+        case Some(bloomFilter) =>
+          recordKeys.exists(bloomFilter.mightContain)
+        case None =>
+          true // If bloom filter is empty or undefined, assume the file might contain the record key
+      }
     }.map(_.getName).toSet
+
+    candidateFiles
   }
 
   override def isIndexAvailable: Boolean = {
@@ -54,34 +73,22 @@ class BloomFiltersIndexSupport(spark: SparkSession,
   }
 
   override def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
-    var recordKeyQueries: List[Expression] = List.empty
-    var recordKeys: List[String] = List.empty
-    for (query <- queryFilters) {
-      val recordKeyOpt = getRecordKeyConfig
-      filterQueryWithRecordKey(query, recordKeyOpt).foreach({
-        case (exp: Expression, recKeys: List[String]) =>
-          recordKeys = recordKeys ++ recKeys
-          recordKeyQueries = recordKeyQueries :+ exp
-      })
-    }
-
-    Tuple2.apply(recordKeyQueries, recordKeys)
-  }
-
-  private def getRecordKeyConfig: Option[String] = {
-    val recordKeysOpt: org.apache.hudi.common.util.Option[Array[String]] = metaClient.getTableConfig.getRecordKeyFields
-    val recordKeyOpt = recordKeysOpt.map[String](JFunction.toJavaFunction[Array[String], String](arr =>
-      if (arr.length == 1) {
-        arr(0)
-      } else {
-        null
-      }))
-    Option.apply(recordKeyOpt.orElse(null))
+    val recordKeyOpt = getRecordKeyConfig
+    recordKeyOpt.map { recordKey =>
+      queryFilters.foldLeft((List.empty[Expression], List.empty[String])) {
+        case ((accQueries, accKeys), query) =>
+          filterQueryWithRecordKey(query, Some(recordKey)).foreach {
+            case (exp: Expression, recKeys: List[String]) =>
+              (accQueries :+ exp, accKeys ++ recKeys)
+          }
+          (accQueries, accKeys)
+      }
+    }.getOrElse((List.empty[Expression], List.empty[String]))
   }
 
 }
 
 
 object BloomFiltersIndexSupport {
-  val INDEX_NAME = "RECORD_LEVEL"
+  val INDEX_NAME = "BLOOM_FILTERS"
 }

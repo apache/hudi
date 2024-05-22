@@ -31,8 +31,8 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, E
 import scala.collection.{JavaConverters, mutable}
 
 class RecordLevelIndexSupport (spark: SparkSession,
-                              metadataConfig: HoodieMetadataConfig,
-                              metaClient: HoodieTableMetaClient)
+                               metadataConfig: HoodieMetadataConfig,
+                               metaClient: HoodieTableMetaClient)
   extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) {
 
 
@@ -47,7 +47,7 @@ class RecordLevelIndexSupport (spark: SparkSession,
     lazy val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
     val allFiles = fileIndex.inputFiles.map(strPath => new StoragePath(strPath)).toSeq
     if (recordKeys.nonEmpty) {
-      Option.apply(getCandidateFiles(allFiles, recordKeys))
+      Option.apply(getCandidateFilesForRecordKeys(allFiles, recordKeys))
     } else {
       Option.empty
     }
@@ -64,7 +64,7 @@ class RecordLevelIndexSupport (spark: SparkSession,
    * @param recordKeys - List of record keys.
    * @return Sequence of file names which need to be queried
    */
-  def getCandidateFiles(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
+  def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
     val recordKeyLocationsMap = metadataTable.readRecordIndex(JavaConverters.seqAsJavaListConverter(recordKeys).asJava)
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
@@ -86,7 +86,7 @@ class RecordLevelIndexSupport (spark: SparkSession,
   /**
    * Returns the configured record key for the table if it is a simple record key else returns empty option.
    */
-  private def getRecordKeyConfig: Option[String] = {
+  def getRecordKeyConfig: Option[String] = {
     val recordKeysOpt: org.apache.hudi.common.util.Option[Array[String]] = metaClient.getTableConfig.getRecordKeyFields
     val recordKeyOpt = recordKeysOpt.map[String](JFunction.toJavaFunction[Array[String], String](arr =>
       if (arr.length == 1) {
