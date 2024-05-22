@@ -19,8 +19,8 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
-import org.apache.hudi.common.model.HoodieFunctionalIndexMetadata;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexesMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -44,12 +44,12 @@ public class TestHoodieIndexUtils {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     String indexName = "testIndex";
 
-    Map<String, HoodieFunctionalIndexDefinition> indexDefinitions = new HashMap<>();
+    Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
     indexDefinitions.put(
         indexName,
-        new HoodieFunctionalIndexDefinition("func_index_testIndex", "column_stats", "lower", Collections.singletonList("name"), null));
-    HoodieFunctionalIndexMetadata indexMetadata = new HoodieFunctionalIndexMetadata(indexDefinitions);
-    when(metaClient.getFunctionalIndexMetadata()).thenReturn(Option.of(indexMetadata));
+        new HoodieIndexDefinition("func_index_testIndex", "column_stats", "lower", Collections.singletonList("name"), null));
+    HoodieIndexesMetadata indexMetadata = new HoodieIndexesMetadata(indexDefinitions);
+    when(metaClient.getIndexesMetadata()).thenReturn(Option.of(indexMetadata));
 
     String result = HoodieIndexUtils.getPartitionNameFromPartitionType(partitionType, metaClient, indexName);
     assertEquals("func_index_testIndex", result);
@@ -68,7 +68,7 @@ public class TestHoodieIndexUtils {
   public void testExceptionForMissingFunctionalIndexMetadata() {
     MetadataPartitionType partitionType = MetadataPartitionType.FUNCTIONAL_INDEX;
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getFunctionalIndexMetadata()).thenReturn(Option.empty());
+    when(metaClient.getIndexesMetadata()).thenReturn(Option.empty());
 
     assertThrows(IllegalArgumentException.class,
         () -> HoodieIndexUtils.getPartitionNameFromPartitionType(partitionType, metaClient, "testIndex"));

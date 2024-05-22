@@ -32,29 +32,29 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents the metadata for all functional indexes in Hudi.
+ * Represents the metadata for all functional and secondary indexes in Hudi.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class HoodieFunctionalIndexMetadata implements Serializable {
+public class HoodieIndexesMetadata implements Serializable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFunctionalIndexMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexesMetadata.class);
 
   // Map to hold the index definitions keyed by their names.
-  private Map<String, HoodieFunctionalIndexDefinition> indexDefinitions;
+  private Map<String, HoodieIndexDefinition> indexDefinitions;
 
-  public HoodieFunctionalIndexMetadata() {
+  public HoodieIndexesMetadata() {
     this.indexDefinitions = new HashMap<>();
   }
 
-  public HoodieFunctionalIndexMetadata(Map<String, HoodieFunctionalIndexDefinition> indexDefinitions) {
+  public HoodieIndexesMetadata(Map<String, HoodieIndexDefinition> indexDefinitions) {
     this.indexDefinitions = indexDefinitions;
   }
 
-  public Map<String, HoodieFunctionalIndexDefinition> getIndexDefinitions() {
+  public Map<String, HoodieIndexDefinition> getIndexDefinitions() {
     return indexDefinitions;
   }
 
-  public void setIndexDefinitions(Map<String, HoodieFunctionalIndexDefinition> indexDefinitions) {
+  public void setIndexDefinitions(Map<String, HoodieIndexDefinition> indexDefinitions) {
     this.indexDefinitions = indexDefinitions;
   }
 
@@ -76,19 +76,19 @@ public class HoodieFunctionalIndexMetadata implements Serializable {
    * Deserialize from JSON string to create an instance of this class.
    *
    * @param json Input JSON string.
-   * @return Deserialized instance of HoodieFunctionalIndexMetadata.
+   * @return Deserialized instance of HoodieIndexesMetadata.
    * @throws IOException If any deserialization errors occur.
    */
-  public static HoodieFunctionalIndexMetadata fromJson(String json) throws IOException {
+  public static HoodieIndexesMetadata fromJson(String json) throws IOException {
     if (json == null || json.isEmpty()) {
-      return new HoodieFunctionalIndexMetadata();
+      return new HoodieIndexesMetadata();
     }
-    return JsonUtils.getObjectMapper().readValue(json, HoodieFunctionalIndexMetadata.class);
+    return JsonUtils.getObjectMapper().readValue(json, HoodieIndexesMetadata.class);
   }
 
   @Override
   public String toString() {
-    return "HoodieFunctionalIndexMetadata{"
+    return "HoodieIndexesMetadata{"
         + "indexDefinitions=" + indexDefinitions
         + '}';
   }

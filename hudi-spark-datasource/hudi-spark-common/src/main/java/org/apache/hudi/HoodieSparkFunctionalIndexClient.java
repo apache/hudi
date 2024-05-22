@@ -20,8 +20,8 @@
 package org.apache.hudi;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.common.config.HoodieFunctionalIndexConfig;
-import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
+import org.apache.hudi.common.config.HoodieIndexingConfig;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -87,16 +87,16 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     }
 
     if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent()
-        || !metaClient.getFunctionalIndexMetadata().isPresent()
-        || !metaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().containsKey(indexName)) {
+        || !metaClient.getIndexesMetadata().isPresent()
+        || !metaClient.getIndexesMetadata().get().getIndexDefinitions().containsKey(indexName)) {
       LOG.info("Index definition is not present. Registering the index first");
       register(metaClient, indexName, indexType, columns, options);
     }
 
-    ValidationUtils.checkState(metaClient.getFunctionalIndexMetadata().isPresent(), "Index definition is not present");
+    ValidationUtils.checkState(metaClient.getIndexesMetadata().isPresent(), "Index definition is not present");
 
     LOG.info("Creating index {} of using {}", indexName, indexType);
-    HoodieFunctionalIndexDefinition functionalIndexDefinition = metaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().get(indexName);
+    HoodieIndexDefinition functionalIndexDefinition = metaClient.getIndexesMetadata().get().getIndexDefinitions().get(indexName);
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
         sparkSession, metaClient.getBasePathV2().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, functionalIndexDefinition)), toScalaOption(Option.empty()))) {
       // generate index plan
@@ -123,7 +123,7 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     return metaClient.getTableConfig().getMetadataPartitions().stream().anyMatch(partition -> partition.equals(indexName));
   }
 
-  private static Map<String, String> buildWriteConfig(HoodieTableMetaClient metaClient, HoodieFunctionalIndexDefinition indexDefinition) {
+  private static Map<String, String> buildWriteConfig(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
     Map<String, String> writeConfig = new HashMap<>();
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       writeConfig.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
@@ -145,7 +145,7 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
       });
     }
 
-    HoodieFunctionalIndexConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> writeConfig.put(key.toString(), value.toString()));
+    HoodieIndexingConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> writeConfig.put(key.toString(), value.toString()));
     return writeConfig;
   }
 }

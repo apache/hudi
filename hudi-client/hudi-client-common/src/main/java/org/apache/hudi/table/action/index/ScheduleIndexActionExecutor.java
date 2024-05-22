@@ -132,7 +132,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
 
   private HoodieIndexPartitionInfo buildIndexPartitionInfo(MetadataPartitionType partitionType, HoodieInstant indexUptoInstant) {
     // for functional index, we need to pass the index name as the partition name
-    String partitionName = MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType) ? config.getFunctionalIndexConfig().getIndexName() : partitionType.getPartitionPath();
+    String partitionName = MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType) ? config.getIndexingConfig().getIndexName() : partitionType.getPartitionPath();
     return new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, partitionName, indexUptoInstant.getTimestamp(), Collections.emptyMap());
   }
 

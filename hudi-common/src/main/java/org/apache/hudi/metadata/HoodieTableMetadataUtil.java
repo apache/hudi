@@ -50,7 +50,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -1838,7 +1838,7 @@ public class HoodieTableMetadataUtil {
     });
   }
 
-  public static Schema getProjectedSchemaForFunctionalIndex(HoodieFunctionalIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
+  public static Schema getProjectedSchemaForFunctionalIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
     Schema tableSchema = schemaResolver.getTableAvroSchema();
     return addMetadataFields(getSchemaForFields(tableSchema, indexDefinition.getSourceFields()));
@@ -1848,7 +1848,7 @@ public class HoodieTableMetadataUtil {
                                                                         List<Pair<String, Pair<String, List<String>>>> partitionFiles,
                                                                         int recordIndexMaxParallelism,
                                                                         String activeModule, HoodieTableMetaClient metaClient, EngineType engineType,
-                                                                        HoodieFunctionalIndexDefinition indexDefinition) {
+                                                                        HoodieIndexDefinition indexDefinition) {
     if (partitionFiles.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -1884,7 +1884,7 @@ public class HoodieTableMetadataUtil {
                                                                          List<Pair<String, FileSlice>> partitionFileSlicePairs,
                                                                          int recordIndexMaxParallelism,
                                                                          String activeModule, HoodieTableMetaClient metaClient, EngineType engineType,
-                                                                         HoodieFunctionalIndexDefinition indexDefinition) throws IOException {
+                                                                         HoodieIndexDefinition indexDefinition) throws IOException {
     if (partitionFileSlicePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -1913,7 +1913,7 @@ public class HoodieTableMetadataUtil {
                                                                               EngineType engineType, List<String> logFilePaths,
                                                                               Schema tableSchema, String partition,
                                                                               Option<StoragePath> dataFilePath,
-                                                                              HoodieFunctionalIndexDefinition indexDefinition) throws Exception {
+                                                                              HoodieIndexDefinition indexDefinition) throws Exception {
     final String basePath = metaClient.getBasePathV2().toString();
     final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
 
