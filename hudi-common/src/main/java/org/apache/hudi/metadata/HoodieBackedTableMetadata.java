@@ -801,8 +801,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Load the file slices for the partition. Each file slice is a shard which saves a portion of the keys.
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
-    final int numFileSlices = partitionFileSlices.size();
-    ValidationUtils.checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
+    if (partitionFileSlices.isEmpty()) {
+      return Collections.emptyMap();
+    }
 
     // Lookup keys from each file slice
     // TODO: parallelize this loop
@@ -869,7 +870,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                             String partitionName) throws IOException {
     if (reader == null) {
       // No base file at all
-      return new HashMap<>();
+      return Collections.emptyMap();
     }
 
     ClosableIterator<HoodieRecord<?>> records = reader.getRecordIterator();

@@ -43,6 +43,7 @@ import java.util.Map;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 
 /**
  * Interface that supports querying various pieces of metadata about a hudi table.
@@ -117,7 +118,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       return false;
     }
 
-    return partitionName.get().startsWith("secondary_index_");
+    return partitionName.get().startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX);
   }
 
   static HoodieTableMetadata create(HoodieEngineContext engineContext,
