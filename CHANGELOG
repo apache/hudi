@@ -182,3 +182,9 @@ cc81d75927f [ENG-9689][INTERNAL] Properly resolve proto schemas in SchemaRegistr
 7e9591051eb [ENG-8542][INTERNAL] Revert old log format by default to ensure all tables write in new log format with 0.14 (#715)
 458d1396b29 [ENG-9695][HUDI-7758] Only consider files in Hudi partitions when initializing MDT (#707)
 de5dd1ca2d0 [AUDIT-789] Upgrade to version release-v1.14.4 (#708)
+
+---[2024-05-22 08:51:34] [release-v1.15.0] Upgrade to version release-v1.15.0---
+dbe2b4d7e08 [ENG-9189][HUDI-7778] Fixing global index for duplicate updates (#720)
+2dd9899b7ae [ENG-9189][HUDI-7712] Fixing RLI initialization to account for file slices instead of just base files while initializing (#713)
+819af5a4eb6 [ENG-9644][INTERNAL] Spark3.4 build workflow (#724)
+f488c527fde [AUDIT-795] Upgrade to version release-v1.14.5 (#719)
