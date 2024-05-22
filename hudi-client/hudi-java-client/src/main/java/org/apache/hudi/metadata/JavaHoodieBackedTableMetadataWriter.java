@@ -36,6 +36,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -122,7 +123,18 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
+  protected HoodieData<HoodieRecord> getSecondaryIndexRecordsFromFileSlices(List<Pair<String, FileSlice>> partitionFileSlicePairs, HoodieIndexDefinition indexDefinition, int parallelism) throws IOException {
+    throw new HoodieNotSupportedException("Java metadata table writer does not support secondary index yet.");
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord> getSecondaryIndexRecordsFromBaseFiles(List<Pair<String, Pair<String, List<String>>>> partitionBaseFilePairs, HoodieIndexDefinition indexDefinition, int parallelism)
+      throws IOException {
+    throw new HoodieNotSupportedException("Java metadata table writer does not support secondary index yet.");
+  }
+
+  @Override
   public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
-    throw new HoodieNotSupportedException("Flink metadata table does not support secondary index yet.");
+    throw new HoodieNotSupportedException("Java metadata table writer does not support secondary index yet.");
   }
 }

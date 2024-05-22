@@ -45,6 +45,7 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -195,6 +196,17 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected HoodieTable getHoodieTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
     return HoodieFlinkTable.create(writeConfig, engineContext, metaClient);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord> getSecondaryIndexRecordsFromFileSlices(List<Pair<String, FileSlice>> partitionFileSlicePairs, HoodieIndexDefinition indexDefinition, int parallelism) throws IOException {
+    throw new HoodieNotSupportedException("Flink metadata table does not support secondary index yet.");
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord> getSecondaryIndexRecordsFromBaseFiles(List<Pair<String, Pair<String, List<String>>>> partitionBaseFilePairs, HoodieIndexDefinition indexDefinition, int parallelism)
+      throws IOException {
+    throw new HoodieNotSupportedException("Flink metadata table does not support secondary index yet.");
   }
 
   @Override

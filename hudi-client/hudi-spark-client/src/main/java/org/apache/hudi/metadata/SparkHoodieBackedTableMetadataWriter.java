@@ -51,6 +51,7 @@ import org.apache.spark.sql.SQLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -59,9 +60,12 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.utils.SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingBloomFilter;
 import static org.apache.hudi.client.utils.SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingColumnStats;
+import static org.apache.hudi.common.engine.EngineType.SPARK;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromBaseFiles;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromFileSlices;
 
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> {
 
@@ -222,6 +226,34 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, ?> initializeWriteClient() {
     return new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord> getSecondaryIndexRecordsFromFileSlices(List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                                            HoodieIndexDefinition indexDefinition,
+                                                                            int parallelism) throws IOException {
+    return readSecondaryKeysFromFileSlices(
+        engineContext,
+        partitionFileSlicePairs,
+        parallelism,
+        this.getClass().getSimpleName(),
+        dataMetaClient,
+        SPARK,
+        indexDefinition);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord> getSecondaryIndexRecordsFromBaseFiles(List<Pair<String, Pair<String, List<String>>>> partitionBaseFilePairs,
+                                                                           HoodieIndexDefinition indexDefinition,
+                                                                           int parallelism) {
+    return readSecondaryKeysFromBaseFiles(
+        engineContext,
+        partitionBaseFilePairs,
+        parallelism,
+        this.getClass().getSimpleName(),
+        dataMetaClient,
+        SPARK,
+        indexDefinition);
   }
 
   @Override

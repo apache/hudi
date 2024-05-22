@@ -27,7 +27,6 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -110,8 +109,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForFunctionalIndex;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFromBaseFiles;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromBaseFiles;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromFileSlices;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
@@ -516,6 +513,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                                                         int parallelism, Schema readerSchema,
                                                                         StorageConfiguration<?> storageConf);
 
+  protected abstract HoodieData<HoodieRecord> getSecondaryIndexRecordsFromFileSlices(List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                                                     HoodieIndexDefinition indexDefinition, int parallelism) throws IOException;
+
+  protected abstract HoodieData<HoodieRecord> getSecondaryIndexRecordsFromBaseFiles(List<Pair<String, Pair<String, List<String>>>> partitionBaseFilePairs,
+                                                                                    HoodieIndexDefinition indexDefinition, int parallelism) throws IOException;
+
   public abstract HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext,
                                                                             Map<String, String> recordKeySecondaryKeyMap,
                                                                             HoodieIndexDefinition indexDefinition);
@@ -564,14 +567,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // Reuse record index parallelism config to build secondary index
     int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
-    HoodieData<HoodieRecord> records = readSecondaryKeysFromFileSlices(
-        engineContext,
-        partitionFileSlicePairs,
-        parallelism,
-        this.getClass().getSimpleName(),
-        dataMetaClient,
-        EngineType.SPARK,
-        indexDefinition);
+    HoodieData<HoodieRecord> records = getSecondaryIndexRecordsFromFileSlices(partitionFileSlicePairs, indexDefinition, parallelism);
 
     // Initialize the file groups - using the same estimation logic as that of record index
     final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(RECORD_INDEX, records.count(),
@@ -1150,15 +1146,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // Reuse record index parallelism config to build secondary index
     int parallelism = Math.min(partitionFilePairs.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
-
-    return deletedRecords.union(readSecondaryKeysFromBaseFiles(
-        engineContext,
-        partitionFilePairs,
-        parallelism,
-        this.getClass().getSimpleName(),
-        dataMetaClient,
-        EngineType.SPARK,
-        indexDefinition));
+    return deletedRecords.union(getSecondaryIndexRecordsFromBaseFiles(partitionFilePairs, indexDefinition, parallelism));
   }
 
   /**
