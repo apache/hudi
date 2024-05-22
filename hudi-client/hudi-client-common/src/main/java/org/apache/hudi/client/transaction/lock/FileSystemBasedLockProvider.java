@@ -96,6 +96,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     synchronized (LOCK_FILE_NAME) {
       try {
         fs.delete(this.lockFile, true);
+        fs.close();
       } catch (IOException e) {
         throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE), e);
       }
