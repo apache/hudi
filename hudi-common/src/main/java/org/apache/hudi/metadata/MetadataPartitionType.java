@@ -164,6 +164,15 @@ public enum MetadataPartitionType {
         .collect(Collectors.toList());
   }
 
+  public static MetadataPartitionType fromPartitionPath(String partitionPath) {
+    for (MetadataPartitionType partitionType : values()) {
+      if (partitionPath.equals(partitionType.getPartitionPath()) || partitionPath.startsWith(partitionType.getPartitionPath())) {
+        return partitionType;
+      }
+    }
+    throw new IllegalArgumentException("No MetadataPartitionType for partition path: " + partitionPath);
+  }
+
   @Override
   public String toString() {
     return "Metadata partition {"

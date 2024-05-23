@@ -87,7 +87,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -113,6 +112,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.MetadataPartitionType.getEnabledPartitions;
 
 /**
@@ -981,9 +981,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           relativePartitionPath, metadataWriteConfig.getBasePath(), indexUptoInstantTime);
 
       // return early and populate enabledPartitionTypes correctly (check in initialCommit)
-      MetadataPartitionType partitionType = relativePartitionPath.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX) ? FUNCTIONAL_INDEX :
-          relativePartitionPath.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX) ? SECONDARY_INDEX :
-              MetadataPartitionType.valueOf(relativePartitionPath.toUpperCase(Locale.ROOT));
+      MetadataPartitionType partitionType = fromPartitionPath(relativePartitionPath);
       if (!enabledPartitionTypes.contains(partitionType)) {
         throw new HoodieIndexException(String.format("Indexing for metadata partition: %s is not enabled", partitionType));
       }
@@ -1104,26 +1102,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private HoodieData<HoodieRecord> getSecondaryIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, HoodieData<WriteStatus> writeStatus) throws Exception {
-    // Build a list of basefiles+delta-log-files for every partition that this commit touches
-    // {
-    //   {
-    //     "partition1", { {"baseFile11", {"logFile11", "logFile12"}}, {"baseFile12", {"logFile11"} } },
-    //   },
-    //   {
-    //     "partition2", { {"baseFile21", {"logFile21", "logFile22"}}, {"baseFile22", {"logFile21"} } }
-    //   }
-    // }
-    List<Pair<String, Pair<String, List<String>>>> partitionFilePairs = new ArrayList<>();
-    commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> {
-      writeStats.forEach(writeStat -> {
-        if (writeStat instanceof HoodieDeltaWriteStat) {
-          partitionFilePairs.add(Pair.of(dataPartition, Pair.of(((HoodieDeltaWriteStat) writeStat).getBaseFile(), ((HoodieDeltaWriteStat) writeStat).getLogFiles())));
-        } else {
-          partitionFilePairs.add(Pair.of(dataPartition, Pair.of(writeStat.getPath(), Collections.emptyList())));
-        }
-      });
-    });
-
+    List<Pair<String, Pair<String, List<String>>>> partitionFilePairs = getPartitionFilePairs(commitMetadata);
     // Build a list of keys that need to be removed. A 'delete' record will be emitted into the respective FileGroup of
     // the secondary index partition for each of these keys. For a commit which is deleting/updating a lot of records, this
     // operation is going to be expensive (in CPU, memory and IO)
@@ -1137,7 +1116,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       });
     });
     HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexPartition);
-
     // Fetch the secondary keys that each of the record keys ('keysToRemove') maps to
     // This is obtained by scanning the entire secondary index partition in the metadata table
     // This could be an expensive operation for a large commit (updating/deleting millions of rows)
@@ -1146,6 +1124,31 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     int parallelism = Math.min(partitionFilePairs.size(), dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
     return deletedRecords.union(getSecondaryIndexRecordsFromBaseFiles(partitionFilePairs, indexDefinition, parallelism));
+  }
+
+  /**
+   * Build a list of baseFiles + logFiles for every partition that this commit touches
+   * {
+   *  {
+   *    "partition1", { { "baseFile11", {"logFile11", "logFile12"}}, {"baseFile12", {"logFile11"} } }
+   *  },
+   *  {
+   *    "partition2", { {"baseFile21", {"logFile21", "logFile22"}}, {"baseFile22", {"logFile21"} } }
+   *  }
+   * }
+   */
+  private static List<Pair<String, Pair<String, List<String>>>> getPartitionFilePairs(HoodieCommitMetadata commitMetadata) {
+    List<Pair<String, Pair<String, List<String>>>> partitionFilePairs = new ArrayList<>();
+    commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> {
+      writeStats.forEach(writeStat -> {
+        if (writeStat instanceof HoodieDeltaWriteStat) {
+          partitionFilePairs.add(Pair.of(dataPartition, Pair.of(((HoodieDeltaWriteStat) writeStat).getBaseFile(), ((HoodieDeltaWriteStat) writeStat).getLogFiles())));
+        } else {
+          partitionFilePairs.add(Pair.of(dataPartition, Pair.of(writeStat.getPath(), Collections.emptyList())));
+        }
+      });
+    });
+    return partitionFilePairs;
   }
 
   /**

@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -157,5 +158,17 @@ public class TestMetadataPartitionType {
     List<MetadataPartitionType> trackingPartitions = MetadataPartitionType.getMetadataPartitionsNeedingWriteStatusTracking();
     assertTrue(trackingPartitions.contains(MetadataPartitionType.RECORD_INDEX), "RECORD_INDEX should need write status tracking");
     assertEquals(1, trackingPartitions.size(), "Only one partition should need write status tracking");
+  }
+
+  @Test
+  public void testFromPartitionPath() {
+    assertEquals(MetadataPartitionType.FILES, MetadataPartitionType.fromPartitionPath("files"));
+    assertEquals(MetadataPartitionType.FUNCTIONAL_INDEX, MetadataPartitionType.fromPartitionPath("func_index_dummy"));
+    assertEquals(MetadataPartitionType.SECONDARY_INDEX, MetadataPartitionType.fromPartitionPath("secondary_index_dummy"));
+    assertEquals(MetadataPartitionType.COLUMN_STATS, MetadataPartitionType.fromPartitionPath("column_stats"));
+    assertEquals(MetadataPartitionType.BLOOM_FILTERS, MetadataPartitionType.fromPartitionPath("bloom_filters"));
+    assertEquals(MetadataPartitionType.RECORD_INDEX, MetadataPartitionType.fromPartitionPath("record_index"));
+    assertEquals(MetadataPartitionType.PARTITION_STATS, MetadataPartitionType.fromPartitionPath("partition_stats"));
+    assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.fromPartitionPath("unknown"));
   }
 }
