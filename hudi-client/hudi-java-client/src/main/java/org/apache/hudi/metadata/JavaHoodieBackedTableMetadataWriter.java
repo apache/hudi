@@ -123,13 +123,14 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getSecondaryIndexRecordsFromFileSlices(List<Pair<String, FileSlice>> partitionFileSlicePairs, HoodieIndexDefinition indexDefinition, int parallelism) throws IOException {
+  protected HoodieData<HoodieRecord> getSecondaryIndexRecordsFromFileSlices(List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                                            HoodieIndexDefinition indexDefinition, int parallelism) throws IOException {
     throw new HoodieNotSupportedException("Java metadata table writer does not support secondary index yet.");
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getSecondaryIndexRecordsFromBaseFiles(List<Pair<String, Pair<String, List<String>>>> partitionBaseFilePairs, HoodieIndexDefinition indexDefinition, int parallelism)
-      throws IOException {
+  protected HoodieData<HoodieRecord> getSecondaryIndexRecordsFromBaseFiles(List<Pair<String, Pair<String, List<String>>>> partitionBaseFilePairs,
+                                                                           HoodieIndexDefinition indexDefinition, int parallelism) throws IOException {
     throw new HoodieNotSupportedException("Java metadata table writer does not support secondary index yet.");
   }
 

@@ -566,7 +566,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs();
 
     // Reuse record index parallelism config to build secondary index
-    int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+    int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
     HoodieData<HoodieRecord> records = getSecondaryIndexRecordsFromFileSlices(partitionFileSlicePairs, indexDefinition, parallelism);
 
     // Initialize the file groups - using the same estimation logic as that of record index
@@ -1144,8 +1144,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     Map<String, String> recordKeySecondaryKeyMap = metadata.getSecondaryKeys(keysToRemove);
     HoodieData<HoodieRecord> deletedRecords = getDeletedSecondaryRecordMapping(engineContext, recordKeySecondaryKeyMap, indexDefinition);
 
-    // Reuse record index parallelism config to build secondary index
-    int parallelism = Math.min(partitionFilePairs.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+    int parallelism = Math.min(partitionFilePairs.size(), dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
     return deletedRecords.union(getSecondaryIndexRecordsFromBaseFiles(partitionFilePairs, indexDefinition, parallelism));
   }
 

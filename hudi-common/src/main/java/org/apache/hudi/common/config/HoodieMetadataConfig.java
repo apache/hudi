@@ -361,7 +361,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.secondary.column")
       .noDefaultValue()
       .sinceVersion("1.0.0")
-      .withDocumentation("Enable secondary index within the Metadata Table.");
+      .withDocumentation("Column for which secondary index will be enabled within the Metadata Table.");
 
   public static final ConfigProperty<Integer> SECONDARY_INDEX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.parallelism")
