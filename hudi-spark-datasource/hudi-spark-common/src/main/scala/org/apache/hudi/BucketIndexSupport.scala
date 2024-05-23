@@ -50,7 +50,7 @@ class BucketIndexSupport(spark: SparkSession,
 
   private lazy val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema(false)
 
-  override def getIndexName: String = "BUCKET"
+  override def getIndexName: String = BucketIndexSupport.INDEX_NAME
 
   /**
    * Return true if table can use bucket index
@@ -215,5 +215,9 @@ class BucketIndexSupport(spark: SparkSession,
   def getKeyGenerator: KeyGenerator = {
     keyGenerator
   }
+}
+
+object BucketIndexSupport {
+  val INDEX_NAME = "BUCKET"
 }
 

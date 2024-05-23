@@ -401,13 +401,20 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isFunctionalIndexEnabled: Boolean = indicesSupport.exists(idx =>
     idx.getIndexName == FunctionalIndexSupport.INDEX_NAME && idx.isIndexAvailable)
 
+  private def isBucketIndexEnabled: Boolean = indicesSupport.exists(idx =>
+    idx.getIndexName == BucketIndexSupport.INDEX_NAME && idx.isIndexAvailable)
+
+  private def isPartitionStatsIndexEnabled: Boolean = indicesSupport.exists(idx =>
+    idx.getIndexName == PartitionStatsIndexSupport.INDEX_NAME && idx.isIndexAvailable)
+
   private def isIndexEnabled: Boolean = indicesSupport.exists(idx => idx.isIndexAvailable)
 
   private def validateConfig(): Unit = {
     if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexEnabled)) {
       logWarning("Data skipping requires both Metadata Table and at least one of Column Stats Index, Record Level Index, or Functional Index" +
         " to be enabled as well! " + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
-        + s", isRecordIndexApplicable = $isRecordIndexEnabled, isFunctionalIndexEnabled = $isFunctionalIndexEnabled)")
+        + s", isRecordIndexApplicable = $isRecordIndexEnabled, isFunctionalIndexEnabled = $isFunctionalIndexEnabled, " +
+        s"isBucketIndexEnable = $isBucketIndexEnabled, isPartitionStatsIndexEnabled = $isPartitionStatsIndexEnabled)")
     }
   }
 
