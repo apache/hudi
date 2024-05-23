@@ -476,7 +476,7 @@ public class KafkaOffsetGen {
         fromOffsets.put(topicPartition, committedOffsetAndMetadata.offset());
       } else {
         LOG.warn("There are no commits associated with this consumer group, starting to consume from latest offset");
-        fromOffsets = consumer.endOffsets(topicPartitions);
+        fromOffsets = consumer.beginningOffsets(topicPartitions);
         break;
       }
     }

@@ -373,6 +373,9 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
 
+    @Parameter(names = {"--checkpoint-write-to-hoodie"}, description = "Write checkpoint to .hoodie")
+    public boolean checkpointWriteToHoodie = true;
+
     @Parameter(names = {"--initial-checkpoint-provider"}, description = "subclass of "
         + "org.apache.hudi.utilities.checkpointing.InitialCheckpointProvider. Generate check point for delta streamer "
         + "for the first run. This field will override the checkpoint of last commit using the checkpoint field. "
