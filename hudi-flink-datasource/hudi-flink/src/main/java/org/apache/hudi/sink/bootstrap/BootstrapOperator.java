@@ -145,7 +145,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     int taskID = getRuntimeContext().getIndexOfThisSubtask();
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
     for (String partitionPath : FSUtils.getAllPartitionPaths(
-        new HoodieFlinkEngineContext(hadoopConf), hoodieTable.getMetaClient().getStorage(), metadataConfig(conf), basePath)) {
+        new HoodieFlinkEngineContext(hadoopConf), hoodieTable.getStorage(), metadataConfig(conf), basePath)) {
       if (pattern.matcher(partitionPath).matches()) {
         loadRecords(partitionPath);
       }
@@ -222,7 +222,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
             return;
           }
           try (ClosableIterator<HoodieKey> iterator = fileUtils.getHoodieKeyIterator(
-              hoodieTable.getMetaClient().getStorage(), baseFile.getStoragePath())) {
+              hoodieTable.getStorage(), baseFile.getStoragePath())) {
             iterator.forEachRemaining(hoodieKey -> {
               output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
             });

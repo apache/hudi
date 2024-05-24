@@ -274,11 +274,11 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       try {
         Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
-            : Option.of(HoodieIOFactory.getIOFactory(table.getMetaClient().getStorage())
+            : Option.of(HoodieIOFactory.getIOFactory(table.getStorage())
             .getReaderFactory(table.getConfig().getRecordMerger().getRecordType())
             .getFileReader(table.getConfig(), new StoragePath(clusteringOp.getDataFilePath())));
         HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-            .withStorage(table.getMetaClient().getStorage())
+            .withStorage(table.getStorage())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(clusteringOp.getDeltaFilePaths())
             .withReaderSchema(readerSchema)
@@ -322,7 +322,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     List<Iterator<RowData>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
       Iterable<IndexedRecord> indexedRecords = () -> {
         try {
-          HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getMetaClient().getStorage())
+          HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getStorage())
               .getReaderFactory(table.getConfig().getRecordMerger().getRecordType());
           HoodieAvroFileReader fileReader = (HoodieAvroFileReader) fileReaderFactory.getFileReader(
               table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()));

@@ -318,6 +318,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return metaClient.getStorageConf();
   }
 
+  public HoodieStorage getStorage() {
+    return metaClient.getStorage();
+  }
+
   /**
    * Get the view of the file system for this table.
    */

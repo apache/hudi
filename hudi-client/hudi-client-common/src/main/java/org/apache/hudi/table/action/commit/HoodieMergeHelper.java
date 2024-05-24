@@ -79,7 +79,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
-    HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(table.getMetaClient().getStorage())
+    HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(table.getStorage())
         .getReaderFactory(recordType)
         .getFileReader(writeConfig, mergeHandle.getOldFilePath());
     HoodieFileReader bootstrapFileReader = null;
@@ -110,7 +110,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       Schema recordSchema;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         StoragePath bootstrapFilePath = baseFile.getBootstrapBaseFile().get().getStoragePath();
-        HoodieStorage storage = table.getMetaClient().getStorage();
+        HoodieStorage storage = table.getStorage();
         bootstrapFileReader = HoodieIOFactory.getIOFactory(storage).getReaderFactory(recordType).newBootstrapFileReader(
             baseFileReader,
             HoodieIOFactory.getIOFactory(storage).getReaderFactory(recordType)

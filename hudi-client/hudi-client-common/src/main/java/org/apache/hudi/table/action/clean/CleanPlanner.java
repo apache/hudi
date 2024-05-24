@@ -280,7 +280,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    return FSUtils.getAllPartitionPaths(context, hoodieTable.getMetaClient().getStorage(), config.getMetadataConfig(), config.getBasePath());
+    return FSUtils.getAllPartitionPaths(context, hoodieTable.getStorage(), config.getMetadataConfig(), config.getBasePath());
   }
 
   /**
@@ -468,7 +468,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
       StoragePath fullPartitionPath = new StoragePath(hoodieTable.getMetaClient().getBasePathV2(), partitionPath);
       fsView.addFilesToView(partitionPath, FSUtils.getAllDataFilesInPartition(
-          hoodieTable.getMetaClient().getStorage(), fullPartitionPath));
+          hoodieTable.getStorage(), fullPartitionPath));
       // use #getAllFileGroups(partitionPath) instead of #getAllFileGroups() to exclude the replaced file groups.
       return fsView.getAllFileGroups(partitionPath).findAny().isPresent();
     } catch (Exception ex) {

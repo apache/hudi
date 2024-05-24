@@ -175,7 +175,7 @@ public abstract class JavaExecutionStrategy<T>
       try {
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
         scanner = HoodieMergedLogRecordScanner.newBuilder()
-            .withStorage(table.getMetaClient().getStorage())
+            .withStorage(table.getStorage())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(clusteringOp.getDeltaFilePaths())
             .withReaderSchema(readerSchema)
@@ -192,7 +192,7 @@ public abstract class JavaExecutionStrategy<T>
 
         baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
-            : Option.of(HoodieIOFactory.getIOFactory(table.getMetaClient().getStorage()).getReaderFactory(recordType)
+            : Option.of(HoodieIOFactory.getIOFactory(table.getStorage()).getReaderFactory(recordType)
             .getFileReader(config, new StoragePath(clusteringOp.getDataFilePath())));
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
         Iterator<HoodieRecord<T>> fileSliceReader = new HoodieFileSliceReader(baseFileReader, scanner, readerSchema, tableConfig.getPreCombineField(), writeConfig.getRecordMerger(),
@@ -221,7 +221,7 @@ public abstract class JavaExecutionStrategy<T>
   private List<HoodieRecord<T>> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
     List<HoodieRecord<T>> records = new ArrayList<>();
     clusteringOps.forEach(clusteringOp -> {
-      try (HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(getHoodieTable().getMetaClient().getStorage())
+      try (HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(getHoodieTable().getStorage())
           .getReaderFactory(recordType)
           .getFileReader(getHoodieTable().getConfig(), new StoragePath(clusteringOp.getDataFilePath()))) {
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));

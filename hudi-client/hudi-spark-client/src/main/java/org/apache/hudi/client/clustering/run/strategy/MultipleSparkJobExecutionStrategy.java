@@ -309,7 +309,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
           HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-              .withStorage(table.getMetaClient().getStorage())
+              .withStorage(table.getStorage())
               .withBasePath(table.getMetaClient().getBasePath())
               .withLogFilePaths(clusteringOp.getDeltaFilePaths())
               .withReaderSchema(readerSchema)
