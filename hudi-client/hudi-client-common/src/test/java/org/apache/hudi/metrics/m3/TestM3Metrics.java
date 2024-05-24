@@ -66,7 +66,7 @@ public class TestM3Metrics {
     when(metricsConfig.getM3Service()).thenReturn("hoodie");
     when(metricsConfig.getM3Tags()).thenReturn("tag1=value1,tag2=value2");
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
-    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     metrics = hoodieMetrics.getMetrics();
     metrics.registerGauge("metric1", 123L);
     assertEquals("123", metrics.getRegistry().getGauges().get("metric1").getValue().toString());
@@ -84,7 +84,7 @@ public class TestM3Metrics {
     when(metricsConfig.getM3Service()).thenReturn("hoodie");
     when(metricsConfig.getM3Tags()).thenReturn("");
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
-    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     metrics = hoodieMetrics.getMetrics();
     metrics.registerGauge("metric1", 123L);
     assertEquals("123", metrics.getRegistry().getGauges().get("metric1").getValue().toString());
@@ -98,7 +98,7 @@ public class TestM3Metrics {
     when(writeConfig.isMetricsOn()).thenReturn(true);
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
     assertThrows(RuntimeException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     });
   }
 }

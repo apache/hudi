@@ -64,15 +64,18 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   public HoodieHadoopStorage(Path path, Configuration conf) {
-    this(convertToStoragePath(path), HadoopFSUtils.getStorageConf(conf));
+    super(HadoopFSUtils.getStorageConf(conf));
+    this.fs = HadoopFSUtils.getFs(path, conf);
   }
 
   public HoodieHadoopStorage(String path, Configuration conf) {
-    this(path, HadoopFSUtils.getStorageConf(conf));
+    super(HadoopFSUtils.getStorageConf(conf));
+    this.fs = HadoopFSUtils.getFs(path, conf);
   }
 
   public HoodieHadoopStorage(String path, StorageConfiguration<?> conf) {
-    this(new StoragePath(path), conf);
+    super(conf);
+    this.fs = HadoopFSUtils.getFs(path, conf);
   }
 
   public HoodieHadoopStorage(StoragePath path,

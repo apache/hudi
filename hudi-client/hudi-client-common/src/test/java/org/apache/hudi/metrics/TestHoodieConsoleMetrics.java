@@ -51,7 +51,7 @@ public class TestHoodieConsoleMetrics {
     when(writeConfig.isMetricsOn()).thenReturn(true);
     when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CONSOLE);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     metrics = hoodieMetrics.getMetrics();
   }
 

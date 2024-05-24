@@ -62,7 +62,7 @@ public class TestHoodieGraphiteMetrics {
     when(metricsConfig.getGraphiteServerPort()).thenReturn(NetworkTestUtils.nextFreePort());
     when(metricsConfig.getGraphiteReportPeriodSeconds()).thenReturn(30);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     metrics = hoodieMetrics.getMetrics();
     metrics.registerGauge("graphite_metric", 123L);
     assertEquals("123", metrics.getRegistry().getGauges()

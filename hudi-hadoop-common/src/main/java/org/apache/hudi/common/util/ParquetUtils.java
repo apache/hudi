@@ -93,7 +93,7 @@ public class ParquetUtils extends FileFormatUtils {
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
    * return all the rowkeys and corresponding positions.
    *
-   * @param storage  configuration to build storage object
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath The parquet file path.
    * @param filter   record keys filter
    * @return Set Set of pairs of row key and position matching candidateRecordKeys
@@ -108,7 +108,8 @@ public class ParquetUtils extends FileFormatUtils {
     ParquetMetadata footer;
     try {
       // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader.readFooter(storage.getConf().unwrapAs(Configuration.class), parquetFileHadoopPath);
+      footer = ParquetFileReader.readFooter(storage.newInstance(
+          parquetFilePath, storage.getConf()).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFileHadoopPath, e);
     }
@@ -169,7 +170,7 @@ public class ParquetUtils extends FileFormatUtils {
   /**
    * Fetch {@link HoodieKey}s with row positions from the given parquet file.
    *
-   * @param storage  configuration to build storage object
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath The parquet file path.
    * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
@@ -186,7 +187,7 @@ public class ParquetUtils extends FileFormatUtils {
   /**
    * Returns a closable iterator for reading the given parquet file.
    *
-   * @param storage         configuration to build storage object
+   * @param storage         {@link HoodieStorage} instance.
    * @param filePath        The parquet file path
    * @param keyGeneratorOpt instance of KeyGenerator
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the parquet file
@@ -217,7 +218,7 @@ public class ParquetUtils extends FileFormatUtils {
   /**
    * Fetch {@link HoodieKey}s with row positions from the given parquet file.
    *
-   * @param storage         configuration to build storage object
+   * @param storage         {@link HoodieStorage} instance.
    * @param filePath        The parquet file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
@@ -350,7 +351,7 @@ public class ParquetUtils extends FileFormatUtils {
   /**
    * Returns the number of records in the parquet file.
    *
-   * @param storage     Configuration
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath path of the file
    */
   @Override

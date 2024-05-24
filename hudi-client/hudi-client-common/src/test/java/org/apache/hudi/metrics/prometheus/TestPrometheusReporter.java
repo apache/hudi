@@ -33,7 +33,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.UUID;
 
-import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.when;
 
@@ -62,8 +61,8 @@ public class TestPrometheusReporter {
     when(metricsConfig.getPrometheusPort()).thenReturn(9090);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     assertDoesNotThrow(() -> {
-      new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
-      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+      new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
       metrics = hoodieMetrics.getMetrics();
     });
   }

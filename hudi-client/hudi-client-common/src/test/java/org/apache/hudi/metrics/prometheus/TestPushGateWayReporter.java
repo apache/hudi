@@ -80,7 +80,7 @@ public class TestPushGateWayReporter {
     configureDefaultReporter();
 
     assertDoesNotThrow(() -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
       metrics = hoodieMetrics.getMetrics();
     });
 
@@ -105,7 +105,7 @@ public class TestPushGateWayReporter {
       when(metricsConfig.getMetricReporterFileBasedConfigs()).thenReturn(propPrometheusPath + "," + propDatadogPath);
     }
 
-    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     metrics = hoodieMetrics.getMetrics();
 
     Map<String, Long> metricsMap = new HashMap<>();

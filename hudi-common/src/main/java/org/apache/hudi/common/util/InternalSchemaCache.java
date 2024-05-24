@@ -175,7 +175,7 @@ public class InternalSchemaCache {
    *
    * @param versionId    the internalSchema version to be search.
    * @param tablePath    table path
-   * @param storage      conf
+   * @param storage      {@link HoodieStorage} instance.
    * @param validCommits current validate commits, use to make up the commit file path/verify the validity of the history schema files
    * @return a internalSchema.
    */

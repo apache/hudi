@@ -72,7 +72,7 @@ public class TestDatadogMetricsReporter {
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
 
     Throwable t = assertThrows(IllegalStateException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
       metrics = hoodieMetrics.getMetrics();
     });
     assertEquals("Datadog cannot be initialized: API key is null or empty.", t.getMessage());
@@ -88,7 +88,7 @@ public class TestDatadogMetricsReporter {
     when(metricsConfig.getDatadogMetricPrefix()).thenReturn("");
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     Throwable t = assertThrows(IllegalStateException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
       metrics = hoodieMetrics.getMetrics();
     });
     assertEquals("Datadog cannot be initialized: Metric prefix is null or empty.", t.getMessage());
@@ -110,7 +110,7 @@ public class TestDatadogMetricsReporter {
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     assertDoesNotThrow(() -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getStorage(DEFAULT_URI));
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
       metrics = hoodieMetrics.getMetrics();
     });
   }

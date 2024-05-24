@@ -173,7 +173,7 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit.
    *
-   * @param storage     storage.
+   * @param storage     {@link HoodieStorage} instance.
    * @param basePath    The base path
    * @return the file full path to file status mapping
    */

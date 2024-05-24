@@ -33,7 +33,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
-import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -47,7 +46,7 @@ public class TestHoodieAvroFileReaderFactory {
   @Test
   public void testGetFileReader() throws IOException {
     // parquet file format.
-    final HoodieStorage storage = HoodieTestUtils.getStorage(DEFAULT_URI);
+    final HoodieStorage storage = HoodieTestUtils.getDefaultStorage();
     final StoragePath parquetPath = new StoragePath("/partition/path/f1_1-0-1_000.parquet");
     HoodieFileReader parquetReader = HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, parquetPath);

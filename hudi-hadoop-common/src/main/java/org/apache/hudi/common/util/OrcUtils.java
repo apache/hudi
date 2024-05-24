@@ -72,7 +72,7 @@ public class OrcUtils extends FileFormatUtils {
   /**
    * Provides a closable iterator for reading the given ORC file.
    *
-   * @param storage  configuration to build storage object
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath The ORC file path
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the ORC file
    */
@@ -111,7 +111,7 @@ public class OrcUtils extends FileFormatUtils {
   /**
    * Fetch {@link HoodieKey}s from the given ORC file.
    *
-   * @param storage  configuration to build storage object
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath The ORC file path.
    * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
    */
@@ -187,7 +187,7 @@ public class OrcUtils extends FileFormatUtils {
    * Read the rowKey list matching the given filter, from the given ORC file. If the filter is empty, then this will
    * return all the rowkeys.
    *
-   * @param storage     {@link HoodieStorage} instance.
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath The ORC file path.
    * @param filter   record keys filter
    * @return Set Set of pairs of row key and position matching candidateRecordKeys

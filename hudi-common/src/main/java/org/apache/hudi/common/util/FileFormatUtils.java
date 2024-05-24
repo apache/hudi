@@ -192,7 +192,7 @@ public abstract class FileFormatUtils {
    * Read the data file
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    *
-   * @param storage  configuration.
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath the data file path.
    * @return a list of GenericRecord.
    */
@@ -242,7 +242,7 @@ public abstract class FileFormatUtils {
   /**
    * Fetch {@link HoodieKey}s with positions from the given data file.
    *
-   * @param storage  configuration to build storage object.
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath the data file path.
    * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
@@ -251,7 +251,7 @@ public abstract class FileFormatUtils {
   /**
    * Provides a closable iterator for reading the given data file.
    *
-   * @param storage         configuration to build storage object.
+   * @param storage         {@link HoodieStorage} instance.
    * @param filePath        the data file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file.
@@ -263,7 +263,7 @@ public abstract class FileFormatUtils {
   /**
    * Provides a closable iterator for reading the given data file.
    *
-   * @param storage  configuration to build storage object.
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath the data file path.
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file.
    */
@@ -272,7 +272,7 @@ public abstract class FileFormatUtils {
   /**
    * Fetch {@link HoodieKey}s with positions from the given data file.
    *
-   * @param storage         configuration to build storage object.
+   * @param storage         {@link HoodieStorage} instance.
    * @param filePath        the data file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file.
@@ -284,7 +284,7 @@ public abstract class FileFormatUtils {
   /**
    * Read the Avro schema of the data file.
    *
-   * @param storage  configuration.
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath the data file path.
    * @return the Avro schema of the data file.
    */
@@ -293,7 +293,7 @@ public abstract class FileFormatUtils {
   /**
    * Reads column statistics stored in the metadata.
    *
-   * @param storage    storage configuration.
+   * @param storage    {@link HoodieStorage} instance.
    * @param filePath   the data file path.
    * @param columnList List of columns to get column statistics.
    * @return {@link List} of {@link HoodieColumnRangeMetadata}.
