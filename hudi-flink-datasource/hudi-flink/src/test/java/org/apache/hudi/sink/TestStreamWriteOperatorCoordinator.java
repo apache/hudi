@@ -243,7 +243,7 @@ public class TestStreamWriteOperatorCoordinator {
 
     String basePath = tempFile.getAbsolutePath();
     HoodieStorage storage =
-        coordinator.getWriteClient().getHoodieTable().getMetaClient().getStorage();
+        coordinator.getWriteClient().getHoodieTable().getStorage();
 
     assertTrue(HoodieHeartbeatClient.heartbeatExists(storage, basePath, instant),
         "Heartbeat is existed");

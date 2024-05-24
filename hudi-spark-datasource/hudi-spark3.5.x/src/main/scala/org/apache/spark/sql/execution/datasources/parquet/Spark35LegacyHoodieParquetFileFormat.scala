@@ -27,6 +27,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
@@ -173,8 +174,9 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       val fileSchema = if (shouldUseInternalSchema) {
         val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
         val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
+        val storage = new HoodieHadoopStorage(tablePath, broadcastedStorageConf.value)
         InternalSchemaCache.getInternalSchemaByVersionId(
-          commitInstantTime, tablePath, broadcastedStorageConf.value, if (validCommits == null) "" else validCommits)
+          commitInstantTime, tablePath, storage, if (validCommits == null) "" else validCommits)
       } else {
         null
       }

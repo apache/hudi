@@ -51,6 +51,8 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 
+import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
+
 /**
  * A utility class for testing.
  */
@@ -71,6 +73,10 @@ public class HoodieTestUtils {
   public static StorageConfiguration<Configuration> getDefaultStorageConfWithDefaults() {
     return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
         new Class<?>[] {Boolean.class}, true);
+  }
+
+  public static HoodieStorage getDefaultStorage() {
+    return getStorage(DEFAULT_URI);
   }
 
   public static HoodieStorage getStorage(String path) {

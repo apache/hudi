@@ -554,7 +554,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig,
                                       HoodieEngineContext hoodieEngineContext) {
     return HoodieTableMetadata.create(
-        hoodieEngineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
+        hoodieEngineContext, storage, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
   protected void validateFilesPerPartition(HoodieTestTable testTable,
@@ -634,7 +634,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, storage, HoodieTableMetadata.getMetadataTableBasePath(basePath),
         false, false);
 
     List<MetadataPartitionType> enabledPartitionTypes = metadataWriter.getEnabledPartitionTypes();

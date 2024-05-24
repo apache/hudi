@@ -302,7 +302,7 @@ public class TableSchemaResolver {
         .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for compaction "
             + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
     StoragePath path = new StoragePath(filePath);
-    return FileFormatUtils.getInstance(path).readAvroSchema(metaClient.getStorageConf(), path);
+    return FileFormatUtils.getInstance(path).readAvroSchema(metaClient.getStorage(), path);
   }
 
   private Schema readSchemaFromLogFile(StoragePath path) throws IOException {
@@ -469,7 +469,7 @@ public class TableSchemaResolver {
         // this is a log file
         schema = readSchemaFromLogFile(filePath);
       } else {
-        schema = FileFormatUtils.getInstance(filePath).readAvroSchema(metaClient.getStorageConf(), filePath);
+        schema = FileFormatUtils.getInstance(filePath).readAvroSchema(metaClient.getStorage(), filePath);
       }
     }
     return schema;

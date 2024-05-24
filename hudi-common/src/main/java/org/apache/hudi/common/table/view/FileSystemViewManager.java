@@ -220,7 +220,7 @@ public class FileSystemViewManager {
       final FileSystemViewStorageConfig config,
       final HoodieCommonConfig commonConfig) {
     return createViewManager(context, config, commonConfig,
-        metaClient -> HoodieTableMetadata.create(context, metadataConfig, metaClient.getBasePathV2().toString(), true));
+        metaClient -> HoodieTableMetadata.create(context, metaClient.getStorage(), metadataConfig, metaClient.getBasePathV2().toString(), true));
   }
 
   public static FileSystemViewManager createViewManager(final HoodieEngineContext context,

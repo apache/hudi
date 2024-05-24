@@ -20,6 +20,11 @@ package org.apache.spark.sql.hudi.dml
 import org.apache.hudi.HoodieSparkUtils
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+
+import java.util.function.Predicate
+import java.util.{Collections, List, Optional}
+import scala.collection.JavaConverters._
 
 class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 

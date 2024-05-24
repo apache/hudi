@@ -47,6 +47,21 @@ import java.util.UUID;
 public abstract class HoodieStorage implements Closeable {
   public static final Logger LOG = LoggerFactory.getLogger(HoodieStorage.class);
 
+  protected final StorageConfiguration<?> storageConf;
+
+  public HoodieStorage(StorageConfiguration<?> storageConf) {
+    this.storageConf = storageConf;
+  }
+
+  /**
+   * @param path        path to instantiate the storage.
+   * @param storageConf new storage configuration.
+   * @return new {@link HoodieStorage} instance with the configuration.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract HoodieStorage newInstance(StoragePath path,
+                                            StorageConfiguration<?> storageConf);
+
   /**
    * @return the scheme of the storage.
    */
@@ -257,16 +272,18 @@ public abstract class HoodieStorage implements Closeable {
   public abstract Object getFileSystem();
 
   /**
-   * @return the storage configuration.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract StorageConfiguration<?> getConf();
-
-  /**
    * @return the raw storage.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract HoodieStorage getRawStorage();
+
+  /**
+   * @return the storage configuration.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public final StorageConfiguration<?> getConf() {
+    return storageConf;
+  }
 
   /**
    * Creates a new file with overwrite set to false. This ensures files are created

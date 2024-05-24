@@ -94,7 +94,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     this.taskContextSupplier = context.getTaskContextSupplier();
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link BaseHoodieWriteClient}.
     this.txnManagerOption = config.shouldAutoCommit()
-        ? Option.of(new TransactionManager(config, table.getMetaClient().getStorage())) : Option.empty();
+        ? Option.of(new TransactionManager(config, table.getStorage())) : Option.empty();
     if (this.txnManagerOption.isPresent() && this.txnManagerOption.get().isLockRequired()) {
       // these txn metadata are only needed for auto commit when optimistic concurrent control is also enabled
       this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
