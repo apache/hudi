@@ -58,8 +58,10 @@ import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -307,7 +309,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
           HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-              .withStorage(table.getMetaClient().getStorage())
+              .withStorage(table.getStorage())
               .withBasePath(table.getMetaClient().getBasePath())
               .withLogFilePaths(clusteringOp.getDeltaFilePaths())
               .withReaderSchema(readerSchema)
@@ -385,8 +387,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
   private HoodieFileReader getBaseOrBootstrapFileReader(StorageConfiguration<?> storageConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp)
       throws IOException {
-    HoodieFileReader baseFileReader = getHoodieSparkIOFactory(storageConf).getReaderFactory(recordType)
-        .getFileReader(writeConfig, new StoragePath(clusteringOp.getDataFilePath()));
+    StoragePath dataFilePath = new StoragePath(clusteringOp.getDataFilePath());
+    HoodieStorage storage = new HoodieHadoopStorage(dataFilePath, storageConf);
+    HoodieFileReader baseFileReader = getHoodieSparkIOFactory(storage).getReaderFactory(recordType)
+        .getFileReader(writeConfig, dataFilePath);
     // handle bootstrap path
     if (StringUtils.nonEmpty(clusteringOp.getBootstrapFilePath()) && StringUtils.nonEmpty(bootstrapBasePath)) {
       String bootstrapFilePath = clusteringOp.getBootstrapFilePath();
@@ -397,9 +401,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         partitionValues = getPartitionFieldVals(partitionFields, partitionFilePath, bootstrapBasePath, baseFileReader.getSchema(),
             storageConf.unwrapAs(Configuration.class));
       }
-      baseFileReader = getHoodieSparkIOFactory(storageConf).getReaderFactory(recordType).newBootstrapFileReader(
+      baseFileReader = getHoodieSparkIOFactory(storage).getReaderFactory(recordType).newBootstrapFileReader(
           baseFileReader,
-          getHoodieSparkIOFactory(storageConf).getReaderFactory(recordType).getFileReader(
+          getHoodieSparkIOFactory(storage).getReaderFactory(recordType).getFileReader(
               writeConfig, new StoragePath(bootstrapFilePath)), partitionFields,
           partitionValues);
     }

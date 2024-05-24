@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -135,7 +135,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes(StorageConfiguration<?> storageConf) throws IOException {
+  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
     // In case this method is called before realizing records from content
     Option<byte[]> content = getContent();
 
@@ -145,7 +145,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
       return content.get();
     }
 
-    return serializeRecords(records.get(), storageConf);
+    return serializeRecords(records.get(), storage);
   }
 
   public String getKeyFieldName() {
@@ -286,7 +286,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     );
   }
 
-  protected abstract byte[] serializeRecords(List<HoodieRecord> records, StorageConfiguration<?> storageConf) throws IOException;
+  protected abstract byte[] serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException;
 
   protected abstract <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException;
 

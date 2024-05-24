@@ -28,8 +28,8 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.FileIOUtils
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.storage.StorageConfiguration
+import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 
 import org.apache.hadoop.conf.Configuration
@@ -149,7 +149,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                   .builder().setConf(storageConf).setBasePath(tableState.tablePath).build
                 val reader = new HoodieFileGroupReader[InternalRow](
                   readerContext,
-                  storageConf,
+                  new HoodieHadoopStorage(metaClient.getBasePathV2, storageConf),
                   tableState.tablePath,
                   tableState.latestCommitTimestamp.get,
                   fileSlice,

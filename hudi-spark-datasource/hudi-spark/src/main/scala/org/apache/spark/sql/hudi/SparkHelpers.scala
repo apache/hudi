@@ -48,7 +48,7 @@ object SparkHelpers {
                               sourceFile: StoragePath,
                               destinationFile: StoragePath,
                               keysToSkip: Set[String]) {
-    val sourceRecords = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readAvroRecords(conf, sourceFile).asScala
+    val sourceRecords = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readAvroRecords(storage, sourceFile).asScala
     val schema: Schema = sourceRecords.head.getSchema
     val filter: BloomFilter = BloomFilterFactory.createBloomFilter(
       BLOOM_FILTER_NUM_ENTRIES_VALUE.defaultValue.toInt, BLOOM_FILTER_FPP_VALUE.defaultValue.toDouble,
@@ -134,13 +134,13 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
    * Checks that all the keys in the file, have been added to the bloom filter
    * in the footer
    *
-   * @param conf
-   * @param sqlContext
-   * @param file
-   * @return
+   * @param storage    [[HoodieStorage]] instance.
+   * @param sqlContext Spark SQL context.
+   * @param file       File path.
+   * @return <pre>true</pre>  if all keys are added to the bloom filter;  <pre>false</pre>  otherwise.
    */
-  def fileKeysAgainstBF(conf: StorageConfiguration[_], sqlContext: SQLContext, file: String): Boolean = {
-    val bf = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readBloomFilterFromMetadata(conf, new StoragePath(file))
+  def fileKeysAgainstBF(storage: HoodieStorage, sqlContext: SQLContext, file: String): Boolean = {
+    val bf = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readBloomFilterFromMetadata(storage, new StoragePath(file))
     val foundCount = sqlContext.parquetFile(file)
       .select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
       .collect().count(r => !bf.mightContain(r.getString(0)))

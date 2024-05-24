@@ -36,6 +36,8 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
@@ -67,8 +69,6 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
-import org.apache.hudi.common.fs.ConsistencyGuard;
-import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -146,7 +146,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
         .build();
-    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath());
+    this.metadata = HoodieTableMetadata.create(context, metaClient.getStorage(), metadataConfig, config.getBasePath());
 
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
@@ -316,6 +316,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public StorageConfiguration<?> getStorageConf() {
     return metaClient.getStorageConf();
+  }
+
+  public HoodieStorage getStorage() {
+    return metaClient.getStorage();
   }
 
   /**

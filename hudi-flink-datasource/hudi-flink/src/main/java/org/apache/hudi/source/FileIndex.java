@@ -24,13 +24,15 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.stats.ColumnStatsIndices;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -153,7 +155,8 @@ public class FileIndex implements Serializable {
     String[] partitions =
         getOrBuildPartitionPaths().stream().map(p -> fullPartitionPath(path, p)).toArray(String[]::new);
     List<StoragePathInfo> allFiles = FSUtils.getFilesInPartitions(
-            new HoodieFlinkEngineContext(hadoopConf), metadataConfig, path.toString(), partitions)
+            new HoodieFlinkEngineContext(hadoopConf),
+            new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString(), partitions)
         .values().stream()
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
@@ -281,7 +284,8 @@ public class FileIndex implements Serializable {
       return this.partitionPaths;
     }
     List<String> allPartitionPaths = this.tableExists
-        ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), metadataConfig, path.toString())
+        ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf),
+        new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString())
         : Collections.emptyList();
     if (this.partitionPruner == null) {
       this.partitionPaths = allPartitionPaths;

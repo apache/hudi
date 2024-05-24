@@ -18,8 +18,6 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
@@ -31,7 +29,11 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
@@ -60,8 +62,8 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   private lazy val fileSchema: InternalSchema = if (shouldUseInternalSchema) {
     val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
     val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
-    InternalSchemaCache.getInternalSchemaByVersionId(
-      commitInstantTime, tablePath, HadoopFSUtils.getStorageConf(sharedConf), if (validCommits == null) "" else validCommits)
+    InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
+      new HoodieHadoopStorage(tablePath, sharedConf), if (validCommits == null) "" else validCommits)
   } else {
     null
   }

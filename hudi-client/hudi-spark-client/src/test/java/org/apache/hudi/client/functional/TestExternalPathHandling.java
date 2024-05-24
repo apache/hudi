@@ -173,7 +173,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
       assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
 
       // assert that column stats are correct
-      HoodieBackedTableMetadata hoodieBackedTableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true);
+      HoodieBackedTableMetadata hoodieBackedTableMetadata = new HoodieBackedTableMetadata(
+          context, metaClient.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true);
       assertEmptyColStats(hoodieBackedTableMetadata, partitionPath1, fileName1);
       assertColStats(hoodieBackedTableMetadata, partitionPath1, fileName2);
       assertColStats(hoodieBackedTableMetadata, partitionPath2, fileName3);

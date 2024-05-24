@@ -40,6 +40,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.JavaScalaConverters;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
 
@@ -137,7 +138,7 @@ public class HoodieSnapshotExporter {
         latestCommitTimestamp));
 
     final HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    final List<String> partitions = getPartitions(engineContext, cfg);
+    final List<String> partitions = getPartitions(engineContext, cfg, new HoodieHadoopStorage(sourceFs));
     if (partitions.isEmpty()) {
       throw new HoodieSnapshotExporterException("The source dataset has 0 partition to snapshot.");
     }
@@ -160,8 +161,9 @@ public class HoodieSnapshotExporter {
     return latestCommit.isPresent() ? Option.of(latestCommit.get().getTimestamp()) : Option.empty();
   }
 
-  private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg) {
-    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true);
+  private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg,
+                                     HoodieStorage storage) {
+    return FSUtils.getAllPartitionPaths(engineContext, storage, cfg.sourceBasePath, true);
   }
 
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {
