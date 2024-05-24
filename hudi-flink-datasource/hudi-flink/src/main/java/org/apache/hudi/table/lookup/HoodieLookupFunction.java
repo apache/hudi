@@ -18,9 +18,17 @@
 
 package org.apache.hudi.table.lookup;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.util.StreamerUtil;
+
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.FunctionContext;
@@ -64,11 +72,16 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
   // timestamp when cache expires
   private transient long nextLoadTime;
 
+  private transient HoodieTableMetaClient metaClient;
+  private transient HoodieInstant currentCommit;
+  private final Configuration conf;
+
   public HoodieLookupFunction(
       HoodieLookupTableReader partitionReader,
       RowType rowType,
       int[] lookupKeys,
-      Duration reloadInterval) {
+      Duration reloadInterval,
+      Configuration conf) {
     this.partitionReader = partitionReader;
     this.rowType = rowType;
     this.lookupFieldGetters = new RowData.FieldGetter[lookupKeys.length];
@@ -78,6 +91,7 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
     }
     this.reloadInterval = reloadInterval;
     this.serializer = InternalSerializers.create(rowType);
+    this.conf = conf;
   }
 
   @Override
@@ -85,6 +99,8 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
     super.open(context);
     cache = new HashMap<>();
     nextLoadTime = -1L;
+    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
+    metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
   }
 
   @Override
@@ -114,6 +130,19 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
     } else {
       LOG.info("Populating lookup join cache");
     }
+
+    HoodieActiveTimeline latestCommit = metaClient.reloadActiveTimeline();
+    Option<HoodieInstant> latestCommitInstant = latestCommit.getCommitsTimeline().lastInstant();
+    if (latestCommit.empty()) {
+      LOG.info("No commit instant found currently.");
+      return;
+    }
+    // Determine whether to reload data by comparing instant
+    if (currentCommit != null && latestCommitInstant.get().equals(currentCommit)) {
+      LOG.info("Ignore loading data because the commit instant " + currentCommit + " has not changed.");
+      return;
+    }
+
     int numRetry = 0;
     while (true) {
       cache.clear();

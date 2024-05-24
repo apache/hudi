@@ -310,7 +310,8 @@ public class HoodieTableSource implements
             new HoodieLookupTableReader(this::getBatchInputFormat, conf),
             tableRowType,
             getLookupKeys(context.getKeys()),
-            duration
+            duration,
+            conf
         ));
   }
 
