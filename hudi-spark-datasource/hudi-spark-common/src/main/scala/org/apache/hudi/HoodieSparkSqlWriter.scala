@@ -409,7 +409,7 @@ class HoodieSparkSqlWriterInternal {
               val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
-            
+
             // Issue the delete.
             val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema.toString
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
