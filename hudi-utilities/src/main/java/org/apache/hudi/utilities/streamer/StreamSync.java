@@ -292,18 +292,18 @@ public class StreamSync implements Serializable, Closeable {
                     TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
     this(cfg, sparkSession, props, new HoodieSparkEngineContext(jssc),
-        new HoodieHadoopStorage(fs), conf, onInitializingHoodieWriteClient,
+        fs, conf, onInitializingHoodieWriteClient,
         new DefaultStreamContext(schemaProvider, Option.empty()));
   }
 
   public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession,
                     TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
-                    HoodieStorage storage, Configuration conf,
+                    FileSystem fs, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, StreamContext streamContext) throws IOException {
     this.cfg = cfg;
     this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
-    this.storage = storage;
+    this.storage = new HoodieHadoopStorage(fs);
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
     this.userProvidedSchemaProvider = streamContext.getSchemaProvider();
@@ -319,7 +319,7 @@ public class StreamSync implements Serializable, Closeable {
     this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig, storage.getConf());
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(
-          cfg, sparkSession, props, hoodieSparkContext, storage);
+          cfg, sparkSession, props, hoodieSparkContext, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     refreshTimeline();

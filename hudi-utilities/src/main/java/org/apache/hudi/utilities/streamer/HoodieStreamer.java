@@ -58,8 +58,8 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -132,26 +132,24 @@ public class HoodieStreamer implements Serializable {
   public static final String STREAMSYNC_POOL_NAME = "hoodiedeltasync";
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
-    this(cfg, jssc,
-        HoodieStorageUtils.getStorage(cfg.targetBasePath, HadoopFSUtils.getStorageConf(jssc.hadoopConfiguration())),
+    this(cfg, jssc, HadoopFSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
         jssc.hadoopConfiguration(), Option.empty());
   }
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, Option<TypedProperties> props) throws IOException {
-    this(cfg, jssc,
-        HoodieStorageUtils.getStorage(cfg.targetBasePath, HadoopFSUtils.getStorageConf(jssc.hadoopConfiguration())),
+    this(cfg, jssc, HadoopFSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
         jssc.hadoopConfiguration(), props);
   }
 
-  public HoodieStreamer(Config cfg, JavaSparkContext jssc, HoodieStorage storage, Configuration conf) throws IOException {
-    this(cfg, jssc, storage, conf, Option.empty());
+  public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf) throws IOException {
+    this(cfg, jssc, fs, conf, Option.empty());
   }
 
-  public HoodieStreamer(Config cfg, JavaSparkContext jssc, HoodieStorage storage, Configuration conf, Option<TypedProperties> propsOverride) throws IOException {
-    this(cfg, jssc, storage, conf, propsOverride, Option.empty());
+  public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf, Option<TypedProperties> propsOverride) throws IOException {
+    this(cfg, jssc, fs, conf, propsOverride, Option.empty());
   }
 
-  public HoodieStreamer(Config cfg, JavaSparkContext jssc, HoodieStorage storage, Configuration conf,
+  public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
@@ -163,11 +161,10 @@ public class HoodieStreamer implements Serializable {
 
     this.cfg = cfg;
     this.bootstrapExecutor = Option.ofNullable(
-        cfg.runBootstrap ? new BootstrapExecutor(
-            cfg, jssc, (FileSystem) storage.getFileSystem(), conf, this.properties) : null);
+        cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
     HoodieSparkEngineContext sparkEngineContext = new HoodieSparkEngineContext(jssc);
     this.ingestionService = Option.ofNullable(
-        cfg.runBootstrap ? null : new StreamSyncService(cfg, sparkEngineContext, storage, conf, Option.ofNullable(this.properties), sourceProfileSupplier));
+        cfg.runBootstrap ? null : new StreamSyncService(cfg, sparkEngineContext, fs, conf, Option.ofNullable(this.properties), sourceProfileSupplier));
   }
 
   private static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
@@ -672,14 +669,14 @@ public class HoodieStreamer implements Serializable {
     private final Option<ConfigurationHotUpdateStrategy> configurationHotUpdateStrategyOpt;
 
     public StreamSyncService(Config cfg, HoodieSparkEngineContext hoodieSparkContext,
-                             HoodieStorage storage, Configuration conf,
+                             FileSystem fs, Configuration conf,
                              Option<TypedProperties> properties, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
       super(HoodieIngestionConfig.newBuilder()
           .isContinuous(cfg.continuousMode)
           .withMinSyncInternalSeconds(cfg.minSyncIntervalSeconds).build());
       this.cfg = cfg;
       this.hoodieSparkContext = hoodieSparkContext;
-      this.storage = storage;
+      this.storage = new HoodieHadoopStorage(fs);
       this.hiveConf = conf;
       this.sparkSession = SparkSession.builder().config(hoodieSparkContext.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();
@@ -732,20 +729,19 @@ public class HoodieStreamer implements Serializable {
           props, hoodieSparkContext.jsc(), cfg.transformerClassNames);
 
       streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkContext,
-          this.storage, conf, this::onInitializingWriteClient, new DefaultStreamContext(schemaProvider, sourceProfileSupplier));
-
+          fs, conf, this::onInitializingWriteClient, new DefaultStreamContext(schemaProvider, sourceProfileSupplier));
     }
 
     public StreamSyncService(HoodieStreamer.Config cfg,
-                             HoodieSparkEngineContext hoodieSparkContext, HoodieStorage storage,
+                             HoodieSparkEngineContext hoodieSparkContext, FileSystem fs,
                              Configuration conf)
         throws IOException {
-      this(cfg, hoodieSparkContext, storage, conf, Option.empty(), Option.empty());
+      this(cfg, hoodieSparkContext, fs, conf, Option.empty(), Option.empty());
     }
 
-    public StreamSyncService(HoodieStreamer.Config cfg, HoodieSparkEngineContext hoodieSparkContext, HoodieStorage storage, Configuration conf, Option<TypedProperties> properties)
+    public StreamSyncService(HoodieStreamer.Config cfg, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf, Option<TypedProperties> properties)
             throws IOException {
-      this(cfg, hoodieSparkContext, storage, conf, properties, Option.empty());
+      this(cfg, hoodieSparkContext, fs, conf, properties, Option.empty());
     }
 
     private void initializeTableTypeAndBaseFileFormat() {
@@ -760,7 +756,8 @@ public class HoodieStreamer implements Serializable {
         streamSync.close();
       }
       streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkContext,
-          storage, hiveConf, this::onInitializingWriteClient, new DefaultStreamContext(schemaProvider, Option.empty()));
+          (FileSystem) storage.getFileSystem(), hiveConf, this::onInitializingWriteClient,
+          new DefaultStreamContext(schemaProvider, Option.empty()));
     }
 
     @Override
