@@ -45,7 +45,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
