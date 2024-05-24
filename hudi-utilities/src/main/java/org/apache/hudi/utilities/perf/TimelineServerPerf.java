@@ -102,7 +102,7 @@ public class TimelineServerPerf implements Serializable {
     JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(
-        engineContext, new HoodieHadoopStorage(HadoopFSUtils.getFs(cfg.basePath, engineContext.getStorageConf())),
+        engineContext, new HoodieHadoopStorage(cfg.basePath, engineContext.getStorageConf()),
         cfg.basePath, cfg.useFileListingFromMetadata);
     Collections.shuffle(allPartitionPaths);
     List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)

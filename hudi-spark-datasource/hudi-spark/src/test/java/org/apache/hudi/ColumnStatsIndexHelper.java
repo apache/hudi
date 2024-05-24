@@ -180,8 +180,7 @@ public class ColumnStatsIndexHelper {
                 Iterable<String> iterable = () -> paths;
                 return StreamSupport.stream(iterable.spliterator(), false)
                     .flatMap(path -> {
-                          StoragePath storagePath = new StoragePath(path);
-                          HoodieStorage storage = new HoodieHadoopStorage(storagePath, storageConf);
+                      HoodieStorage storage = new HoodieHadoopStorage(path, storageConf);
                           return utils.readColumnStatsFromMetadata(
                                   storage,
                                   new StoragePath(path),

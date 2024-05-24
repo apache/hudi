@@ -63,7 +63,7 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
     val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
-      new HoodieHadoopStorage(new StoragePath(tablePath), HadoopFSUtils.getStorageConf(sharedConf)), if (validCommits == null) "" else validCommits)
+      new HoodieHadoopStorage(tablePath, sharedConf), if (validCommits == null) "" else validCommits)
   } else {
     null
   }

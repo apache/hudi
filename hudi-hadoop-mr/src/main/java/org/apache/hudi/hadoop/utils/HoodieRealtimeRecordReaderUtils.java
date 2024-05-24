@@ -313,7 +313,7 @@ public class HoodieRealtimeRecordReaderUtils {
   public static HoodieFileReader getBaseFileReader(Path path, JobConf conf) throws IOException {
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
     HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
-    return HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(convertToStoragePath(path), storageConf))
+    return HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, conf))
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, convertToStoragePath(path));
   }

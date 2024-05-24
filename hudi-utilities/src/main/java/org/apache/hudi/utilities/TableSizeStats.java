@@ -279,7 +279,7 @@ public class TableSizeStats implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
-        engineContext, new HoodieHadoopStorage(HadoopFSUtils.getFs(basePath, storageConf)), metadataConfig, basePath);
+        engineContext, new HoodieHadoopStorage(basePath, storageConf), metadataConfig, basePath);
 
     List<String> allPartitions = tableMetadata.getAllPartitionPaths();
 

@@ -397,7 +397,6 @@ class HoodieSparkSqlWriterInternal {
             }
 
             val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
-            // Create a HoodieWriteClient & issue the delete.
             val tableMetaClient = HoodieTableMetaClient.builder
               .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
               .setBasePath(basePath.toString).build()
@@ -410,7 +409,8 @@ class HoodieSparkSqlWriterInternal {
               val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
-
+            
+            // Issue the delete.
             val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema.toString
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               schemaStr, path, tblName,

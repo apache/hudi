@@ -54,7 +54,7 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
     val table = getArgValueOrDefault(args, PARAMETERS(0))
 
     val basePath = getBasePath(table)
-    val storage = new HoodieHadoopStorage(basePath, HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()))
+    val storage = new HoodieHadoopStorage(basePath, spark.sessionState.newHadoopConf())
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
     val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), storage, config, basePath)
     if (!metadata.enabled){
