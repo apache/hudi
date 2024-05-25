@@ -258,7 +258,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    * @return the {@link TypedProperties} instance.
    */
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new StoragePath(cfg.propsFilePath), cfg.configs)
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
         .getProps(true);
   }
 

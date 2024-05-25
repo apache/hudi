@@ -23,7 +23,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.StoragePath;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -62,7 +61,7 @@ public class HoodieCleaner {
      * Filesystem used.
      */
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
-        : UtilHelpers.readConfig(jssc.hadoopConfiguration(), new StoragePath(cfg.propsFilePath), cfg.configs).getProps(true);
+        : UtilHelpers.readConfig(jssc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs).getProps(true);
     LOG.info("Creating Cleaner with configs : " + props.toString());
   }
 

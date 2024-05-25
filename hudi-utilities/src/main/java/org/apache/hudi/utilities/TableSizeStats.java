@@ -34,7 +34,6 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import com.beust.jcommander.JCommander;
@@ -132,7 +131,7 @@ public class TableSizeStats implements Serializable {
    * @return the {@link TypedProperties} instance.
    */
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new StoragePath(cfg.propsFilePath), cfg.configs)
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
         .getProps(true);
   }
 
