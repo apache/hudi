@@ -51,6 +51,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -61,7 +62,7 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieSparkIOFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -1439,9 +1440,10 @@ public class HoodieMetadataTableValidator implements Serializable {
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
       } else {
+        FileFormatUtils formatUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getFileFormatUtils(HoodieFileFormat.PARQUET);
         return baseFileNameList.stream().flatMap(filename ->
-                new HoodieSparkIOFactory(metaClient.getStorage()).getFileFormatUtils(HoodieFileFormat.PARQUET)
-                    .readColumnStatsFromMetadata(
+                formatUtils.readColumnStatsFromMetadata(
                         metaClient.getStorage(),
                         new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath), filename),
                         allColumnNameList).stream())

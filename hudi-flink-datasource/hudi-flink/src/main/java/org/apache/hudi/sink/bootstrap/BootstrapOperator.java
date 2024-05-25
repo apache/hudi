@@ -204,7 +204,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
 
     if (latestCommitTime.isPresent()) {
       FileFormatUtils fileUtils = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
-          .getFileFormatUtils(this.hoodieTable.getBaseFileFormat());
+          .getFileFormatUtils(hoodieTable.getBaseFileFormat());
       Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
 
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()
