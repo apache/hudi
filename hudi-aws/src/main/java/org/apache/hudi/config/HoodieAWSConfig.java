@@ -36,7 +36,6 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY;
-
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE;
 
 /**
@@ -91,18 +90,18 @@ public class HoodieAWSConfig extends HoodieConfig {
           .withDocumentation("External ID use when assuming the AWS Role");
 
   public static final ConfigProperty<String> AWS_GLUE_ENDPOINT = ConfigProperty
-          .key("hoodie.aws.glue.endpoint")
-          .noDefaultValue()
-          .markAdvanced()
-          .sinceVersion("0.14.2")
-          .withDocumentation("Aws glue endpoint");
+      .key("hoodie.aws.glue.endpoint")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Aws glue endpoint");
 
   public static final ConfigProperty<String> AWS_GLUE_REGION = ConfigProperty
-          .key("hoodie.aws.glue.region")
-          .noDefaultValue()
-          .markAdvanced()
-          .sinceVersion("0.14.2")
-          .withDocumentation("Aws glue endpoint");
+      .key("hoodie.aws.glue.region")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Aws glue endpoint");
 
   private HoodieAWSConfig() {
     super();
