@@ -58,7 +58,7 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
   public HoodieAvroOrcReader(HoodieStorage storage, StoragePath path) {
     this.storage = storage;
     this.path = path;
-    this.orcUtils = FileFormatUtils.getInstance(HoodieFileFormat.ORC);
+    this.orcUtils = new HoodieHadoopIOFactory(storage).getFileFormatUtils(HoodieFileFormat.ORC);
   }
 
   @Override

@@ -1213,7 +1213,8 @@ public class HoodieTableMetadataUtil {
     try {
       if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePathV2(), filePath);
-        return FileFormatUtils.getInstance(HoodieFileFormat.PARQUET)
+        return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
+            .getFileFormatUtils(HoodieFileFormat.PARQUET)
             .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex);
       }
 

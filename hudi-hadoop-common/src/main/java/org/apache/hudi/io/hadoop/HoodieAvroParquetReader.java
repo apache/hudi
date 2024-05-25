@@ -68,7 +68,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     // by the Reader (for proper config propagation to Parquet components)
     this.storage = storage.newInstance(path, tryOverrideDefaultConfigs(storage.getConf().newInstance()));
     this.path = path;
-    this.parquetUtils = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET);
+    this.parquetUtils = new HoodieHadoopIOFactory(storage).getFileFormatUtils(HoodieFileFormat.PARQUET);
   }
 
   @Override

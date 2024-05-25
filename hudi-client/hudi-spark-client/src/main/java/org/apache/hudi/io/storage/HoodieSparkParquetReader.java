@@ -69,7 +69,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     this.storage = storage.newInstance(path, storage.getConf().newInstance());
     // Avoid adding record in list element when convert parquet schema to avro schema
     this.storage.getConf().set(ADD_LIST_ELEMENT_RECORDS, "false");
-    this.parquetUtils = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET);
+    this.parquetUtils = new HoodieSparkIOFactory(storage).getFileFormatUtils(HoodieFileFormat.PARQUET);
   }
 
   @Override

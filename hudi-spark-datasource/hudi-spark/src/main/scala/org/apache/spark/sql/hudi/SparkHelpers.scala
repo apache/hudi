@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig.{BLOOM_FILTER_DYNAMIC_M
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.util.{FileFormatUtils, Option}
 import org.apache.hudi.io.hadoop.HoodieAvroParquetWriter
-import org.apache.hudi.io.storage.HoodieParquetConfig
+import org.apache.hudi.io.storage.{HoodieParquetConfig, HoodieSparkIOFactory}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 
 import org.apache.avro.Schema
@@ -48,7 +48,8 @@ object SparkHelpers {
                               sourceFile: StoragePath,
                               destinationFile: StoragePath,
                               keysToSkip: Set[String]) {
-    val sourceRecords = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readAvroRecords(storage, sourceFile).asScala
+    val sourceRecords = new HoodieSparkIOFactory(storage).getFileFormatUtils(HoodieFileFormat.PARQUET)
+      .readAvroRecords(storage, sourceFile).asScala
     val schema: Schema = sourceRecords.head.getSchema
     val filter: BloomFilter = BloomFilterFactory.createBloomFilter(
       BLOOM_FILTER_NUM_ENTRIES_VALUE.defaultValue.toInt, BLOOM_FILTER_FPP_VALUE.defaultValue.toDouble,
@@ -140,7 +141,8 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
    * @return <pre>true</pre>  if all keys are added to the bloom filter;  <pre>false</pre>  otherwise.
    */
   def fileKeysAgainstBF(storage: HoodieStorage, sqlContext: SQLContext, file: String): Boolean = {
-    val bf = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readBloomFilterFromMetadata(storage, new StoragePath(file))
+    val bf = new HoodieSparkIOFactory(storage).getFileFormatUtils(HoodieFileFormat.PARQUET)
+      .readBloomFilterFromMetadata(storage, new StoragePath(file))
     val foundCount = sqlContext.parquetFile(file)
       .select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
       .collect().count(r => !bf.mightContain(r.getString(0)))
