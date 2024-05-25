@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -111,34 +112,43 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     return basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
   }
 
-  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath) {
-    return create(engineContext, metadataConfig, datasetBasePath, false);
+  static HoodieTableMetadata create(HoodieEngineContext engineContext,
+                                    HoodieStorage storage,
+                                    HoodieMetadataConfig metadataConfig,
+                                    String datasetBasePath) {
+    return create(engineContext, storage, metadataConfig, datasetBasePath, false);
   }
 
-  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath, boolean reuse) {
+  static HoodieTableMetadata create(HoodieEngineContext engineContext,
+                                    HoodieStorage storage,
+                                    HoodieMetadataConfig metadataConfig,
+                                    String datasetBasePath,
+                                    boolean reuse) {
     if (metadataConfig.isEnabled()) {
-      HoodieBackedTableMetadata metadata = createHoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, reuse);
+      HoodieBackedTableMetadata metadata = createHoodieBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath, reuse);
       // If the MDT is not initialized then we fallback to FSBackedTableMetadata
       if (metadata.isMetadataTableInitialized()) {
         return metadata;
       }
     }
 
-    return createFSBackedTableMetadata(engineContext, metadataConfig, datasetBasePath);
+    return createFSBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath);
   }
 
   static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
+                                                                   HoodieStorage storage,
                                                                    HoodieMetadataConfig metadataConfig,
                                                                    String datasetBasePath) {
-    return new FileSystemBackedTableMetadata(engineContext, engineContext.getStorageConf(),
+    return new FileSystemBackedTableMetadata(engineContext, storage,
         datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
   }
 
   static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,
+                                                                   HoodieStorage storage,
                                                                    HoodieMetadataConfig metadataConfig,
                                                                    String datasetBasePath,
                                                                    boolean reuse) {
-    return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, reuse);
+    return new HoodieBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath, reuse);
   }
 
   /**

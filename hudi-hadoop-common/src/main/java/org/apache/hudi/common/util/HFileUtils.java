@@ -33,7 +33,6 @@ import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -84,56 +83,56 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath) {
+  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath) {
     throw new UnsupportedOperationException("HFileUtils does not support readAvroRecords");
   }
 
   @Override
-  public List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath, Schema schema) {
+  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, Schema schema) {
     throw new UnsupportedOperationException("HFileUtils does not support readAvroRecords");
   }
 
   @Override
-  public Map<String, String> readFooter(StorageConfiguration<?> configuration, boolean required, StoragePath filePath, String... footerNames) {
+  public Map<String, String> readFooter(HoodieStorage storage, boolean required, StoragePath filePath, String... footerNames) {
     throw new UnsupportedOperationException("HFileUtils does not support readFooter");
   }
 
   @Override
-  public long getRowCount(StorageConfiguration<?> configuration, StoragePath filePath) {
+  public long getRowCount(HoodieStorage storage, StoragePath filePath) {
     throw new UnsupportedOperationException("HFileUtils does not support getRowCount");
   }
 
   @Override
-  public Set<String> filterRowKeys(StorageConfiguration<?> configuration, StoragePath filePath, Set<String> filter) {
+  public Set<String> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filter) {
     throw new UnsupportedOperationException("HFileUtils does not support filterRowKeys");
   }
 
   @Override
-  public List<HoodieKey> fetchHoodieKeys(StorageConfiguration<?> configuration, StoragePath filePath) {
+  public List<HoodieKey> fetchHoodieKeys(HoodieStorage storage, StoragePath filePath) {
     throw new UnsupportedOperationException("HFileUtils does not support fetchRecordKeysWithPositions");
   }
 
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new UnsupportedOperationException("HFileUtils does not support getHoodieKeyIterator");
   }
 
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
     throw new UnsupportedOperationException("HFileUtils does not support getHoodieKeyIterator");
   }
 
   @Override
-  public List<HoodieKey> fetchHoodieKeys(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public List<HoodieKey> fetchHoodieKeys(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new UnsupportedOperationException("HFileUtils does not support fetchRecordKeysWithPositions");
   }
 
   @Override
-  public Schema readAvroSchema(StorageConfiguration<?> configuration, StoragePath filePath) {
+  public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
     LOG.info("Reading schema from {}", filePath);
 
     try (HoodieFileReader fileReader =
-             HoodieIOFactory.getIOFactory(configuration)
+             HoodieIOFactory.getIOFactory(storage)
                  .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
                  .getFileReader(
                      ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
@@ -145,7 +144,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(StorageConfiguration<?> storageConf, StoragePath filePath, List<String> columnList) {
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage, StoragePath filePath, List<String> columnList) {
     throw new UnsupportedOperationException(
         "Reading column statistics from metadata is not supported for HFile format yet");
   }
@@ -161,7 +160,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public byte[] serializeRecordsToLogBlock(StorageConfiguration<?> storageConf,
+  public byte[] serializeRecordsToLogBlock(HoodieStorage storage,
                                            List<HoodieRecord> records,
                                            Schema writerSchema,
                                            Schema readerSchema,
@@ -174,7 +173,7 @@ public class HFileUtils extends FileFormatUtils {
         .withCellComparator(new HoodieHBaseKVComparator())
         .build();
 
-    Configuration conf = storageConf.unwrapAs(Configuration.class);
+    Configuration conf = storage.getConf().unwrapAs(Configuration.class);
     CacheConfig cacheConfig = new CacheConfig(conf);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     FSDataOutputStream ostream = new FSDataOutputStream(baos, null);

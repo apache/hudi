@@ -260,7 +260,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   }
 
   protected HoodieTableMetadata metadata(HoodieWriteConfig clientConfig, HoodieEngineContext engineContext) {
-    return HoodieTableMetadata.create(engineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
+    return HoodieTableMetadata.create(engineContext, metaClient.getStorage(), clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
   /**
@@ -405,7 +405,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       // Metadata table has a fixed number of partitions
       // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
       // in the .hoodie folder.
-      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath), false, false);
+      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, storage, HoodieTableMetadata.getMetadataTableBasePath(basePath), false, false);
 
       List<MetadataPartitionType> enabledPartitionTypes = metadataWriter.getEnabledPartitionTypes();
 
@@ -908,7 +908,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
       return paths.values().stream().map(StoragePath::new).flatMap(path ->
-              FileFormatUtils.getInstance(path).readAvroRecords(context.getStorageConf(), path).stream())
+              FileFormatUtils.getInstance(path).readAvroRecords(storage, path).stream())
           .filter(record -> {
             if (filterByCommitTime) {
               Object commitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
@@ -938,7 +938,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, storage, paths);
       return latestFiles.stream().mapToLong(baseFile ->
               FileFormatUtils.getInstance(baseFile.getStoragePath())
-                  .readAvroRecords(context.getStorageConf(), baseFile.getStoragePath()).size())
+                  .readAvroRecords(storage, baseFile.getStoragePath()).size())
           .sum();
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie table as a dataframe", e);
@@ -975,7 +975,8 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
       String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
       if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        return Arrays.stream(paths).map(StoragePath::new).flatMap(path -> FileFormatUtils.getInstance(path).readAvroRecords(context.getStorageConf(), path).stream())
+        return Arrays.stream(paths).map(StoragePath::new).flatMap(path -> FileFormatUtils.getInstance(path)
+                .readAvroRecords(storage, path).stream())
             .filter(record -> {
               if (lastCommitTimeOpt.isPresent()) {
                 Object commitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD);

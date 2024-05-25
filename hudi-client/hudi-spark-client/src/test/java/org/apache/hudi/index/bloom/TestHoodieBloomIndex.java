@@ -337,7 +337,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
     List<String> results = HoodieIndexUtils.filterKeysFromFile(
-        new StoragePath(Paths.get(basePath, partition, filename).toString()), uuids, storageConf);
+        new StoragePath(Paths.get(basePath, partition, filename).toString()), uuids, storage);
 
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")

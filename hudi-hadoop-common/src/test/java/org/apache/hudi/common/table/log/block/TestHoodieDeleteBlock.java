@@ -118,7 +118,7 @@ public class TestHoodieDeleteBlock {
 
   public void testDeleteBlockWithValidation(DeleteRecord[] deleteRecords) throws IOException {
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecords, new HashMap<>());
-    byte[] contentBytes = deleteBlock.getContentBytes(HoodieTestUtils.getDefaultStorageConf());
+    byte[] contentBytes = deleteBlock.getContentBytes(HoodieTestUtils.getDefaultStorage());
     HoodieDeleteBlock deserializeDeleteBlock = new HoodieDeleteBlock(
         Option.of(contentBytes), null, true, Option.empty(), new HashMap<>(), new HashMap<>());
     DeleteRecord[] deserializedDeleteRecords = deserializeDeleteBlock.getRecordsToDelete();

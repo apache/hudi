@@ -198,7 +198,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     }
 
     @Override
-    List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath) {
+    List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath, HoodieStorage storage) {
       return metadataPartitionsToReturn;
     }
 

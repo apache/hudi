@@ -92,7 +92,7 @@ public class TestCommitMetadataUtils extends HoodieCommonTestHarness {
     when(table.getMetaClient()).thenReturn(metaClient);
     Mockito.when(table.getConfig()).thenReturn(writeConfig);
     when(metaClient.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
-    when(metaClient.getStorage()).thenReturn(new HoodieHadoopStorage(fileSystem));
+    when(metaClient.getStorage()).thenReturn(new HoodieHadoopStorage(basePath, getDefaultStorageConf()));
     when(metaClient.getBasePath()).thenReturn(basePath);
     when(metaClient.getMarkerFolderPath(any())).thenReturn(basePath + ".hoodie/.temp");
     when(table.getContext()).thenReturn(context);

@@ -204,7 +204,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   @Override
   public HoodieStorage getStorage() {
-    return hoodieTable.getMetaClient().getStorage();
+    return hoodieTable.getStorage();
   }
 
   public HoodieWriteConfig getConfig() {

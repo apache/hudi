@@ -25,8 +25,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
 import java.util.List;
@@ -52,7 +52,8 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
                                       HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
                                       HoodieMetadataConfig metadataConfig) {
-    this(metaClient, visibleActiveTimeline, HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(), true));
+    this(metaClient, visibleActiveTimeline, HoodieTableMetadata.create(
+        engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath(), true));
   }
 
   /**

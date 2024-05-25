@@ -29,8 +29,9 @@ import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.stats.ColumnStatsIndices;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -150,7 +151,8 @@ public class FileIndex {
     String[] partitions =
         getOrBuildPartitionPaths().stream().map(p -> fullPartitionPath(path, p)).toArray(String[]::new);
     List<StoragePathInfo> allFiles = FSUtils.getFilesInPartitions(
-            new HoodieFlinkEngineContext(hadoopConf), metadataConfig, path.toString(), partitions)
+            new HoodieFlinkEngineContext(hadoopConf),
+            new HoodieHadoopStorage(path, hadoopConf), metadataConfig, path.toString(), partitions)
         .values().stream()
         .flatMap(e -> e.stream())
         .collect(Collectors.toList());
@@ -278,7 +280,8 @@ public class FileIndex {
       return this.partitionPaths;
     }
     List<String> allPartitionPaths = this.tableExists
-        ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), metadataConfig, path.toString())
+        ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf),
+        new HoodieHadoopStorage(path, hadoopConf), metadataConfig, path.toString())
         : Collections.emptyList();
     if (this.partitionPruner == null) {
       this.partitionPaths = allPartitionPaths;

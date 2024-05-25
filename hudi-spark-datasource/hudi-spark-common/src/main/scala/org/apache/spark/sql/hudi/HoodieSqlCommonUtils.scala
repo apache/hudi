@@ -17,29 +17,28 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline.parseDateFromInstantTime
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator, HoodieTimeline}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.storage.{HoodieStorage, StoragePathInfo}
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.storage.StoragePathInfo
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.net.URI
 import java.text.SimpleDateFormat
@@ -66,24 +65,25 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType)
   }
 
-  def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {
+  def getAllPartitionPaths(spark: SparkSession, table: CatalogTable, storage: HoodieStorage): Seq[String] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
       val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
-    FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala.toSeq
+    FSUtils.getAllPartitionPaths(sparkEngine, storage, metadataConfig, getTableLocation(table, spark)).asScala.toSeq
   }
 
   def getFilesInPartitions(spark: SparkSession,
                            table: CatalogTable,
+                           storage: HoodieStorage,
                            partitionPaths: Seq[String]): Map[String, Seq[StoragePathInfo]] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
       val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
-    FSUtils.getFilesInPartitions(sparkEngine, metadataConfig, getTableLocation(table, spark),
+    FSUtils.getFilesInPartitions(sparkEngine, storage, metadataConfig, getTableLocation(table, spark),
       partitionPaths.toArray).asScala
       .map(e => (e._1, e._2.asScala.toSeq))
       .toMap

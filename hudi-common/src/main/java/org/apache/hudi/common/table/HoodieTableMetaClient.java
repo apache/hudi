@@ -297,13 +297,12 @@ public class HoodieTableMetaClient implements Serializable {
 
   public HoodieStorage getStorage() {
     if (storage == null) {
+      HoodieStorage newStorage = HoodieStorageUtils.getStorage(metaPath, getStorageConf());
       ConsistencyGuard consistencyGuard = consistencyGuardConfig.isConsistencyCheckEnabled()
-          ? new FailSafeConsistencyGuard(
-          HoodieStorageUtils.getStorage(metaPath, getStorageConf()),
-          consistencyGuardConfig)
+          ? new FailSafeConsistencyGuard(newStorage, consistencyGuardConfig)
           : new NoOpConsistencyGuard();
 
-      storage = getIOFactory(getStorageConf()).getStorage(metaPath,
+      storage = getIOFactory(newStorage).getStorage(metaPath,
           fileSystemRetryConfig.isFileSystemActionRetryEnable(),
           fileSystemRetryConfig.getMaxRetryIntervalMs(),
           fileSystemRetryConfig.getMaxRetryNumbers(),
