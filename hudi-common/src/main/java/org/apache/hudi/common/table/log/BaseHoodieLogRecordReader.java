@@ -154,7 +154,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder()
-        .setConf(storage.getConf().newInstance()).setBasePath(basePath).build();
+        .setStorage(storage.newInstance(new StoragePath(basePath), storage.getConf().newInstance()))
+        .setBasePath(basePath).build();
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
