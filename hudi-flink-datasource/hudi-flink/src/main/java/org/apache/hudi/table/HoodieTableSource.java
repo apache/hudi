@@ -616,7 +616,7 @@ public class HoodieTableSource implements
     for (int[] key : keys) {
       if (key.length > 1) {
         throw new UnsupportedOperationException(
-            "Hive lookup can not support nested key now.");
+            "Hoodie lookup can not support nested key now.");
       }
       keyIndices[i] = key[0];
       i++;
