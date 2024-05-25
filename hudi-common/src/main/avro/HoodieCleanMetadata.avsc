@@ -23,24 +23,33 @@
      {"name": "timeTakenInMillis", "type": "long"},
      {"name": "totalFilesDeleted", "type": "int"},
      {"name": "earliestCommitToRetain", "type": "string"},
+     {"name": "lastCompletedCommitTimestamp", "type": "string", "default" : ""},
      {"name": "partitionMetadata", "type": {
-     "type" : "map", "values" : {
-        "type": "record",
-        "name": "HoodieCleanPartitionMetadata",
-        "fields": [
-            {"name": "partitionPath", "type": "string"},
-            {"name": "policy", "type": "string"},
-            {"name": "deletePathPatterns", "type": {"type": "array", "items": "string"}},
-            {"name": "successDeleteFiles", "type": {"type": "array", "items": "string"}},
-            {"name": "failedDeleteFiles", "type": {"type": "array", "items": "string"}}
-        ]
-     }
-     }
+        "type" : "map", "values" : "HoodieCleanPartitionMetadata"
+      }
      },
      {
         "name":"version",
         "type":["int", "null"],
         "default": 1
-     }
+     },
+     {
+        "name": "bootstrapPartitionMetadata",
+        "type": [ "null", {
+          "type" : "map", 
+          "values" : "HoodieCleanPartitionMetadata",
+          "default" : null
+        }],
+        "default" : null
+     },
+   {
+      "name":"extraMetadata",
+      "type":["null", {
+         "type":"map",
+         "values":"string",
+         "default": null
+      }],
+      "default": null
+   }
  ]
 }

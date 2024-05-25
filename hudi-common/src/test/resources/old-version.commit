@@ -1,0 +1,20 @@
+{
+  "partitionToWriteStats" : {
+    "americas/brazil/sao_paulo" : []
+  },
+  "compacted" : false,
+  "extraMetadataMap" : {
+  },
+  "extraMetadata" : {
+  },
+  "fileIdAndRelativePaths" : {
+  },
+  "totalRecordsDeleted" : 0,
+  "totalLogRecordsCompacted" : 0,
+  "totalScanTime" : 0,
+  "totalCreateTime" : 4895,
+  "totalUpsertTime" : 0,
+  "totalCompactedRecordsUpdated" : 0,
+  "totalLogFilesCompacted" : 0,
+  "totalLogFilesSize" : 0
+}

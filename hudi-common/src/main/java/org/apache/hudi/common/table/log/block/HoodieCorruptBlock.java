@@ -18,27 +18,28 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.HoodieStorage;
+
 import java.io.IOException;
 import java.util.Map;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.util.Option;
+import java.util.function.Supplier;
 
 /**
  * Corrupt block is emitted whenever the scanner finds the length of the block written at the beginning does not match
- * (did not find a EOF or a sync marker after the length)
+ * (did not find a EOF or a sync marker after the length).
  */
 public class HoodieCorruptBlock extends HoodieLogBlock {
 
-  private HoodieCorruptBlock(Option<byte[]> corruptedBytes, FSDataInputStream inputStream, boolean readBlockLazily,
-      Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer) {
-    super(header, footer, blockContentLocation, corruptedBytes, inputStream, readBlockLazily);
+  public HoodieCorruptBlock(Option<byte[]> corruptedBytes, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
+                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
+                            Map<HeaderMetadataType, String> footer) {
+    super(header, footer, blockContentLocation, corruptedBytes, inputStreamSupplier, readBlockLazily);
   }
 
   @Override
-  public byte[] getContentBytes() throws IOException {
-
+  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
     if (!getContent().isPresent() && readBlockLazily) {
       // read content from disk
       inflate();
@@ -51,11 +52,4 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
     return HoodieLogBlockType.CORRUPT_BLOCK;
   }
 
-  public static HoodieLogBlock getBlock(HoodieLogFile logFile, FSDataInputStream inputStream,
-      Option<byte[]> corruptedBytes, boolean readBlockLazily, long position, long blockSize, long blockEndPos,
-      Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
-
-    return new HoodieCorruptBlock(corruptedBytes, inputStream, readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), header, footer);
-  }
 }

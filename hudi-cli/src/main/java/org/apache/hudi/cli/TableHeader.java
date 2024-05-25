@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Header for the table to be rendered
+ * Header for the table to be rendered.
  */
 public class TableHeader {
 
@@ -30,7 +30,7 @@ public class TableHeader {
   private final List<String> fieldNames = new ArrayList<>();
 
   /**
-   * Add a field (column) to table
+   * Add a field (column) to table.
    *
    * @param fieldName field Name
    */
@@ -40,14 +40,24 @@ public class TableHeader {
   }
 
   /**
-   * Get all field names
+   * Add fields from another {@link TableHeader} instance.
+   *
+   * @param tableHeader {@link TableHeader} instance.
+   */
+  public TableHeader addTableHeaderFields(TableHeader tableHeader) {
+    fieldNames.addAll(tableHeader.getFieldNames());
+    return this;
+  }
+
+  /**
+   * Get all field names.
    */
   public List<String> getFieldNames() {
     return fieldNames;
   }
 
   /**
-   * Index of the field in the table
+   * Index of the field in the table.
    *
    * @param fieldName Field Name
    */
@@ -56,16 +66,20 @@ public class TableHeader {
   }
 
   /**
-   * Lookup field by offset
+   * Lookup field by offset.
    */
   public String get(int index) {
     return fieldNames.get(index);
   }
 
   /**
-   * Get number of fields in the table
+   * Get number of fields in the table.
    */
   public int getNumFields() {
     return fieldNames.size();
+  }
+
+  public boolean containsField(String fieldName) {
+    return fieldNames.contains(fieldName);
   }
 }

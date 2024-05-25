@@ -18,49 +18,58 @@
 
 package org.apache.hudi.utilities.schema;
 
-import java.io.IOException;
-import java.util.Collections;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.utilities.config.FilebasedSchemaProviderConfig;
+import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
+import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
+
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collections;
+
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
- * A simple schema provider, that reads off files on DFS
+ * A simple schema provider, that reads off files on DFS.
  */
 public class FilebasedSchemaProvider extends SchemaProvider {
 
-  /**
-   * Configs supported
-   */
-  public static class Config {
-    private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider" + ".source.schema.file";
-    private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider" + ".target.schema.file";
-  }
-
   private final FileSystem fs;
 
-  private final Schema sourceSchema;
+  private final String sourceFile;
+  private final String targetFile;
+  private final boolean shouldSanitize;
+  private final String invalidCharMask;
 
-  private Schema targetSchema;
+  protected Schema sourceSchema;
+
+  protected Schema targetSchema;
 
   public FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
-    this.fs = FSUtils.getFs(props.getString(Config.SOURCE_SCHEMA_FILE_PROP), jssc.hadoopConfiguration());
-    try {
-      this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(props.getString(Config.SOURCE_SCHEMA_FILE_PROP))));
-      if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
-        this.targetSchema =
-            new Schema.Parser().parse(fs.open(new Path(props.getString(Config.TARGET_SCHEMA_FILE_PROP))));
-      }
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading schema", ioe);
+    checkRequiredConfigProperties(props, Collections.singletonList(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE));
+    this.sourceFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE);
+    this.targetFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE, sourceFile);
+    this.shouldSanitize = SanitizationUtils.shouldSanitize(props);
+    this.invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
+    this.fs = HadoopFSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
+    this.sourceSchema = parseSchema(this.sourceFile);
+    if (containsConfigProperty(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE)) {
+      this.targetSchema = parseSchema(this.targetFile);
     }
+  }
+
+  private Schema parseSchema(String schemaFile) {
+    return readAvroSchemaFromFile(schemaFile, this.fs, shouldSanitize, invalidCharMask);
   }
 
   @Override
@@ -75,5 +84,22 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     } else {
       return super.getTargetSchema();
     }
+  }
+
+  private static Schema readAvroSchemaFromFile(String schemaPath, FileSystem fs, boolean sanitizeSchema, String invalidCharMask) {
+    String schemaStr;
+    try (InputStream in = fs.open(new Path(schemaPath))) {
+      schemaStr = FileIOUtils.readAsUTFString(in);
+    } catch (IOException ioe) {
+      throw new HoodieSchemaProviderException(String.format("Error reading schema from file %s", schemaPath), ioe);
+    }
+    return SanitizationUtils.parseAvroSchema(schemaStr, sanitizeSchema, invalidCharMask);
+  }
+
+  // Per write batch, refresh the schemas from the file
+  @Override
+  public void refresh() {
+    this.sourceSchema = parseSchema(this.sourceFile);
+    this.targetSchema = parseSchema(this.targetFile);
   }
 }

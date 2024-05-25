@@ -18,40 +18,45 @@
 
 package org.apache.hudi.common.model;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.storage.StoragePath;
 
-import java.text.SimpleDateFormat;
+import org.junit.jupiter.api.Test;
+
 import java.util.Date;
 import java.util.UUID;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
-import org.junit.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+/**
+ * Tests hoodie write stat {@link HoodieWriteStat}.
+ */
 public class TestHoodieWriteStat {
 
   @Test
   public void testSetPaths() {
-    String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String basePathString = "/data/tables/some-hoodie-table";
     String partitionPathString = "2017/12/31";
     String fileName = UUID.randomUUID().toString();
     String writeToken = "1-0-1";
 
-    Path basePath = new Path(basePathString);
-    Path partitionPath = new Path(basePath, partitionPathString);
-    Path tempPath = new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
+    StoragePath basePath = new StoragePath(basePathString);
+    StoragePath partitionPath = new StoragePath(basePath, partitionPathString);
 
-    Path finalizeFilePath = new Path(partitionPath, FSUtils.makeDataFileName(commitTime, writeToken, fileName));
+    StoragePath finalizeFilePath = new StoragePath(partitionPath, FSUtils.makeBaseFileName(instantTime, writeToken, fileName,
+        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setPath(basePath, finalizeFilePath);
-    assertEquals(finalizeFilePath, new Path(basePath, writeStat.getPath()));
+    assertEquals(finalizeFilePath, new StoragePath(basePath, writeStat.getPath()));
 
     // test for null tempFilePath
     writeStat = new HoodieWriteStat();
     writeStat.setPath(basePath, finalizeFilePath);
-    assertEquals(finalizeFilePath, new Path(basePath, writeStat.getPath()));
+    assertEquals(finalizeFilePath, new StoragePath(basePath, writeStat.getPath()));
     assertNull(writeStat.getTempPath());
   }
 }

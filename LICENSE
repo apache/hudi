@@ -206,6 +206,7 @@
 This product includes code from Apache Hive.
 
 * org.apache.hadoop.hive.ql.io.CombineHiveInputFormat copied to org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat
+* org.apache.hadoop.hive.serde2.ColumnProjectionUtils copied and modified to org.apache.hudi.hadoop.HoodieColumnProjectionUtils
 
 Copyright: 2011-2019 The Apache Software Foundation
 Home page: http://hive.apache.org/
@@ -215,7 +216,7 @@ License: http://www.apache.org/licenses/LICENSE-2.0
 
 This product includes code from Apache SystemML.
 
-* org.apache.hudi.func.LazyIterableIterator  adapted from org/apache/sysml/runtime/instructions/spark/data/LazyIterableIterator
+* org.apache.hudi.client.utils.LazyIterableIterator  adapted from org/apache/sysml/runtime/instructions/spark/data/LazyIterableIterator
 
 Copyright: 2015-2018 The Apache Software Foundation
 Home page: https://systemml.apache.org/
@@ -241,27 +242,19 @@ This product includes code from https://github.com/twitter/commons/blob/master/s
  limitations under the License.
 =================================================================================================
 
-This product includes code from Databricks spark-avro with the below license
+This product includes code from Apache Spark
 
-* org.apache.hudi.AvroConversionHelper copied from classes in com/databricks/spark/avro package
+* org.apache.hudi.AvroConversionHelper copied from classes in org/apache/spark/sql/avro package
 
- Copyright 2014 Databricks
+* org.apache.hudi.HoodieSparkUtils.scala copied some methods from org.apache.spark.deploy.SparkHadoopUtil.scala
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright: 2014 and onwards The Apache Software Foundation
+Home page: http://spark.apache.org/
+License: http://www.apache.org/licenses/LICENSE-2.0
 
 --------------------------------------------------------------------------------
 
-This product includes code from https://github.com/big-data-europe/README 
+This product includes code from https://github.com/big-data-europe/README
 
 * docker/hoodie/hadoop/base/entrypoint.sh copied from https://github.com/big-data-europe/docker-hadoop/blob/master/base/entrypoint.sh 
 
@@ -293,3 +286,85 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 -------------------------------------------------------------------------------
+
+This product includes code from Apache Hadoop
+
+* org.apache.hudi.common.bloom.InternalDynamicBloomFilter.java adapted from org.apache.hadoop.util.bloom.DynamicBloomFilter.java
+
+* org.apache.hudi.common.bloom.InternalFilter.java adapted from org.apache.hadoop.util.bloom.Filter.java
+  and org.apache.hadoop.io.Writable.java
+
+* org.apache.hudi.common.bloom.InternalBloomFilter adapted from org.apache.hadoop.util.bloom.BloomFilter.java
+
+* org.apache.hudi.common.bloom.Key.java adapted from org.apache.hadoop.util.bloom.Key.java
+
+* org.apache.hudi.common.bloom.HashFunction.java ported from org.apache.hadoop.util.bloom.HashFunction.java
+
+* org.apache.hudi.common.util.hash.Hash.java ported from org.apache.hadoop.util.hash.Hash.java
+
+* org.apache.hudi.common.util.hash.JenkinsHash.java ported from org.apache.hadoop.util.hash.JenkinsHash.java
+
+* org.apache.hudi.common.util.hash.MurmurHash.java ported from org.apache.hadoop.util.hash.MurmurHash.java
+
+with the following license
+
+Copyright (c) 2005, European Commission project OneLab under contract 034819 (http://www.one-lab.org)
+
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+ -------------------------------------------------------------------------------
+
+ This product includes code from Apache Cassandra
+
+ * org.apache.hudi.common.util.BufferedRandomAccessFile adapted from org.apache.cassandra.io.BufferedRandomAccessFile
+
+ Copyright: 2011-2019 The Apache Software Foundation
+ Home page: http://cassandra.apache.org/
+ License: http://www.apache.org/licenses/LICENSE-2.0
+
+ -------------------------------------------------------------------------------
+
+ This product includes code from Apache commons-lang
+
+ * org.apache.hudi.common.util.collection.Pair adapted from org.apache.commons.lang3.tuple.Pair
+
+ Copyright 2001-2020 The Apache Software Foundation
+
+ Home page: https://commons.apache.org/proper/commons-lang/
+ License: http://www.apache.org/licenses/LICENSE-2.0
+
+ -------------------------------------------------------------------------------
+
+ This product includes code from StreamSets Data Collector
+
+  * com.streamsets.pipeline.lib.util.avroorc.AvroToOrcRecordConverter copied and modified to org.apache.hudi.common.util.AvroOrcUtils
+  * com.streamsets.pipeline.lib.util.avroorc.AvroToOrcSchemaConverter copied and modified to org.apache.hudi.common.util.AvroOrcUtils
+
+  Copyright 2018 StreamSets Inc.
+
+  Home page: https://github.com/streamsets/datacollector-oss
+  License: http://www.apache.org/licenses/LICENSE-2.0
+
+ -------------------------------------------------------------------------------
+
+ This product includes code from Apache Avro
+
+ * org.apache.hudi.avro.JsonEncoder adapted from org.apache.avro.io.JsonEncoder
+
+ Copyright: 2010-2019 The Apache Software Foundation
+ Home page: https://avro.apache.org
+ License: http://www.apache.org/licenses/LICENSE-2.0

@@ -41,20 +41,22 @@ package org.apache.hudi.common.util.collection;
 public final class ImmutableTriple<L, M, R> extends Triple<L, M, R> {
 
   /**
-   * Serialization version
+   * Serialization version.
    */
   private static final long serialVersionUID = 1L;
 
   /**
-   * Left object
+   * Left object.
    */
   public final L left;
+
   /**
-   * Middle object
+   * Middle object.
    */
   public final M middle;
+
   /**
-   * Right object
+   * Right object.
    */
   public final R right;
 

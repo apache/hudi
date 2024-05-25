@@ -18,17 +18,18 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.Arrays;
-import java.util.List;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Helper class to generate Key and column names for rocksdb based view
  *
- * For RocksDB, 3 colFamilies are used for storing file-system view for each dataset. (a) View (b) Partitions Cached (c)
+ * For RocksDB, 3 colFamilies are used for storing file-system view for each table. (a) View (b) Partitions Cached (c)
  * Pending Compactions
  *
  *
@@ -44,16 +45,26 @@ public class RocksDBSchemaHelper {
 
   private final String colFamilyForView;
   private final String colFamilyForPendingCompaction;
+  private final String colFamilyForPendingLogCompaction;
+  private final String colFamilyForBootstrapBaseFile;
   private final String colFamilyForStoredPartitions;
+  private final String colFamilyForReplacedFileGroups;
+  private final String colFamilyForPendingClusteringFileGroups;
 
   public RocksDBSchemaHelper(HoodieTableMetaClient metaClient) {
+    this.colFamilyForBootstrapBaseFile = "hudi_bootstrap_basefile_" + metaClient.getBasePath().replace("/", "_");
     this.colFamilyForPendingCompaction = "hudi_pending_compaction_" + metaClient.getBasePath().replace("/", "_");
+    this.colFamilyForPendingLogCompaction = "hudi_pending_log_compaction_" + metaClient.getBasePath().replace("/", "_");
     this.colFamilyForStoredPartitions = "hudi_partitions_" + metaClient.getBasePath().replace("/", "_");
     this.colFamilyForView = "hudi_view_" + metaClient.getBasePath().replace("/", "_");
+    this.colFamilyForReplacedFileGroups = "hudi_replaced_fg" + metaClient.getBasePath().replace("/", "_");
+    this.colFamilyForPendingClusteringFileGroups = "hudi_pending_clustering_fg" + metaClient.getBasePath().replace("/", "_");
   }
 
   public List<String> getAllColumnFamilies() {
-    return Arrays.asList(getColFamilyForView(), getColFamilyForPendingCompaction(), getColFamilyForStoredPartitions());
+    return Arrays.asList(getColFamilyForView(), getColFamilyForPendingCompaction(), getColFamilyForPendingLogCompaction(),
+        getColFamilyForBootstrapBaseFile(), getColFamilyForStoredPartitions(), getColFamilyForReplacedFileGroups(),
+        getColFamilyForFileGroupsInPendingClustering());
   }
 
   public String getKeyForPartitionLookup(String partition) {
@@ -61,6 +72,26 @@ public class RocksDBSchemaHelper {
   }
 
   public String getKeyForPendingCompactionLookup(HoodieFileGroupId fgId) {
+    return getPartitionFileIdBasedLookup(fgId);
+  }
+
+  public String getKeyForPendingLogCompactionLookup(HoodieFileGroupId fgId) {
+    return getPartitionFileIdBasedLookup(fgId);
+  }
+
+  public String getKeyForBootstrapBaseFile(HoodieFileGroupId fgId) {
+    return getPartitionFileIdBasedLookup(fgId);
+  }
+
+  public String getKeyForReplacedFileGroup(HoodieFileGroupId fgId) {
+    return getPartitionFileIdBasedLookup(fgId);
+  }
+
+  public String getPrefixForReplacedFileGroup(String partitionPath) {
+    return String.format("part=%s,id=", partitionPath);
+  }
+
+  public String getKeyForFileGroupsInPendingClustering(HoodieFileGroupId fgId) {
     return getPartitionFileIdBasedLookup(fgId);
   }
 
@@ -110,7 +141,23 @@ public class RocksDBSchemaHelper {
     return colFamilyForPendingCompaction;
   }
 
+  public String getColFamilyForPendingLogCompaction() {
+    return colFamilyForPendingLogCompaction;
+  }
+
+  public String getColFamilyForBootstrapBaseFile() {
+    return colFamilyForBootstrapBaseFile;
+  }
+
   public String getColFamilyForStoredPartitions() {
     return colFamilyForStoredPartitions;
+  }
+
+  public String getColFamilyForReplacedFileGroups() {
+    return colFamilyForReplacedFileGroups;
+  }
+
+  public String getColFamilyForFileGroupsInPendingClustering() {
+    return colFamilyForPendingClusteringFileGroups;
   }
 }

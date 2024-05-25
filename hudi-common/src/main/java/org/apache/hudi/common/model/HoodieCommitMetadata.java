@@ -18,21 +18,35 @@
 
 package org.apache.hudi.common.model;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.JsonUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -40,11 +54,14 @@ import org.apache.log4j.Logger;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieCommitMetadata implements Serializable {
 
-  private static volatile Logger log = LogManager.getLogger(HoodieCommitMetadata.class);
+  public static final String SCHEMA_KEY = "schema";
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCommitMetadata.class);
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;
 
-  private Map<String, String> extraMetadataMap;
+  protected Map<String, String> extraMetadata;
+
+  protected WriteOperationType operationType = WriteOperationType.UNKNOWN;
 
   // for ser/deser
   public HoodieCommitMetadata() {
@@ -52,7 +69,7 @@ public class HoodieCommitMetadata implements Serializable {
   }
 
   public HoodieCommitMetadata(boolean compacted) {
-    extraMetadataMap = new HashMap<>();
+    extraMetadata = new HashMap<>();
     partitionToWriteStats = new HashMap<>();
     this.compacted = compacted;
   }
@@ -65,7 +82,7 @@ public class HoodieCommitMetadata implements Serializable {
   }
 
   public void addMetadata(String metaKey, String value) {
-    extraMetadataMap.put(metaKey, value);
+    extraMetadata.put(metaKey, value);
   }
 
   public List<HoodieWriteStat> getWriteStats(String partitionPath) {
@@ -73,15 +90,19 @@ public class HoodieCommitMetadata implements Serializable {
   }
 
   public Map<String, String> getExtraMetadata() {
-    return extraMetadataMap;
+    return extraMetadata;
   }
 
   public Map<String, List<HoodieWriteStat>> getPartitionToWriteStats() {
     return partitionToWriteStats;
   }
 
+  public List<HoodieWriteStat> getWriteStats() {
+    return partitionToWriteStats.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
+  }
+
   public String getMetadata(String metaKey) {
-    return extraMetadataMap.get(metaKey);
+    return extraMetadata.get(metaKey);
   }
 
   public Boolean getCompacted() {
@@ -95,38 +116,169 @@ public class HoodieCommitMetadata implements Serializable {
   public HashMap<String, String> getFileIdAndRelativePaths() {
     HashMap<String, String> filePaths = new HashMap<>();
     // list all partitions paths
-    for (Map.Entry<String, List<HoodieWriteStat>> entry : getPartitionToWriteStats().entrySet()) {
-      for (HoodieWriteStat stat : entry.getValue()) {
+    for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
+      for (HoodieWriteStat stat : stats) {
         filePaths.put(stat.getFileId(), stat.getPath());
       }
     }
     return filePaths;
   }
 
-  public HashMap<String, String> getFileIdAndFullPaths(String basePath) {
+  public void setOperationType(WriteOperationType type) {
+    this.operationType = type;
+  }
+
+  public WriteOperationType getOperationType() {
+    return this.operationType;
+  }
+
+  public HashMap<String, String> getFileIdAndFullPaths(StoragePath basePath) {
     HashMap<String, String> fullPaths = new HashMap<>();
     for (Map.Entry<String, String> entry : getFileIdAndRelativePaths().entrySet()) {
-      String fullPath =
-          (entry.getValue() != null) ? (FSUtils.getPartitionPath(basePath, entry.getValue())).toString() : null;
+      String fullPath = entry.getValue() != null
+          ? FSUtils.constructAbsolutePath(basePath, entry.getValue()).toString()
+          : null;
       fullPaths.put(entry.getKey(), fullPath);
     }
     return fullPaths;
   }
 
+  public List<String> getFullPathsByPartitionPath(String basePath, String partitionPath) {
+    HashSet<String> fullPaths = new HashSet<>();
+    if (getPartitionToWriteStats().get(partitionPath) != null) {
+      for (HoodieWriteStat stat : getPartitionToWriteStats().get(partitionPath)) {
+        if ((stat.getFileId() != null)) {
+          String fullPath = FSUtils.constructAbsolutePath(basePath, stat.getPath()).toString();
+          fullPaths.add(fullPath);
+        }
+      }
+    }
+    return new ArrayList<>(fullPaths);
+  }
+
+  public Map<HoodieFileGroupId, String> getFileGroupIdAndFullPaths(String basePath) {
+    Map<HoodieFileGroupId, String> fileGroupIdToFullPaths = new HashMap<>();
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : getPartitionToWriteStats().entrySet()) {
+      for (HoodieWriteStat stat : entry.getValue()) {
+        HoodieFileGroupId fileGroupId = new HoodieFileGroupId(stat.getPartitionPath(), stat.getFileId());
+        StoragePath fullPath = new StoragePath(basePath, stat.getPath());
+        fileGroupIdToFullPaths.put(fileGroupId, fullPath.toString());
+      }
+    }
+    return fileGroupIdToFullPaths;
+  }
+
+  /**
+   * Extract the file status of all affected files from the commit metadata. If a file has
+   * been touched multiple times in the given commits, the return value will keep the one
+   * from the latest commit.
+   *
+   * @param storage     {@link HoodieStorage} instance.
+   * @param basePath    The base path
+   * @return the file full path to file status mapping
+   */
+  public Map<String, StoragePathInfo> getFullPathToInfo(HoodieStorage storage,
+                                                        String basePath) {
+    Map<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
+    for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
+      // Iterate through all the written files.
+      for (HoodieWriteStat stat : stats) {
+        String relativeFilePath = stat.getPath();
+        StoragePath fullPath = relativeFilePath != null
+            ? FSUtils.constructAbsolutePath(basePath, relativeFilePath) : null;
+        if (fullPath != null) {
+          long blockSize = storage.getDefaultBlockSize(fullPath);
+          StoragePathInfo pathInfo = new StoragePathInfo(
+              fullPath, stat.getFileSizeInBytes(), false, (short) 0, blockSize, 0);
+          fullPathToInfoMap.put(fullPath.getName(), pathInfo);
+        }
+      }
+    }
+    return fullPathToInfoMap;
+  }
+
+  /**
+   * Extract the file status of all affected files from the commit metadata. If a file has
+   * been touched multiple times in the given commits, the return value will keep the one
+   * from the latest commit by file group ID.
+   *
+   * <p>Note: different with {@link #getFullPathToInfo(HoodieStorage, String)},
+   * only the latest commit file for a file group is returned,
+   * this is an optimization for COPY_ON_WRITE table to eliminate legacy files for filesystem view.
+   *
+   * @param basePath    The base path
+   * @return the file ID to file status mapping
+   */
+  public Map<String, StoragePathInfo> getFileIdToInfo(String basePath) {
+    Map<String, StoragePathInfo> fileIdToInfoMap = new HashMap<>();
+    for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
+      // Iterate through all the written files.
+      for (HoodieWriteStat stat : stats) {
+        String relativeFilePath = stat.getPath();
+        StoragePath fullPath =
+            relativeFilePath != null ? FSUtils.constructAbsolutePath(basePath,
+                relativeFilePath) : null;
+        if (fullPath != null) {
+          StoragePathInfo pathInfo =
+              new StoragePathInfo(fullPath, stat.getFileSizeInBytes(), false, (short) 0, 0, 0);
+          fileIdToInfoMap.put(stat.getFileId(), pathInfo);
+        }
+      }
+    }
+    return fileIdToInfoMap;
+  }
+
   public String toJsonString() throws IOException {
     if (partitionToWriteStats.containsKey(null)) {
-      log.info("partition path is null for " + partitionToWriteStats.get(null));
+      LOG.info("partition path is null for " + partitionToWriteStats.get(null));
       partitionToWriteStats.remove(null);
     }
-    return getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
+    return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
   public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
     if (jsonStr == null || jsonStr.isEmpty()) {
-      // For empty commit file (no data or somethings bad happen).
+      // For empty commit file
       return clazz.newInstance();
     }
-    return getObjectMapper().readValue(jsonStr, clazz);
+    return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
+  }
+
+  /**
+   * parse the bytes of deltacommit, and get the base file and the log files belonging to this
+   * provided file group.
+   */
+  // TODO: refactor this method to avoid doing the json tree walking (HUDI-4822).
+  public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(byte[] bytes, HoodieFileGroupId fileGroupId) {
+    try {
+      String jsonStr = fromUTF8Bytes(
+          convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class));
+      if (jsonStr.isEmpty()) {
+        return Option.empty();
+      }
+      JsonNode ptToWriteStatsMap = JsonUtils.getObjectMapper().readTree(jsonStr).get("partitionToWriteStats");
+      Iterator<Map.Entry<String, JsonNode>> pts = ptToWriteStatsMap.fields();
+      while (pts.hasNext()) {
+        Map.Entry<String, JsonNode> ptToWriteStats = pts.next();
+        if (ptToWriteStats.getValue().isArray()) {
+          for (JsonNode writeStat : ptToWriteStats.getValue()) {
+            HoodieFileGroupId fgId = new HoodieFileGroupId(ptToWriteStats.getKey(), writeStat.get("fileId").asText());
+            if (fgId.equals(fileGroupId)) {
+              String baseFile = writeStat.get("baseFile").asText();
+              ArrayNode logFilesNode = (ArrayNode) writeStat.get("logFiles");
+              List<String> logFiles = new ArrayList<>();
+              for (JsonNode logFile : logFilesNode) {
+                logFiles.add(logFile.asText());
+              }
+              return Option.of(Pair.of(baseFile, logFiles));
+            }
+          }
+        }
+      }
+      return Option.empty();
+    } catch (Exception e) {
+      throw new HoodieException("Fail to parse the base file and log files from DeltaCommit", e);
+    }
   }
 
   // Here the functions are named "fetch" instead of "get", to get avoid of the json conversion.
@@ -172,7 +324,8 @@ public class HoodieCommitMetadata implements Serializable {
     long totalInsertRecordsWritten = 0;
     for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
       for (HoodieWriteStat stat : stats) {
-        if (stat.getPrevCommit() != null && stat.getPrevCommit().equalsIgnoreCase("null")) {
+        // determine insert rows in every file
+        if (stat.getPrevCommit() != null) {
           totalInsertRecordsWritten += stat.getNumInserts();
         }
       }
@@ -250,6 +403,26 @@ public class HoodieCommitMetadata implements Serializable {
     return totalUpdateRecords;
   }
 
+  public Long getTotalCorruptLogBlocks() {
+    Long totalCorruptedLogBlocks = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalCorruptedLogBlocks += writeStat.getTotalCorruptLogBlock();
+      }
+    }
+    return totalCorruptedLogBlocks;
+  }
+
+  public Long getTotalRollbackLogBlocks() {
+    Long totalRollbackLogBlocks = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalRollbackLogBlocks += writeStat.getTotalRollbackBlocks();
+      }
+    }
+    return totalRollbackLogBlocks;
+  }
+
   public Long getTotalLogFilesSize() {
     Long totalLogFilesSize = 0L;
     for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
@@ -296,6 +469,24 @@ public class HoodieCommitMetadata implements Serializable {
     return totalUpsertTime;
   }
 
+  public Pair<Option<Long>, Option<Long>> getMinAndMaxEventTime() {
+    long minEventTime = Long.MAX_VALUE;
+    long maxEventTime = Long.MIN_VALUE;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        minEventTime = writeStat.getMinEventTime() != null ? Math.min(writeStat.getMinEventTime(), minEventTime) : minEventTime;
+        maxEventTime = writeStat.getMaxEventTime() != null ? Math.max(writeStat.getMaxEventTime(), maxEventTime) : maxEventTime;
+      }
+    }
+    return Pair.of(
+        minEventTime == Long.MAX_VALUE ? Option.empty() : Option.of(minEventTime),
+        maxEventTime == Long.MIN_VALUE ? Option.empty() : Option.of(maxEventTime));
+  }
+
+  public HashSet<String> getWritePartitionPaths() {
+    return new HashSet<>(partitionToWriteStats.keySet());
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -323,22 +514,23 @@ public class HoodieCommitMetadata implements Serializable {
 
   public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
     try {
-      return fromJsonString(new String(bytes, Charset.forName("utf-8")), clazz);
+      if (bytes.length == 0) {
+        return clazz.newInstance();
+      }
+      return fromJsonString(
+          fromUTF8Bytes(
+              convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class)),
+          clazz);
     } catch (Exception e) {
-      throw new IOException("unable to read commit metadata", e);
+      throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);
     }
-  }
-
-  protected static ObjectMapper getObjectMapper() {
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-    mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-    return mapper;
   }
 
   @Override
   public String toString() {
-    return "HoodieCommitMetadata{" + "partitionToWriteStats=" + partitionToWriteStats + ", compacted=" + compacted
-        + ", extraMetadataMap=" + extraMetadataMap + '}';
+    return "HoodieCommitMetadata{" + "partitionToWriteStats=" + partitionToWriteStats
+        + ", compacted=" + compacted
+        + ", extraMetadata=" + extraMetadata
+        + ", operationType=" + operationType + '}';
   }
 }

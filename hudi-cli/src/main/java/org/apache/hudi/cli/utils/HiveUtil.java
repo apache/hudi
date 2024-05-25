@@ -18,23 +18,28 @@
 
 package org.apache.hudi.cli.utils;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+
+import org.joda.time.DateTime;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.joda.time.DateTime;
 
+/**
+ * Hive connection related utilities.
+ */
 public class HiveUtil {
 
-  private static final String driverName = "org.apache.hive.jdbc.HiveDriver";
+  private static final String DRIVER_NAME = "org.apache.hive.jdbc.HiveDriver";
 
   static {
     try {
-      Class.forName(driverName);
+      Class.forName(DRIVER_NAME);
     } catch (ClassNotFoundException e) {
-      throw new IllegalStateException("Could not find " + driverName + " in classpath. ", e);
+      throw new IllegalStateException("Could not find " + DRIVER_NAME + " in classpath. ", e);
     }
   }
 
@@ -44,10 +49,9 @@ public class HiveUtil {
 
   public static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String dbName, String user, String pass)
       throws SQLException {
-    Connection conn = HiveUtil.getConnection(jdbcUrl, user, pass);
     ResultSet rs = null;
-    Statement stmt = conn.createStatement();
-    try {
+    try (Connection conn = HiveUtil.getConnection(jdbcUrl, user, pass);
+         Statement stmt = conn.createStatement()) {
       // stmt.execute("set mapred.job.queue.name=<queue_name>");
       stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
       stmt.execute("set hive.stats.autogather=false");
@@ -62,9 +66,6 @@ public class HiveUtil {
     } finally {
       if (rs != null) {
         rs.close();
-      }
-      if (stmt != null) {
-        stmt.close();
       }
     }
   }
@@ -83,10 +84,9 @@ public class HiveUtil {
 
   private static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String srcDb, String startDateStr,
       String endDateStr, String user, String pass) throws SQLException {
-    Connection conn = HiveUtil.getConnection(jdbcUrl, user, pass);
     ResultSet rs = null;
-    Statement stmt = conn.createStatement();
-    try {
+    try (Connection conn = HiveUtil.getConnection(jdbcUrl, user, pass);
+         Statement stmt = conn.createStatement()) {
       // stmt.execute("set mapred.job.queue.name=<queue_name>");
       stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
       stmt.execute("set hive.stats.autogather=false");
@@ -100,9 +100,6 @@ public class HiveUtil {
     } finally {
       if (rs != null) {
         rs.close();
-      }
-      if (stmt != null) {
-        stmt.close();
       }
     }
   }

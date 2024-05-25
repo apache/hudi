@@ -30,15 +30,42 @@
         "fields": [
             {"name": "partitionPath", "type": "string"},
             {"name": "successDeleteFiles", "type": {"type": "array", "items": "string"}},
-            {"name": "failedDeleteFiles", "type": {"type": "array", "items": "string"}}
+            {"name": "failedDeleteFiles", "type": {"type": "array", "items": "string"}},
+            {"name": "rollbackLogFiles", "type": ["null", {
+                "type": "map",
+                "doc": "Files to which append blocks were written to capture rollback commit",
+                "values": {
+                    "type": "long",
+                    "doc": "Size of this file in bytes"
+                }
+            }], "default":null },
+            {"name": "logFilesFromFailedCommit",
+             "type": ["null", {
+               "type": "map",
+               "doc": "Log files from the failed commit(commit to be rolled back)",
+               "values": {
+                   "type": "long",
+                   "doc": "Size of this file in bytes"
+               }
+             }],
+             "default":null
+            }
         ]
-     }
-     }
-     },
+     }}},
      {
         "name":"version",
         "type":["int", "null"],
         "default": 1
+     },
+     /* overlaps with 'commitsRollback' field. Adding this to track action type for all the instants being rolled back. */
+     {
+       "name": "instantsRollback",
+       "default": [],
+       "type": {
+          "type": "array",
+          "default": [],
+          "items": "HoodieInstantInfo"
+       }
      }
  ]
 }

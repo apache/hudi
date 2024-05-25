@@ -18,38 +18,34 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.config.HoodieWriteConfig;
+
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import java.io.IOException;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaSparkContext;
 
 public class HoodieCleaner {
 
-  private static volatile Logger log = LogManager.getLogger(HoodieCleaner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCleaner.class);
 
   /**
-   * Config for Cleaner
+   * Config for Cleaner.
    */
   private final Config cfg;
 
   /**
-   * Filesystem used
-   */
-  private transient FileSystem fs;
-
-  /**
-   * Spark context
+   * Spark context.
    */
   private transient JavaSparkContext jssc;
 
@@ -58,29 +54,32 @@ public class HoodieCleaner {
    */
   private TypedProperties props;
 
-  public HoodieCleaner(Config cfg, JavaSparkContext jssc) throws IOException {
+  public HoodieCleaner(Config cfg, JavaSparkContext jssc) {
+    this(cfg, jssc, UtilHelpers.buildProperties(jssc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));
+  }
+
+  public HoodieCleaner(Config cfg, JavaSparkContext jssc, TypedProperties props) {
     this.cfg = cfg;
     this.jssc = jssc;
-    this.fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
-    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
-        : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
-    log.info("Creating Cleaner with configs : " + props.toString());
+    this.props = props;
+    LOG.info("Creating Cleaner with configs : " + props.toString());
   }
 
-  public void run() throws Exception {
+  public void run() {
     HoodieWriteConfig hoodieCfg = getHoodieClientConfig();
-    HoodieWriteClient client = new HoodieWriteClient<>(jssc, hoodieCfg, false);
-    client.clean();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), hoodieCfg)) {
+      client.clean();
+    }
   }
 
-  private HoodieWriteConfig getHoodieClientConfig() throws Exception {
+  private HoodieWriteConfig getHoodieClientConfig() {
     return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath).withAutoCommit(false)
         .withProps(props).build();
   }
 
   public static class Config implements Serializable {
 
-    @Parameter(names = {"--target-base-path"}, description = "base path for the hoodie dataset to be cleaner.",
+    @Parameter(names = {"--target-base-path"}, description = "base path for the hoodie table to be cleaner.",
         required = true)
     public String basePath;
 
@@ -89,7 +88,8 @@ public class HoodieCleaner {
     public String propsFilePath = null;
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
+            splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--spark-master"}, description = "spark master to use.")
@@ -99,16 +99,25 @@ public class HoodieCleaner {
     public Boolean help = false;
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
+    JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
-      System.exit(1);
+      throw new HoodieException("Failed to run cleaning for " + cfg.basePath);
     }
 
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);
-    new HoodieCleaner(cfg, jssc).run();
+
+    try {
+      new HoodieCleaner(cfg, jssc).run();
+    } catch (Throwable throwable) {
+      throw new HoodieException("Failed to run cleaning for " + cfg.basePath, throwable);
+    } finally {
+      jssc.stop();
+    }
+
+    LOG.info("Cleaner ran successfully");
   }
 }

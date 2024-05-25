@@ -18,112 +18,141 @@
 
 package org.apache.hudi.cli.commands;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.cli.utils.CLIUtils;
+import org.apache.hudi.cli.utils.InputStreamConsumer;
+import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.AvroUtils;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.spark.launcher.SparkLauncher;
+import org.apache.spark.util.Utils;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
+import scala.collection.JavaConverters;
 
-@Component
-public class CleansCommand implements CommandMarker {
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-  @CliAvailabilityIndicator({"cleans show"})
-  public boolean isShowAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
+/**
+ * CLI command to show cleans options.
+ */
+@ShellComponent
+public class CleansCommand {
 
-  @CliAvailabilityIndicator({"cleans refresh"})
-  public boolean isRefreshAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
-  @CliAvailabilityIndicator({"clean showpartitions"})
-  public boolean isCommitShowAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
-  @CliCommand(value = "cleans show", help = "Show the cleans")
+  @ShellMethod(key = "cleans show", value = "Show the cleans")
   public String showCleans(
-      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--startTs"}, help = "start time for cleans, default: now - 10 days",
+          defaultValue = ShellOption.NULL) String startTs,
+      @ShellOption(value = {"--endTs"}, help = "end time for clean, default: upto latest",
+          defaultValue = ShellOption.NULL) String endTs,
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
+          defaultValue = "false") final boolean includeArchivedTimeline,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+    HoodieDefaultTimeline activeTimeline = CLIUtils.getTimelineInRange(startTs, endTs, includeArchivedTimeline);
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
-    List<HoodieInstant> cleans = timeline.getInstants().collect(Collectors.toList());
+    List<HoodieInstant> cleans = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
-    Collections.reverse(cleans);
-    for (int i = 0; i < cleans.size(); i++) {
-      HoodieInstant clean = cleans.get(i);
+    for (HoodieInstant clean : cleans) {
       HoodieCleanMetadata cleanMetadata =
-          AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
+          TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
       rows.add(new Comparable[] {clean.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
           cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
     }
 
     TableHeader header =
-        new TableHeader().addTableHeaderField("CleanTime").addTableHeaderField("EarliestCommandRetained")
-            .addTableHeaderField("Total Files Deleted").addTableHeaderField("Total Time Taken");
+        new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_CLEAN_TIME)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_EARLIEST_COMMAND_RETAINED)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_DELETED)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_TIME_TAKEN);
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "cleans refresh", help = "Refresh the commits")
-  public String refreshCleans() throws IOException {
-    HoodieCLI.refreshTableMetadata();
-    return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " refreshed.";
-  }
-
-  @CliCommand(value = "clean showpartitions", help = "Show partition level details of a clean")
-  public String showCleanPartitions(@CliOption(key = {"clean"}, help = "clean to show") final String commitTime,
-      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+  @ShellMethod(key = "clean showpartitions", value = "Show partition level details of a clean")
+  public String showCleanPartitions(
+      @ShellOption(value = {"--clean"}, help = "clean to show") final String instantTime,
+      @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly)
       throws Exception {
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
-    HoodieInstant cleanInstant = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, commitTime);
+    HoodieInstant cleanInstant = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, instantTime);
 
     if (!timeline.containsInstant(cleanInstant)) {
-      return "Clean " + commitTime + " not found in metadata " + timeline;
+      return "Clean " + instantTime + " not found in metadata " + timeline;
     }
 
     HoodieCleanMetadata cleanMetadata =
-        AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(cleanInstant).get());
+        TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(cleanInstant).get());
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, HoodieCleanPartitionMetadata> entry : cleanMetadata.getPartitionMetadata().entrySet()) {
       String path = entry.getKey();
       HoodieCleanPartitionMetadata stats = entry.getValue();
       String policy = stats.getPolicy();
-      Integer totalSuccessDeletedFiles = stats.getSuccessDeleteFiles().size();
-      Integer totalFailedDeletedFiles = stats.getFailedDeleteFiles().size();
+      int totalSuccessDeletedFiles = stats.getSuccessDeleteFiles().size();
+      int totalFailedDeletedFiles = stats.getFailedDeleteFiles().size();
       rows.add(new Comparable[] {path, policy, totalSuccessDeletedFiles, totalFailedDeletedFiles});
     }
 
-    TableHeader header = new TableHeader().addTableHeaderField("Partition Path").addTableHeaderField("Cleaning policy")
-        .addTableHeaderField("Total Files Successfully Deleted").addTableHeaderField("Total Failed Deletions");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_CLEANING_POLICY)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_SUCCESSFULLY_DELETED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FAILED_DELETIONS);
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
 
+  }
+
+  @ShellMethod(key = "cleans run", value = "run clean")
+  public String runClean(
+      @ShellOption(value = "--sparkMemory", defaultValue = "4G",
+          help = "Spark executor memory") final String sparkMemory,
+      @ShellOption(value = "--propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for cleaning",
+          defaultValue = "") final String propsFilePath,
+      @ShellOption(value = "--hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+          defaultValue = "") final String[] configs,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master ") String master) throws IOException, InterruptedException, URISyntaxException {
+    boolean initialized = HoodieCLI.initConf();
+    HoodieCLI.initFS(initialized);
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+
+    String sparkPropertiesPath =
+        Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+
+    String cmd = SparkMain.SparkCommand.CLEAN.toString();
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, metaClient.getBasePath(), propsFilePath);
+    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+    if (exitCode != 0) {
+      return "Failed to clean hoodie dataset";
+    }
+    return "Cleaned hoodie dataset";
   }
 }

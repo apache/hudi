@@ -18,97 +18,169 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.common.util.collection.ImmutablePair;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieIOException;
 
-public class DFSPathSelector {
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
+public class DFSPathSelector implements Serializable {
+
+  protected static volatile Logger log = LoggerFactory.getLogger(DFSPathSelector.class);
 
   /**
-   * Configs supported
+   * Configs supported.
    */
-  static class Config {
+  public static class Config {
 
-    private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
+    @Deprecated
+    public static final String ROOT_INPUT_PATH_PROP = DFSPathSelectorConfig.ROOT_INPUT_PATH.key();
+    @Deprecated
+    public static final String SOURCE_INPUT_SELECTOR = DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR.key();
   }
 
-  private static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
+  protected static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
 
-  private final transient FileSystem fs;
-  private final TypedProperties props;
+  protected final transient HoodieStorage storage;
+  protected final TypedProperties props;
 
   public DFSPathSelector(TypedProperties props, Configuration hadoopConf) {
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
+    checkRequiredConfigProperties(
+        props, Collections.singletonList(DFSPathSelectorConfig.ROOT_INPUT_PATH));
     this.props = props;
-    this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), hadoopConf);
+    this.storage = HoodieStorageUtils.getStorage(
+        getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH), HadoopFSUtils.getStorageConf(hadoopConf));
   }
 
-  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(Option<String> lastCheckpointStr,
-      long sourceLimit) {
+  /**
+   * Factory method for creating custom DFSPathSelector. Default selector
+   * to use is {@link DFSPathSelector}
+   */
+  public static DFSPathSelector createSourceSelector(TypedProperties props,
+                                                     Configuration conf) {
+    String sourceSelectorClass = getStringWithAltKeys(
+        props, DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR, DFSPathSelector.class.getName());
+    try {
+      DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
+          new Class<?>[] {TypedProperties.class, Configuration.class},
+          props, conf);
 
+      log.info("Using path selector " + selector.getClass().getName());
+      return selector;
+    } catch (Exception e) {
+      throw new HoodieException("Could not load source selector class " + sourceSelectorClass, e);
+    }
+  }
+
+  /**
+   * Get the list of files changed since last checkpoint.
+   *
+   * @param sparkContext JavaSparkContext to help parallelize certain operations
+   * @param lastCheckpointStr the last checkpoint time string, empty if first run
+   * @param sourceLimit       max bytes to read each time
+   * @return the list of files concatenated and their latest modified time
+   */
+  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(JavaSparkContext sparkContext, Option<String> lastCheckpointStr,
+                                                                             long sourceLimit) {
+    return getNextFilePathsAndMaxModificationTime(lastCheckpointStr, sourceLimit);
+  }
+
+  /**
+   * Get the list of files changed since last checkpoint.
+   *
+   * @param lastCheckpointStr the last checkpoint time string, empty if first run
+   * @param sourceLimit       max bytes to read each time
+   * @return the list of files concatenated and their latest modified time
+   */
+  @Deprecated
+  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(Option<String> lastCheckpointStr,
+                                                                             long sourceLimit) {
     try {
       // obtain all eligible files under root folder.
-      List<FileStatus> eligibleFiles = new ArrayList<>();
-      RemoteIterator<LocatedFileStatus> fitr =
-          fs.listFiles(new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), true);
-      while (fitr.hasNext()) {
-        LocatedFileStatus fileStatus = fitr.next();
-        if (fileStatus.isDirectory()
-            || IGNORE_FILEPREFIX_LIST.stream().anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
-          continue;
-        }
-        eligibleFiles.add(fileStatus);
-      }
+      log.info("Root path => " + getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH)
+          + " source limit => " + sourceLimit);
+      long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
+      List<StoragePathInfo> eligibleFiles = listEligibleFiles(
+          storage, new StoragePath(getStringWithAltKeys(props,
+              DFSPathSelectorConfig.ROOT_INPUT_PATH)),
+          lastCheckpointTime);
       // sort them by modification time.
-      eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
-
+      eligibleFiles.sort(Comparator.comparingLong(StoragePathInfo::getModificationTime));
       // Filter based on checkpoint & input size, if needed
       long currentBytes = 0;
-      long maxModificationTime = Long.MIN_VALUE;
-      List<FileStatus> filteredFiles = new ArrayList<>();
-      for (FileStatus f : eligibleFiles) {
-        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(lastCheckpointStr.get())) {
-          // skip processed files
-          continue;
-        }
-
-        if (currentBytes + f.getLen() >= sourceLimit) {
+      long newCheckpointTime = lastCheckpointTime;
+      List<StoragePathInfo> filteredFiles = new ArrayList<>();
+      for (StoragePathInfo f : eligibleFiles) {
+        if (currentBytes + f.getLength() >= sourceLimit
+            && f.getModificationTime() > newCheckpointTime) {
           // we have enough data, we are done
+          // Also, we've read up to a file with a newer modification time
+          // so that some files with the same modification time won't be skipped in next read
           break;
         }
 
-        maxModificationTime = f.getModificationTime();
-        currentBytes += f.getLen();
+        newCheckpointTime = f.getModificationTime();
+        currentBytes += f.getLength();
         filteredFiles.add(f);
       }
 
       // no data to read
-      if (filteredFiles.size() == 0) {
-        return new ImmutablePair<>(Option.empty(), lastCheckpointStr.orElseGet(() -> String.valueOf(Long.MIN_VALUE)));
+      if (filteredFiles.isEmpty()) {
+        return new ImmutablePair<>(Option.empty(), String.valueOf(newCheckpointTime));
       }
 
       // read the files out.
-      String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
+      String pathStr =
+          filteredFiles.stream().map(f -> f.getPath().toString())
+              .collect(Collectors.joining(","));
 
-      return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(maxModificationTime));
+      return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(newCheckpointTime));
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
     }
+  }
+
+  /**
+   * List files recursively, filter out illegible files/directories while doing so.
+   */
+  protected List<StoragePathInfo> listEligibleFiles(HoodieStorage storage, StoragePath path,
+                                                    long lastCheckpointTime) throws IOException {
+    // skip files/dirs whose names start with (_, ., etc)
+    List<StoragePathInfo> pathInfoList = storage.listDirectEntries(path, file ->
+        IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
+    List<StoragePathInfo> res = new ArrayList<>();
+    for (StoragePathInfo pathInfo : pathInfoList) {
+      if (pathInfo.isDirectory()) {
+        res.addAll(listEligibleFiles(storage, pathInfo.getPath(), lastCheckpointTime));
+      } else if (pathInfo.getModificationTime() > lastCheckpointTime && pathInfo.getLength() > 0) {
+        res.add(pathInfo);
+      }
+    }
+    return res;
   }
 }

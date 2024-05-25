@@ -15,11 +15,12 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.5.1-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -35,11 +36,8 @@
         <directory>src/main/resources</directory>
       </resource>
     </resources>
+
     <plugins>
-      <plugin>
-        <groupId>org.jacoco</groupId>
-        <artifactId>jacoco-maven-plugin</artifactId>
-      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
@@ -61,18 +59,42 @@
         <artifactId>apache-rat-plugin</artifactId>
       </plugin>
       <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
         <groupId>org.apache.avro</groupId>
         <artifactId>avro-maven-plugin</artifactId>
         <configuration>
           <imports>
             <!-- import avro files -->
             <import>${basedir}/src/main/avro/HoodieCommitMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieCompactionStrategy.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCompactionOperation.avsc</import>
             <import>${basedir}/src/main/avro/HoodieSavePointMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCompactionMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieCleanPartitionMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCleanMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieCleanerPlan.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieInstantInfo.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRollbackMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRestoreMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieReplaceCommitMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodiePath.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieFSPermission.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieFileStatus.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBootstrapSourceFilePartitionInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBootstrapIndexInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBootstrapMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieSliceInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieClusteringGroup.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieClusteringStrategy.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieClusteringPlan.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieRequestedReplaceMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieIndexPartitionInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieIndexPlan.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieIndexCommitMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieArchivedMetaEntry.avsc</import>
           </imports>
         </configuration>
@@ -81,6 +103,23 @@
   </build>
 
   <dependencies>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-io</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.openjdk.jol</groupId>
+      <artifactId>jol-core</artifactId>
+    </dependency>
+
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-1.2-api</artifactId>
+    </dependency>
+
     <!-- Fasterxml -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
@@ -90,6 +129,20 @@
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.module</groupId>
+      <artifactId>jackson-module-afterburner</artifactId>
+    </dependency>
+
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.module</groupId>
+      <artifactId>jackson-module-afterburner</artifactId>
+    </dependency>
 
     <!-- Avro -->
     <dependency>
@@ -97,10 +150,28 @@
       <artifactId>avro</artifactId>
     </dependency>
 
+    <!-- caffeine -->
+    <dependency>
+      <groupId>com.github.ben-manes.caffeine</groupId>
+      <artifactId>caffeine</artifactId>
+    </dependency>
+
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+    </dependency>
+
+    <!-- Orc -->
+    <dependency>
+      <groupId>org.apache.orc</groupId>
+      <artifactId>orc-core</artifactId>
+    </dependency>
+
+    <!-- RoaringBitmap -->
+    <dependency>
+      <groupId>org.roaringbitmap</groupId>
+      <artifactId>RoaringBitmap</artifactId>
     </dependency>
 
     <!-- Httpcomponents -->
@@ -118,57 +189,155 @@
       <artifactId>rocksdbjni</artifactId>
     </dependency>
 
-    <!-- Hadoop -->
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-      <classifier>tests</classifier>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-io</artifactId>
+      <version>${project.version}</version>
       <classifier>tests</classifier>
       <scope>test</scope>
     </dependency>
 
     <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
 
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-all</artifactId>
-      <scope>test</scope>
-    </dependency>
-
+    <!-- Kryo -->
     <dependency>
       <groupId>com.esotericsoftware</groupId>
       <artifactId>kryo-shaded</artifactId>
-      <version>4.0.2</version>
     </dependency>
 
     <dependency>
       <groupId>com.github.stefanbirkner</groupId>
       <artifactId>system-rules</artifactId>
-      <version>1.16.0</version>
+      <version>1.17.2</version>
       <scope>test</scope>
     </dependency>
+
+    <!-- HBase -->
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-client</artifactId>
+      <version>${hbase.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>log4j</groupId>
+          <artifactId>log4j</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-server</artifactId>
+      <version>${hbase.version}</version>
+      <!-- Unfortunately, HFile is packaged ONLY under hbase-server -->
+      <scope>compile</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.mortbay.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>tomcat</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-streaming-kafka-0-10_${scala.binary.version}</artifactId>
+      <scope>test</scope>
+      <version>${spark.version}</version>
+    </dependency>
+
+    <!-- Force to use 2.11.0 since hbase-server requires 2.7+ -->
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>${commons.io.version}</version>
+    </dependency>
+
+    <!-- LZ4 Hash Utils -->
+    <dependency>
+      <groupId>org.lz4</groupId>
+      <artifactId>lz4-java</artifactId>
+      <version>1.8.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>joda-time</groupId>
+      <artifactId>joda-time</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.lmax</groupId>
+      <artifactId>disruptor</artifactId>
+      <version>${disruptor.version}</version>
+    </dependency>
+
+    <!-- Dropwizard Metrics -->
+    <dependency>
+          <groupId>io.dropwizard.metrics</groupId>
+          <artifactId>metrics-graphite</artifactId>
+          <exclusions>
+              <exclusion>
+                  <groupId>com.rabbitmq</groupId>
+                  <artifactId>*</artifactId>
+              </exclusion>
+          </exclusions>
+      </dependency>
+      <dependency>
+          <groupId>io.dropwizard.metrics</groupId>
+          <artifactId>metrics-core</artifactId>
+      </dependency>
+      <dependency>
+          <groupId>io.dropwizard.metrics</groupId>
+          <artifactId>metrics-jmx</artifactId>
+      </dependency>
+      <dependency>
+          <groupId>io.prometheus</groupId>
+          <artifactId>simpleclient</artifactId>
+      </dependency>
+      <dependency>
+          <groupId>io.prometheus</groupId>
+          <artifactId>simpleclient_httpserver</artifactId>
+      </dependency>
+      <dependency>
+          <groupId>io.prometheus</groupId>
+          <artifactId>simpleclient_dropwizard</artifactId>
+      </dependency>
+      <dependency>
+          <groupId>io.prometheus</groupId>
+          <artifactId>simpleclient_pushgateway</artifactId>
+      </dependency>
+    <dependency>
+      <groupId>com.uber.m3</groupId>
+      <artifactId>tally-m3</artifactId>
+      <version>${tally.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.uber.m3</groupId>
+      <artifactId>tally-core</artifactId>
+      <version>${tally.version}</version>
+    </dependency>
+
   </dependencies>
 </project>

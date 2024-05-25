@@ -18,50 +18,57 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
+
 import scala.collection.JavaConverters;
 
-@Component
-public class HDFSParquetImportCommand implements CommandMarker {
+/**
+ * CLI command for importing parquet table to hudi table.
+ *
+ * @see HoodieStreamer
+ * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieStreamer.Config#runBootstrap} instead.
+ */
+@ShellComponent
+public class HDFSParquetImportCommand {
 
-  private static Logger log = LogManager.getLogger(HDFSParquetImportCommand.class);
-
-  @CliCommand(value = "hdfsparquetimport", help = "Imports Parquet dataset to a hoodie dataset")
+  @ShellMethod(key = "hdfsparquetimport", value = "Imports Parquet table to a hoodie table")
   public String convert(
-      @CliOption(key = "upsert", mandatory = false, unspecifiedDefaultValue = "false",
+      @ShellOption(value = "--upsert", defaultValue = "false",
           help = "Uses upsert API instead of the default insert API of WriteClient") boolean useUpsert,
-      @CliOption(key = "srcPath", mandatory = true, help = "Base path for the input dataset") final String srcPath,
-      @CliOption(key = "targetPath", mandatory = true,
-          help = "Base path for the target hoodie dataset") final String targetPath,
-      @CliOption(key = "tableName", mandatory = true, help = "Table name") final String tableName,
-      @CliOption(key = "tableType", mandatory = true, help = "Table type") final String tableType,
-      @CliOption(key = "rowKeyField", mandatory = true, help = "Row key field name") final String rowKeyField,
-      @CliOption(key = "partitionPathField", mandatory = true,
+      @ShellOption(value = "--srcPath", help = "Base path for the input table") final String srcPath,
+      @ShellOption(value = "--targetPath",
+          help = "Base path for the target hoodie table") final String targetPath,
+      @ShellOption(value = "--tableName", help = "Table name") final String tableName,
+      @ShellOption(value = "--tableType", help = "Table type") final String tableType,
+      @ShellOption(value = "--rowKeyField", help = "Row key field name") final String rowKeyField,
+      @ShellOption(value = "--partitionPathField", defaultValue = "",
           help = "Partition path field name") final String partitionPathField,
-      @CliOption(key = {"parallelism"}, mandatory = true,
+      @ShellOption(value = {"--parallelism"},
           help = "Parallelism for hoodie insert") final String parallelism,
-      @CliOption(key = "schemaFilePath", mandatory = true,
+      @ShellOption(value = "--schemaFilePath",
           help = "Path for Avro schema file") final String schemaFilePath,
-      @CliOption(key = "format", mandatory = true, help = "Format for the input data") final String format,
-      @CliOption(key = "sparkMemory", mandatory = true, help = "Spark executor memory") final String sparkMemory,
-      @CliOption(key = "retry", mandatory = true, help = "Number of retries") final String retry) throws Exception {
+      @ShellOption(value = "--format", help = "Format for the input data") final String format,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
+      @ShellOption(value = "--sparkMemory", help = "Spark executor memory") final String sparkMemory,
+      @ShellOption(value = "--retry", help = "Number of retries") final String retry,
+      @ShellOption(value = "--propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for importing",
+          defaultValue = "") final String propsFilePath,
+      @ShellOption(value = "--hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+          defaultValue = "") final String[] configs) throws Exception {
 
     (new FormatValidator()).validate("format", format);
 
-    boolean initialized = HoodieCLI.initConf();
-    HoodieCLI.initFS(initialized);
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
 
@@ -72,14 +79,15 @@ public class HDFSParquetImportCommand implements CommandMarker {
       cmd = SparkCommand.UPSERT.toString();
     }
 
-    sparkLauncher.addAppArgs(cmd, srcPath, targetPath, tableName, tableType, rowKeyField, partitionPathField,
-        parallelism, schemaFilePath, sparkMemory, retry);
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, srcPath, targetPath, tableName, tableType, rowKeyField,
+        partitionPathField, parallelism, schemaFilePath, retry, propsFilePath);
+    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     if (exitCode != 0) {
-      return "Failed to import dataset to hoodie format";
+      return "Failed to import table to hoodie format";
     }
-    return "Dataset imported to hoodie format";
+    return "Table imported to hoodie format";
   }
 }

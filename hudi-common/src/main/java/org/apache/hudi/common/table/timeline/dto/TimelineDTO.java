@@ -18,14 +18,19 @@
 
 package org.apache.hudi.common.table.timeline.dto;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 
+/**
+ * The data transfer object of timeline.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class TimelineDTO {
 
@@ -34,7 +39,7 @@ public class TimelineDTO {
 
   public static TimelineDTO fromTimeline(HoodieTimeline timeline) {
     TimelineDTO dto = new TimelineDTO();
-    dto.instants = timeline.getInstants().map(InstantDTO::fromInstant).collect(Collectors.toList());
+    dto.instants = timeline.getInstantsAsStream().map(InstantDTO::fromInstant).collect(Collectors.toList());
     return dto;
   }
 

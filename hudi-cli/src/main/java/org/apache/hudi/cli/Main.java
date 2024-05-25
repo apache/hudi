@@ -18,17 +18,19 @@
 
 package org.apache.hudi.cli;
 
-import java.io.IOException;
-import org.springframework.shell.Bootstrap;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+import java.io.IOException;
+
+/**
+ * Main class that delegates to Spring Shell's Bootstrap class in order to simplify debugging inside an IDE.
+ */
+@SpringBootApplication(exclude = {org.springframework.boot.autoconfigure.gson.GsonAutoConfiguration.class})
 public class Main {
 
-  /**
-   * Main class that delegates to Spring Shell's Bootstrap class in order to simplify debugging inside an IDE
-   */
   public static void main(String[] args) throws IOException {
     System.out.println("Main called");
-    new HoodieSplashScreen();
-    Bootstrap.main(args);
+    SpringApplication.run(Main.class, args);
   }
 }

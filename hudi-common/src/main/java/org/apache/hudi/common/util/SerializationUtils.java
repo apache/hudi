@@ -22,16 +22,14 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import com.esotericsoftware.kryo.serializers.FieldSerializer;
-import com.esotericsoftware.reflectasm.ConstructorAccess;
+import org.apache.avro.generic.GenericData;
+import org.apache.hudi.avro.GenericAvroSerializer;
+import org.apache.avro.util.Utf8;
+import org.objenesis.strategy.StdInstantiatorStrategy;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import org.apache.hudi.exception.HoodieSerializationException;
-import org.objenesis.instantiator.ObjectInstantiator;
-
 
 /**
  * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.
@@ -39,11 +37,8 @@ import org.objenesis.instantiator.ObjectInstantiator;
 public class SerializationUtils {
 
   // Caching kryo serializer to avoid creating kryo instance for every serde operation
-  private static final ThreadLocal<KryoSerializerInstance> serializerRef =
-      ThreadLocal.withInitial(() -> new KryoSerializerInstance());
-
-  // Serialize
-  // -----------------------------------------------------------------------
+  private static final ThreadLocal<KryoSerializerInstance> SERIALIZER_REF =
+      ThreadLocal.withInitial(KryoSerializerInstance::new);
 
   /**
    * <p>
@@ -55,11 +50,8 @@ public class SerializationUtils {
    * @throws IOException if the serialization fails
    */
   public static byte[] serialize(final Object obj) throws IOException {
-    return serializerRef.get().serialize(obj);
+    return SERIALIZER_REF.get().serialize(obj);
   }
-
-  // Deserialize
-  // -----------------------------------------------------------------------
 
   /**
    * <p>
@@ -76,13 +68,12 @@ public class SerializationUtils {
    * @param objectData the serialized object, must not be null
    * @return the deserialized object
    * @throws IllegalArgumentException if {@code objectData} is {@code null}
-   * @throws HoodieSerializationException (runtime) if the serialization fails
    */
   public static <T> T deserialize(final byte[] objectData) {
     if (objectData == null) {
       throw new IllegalArgumentException("The byte[] must not be null");
     }
-    return (T) serializerRef.get().deserialize(objectData);
+    return (T) SERIALIZER_REF.get().deserialize(objectData);
   }
 
   private static class KryoSerializerInstance implements Serializable {
@@ -98,12 +89,12 @@ public class SerializationUtils {
       kryo.setRegistrationRequired(false);
     }
 
-    byte[] serialize(Object obj) throws IOException {
+    byte[] serialize(Object obj) {
       kryo.reset();
       baos.reset();
-      Output output = new Output(baos);
-      this.kryo.writeClassAndObject(output, obj);
-      output.close();
+      try (Output output = new Output(baos)) {
+        this.kryo.writeClassAndObject(output, obj);
+      }
       return baos.toByteArray();
     }
 
@@ -119,51 +110,46 @@ public class SerializationUtils {
   private static class KryoInstantiator implements Serializable {
 
     public Kryo newKryo() {
+      Kryo kryo = new Kryo();
 
-      Kryo kryo = new KryoBase();
-      // ensure that kryo doesn't fail if classes are not registered with kryo.
+      // This instance of Kryo should not require prior registration of classes
       kryo.setRegistrationRequired(false);
-      // This would be used for object initialization if nothing else works out.
-      kryo.setInstantiatorStrategy(new org.objenesis.strategy.StdInstantiatorStrategy());
+      kryo.setInstantiatorStrategy(new Kryo.DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
       // Handle cases where we may have an odd classloader setup like with libjars
       // for hadoop
       kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
+
+      // Register Hudi's classes
+      new HoodieCommonKryoRegistrar().registerClasses(kryo);
+
+      // Register serializers
+      kryo.register(Utf8.class, new AvroUtf8Serializer());
+      kryo.register(GenericData.Fixed.class, new GenericAvroSerializer<>());
+
       return kryo;
     }
 
-    private static class KryoBase extends Kryo {
-      @Override
-      protected Serializer newDefaultSerializer(Class type) {
-        final Serializer serializer = super.newDefaultSerializer(type);
-        if (serializer instanceof FieldSerializer) {
-          final FieldSerializer fieldSerializer = (FieldSerializer) serializer;
-          fieldSerializer.setIgnoreSyntheticFields(true);
-        }
-        return serializer;
-      }
+  }
 
-      @Override
-      protected ObjectInstantiator newInstantiator(Class type) {
-        return () -> {
-          // First try reflectasm - it is fastest way to instantiate an object.
-          try {
-            final ConstructorAccess access = ConstructorAccess.get(type);
-            return access.newInstance();
-          } catch (Throwable t) {
-            // ignore this exception. We may want to try other way.
-          }
-          // fall back to java based instantiation.
-          try {
-            final Constructor constructor = type.getConstructor();
-            constructor.setAccessible(true);
-            return constructor.newInstance();
-          } catch (NoSuchMethodException | IllegalAccessException | InstantiationException
-              | InvocationTargetException e) {
-            // ignore this exception. we will fall back to default instantiation strategy.
-          }
-          return super.getInstantiatorStrategy().newInstantiatorOf(type).newInstance();
-        };
-      }
+  /**
+   * NOTE: This {@link Serializer} could deserialize instance of {@link Utf8} serialized
+   *       by implicitly generated Kryo serializer (based on {@link com.esotericsoftware.kryo.serializers.FieldSerializer}
+   */
+  public static class AvroUtf8Serializer extends Serializer<Utf8> {
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void write(Kryo kryo, Output output, Utf8 utf8String) {
+      Serializer<byte[]> bytesSerializer = kryo.getDefaultSerializer(byte[].class);
+      bytesSerializer.write(kryo, output, utf8String.getBytes());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Utf8 read(Kryo kryo, Input input, Class<Utf8> type) {
+      Serializer<byte[]> bytesSerializer = kryo.getDefaultSerializer(byte[].class);
+      byte[] bytes = bytesSerializer.read(kryo, input, byte[].class);
+      return new Utf8(bytes);
     }
   }
 }

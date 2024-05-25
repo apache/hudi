@@ -18,20 +18,23 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.hudi.exception.HoodieNotSupportedException;
+
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import org.apache.hudi.common.util.RocksDBDAO;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 
-public final class RocksDBBasedMap<K extends Serializable, R extends Serializable> implements Map<K, R> {
+/**
+ * A map's implementation based on RocksDB.
+ */
+public final class RocksDBBasedMap<K extends Serializable, R extends Serializable> implements Map<K, R>, Serializable {
 
   private static final String COL_FAMILY_NAME = "map_handle";
 
   private final String rocksDbStoragePath;
-  private RocksDBDAO rocksDBDAO;
+  private transient RocksDBDAO rocksDBDAO;
   private final String columnFamilyName;
 
   public RocksDBBasedMap(String rocksDbStoragePath) {
@@ -80,11 +83,7 @@ public final class RocksDBBasedMap<K extends Serializable, R extends Serializabl
 
   @Override
   public void putAll(Map<? extends K, ? extends R> m) {
-    getRocksDBDAO().writeBatch(batch -> {
-      m.entrySet().forEach(entry -> {
-        getRocksDBDAO().putInBatch(batch, columnFamilyName, entry.getKey(), entry.getValue());
-      });
-    });
+    getRocksDBDAO().writeBatch(batch -> m.forEach((key, value) -> getRocksDBDAO().putInBatch(batch, columnFamilyName, key, value)));
   }
 
   private RocksDBDAO getRocksDBDAO() {

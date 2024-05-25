@@ -18,30 +18,52 @@
 
 package org.apache.hudi.cli;
 
-import java.io.IOException;
+import org.apache.hudi.cli.utils.SparkTempViewProvider;
+import org.apache.hudi.cli.utils.TempViewProvider;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.ConsistencyGuardConfig;
-import org.apache.hudi.common.util.FSUtils;
 
+import java.io.IOException;
+
+/**
+ * This class is responsible to load table metadata and hoodie related configs.
+ */
 public class HoodieCLI {
 
-  public static Configuration conf;
+  public static StorageConfiguration<Configuration> conf;
   public static ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
-  public static FileSystem fs;
+  public static HoodieTimeGeneratorConfig timeGeneratorConfig;
+  public static HoodieStorage storage;
   public static CLIState state = CLIState.INIT;
   public static String basePath;
-  public static HoodieTableMetaClient tableMetadata;
+  protected static HoodieTableMetaClient tableMetadata;
   public static HoodieTableMetaClient syncTableMetadata;
+  public static TimelineLayoutVersion layoutVersion;
+  public static TempViewProvider tempViewProvider;
 
-
+  /**
+   * Enum for CLI state.
+   */
   public enum CLIState {
-    INIT, DATASET, SYNC
+    INIT, TABLE, SYNC
   }
 
   public static void setConsistencyGuardConfig(ConsistencyGuardConfig config) {
     consistencyGuardConfig = config;
+  }
+
+  public static void setTimeGeneratorConfig(HoodieTimeGeneratorConfig config) {
+    timeGeneratorConfig = config;
   }
 
   private static void setTableMetaClient(HoodieTableMetaClient tableMetadata) {
@@ -52,26 +74,59 @@ public class HoodieCLI {
     HoodieCLI.basePath = basePath;
   }
 
+  private static void setLayoutVersion(Integer layoutVersion) {
+    HoodieCLI.layoutVersion = new TimelineLayoutVersion(
+        (layoutVersion == null) ? TimelineLayoutVersion.CURR_VERSION : layoutVersion);
+  }
+
   public static boolean initConf() {
     if (HoodieCLI.conf == null) {
-      HoodieCLI.conf = FSUtils.prepareHadoopConf(new Configuration());
+      HoodieCLI.conf = HadoopFSUtils.getStorageConf(
+          HadoopFSUtils.prepareHadoopConf(new Configuration()));
       return true;
     }
     return false;
   }
 
   public static void initFS(boolean force) throws IOException {
-    if (fs == null || force) {
-      fs = (tableMetadata != null) ? tableMetadata.getFs() : FileSystem.get(conf);
+    if (storage == null || force) {
+      storage = (tableMetadata != null)
+          ? tableMetadata.getStorage()
+          : new HoodieHadoopStorage(FileSystem.get(conf.unwrap()));
     }
   }
 
   public static void refreshTableMetadata() {
-    setTableMetaClient(new HoodieTableMetaClient(HoodieCLI.conf, basePath, false, HoodieCLI.consistencyGuardConfig));
+    setTableMetaClient(HoodieTableMetaClient.builder()
+        .setConf(HoodieCLI.conf.newInstance()).setBasePath(basePath).setLoadActiveTimelineOnLoad(false)
+        .setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
+        .setTimeGeneratorConfig(timeGeneratorConfig == null ? HoodieTimeGeneratorConfig.defaultConfig(basePath) : timeGeneratorConfig)
+        .setLayoutVersion(Option.of(layoutVersion)).build());
   }
 
-  public static void connectTo(String basePath) {
+  public static void connectTo(String basePath, Integer layoutVersion) {
     setBasePath(basePath);
+    setLayoutVersion(layoutVersion);
     refreshTableMetadata();
+  }
+
+  /**
+   * Get tableMetadata, throw NullPointerException when it is null.
+   *
+   * @return tableMetadata which is instance of HoodieTableMetaClient
+   */
+  public static HoodieTableMetaClient getTableMetaClient() {
+    if (tableMetadata == null) {
+      throw new NullPointerException("There is no hudi table. Please use connect command to set table first");
+    }
+    return tableMetadata;
+  }
+
+  public static synchronized TempViewProvider getTempViewProvider() {
+    if (tempViewProvider == null) {
+      tempViewProvider = new SparkTempViewProvider(HoodieCLI.class.getSimpleName());
+    }
+
+    return tempViewProvider;
   }
 }

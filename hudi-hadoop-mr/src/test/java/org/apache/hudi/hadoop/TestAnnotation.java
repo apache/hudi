@@ -18,23 +18,47 @@
 
 package org.apache.hudi.hadoop;
 
-import static org.junit.Assert.assertTrue;
-
+import org.junit.jupiter.api.Test;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import java.lang.annotation.Annotation;
-import org.junit.Test;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestAnnotation {
 
   @Test
-  public void testAnnotation() {
+  public void testHoodieParquetInputFormatAnnotation() {
     assertTrue(HoodieParquetInputFormat.class.isAnnotationPresent(UseFileSplitsFromInputFormat.class));
+    assertTrue(HoodieParquetInputFormat.class.isAnnotationPresent(UseRecordReaderFromInputFormat.class));
     Annotation[] annotations = HoodieParquetInputFormat.class.getAnnotations();
-    boolean found = false;
+    boolean foundFileSplitsAnnotation = false;
+    boolean foundRecordReaderAnnotation = false;
     for (Annotation annotation : annotations) {
-      if ("UseFileSplitsFromInputFormat".equals(annotation.annotationType().getSimpleName())) {
-        found = true;
+      if (UseFileSplitsFromInputFormat.class.getSimpleName().equals(annotation.annotationType().getSimpleName())) {
+        foundFileSplitsAnnotation = true;
+      } else if (UseRecordReaderFromInputFormat.class.getSimpleName().equals(annotation.annotationType().getSimpleName())) {
+        foundRecordReaderAnnotation = true;
       }
     }
-    assertTrue(found);
+    assertTrue(foundFileSplitsAnnotation);
+    assertTrue(foundRecordReaderAnnotation);
+  }
+
+  @Test
+  public void testHoodieParquetRealtimeInputFormatAnnotations() {
+    assertTrue(HoodieParquetRealtimeInputFormat.class.isAnnotationPresent(UseFileSplitsFromInputFormat.class));
+    assertTrue(HoodieParquetRealtimeInputFormat.class.isAnnotationPresent(UseRecordReaderFromInputFormat.class));
+    Annotation[] annotations = HoodieParquetRealtimeInputFormat.class.getAnnotations();
+    boolean foundFileSplitsAnnotation = false;
+    boolean foundRecordReaderAnnotation = false;
+    for (Annotation annotation : annotations) {
+      if (UseFileSplitsFromInputFormat.class.getSimpleName().equals(annotation.annotationType().getSimpleName())) {
+        foundFileSplitsAnnotation = true;
+      } else if (UseRecordReaderFromInputFormat.class.getSimpleName().equals(annotation.annotationType().getSimpleName())) {
+        foundRecordReaderAnnotation = true;
+      }
+    }
+    assertTrue(foundFileSplitsAnnotation);
+    assertTrue(foundRecordReaderAnnotation);
   }
 }

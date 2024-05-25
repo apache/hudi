@@ -18,19 +18,22 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.JsonUtils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
- * This class holds statistics about files belonging to a dataset
+ * This class holds statistics about files belonging to a table.
  */
 public class HoodieRollingStatMetadata implements Serializable {
 
-  private static volatile Logger log = LogManager.getLogger(HoodieRollingStatMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRollingStatMetadata.class);
   protected Map<String, Map<String, HoodieRollingStat>> partitionToRollingStats;
   private String actionType = "DUMMY_ACTION";
   public static final String ROLLING_STAT_METADATA_KEY = "ROLLING_STAT";
@@ -51,7 +54,7 @@ public class HoodieRollingStatMetadata implements Serializable {
     this.actionType = actionType;
   }
 
-  class RollingStatsHashMap<K, V> extends HashMap<K, V> {
+  static class RollingStatsHashMap<K, V> extends HashMap<K, V> {
 
     @Override
     public V put(K key, V value) {
@@ -77,10 +80,10 @@ public class HoodieRollingStatMetadata implements Serializable {
 
   public String toJsonString() throws IOException {
     if (partitionToRollingStats.containsKey(null)) {
-      log.info("partition path is null for " + partitionToRollingStats.get(null));
+      LOG.info("partition path is null for " + partitionToRollingStats.get(null));
       partitionToRollingStats.remove(null);
     }
-    return HoodieCommitMetadata.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
+    return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
   public HoodieRollingStatMetadata merge(HoodieRollingStatMetadata rollingStatMetadata) {

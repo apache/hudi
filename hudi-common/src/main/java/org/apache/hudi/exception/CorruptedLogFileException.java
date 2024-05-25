@@ -18,6 +18,9 @@
 
 package org.apache.hudi.exception;
 
+/**
+ * An Exception thrown when the log file corrupted.
+ */
 public class CorruptedLogFileException extends HoodieException {
 
   public CorruptedLogFileException(String msg) {

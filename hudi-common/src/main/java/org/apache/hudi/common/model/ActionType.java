@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.model;
 
+/**
+ * The supported action types.
+ */
 public enum ActionType {
-  commit, savepoint, compaction, clean, rollback
+  commit, savepoint, compaction, clean, rollback, replacecommit, deltacommit, logcompaction
 }

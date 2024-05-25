@@ -18,29 +18,47 @@
 
 package org.apache.hudi.common.model;
 
-import com.google.common.base.Objects;
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * HoodieKey consists of
  * <p>
- * - recordKey : a recordKey that acts as primary key for a record - partitionPath : path to the partition that contains
- * the record
+ * - recordKey : a recordKey that acts as primary key for a record.
+ * - partitionPath : the partition path of a record.
+ *
+ * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+ *
+ *       This class is serialized (using Kryo) as part of {@code HoodieDeleteBlock} to make
+ *       sure this stays backwards-compatible we can't MAKE ANY CHANGES TO THIS CLASS (add,
+ *       delete, reorder or change types of the fields in this class, make class final, etc)
+ *       as this would break its compatibility with already persisted blocks.
+ *
+ *       Check out HUDI-5760 for more details
  */
 public class HoodieKey implements Serializable {
 
+  private String recordKey;
+  private String partitionPath;
 
-  private final String recordKey;
-
-  private final String partitionPath;
+  // Required for serializer
+  public HoodieKey() {}
 
   public HoodieKey(String recordKey, String partitionPath) {
     this.recordKey = recordKey;
     this.partitionPath = partitionPath;
   }
 
+  public void setRecordKey(String recordKey) {
+    this.recordKey = recordKey;
+  }
+
   public String getRecordKey() {
     return recordKey;
+  }
+
+  public void setPartitionPath(String partitionPath) {
+    this.partitionPath = partitionPath;
   }
 
   public String getPartitionPath() {
@@ -56,12 +74,12 @@ public class HoodieKey implements Serializable {
       return false;
     }
     HoodieKey otherKey = (HoodieKey) o;
-    return Objects.equal(recordKey, otherKey.recordKey) && Objects.equal(partitionPath, otherKey.partitionPath);
+    return Objects.equals(recordKey, otherKey.recordKey) && Objects.equals(partitionPath, otherKey.partitionPath);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(recordKey, partitionPath);
+    return Objects.hash(recordKey, partitionPath);
   }
 
   @Override

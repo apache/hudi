@@ -18,28 +18,36 @@
 
 package org.apache.hudi.utilities.sources;
 
-import java.io.Serializable;
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.utilities.callback.SourceCommitCallback;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.utilities.streamer.DefaultStreamContext;
+import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
+import org.apache.hudi.utilities.streamer.StreamContext;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+
+import java.io.Serializable;
 
 /**
  * Represents a source from which we can tail data. Assumes a constructor that takes properties.
  */
-public abstract class Source<T> implements Serializable {
-  protected static volatile Logger log = LogManager.getLogger(Source.class);
+@PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
+public abstract class Source<T> implements SourceCommitCallback, Serializable {
 
   public enum SourceType {
-    JSON, AVRO, ROW, PARQUET
+    JSON, AVRO, ROW, PROTO
   }
 
   protected transient TypedProperties props;
   protected transient JavaSparkContext sparkContext;
   protected transient SparkSession sparkSession;
+  protected transient Option<SourceProfileSupplier> sourceProfileSupplier;
   private transient SchemaProvider overriddenSchemaProvider;
 
   private final SourceType sourceType;
@@ -51,18 +59,24 @@ public abstract class Source<T> implements Serializable {
 
   protected Source(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider, SourceType sourceType) {
+    this(props, sparkContext, sparkSession, sourceType, new DefaultStreamContext(schemaProvider, Option.empty()));
+  }
+
+  protected Source(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession, SourceType sourceType, StreamContext streamContext) {
     this.props = props;
     this.sparkContext = sparkContext;
     this.sparkSession = sparkSession;
-    this.overriddenSchemaProvider = schemaProvider;
+    this.overriddenSchemaProvider = streamContext.getSchemaProvider();
     this.sourceType = sourceType;
+    this.sourceProfileSupplier = streamContext.getSourceProfileSupplier();
   }
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   protected abstract InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit);
 
   /**
-   * Main API called by Hoodie Delta Streamer to fetch records
-   * 
+   * Main API called by Hoodie Streamer to fetch records.
+   *
    * @param lastCkptStr Last Checkpoint
    * @param sourceLimit Source Limit
    * @return

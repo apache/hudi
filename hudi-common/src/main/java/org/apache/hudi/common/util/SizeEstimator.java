@@ -19,7 +19,7 @@
 package org.apache.hudi.common.util;
 
 /**
- * An interface to estimate the size of payload in memory
+ * An interface to estimate the size of payload in memory.
  * 
  * @param <T>
  */

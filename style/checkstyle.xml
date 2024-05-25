@@ -24,7 +24,7 @@
     that can be found at https://google.github.io/styleguide/javaguide.html.
 
     Checkstyle is very configurable. Be sure to read the documentation at
-    http://checkstyle.sf.net (or in your downloaded distribution).
+    https://checkstyle.sourceforge.io/checks.html.
 
     To completely disable a check, just comment it out or delete it from the file.
 
@@ -34,7 +34,7 @@
 <module name = "Checker">
     <property name="charset" value="UTF-8"/>
 
-    <property name="severity" value="warning"/>
+    <property name="severity" value="error"/>
 
     <property name="fileExtensions" value="java, properties, xml"/>
     <!-- Checks for whitespace                               -->
@@ -46,10 +46,12 @@
         <property name="file" value="${checkstyle.suppressions.file}" default="checkstyle-suppressions.xml"/>
         <property name="optional" value="true"/>
     </module>
+    <module name="SuppressWarningsFilter" />
     <module name="TreeWalker">
         <module name="AvoidNestedBlocks">
             <property name="allowInSwitchCase" value="true"/>
         </module>
+        <module name="SuppressWarningsHolder"/>
         <module name="OuterTypeFilename"/>
         <module name="IllegalTokenText">
             <property name="tokens" value="STRING_LITERAL, CHAR_LITERAL"/>
@@ -101,6 +103,9 @@
         <module name="ModifierOrder"/>
         <module name="EmptyLineSeparator">
             <property name="allowNoEmptyLineBetweenFields" value="true"/>
+            <property name="allowMultipleEmptyLines" value="false"/>
+            <property name="tokens" value="PACKAGE_DEF, IMPORT, CLASS_DEF, INTERFACE_DEF, ENUM_DEF,
+                         STATIC_INIT, INSTANCE_INIT, METHOD_DEF, CTOR_DEF"/>
         </module>
         <module name="SeparatorWrap">
             <property name="id" value="SeparatorWrapDot"/>
@@ -203,11 +208,6 @@
             <property name="allowedDistance" value="5"/>
         </module>
         -->
-        <module name="CustomImportOrder">
-            <property name="sortImportsInGroupAlphabetically" value="true"/>
-            <property name="separateLineBetweenGroups" value="true"/>
-            <property name="customImportOrderRules" value="STATIC###THIRD_PARTY_PACKAGE"/>
-        </module>
         <module name="UnusedImports"/>
         <module name="RedundantImport"/>
 
@@ -266,8 +266,50 @@
         </module>
         <module name="CommentsIndentation"/>
         <module name="IllegalImport">
-            <property name="illegalPkgs" value="org.apache.commons" />
-            <property name="illegalClasses" value="java.util.Optional, com.google.common.base.Optional" />
+            <property name="regexp" value="true"/>
+            <property name="illegalPkgs" value="org\.apache\.commons, com\.google\.common, org\.apache\.log4j"/>
+            <property name="illegalClasses"
+              value="^java\.util\.Optional, ^org\.junit\.(?!jupiter|platform|contrib|Rule|runner)(.*)"/>
         </module>
+
+        <module name="EmptyStatement" />
+
+        <!-- Checks for Java Docs. -->
+        <module name="JavadocStyle">
+            <property name="checkFirstSentence" value="false"/>
+        </module>
+
+        <module name="JavadocType">
+            <property name="severity" value="info"/>
+            <property name="scope" value="protected"/>
+            <property name="allowMissingParamTags" value="true"/>
+        </module>
+
+        <!-- Checks for out of order import statements. -->
+        <module name="ImportOrder">
+            <property name="severity" value="info"/>
+            <property name="groups" value="org.apache.hudi,*,javax,java,scala"/>
+            <property name="separated" value="true"/>
+            <property name="sortStaticImportsAlphabetically" value="true"/>
+            <property name="option" value="bottom"/>
+            <property name="tokens" value="STATIC_IMPORT, IMPORT"/>
+            <message key="import.ordering"
+                     value="Import {0} appears after other imports that it should precede"/>
+        </module>
+
+        <!-- Checks for star import. -->
+        <module name="AvoidStarImport" />
+
+        <!-- Checks for constant name. -->
+        <module name="ConstantName" />
+
+        <!-- Checks for simple boolean expressions. -->
+        <module name="SimplifyBooleanExpression"/>
+
+        <module name="ImportControl">
+            <property name="file" value="${basedir}/style/import-control.xml"/>
+            <property name="path" value="^.*[\\/]hudi-client[\\/]hudi-client-common[\\/]src[\\/].*$"/>
+        </module>
+
     </module>
 </module>

@@ -18,18 +18,27 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.apache.hudi.common.util.StringUtils;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
-@Component
-public class UtilsCommand implements CommandMarker {
+/**
+ * CLI command to display utils.
+ */
+@ShellComponent
+public class UtilsCommand {
 
-  @CliCommand(value = "utils loadClass", help = "Load a class")
-  public String loadClass(@CliOption(key = {"class"}, help = "Check mode") final String clazz) throws Exception {
-    Class klass = Class.forName(clazz);
-    return klass.getProtectionDomain().getCodeSource().getLocation().toExternalForm();
+  @ShellMethod(key = "utils loadClass", value = "Load a class")
+  public String loadClass(@ShellOption(value = {"--class"}, help = "Check mode") final String clazz) {
+    if (StringUtils.isNullOrEmpty(clazz)) {
+      return "Class to be loaded can not be null!";
+    }
+    try {
+      Class klass = Class.forName(clazz);
+      return klass.getProtectionDomain().getCodeSource().getLocation().toExternalForm();
+    } catch (ClassNotFoundException e) {
+      return String.format("Class %s not found!", clazz);
+    }
   }
-
 }

@@ -1,4 +1,4 @@
-################################################################################
+
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -14,7 +14,6 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 # limitations under the License.
-################################################################################
 
 ARG HADOOP_VERSION=2.8.4 
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
@@ -53,9 +52,10 @@ ADD conf/llap-daemon-log4j2.properties $HIVE_HOME/conf
 ADD target/ /var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/
 
 ENV HUDI_HADOOP_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-hadoop-mr-bundle.jar
-ENV HUDI_HIVE_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-hive-bundle.jar
+ENV HUDI_HIVE_SYNC_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-hive-sync-bundle.jar
 ENV HUDI_SPARK_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar
 ENV HUDI_UTILITIES_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-utilities.jar
+ENV HUDI_INTEG_TEST_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-integ-test-bundle.jar
 
 COPY startup.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/startup.sh
@@ -64,6 +64,8 @@ COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENV PATH $HIVE_HOME/bin/:$PATH
+# NOTE: This is the only battle-proven method to inject jars into Hive CLI
+ENV AUX_CLASSPATH=file://${HUDI_HADOOP_BUNDLE}
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD startup.sh

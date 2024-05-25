@@ -18,14 +18,16 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import java.io.IOException;
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
 
 /**
  * Realtime Record Reader which can do compacted (merge-on-read) record reading or unmerged reading (parquet and log
@@ -37,37 +39,45 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   public static final String REALTIME_SKIP_MERGE_PROP = "hoodie.realtime.merge.skip";
   // By default, we do merged-reading
   public static final String DEFAULT_REALTIME_SKIP_MERGE = "false";
-  private static final transient Logger LOG = LogManager.getLogger(HoodieRealtimeRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReader.class);
   private final RecordReader<NullWritable, ArrayWritable> reader;
 
-  public HoodieRealtimeRecordReader(HoodieRealtimeFileSplit split, JobConf job,
+  public HoodieRealtimeRecordReader(RealtimeSplit split, JobConf job,
       RecordReader<NullWritable, ArrayWritable> realReader) {
     this.reader = constructRecordReader(split, job, realReader);
   }
 
   public static boolean canSkipMerging(JobConf jobConf) {
-    return Boolean.valueOf(jobConf.get(REALTIME_SKIP_MERGE_PROP, DEFAULT_REALTIME_SKIP_MERGE));
+    return Boolean.parseBoolean(jobConf.get(REALTIME_SKIP_MERGE_PROP, DEFAULT_REALTIME_SKIP_MERGE));
   }
 
   /**
-   * Construct record reader based on job configuration
+   * Construct record reader based on job configuration.
    *
    * @param split File Split
    * @param jobConf Job Configuration
    * @param realReader Parquet Record Reader
    * @return Realtime Reader
    */
-  private static RecordReader<NullWritable, ArrayWritable> constructRecordReader(HoodieRealtimeFileSplit split,
+  private static RecordReader<NullWritable, ArrayWritable> constructRecordReader(RealtimeSplit split,
       JobConf jobConf, RecordReader<NullWritable, ArrayWritable> realReader) {
     try {
       if (canSkipMerging(jobConf)) {
         LOG.info("Enabling un-merged reading of realtime records");
         return new RealtimeUnmergedRecordReader(split, jobConf, realReader);
       }
+      LOG.info("Enabling merged reading of realtime records for split " + split);
       return new RealtimeCompactedRecordReader(split, jobConf, realReader);
-    } catch (IOException ex) {
-      LOG.error("Got exception when constructing record reader", ex);
-      throw new HoodieException(ex);
+    } catch (Exception e) {
+      LOG.error("Got exception when constructing record reader", e);
+      try {
+        if (null != realReader) {
+          realReader.close();
+        }
+      } catch (IOException ioe) {
+        LOG.error("Unable to close real reader", ioe);
+      }
+      throw new HoodieException("Exception when constructing record reader ", e);
     }
   }
 
@@ -99,5 +109,9 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   @Override
   public float getProgress() throws IOException {
     return this.reader.getProgress();
+  }
+
+  public RecordReader<NullWritable, ArrayWritable> getReader() {
+    return this.reader;
   }
 }

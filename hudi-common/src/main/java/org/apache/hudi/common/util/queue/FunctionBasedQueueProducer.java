@@ -18,29 +18,33 @@
 
 package org.apache.hudi.common.util.queue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.function.Function;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * Buffer producer which allows custom functions to insert entries to queue.
  *
  * @param <I> Type of entry produced for queue
  */
-public class FunctionBasedQueueProducer<I> implements BoundedInMemoryQueueProducer<I> {
+public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
 
-  private static final Logger logger = LogManager.getLogger(FunctionBasedQueueProducer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FunctionBasedQueueProducer.class);
 
-  private final Function<BoundedInMemoryQueue<I, ?>, Boolean> producerFunction;
+  private final Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction;
 
-  public FunctionBasedQueueProducer(Function<BoundedInMemoryQueue<I, ?>, Boolean> producerFunction) {
+  public FunctionBasedQueueProducer(Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction) {
     this.producerFunction = producerFunction;
   }
 
   @Override
-  public void produce(BoundedInMemoryQueue<I, ?> queue) {
-    logger.info("starting function which will enqueue records");
+  public void produce(HoodieMessageQueue<I, ?> queue) {
+    LOG.info("Starting to produce records into the queue");
     producerFunction.apply(queue);
-    logger.info("finished function which will enqueue records");
+    LOG.info("Finished producing records into the queue");
   }
+
+  @Override
+  public void close() { /* no-op */ }
 }

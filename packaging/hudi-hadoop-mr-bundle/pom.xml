@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.5.1-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -29,6 +29,7 @@
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <skipTests>true</skipTests>
   </properties>
 
   <build>
@@ -48,48 +49,91 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <createSourcesJar>true</createSourcesJar>
+              <createSourcesJar>${shadeSources}</createSourcesJar>
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer">
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
-                    <addHeader>true</addHeader>
+                  <addHeader>true</addHeader>
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
                   <resource>META-INF/LICENSE</resource>
                   <file>target/classes/META-INF/LICENSE</file>
                 </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
-                <includes>
+                <includes combine.children="append">
+                  <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
-                  <include>org.apache.parquet:parquet-avro</include>
+                  <!-- Kryo -->
                   <include>com.esotericsoftware:kryo-shaded</include>
-                  <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
+                  <include>org.objenesis:objenesis</include>
+
+                  <!-- Jackson
+                       NOTE: Even though Hive bundles Jackson, it doesn't bundle JSR310 module (unlike Spark).
+                             Therefore, to make sure that JSR310 is compatible w/ the Jackson core used by Hudi, we bundle the core
+                             as well, while shading it -->
+                  <include>com.fasterxml.jackson.core:jackson-annotations</include>
+                  <include>com.fasterxml.jackson.core:jackson-core</include>
+                  <include>com.fasterxml.jackson.core:jackson-databind</include>
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
+
+                  <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
+                  <include>com.yammer.metrics:metrics-core</include>
+                  <include>commons-io:commons-io</include>
+                  <include>org.openjdk.jol:jol-core</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                 </includes>
               </artifactSet>
-              <relocations>
+              <relocations combine.children="append">
+                <!-- Kryo -->
                 <relocation>
                   <pattern>com.esotericsoftware.kryo.</pattern>
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.objenesis.</pattern>
-                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+                  <pattern>com.esotericsoftware.reflectasm.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.reflectasm.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.esotericsoftware.minlog.</pattern>
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
                 </relocation>
                 <relocation>
+                  <pattern>org.objenesis.</pattern>
+                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>com.yammer.metrics.</pattern>
+                  <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>org.apache.avro.</pattern>
-                  <shadedPattern>${mr.bundle.avro.shade.prefix}org.apache.avro.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.io.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.parquet.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.openjdk.jol.</pattern>
+                  <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.</pattern>
+                  <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -101,6 +145,8 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>**/*.proto</exclude>
+                    <exclude>hbase-webapps/**</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -113,9 +159,6 @@
     <resources>
       <resource>
         <directory>src/main/resources</directory>
-      </resource>
-      <resource>
-        <directory>src/test/resources</directory>
       </resource>
     </resources>
   </build>
@@ -133,27 +176,28 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!-- Kryo -->
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>${kryo.shaded.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <version>${hive.parquet.version}</version>
       <scope>compile</scope>
     </dependency>
 
+    <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-      <scope>${mr.bundle.avro.scope}</scope>
+      <version>${hive.avro.version}</version>
+      <scope>compile</scope>
     </dependency>
   </dependencies>
-
-  <profiles>
-    <profile>
-      <id>mr-bundle-shade-avro</id>
-      <properties>
-        <mr.bundle.avro.scope>compile</mr.bundle.avro.scope>
-        <mr.bundle.avro.shade.prefix>org.apache.hudi.</mr.bundle.avro.shade.prefix>
-      </properties>
-    </profile>
-  </profiles>
 </project>

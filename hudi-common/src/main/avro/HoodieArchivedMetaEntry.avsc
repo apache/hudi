@@ -26,7 +26,7 @@
             "null",
             "HoodieCommitMetadata"
          ],
-         "default": "null"
+         "default": null
       },
       {
          "name":"hoodieCleanMetadata",
@@ -34,15 +34,16 @@
             "null",
             "HoodieCleanMetadata"
          ],
-         "default": "null"
+         "default": null
       },
       {
+         /** DEPRECATED **/
          "name":"hoodieCompactionMetadata",
          "type":[
             "null",
             "HoodieCompactionMetadata"
          ],
-         "default": "null"
+         "default": null
       },
       {
          "name":"hoodieRollbackMetadata",
@@ -50,7 +51,7 @@
             "null",
             "HoodieRollbackMetadata"
          ],
-         "default": "null"
+         "default": null
       },
       {
          "name":"hoodieSavePointMetadata",
@@ -58,20 +59,80 @@
             "null",
             "HoodieSavepointMetadata"
          ],
-         "default": "null"
+         "default": null
       },
       {
          "name":"commitTime",
-         "type":["null","string"]
+         "type":["null","string"],
+         "default": null
       },
       {
          "name":"actionType",
-         "type":["null","string"]
+         "type":["null","string"],
+         "default": null
       },
       {
          "name":"version",
          "type":["int", "null"],
          "default": 1
+      },
+      {
+         "name":"hoodieCompactionPlan",
+         "type":[
+            "null",
+            "HoodieCompactionPlan"
+         ],
+         "default": null
+      },
+      {
+         "name":"hoodieCleanerPlan",
+         "type":[
+            "null",
+            "HoodieCleanerPlan"
+         ],
+         "default": null
+      },
+      {
+         "name":"actionState",
+         "type":["null","string"],
+         "default": null
+      },
+      {
+         "name":"hoodieReplaceCommitMetadata",
+         "type":[
+            "null",
+            "HoodieReplaceCommitMetadata"
+         ],
+         "default": null
+      },
+      {
+         "name":"hoodieRequestedReplaceMetadata",
+         "type":[
+            "null",
+            "HoodieRequestedReplaceMetadata"
+         ],
+         "default": null
+      },
+      {
+         "name":"HoodieInflightReplaceMetadata",
+         "type":[
+            "null",
+            "HoodieCommitMetadata"
+         ],
+         "default": null
+      },
+      {
+         "name":"hoodieIndexCommitMetadata",
+         "type":[
+            "null",
+            "HoodieIndexCommitMetadata"
+         ],
+         "default": null
+      },
+      {
+         "name":"stateTransitionTime",
+         "type":["null","string"],
+         "default": null
       }
    ]
 }

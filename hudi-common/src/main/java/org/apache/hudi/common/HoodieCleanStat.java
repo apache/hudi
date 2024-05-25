@@ -18,14 +18,16 @@
 
 package org.apache.hudi.common;
 
-import java.io.Serializable;
-import java.util.List;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
+import java.io.Serializable;
+import java.util.List;
+
 /**
- * Collects stats about a single partition clean operation
+ * Collects stats about a single partition clean operation.
  */
 public class HoodieCleanStat implements Serializable {
 
@@ -38,17 +40,43 @@ public class HoodieCleanStat implements Serializable {
   private final List<String> successDeleteFiles;
   // Files that could not be deleted
   private final List<String> failedDeleteFiles;
+  // Bootstrap Base Path patterns that were generated for the delete operation
+  private final List<String> deleteBootstrapBasePathPatterns;
+  private final List<String> successDeleteBootstrapBaseFiles;
+  // Files that could not be deleted
+  private final List<String> failedDeleteBootstrapBaseFiles;
   // Earliest commit that was retained in this clean
   private final String earliestCommitToRetain;
+  // Last completed commit timestamp before clean
+  private final String lastCompletedCommitTimestamp;
+  // set to true if partition is deleted
+  private final boolean isPartitionDeleted;
 
   public HoodieCleanStat(HoodieCleaningPolicy policy, String partitionPath, List<String> deletePathPatterns,
-      List<String> successDeleteFiles, List<String> failedDeleteFiles, String earliestCommitToRetain) {
+      List<String> successDeleteFiles, List<String> failedDeleteFiles, String earliestCommitToRetain,String lastCompletedCommitTimestamp) {
+    this(policy, partitionPath, deletePathPatterns, successDeleteFiles, failedDeleteFiles, earliestCommitToRetain,
+        lastCompletedCommitTimestamp, CollectionUtils.createImmutableList(), CollectionUtils.createImmutableList(),
+        CollectionUtils.createImmutableList(), false);
+  }
+
+  public HoodieCleanStat(HoodieCleaningPolicy policy, String partitionPath, List<String> deletePathPatterns,
+                         List<String> successDeleteFiles, List<String> failedDeleteFiles,
+                         String earliestCommitToRetain,String lastCompletedCommitTimestamp,
+                         List<String> deleteBootstrapBasePathPatterns,
+                         List<String> successDeleteBootstrapBaseFiles,
+                         List<String> failedDeleteBootstrapBaseFiles,
+                         boolean isPartitionDeleted) {
     this.policy = policy;
     this.partitionPath = partitionPath;
     this.deletePathPatterns = deletePathPatterns;
     this.successDeleteFiles = successDeleteFiles;
     this.failedDeleteFiles = failedDeleteFiles;
     this.earliestCommitToRetain = earliestCommitToRetain;
+    this.lastCompletedCommitTimestamp = lastCompletedCommitTimestamp;
+    this.deleteBootstrapBasePathPatterns = deleteBootstrapBasePathPatterns;
+    this.successDeleteBootstrapBaseFiles = successDeleteBootstrapBaseFiles;
+    this.failedDeleteBootstrapBaseFiles = failedDeleteBootstrapBaseFiles;
+    this.isPartitionDeleted = isPartitionDeleted;
   }
 
   public HoodieCleaningPolicy getPolicy() {
@@ -71,14 +99,37 @@ public class HoodieCleanStat implements Serializable {
     return failedDeleteFiles;
   }
 
+  public List<String> getDeleteBootstrapBasePathPatterns() {
+    return deleteBootstrapBasePathPatterns;
+  }
+
+  public List<String> getSuccessDeleteBootstrapBaseFiles() {
+    return successDeleteBootstrapBaseFiles;
+  }
+
+  public List<String> getFailedDeleteBootstrapBaseFiles() {
+    return failedDeleteBootstrapBaseFiles;
+  }
+
   public String getEarliestCommitToRetain() {
     return earliestCommitToRetain;
   }
 
-  public static HoodieCleanStat.Builder newBuilder() {
+  public String getLastCompletedCommitTimestamp() {
+    return lastCompletedCommitTimestamp;
+  }
+
+  public boolean isPartitionDeleted() {
+    return isPartitionDeleted;
+  }
+
+  public static Builder newBuilder() {
     return new Builder();
   }
 
+  /**
+   * A builder used to build {@link HoodieCleanStat}.
+   */
   public static class Builder {
 
     private HoodieCleaningPolicy policy;
@@ -87,6 +138,11 @@ public class HoodieCleanStat implements Serializable {
     private List<String> failedDeleteFiles;
     private String partitionPath;
     private String earliestCommitToRetain;
+    private String lastCompletedCommitTimestamp;
+    private List<String> deleteBootstrapBasePathPatterns;
+    private List<String> successDeleteBootstrapBaseFiles;
+    private List<String> failedDeleteBootstrapBaseFiles;
+    private boolean isPartitionDeleted;
 
     public Builder withPolicy(HoodieCleaningPolicy policy) {
       this.policy = policy;
@@ -108,6 +164,21 @@ public class HoodieCleanStat implements Serializable {
       return this;
     }
 
+    public Builder withDeleteBootstrapBasePathPatterns(List<String> deletePathPatterns) {
+      this.deleteBootstrapBasePathPatterns = deletePathPatterns;
+      return this;
+    }
+
+    public Builder withSuccessfulDeleteBootstrapBaseFiles(List<String> successDeleteFiles) {
+      this.successDeleteBootstrapBaseFiles = successDeleteFiles;
+      return this;
+    }
+
+    public Builder withFailedDeleteBootstrapBaseFiles(List<String> failedDeleteFiles) {
+      this.failedDeleteBootstrapBaseFiles = failedDeleteFiles;
+      return this;
+    }
+
     public Builder withPartitionPath(String partitionPath) {
       this.partitionPath = partitionPath;
       return this;
@@ -115,13 +186,40 @@ public class HoodieCleanStat implements Serializable {
 
     public Builder withEarliestCommitRetained(Option<HoodieInstant> earliestCommitToRetain) {
       this.earliestCommitToRetain =
-          (earliestCommitToRetain.isPresent()) ? earliestCommitToRetain.get().getTimestamp() : "-1";
+          (earliestCommitToRetain.isPresent()) ? earliestCommitToRetain.get().getTimestamp() : "";
+      return this;
+    }
+
+    public Builder withLastCompletedCommitTimestamp(String lastCompletedCommitTimestamp) {
+      this.lastCompletedCommitTimestamp = lastCompletedCommitTimestamp;
+      return this;
+    }
+
+    public Builder isPartitionDeleted(boolean isPartitionDeleted) {
+      this.isPartitionDeleted = isPartitionDeleted;
       return this;
     }
 
     public HoodieCleanStat build() {
       return new HoodieCleanStat(policy, partitionPath, deletePathPatterns, successDeleteFiles, failedDeleteFiles,
-          earliestCommitToRetain);
+          earliestCommitToRetain, lastCompletedCommitTimestamp, deleteBootstrapBasePathPatterns,
+        successDeleteBootstrapBaseFiles, failedDeleteBootstrapBaseFiles, isPartitionDeleted);
     }
+  }
+
+  @Override
+  public String toString() {
+    return "HoodieCleanStat{"
+        + "policy=" + policy
+        + ", partitionPath='" + partitionPath + '\''
+        + ", deletePathPatterns=" + deletePathPatterns
+        + ", successDeleteFiles=" + successDeleteFiles
+        + ", failedDeleteFiles=" + failedDeleteFiles
+        + ", earliestCommitToRetain='" + earliestCommitToRetain
+        + ", deleteBootstrapBasePathPatterns=" + deleteBootstrapBasePathPatterns
+        + ", successDeleteBootstrapBaseFiles=" + successDeleteBootstrapBaseFiles
+        + ", failedDeleteBootstrapBaseFiles=" + failedDeleteBootstrapBaseFiles
+        + ", isPartitionDeleted=" + isPartitionDeleted + '\''
+        + '}';
   }
 }

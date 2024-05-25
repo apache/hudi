@@ -18,48 +18,54 @@
 
 package org.apache.hudi.cli.commands;
 
-import static org.apache.hudi.common.table.HoodieTimeline.ROLLBACK_ACTION;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.cli.HoodieCLI;
+import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
+import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.utils.InputStreamConsumer;
+import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
-import com.google.common.collect.ImmutableSet;
+import org.apache.spark.launcher.SparkLauncher;
+
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Stream;
-import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.cli.HoodieCLI;
-import org.apache.hudi.cli.HoodiePrintHelper;
-import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.util.AvroUtils;
-import org.apache.hudi.common.util.collection.Pair;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
 
-@Component
-public class RollbacksCommand implements CommandMarker {
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 
-  @CliCommand(value = "show rollbacks", help = "List all rollback instants")
+/**
+ * CLI command to display rollback options.
+ */
+@ShellComponent
+public class RollbacksCommand {
+
+  @ShellMethod(key = "show rollbacks", value = "List all rollback instants")
   public String showRollbacks(
-      @CliOption(key = {"limit"}, help = "Limit #rows to be displayed", unspecifiedDefaultValue = "10") Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
-      throws IOException {
-    HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.tableMetadata);
+      @ShellOption(value = {"--limit"}, help = "Limit #rows to be displayed", defaultValue = "10") Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+          defaultValue = "false") final boolean headerOnly) {
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants();
 
     final List<Comparable[]> rows = new ArrayList<>();
     rollback.getInstants().forEach(instant -> {
       try {
-        HoodieRollbackMetadata metadata = AvroUtils
+        HoodieRollbackMetadata metadata = TimelineMetadataUtils
             .deserializeAvroMetadata(activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
         metadata.getCommitsRollback().forEach(c -> {
           Comparable[] row = new Comparable[5];
@@ -74,53 +80,77 @@ public class RollbacksCommand implements CommandMarker {
         e.printStackTrace();
       }
     });
-    TableHeader header = new TableHeader().addTableHeaderField("Instant").addTableHeaderField("Rolledback Instant")
-        .addTableHeaderField("Total Files Deleted").addTableHeaderField("Time taken in millis")
-        .addTableHeaderField("Total Partitions");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_ROLLBACK_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_DELETED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_PARTITIONS);
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "show rollback", help = "Show details of a rollback instant")
+  @ShellMethod(key = "show rollback", value = "Show details of a rollback instant")
   public String showRollback(
-      @CliOption(key = {"instant"}, help = "Rollback instant", mandatory = true) String rollbackInstant,
-      @CliOption(key = {"limit"}, help = "Limit  #rows to be displayed", unspecifiedDefaultValue = "10") Integer limit,
-      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @ShellOption(value = {"--instant"}, help = "Rollback instant") String rollbackInstant,
+      @ShellOption(value = {"--limit"}, help = "Limit  #rows to be displayed", defaultValue = "10") Integer limit,
+      @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
+              defaultValue = "false") final boolean headerOnly)
       throws IOException {
-    HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.tableMetadata);
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     final List<Comparable[]> rows = new ArrayList<>();
-    HoodieRollbackMetadata metadata = AvroUtils.deserializeAvroMetadata(
+    HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
         activeTimeline.getInstantDetails(new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
         HoodieRollbackMetadata.class);
-    metadata.getPartitionMetadata().entrySet().forEach(e -> {
-      Stream
-          .concat(e.getValue().getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
-              e.getValue().getFailedDeleteFiles().stream().map(f -> Pair.of(f, false)))
-          .forEach(fileWithDeleteStatus -> {
-            Comparable[] row = new Comparable[5];
-            row[0] = metadata.getStartRollbackTime();
-            row[1] = metadata.getCommitsRollback().toString();
-            row[2] = e.getKey();
-            row[3] = fileWithDeleteStatus.getLeft();
-            row[4] = fileWithDeleteStatus.getRight();
-            rows.add(row);
-          });
-    });
+    metadata.getPartitionMetadata().forEach((key, value) -> Stream
+        .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
+            value.getFailedDeleteFiles().stream().map(f -> Pair.of(f, false)))
+        .forEach(fileWithDeleteStatus -> {
+          Comparable[] row = new Comparable[5];
+          row[0] = metadata.getStartRollbackTime();
+          row[1] = metadata.getCommitsRollback().toString();
+          row[2] = key;
+          row[3] = fileWithDeleteStatus.getLeft();
+          row[4] = fileWithDeleteStatus.getRight();
+          rows.add(row);
+        }));
 
-    TableHeader header = new TableHeader().addTableHeaderField("Instant").addTableHeaderField("Rolledback Instants")
-        .addTableHeaderField("Partition").addTableHeaderField("Deleted File").addTableHeaderField("Succeeded");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_ROLLBACK_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELETED_FILE)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_SUCCEEDED);
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  /**
-   * An Active timeline containing only rollbacks
-   */
-  class RollbackTimeline extends HoodieActiveTimeline {
-
-    public RollbackTimeline(HoodieTableMetaClient metaClient) {
-      super(metaClient, ImmutableSet.<String>builder().add(HoodieTimeline.ROLLBACK_EXTENSION).build());
+  @ShellMethod(key = "commit rollback", value = "Rollback a commit")
+  public String rollbackCommit(
+      @ShellOption(value = {"--commit"}, help = "Commit to rollback") final String instantTime,
+      @ShellOption(value = {"--sparkProperties"}, help = "Spark Properties File Path",
+          defaultValue = "") final String sparkPropertiesPath,
+      @ShellOption(value = "--sparkMaster", defaultValue = "", help = "Spark Master") String master,
+      @ShellOption(value = "--sparkMemory", defaultValue = "4G",
+          help = "Spark executor memory") final String sparkMemory,
+      @ShellOption(value = "--rollbackUsingMarkers", defaultValue = "false",
+          help = "Enabling marker based rollback") final String rollbackUsingMarkers)
+      throws Exception {
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    HoodieTimeline filteredTimeline = activeTimeline.filter(instant -> instant.getTimestamp().equals(instantTime));
+    if (filteredTimeline.empty()) {
+      return "Commit " + instantTime + " not found in Commits " + activeTimeline;
     }
+
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(), master, sparkMemory, instantTime,
+        HoodieCLI.getTableMetaClient().getBasePath(), rollbackUsingMarkers);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+    // Refresh the current
+    HoodieCLI.refreshTableMetadata();
+    if (exitCode != 0) {
+      return "Commit " + instantTime + " failed to roll back";
+    }
+    return "Commit " + instantTime + " rolled back";
   }
 }

@@ -20,16 +20,12 @@ package org.apache.hudi.common.model;
 
 /**
  * Type of the Hoodie Table.
- * <p>
- * Currently, 1 type is supported
- * <p>
- * COPY_ON_WRITE - Performs upserts by versioning entire files, with later versions containing newer value of a record.
- * <p>
- * In the future, following might be added.
- * <p>
- * MERGE_ON_READ - Speeds up upserts, by delaying merge until enough work piles up.
- * <p>
- * SIMPLE_LSM - A simple 2 level LSM tree.
+ *
+ * Currently, 2 types are supported.
+ * <ul>
+ * <li> COPY_ON_WRITE - Performs upserts by versioning entire files, with later versions containing newer value of a record.
+ * <li> MERGE_ON_READ - Speeds up upserts, by delaying merge until enough work piles up.
+ * </ul>
  */
 public enum HoodieTableType {
   COPY_ON_WRITE, MERGE_ON_READ

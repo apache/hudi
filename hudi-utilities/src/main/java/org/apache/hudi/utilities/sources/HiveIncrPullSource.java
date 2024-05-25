@@ -18,12 +18,14 @@
 
 package org.apache.hudi.utilities.sources;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.utilities.HiveIncrementalPuller;
+import org.apache.hudi.utilities.config.HiveIncrPullSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
+import org.apache.hudi.utilities.schema.SchemaProvider;
+
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
 import org.apache.avro.mapreduce.AvroKeyInputFormat;
@@ -31,19 +33,22 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.NullWritable;
-import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.utilities.HiveIncrementalPuller;
-import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Source to read deltas produced by {@link HiveIncrementalPuller}, commit by commit and apply to the target table
@@ -57,27 +62,28 @@ import org.apache.spark.sql.SparkSession;
  */
 public class HiveIncrPullSource extends AvroSource {
 
-  private static volatile Logger log = LogManager.getLogger(HiveIncrPullSource.class);
+  private static final long serialVersionUID = 1L;
+
+  private static final Logger LOG = LoggerFactory.getLogger(HiveIncrPullSource.class);
 
   private final transient FileSystem fs;
 
   private final String incrPullRootPath;
 
-
   /**
-   * Configs supported
+   * Configs supported.
    */
   static class Config {
-
-    private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.incrpull.root";
+    @Deprecated
+    private static final String ROOT_INPUT_PATH_PROP = HiveIncrPullSourceConfig.ROOT_INPUT_PATH.key();
   }
 
   public HiveIncrPullSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.ROOT_INPUT_PATH_PROP));
-    this.incrPullRootPath = props.getString(Config.ROOT_INPUT_PATH_PROP);
-    this.fs = FSUtils.getFs(incrPullRootPath, sparkContext.hadoopConfiguration());
+    checkRequiredConfigProperties(props, Collections.singletonList(HiveIncrPullSourceConfig.ROOT_INPUT_PATH));
+    this.incrPullRootPath = getStringWithAltKeys(props, HiveIncrPullSourceConfig.ROOT_INPUT_PATH);
+    this.fs = HadoopFSUtils.getFs(incrPullRootPath, sparkContext.hadoopConfiguration());
   }
 
   /**
@@ -85,7 +91,7 @@ public class HiveIncrPullSource extends AvroSource {
    */
   private Option<String> findCommitToPull(Option<String> latestTargetCommit) throws IOException {
 
-    log.info("Looking for commits ");
+    LOG.info("Looking for commits ");
 
     FileStatus[] commitTimePaths = fs.listStatus(new Path(incrPullRootPath));
     List<String> commitTimes = new ArrayList<>(commitTimePaths.length);
@@ -94,17 +100,17 @@ public class HiveIncrPullSource extends AvroSource {
       commitTimes.add(splits[splits.length - 1]);
     }
     Collections.sort(commitTimes);
-    log.info("Retrieved commit times " + commitTimes);
+    LOG.info("Retrieved commit times " + commitTimes);
 
     if (!latestTargetCommit.isPresent()) {
       // start from the beginning
       return Option.of(commitTimes.get(0));
     }
 
-    for (String commitTime : commitTimes) {
+    for (String instantTime : commitTimes) {
       // TODO(vc): Add an option to delete consumed commits
-      if (commitTime.compareTo(latestTargetCommit.get()) > 0) {
-        return Option.of(commitTime);
+      if (instantTime.compareTo(latestTargetCommit.get()) > 0) {
+        return Option.of(instantTime);
       }
     }
     return Option.empty();
@@ -125,10 +131,11 @@ public class HiveIncrPullSource extends AvroSource {
       String pathStr = commitDeltaFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
       JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr, AvroKeyInputFormat.class,
           AvroKey.class, NullWritable.class, sparkContext.hadoopConfiguration());
+      sparkContext.setJobGroup(this.getClass().getSimpleName(), "Fetch new data");
       return new InputBatch<>(Option.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
           String.valueOf(commitToPull.get()));
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
+    } catch (Exception e) {
+      throw new HoodieReadFromSourceException("Unable to read from source from checkpoint: " + lastCheckpointStr, e);
     }
   }
 }

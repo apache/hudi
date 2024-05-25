@@ -18,19 +18,25 @@
 
 package org.apache.hudi.cli;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+
 import com.jakewharton.fliptables.FlipTable;
+
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import org.apache.hudi.common.util.Option;
+import java.util.stream.Collectors;
+
 
 /**
- * Helper class to render table for hoodie-cli
+ * Helper class to render table for hoodie-cli.
  */
 public class HoodiePrintHelper {
 
   /**
-   * Print header and raw rows
+   * Print header and raw rows.
    *
    * @param header Header
    * @param rows Raw Rows
@@ -41,7 +47,7 @@ public class HoodiePrintHelper {
   }
 
   /**
-   * Serialize Table to printable string
+   * Serialize Table to printable string.
    *
    * @param rowHeader Row Header
    * @param fieldNameToConverterMap Field Specific Converters
@@ -52,22 +58,100 @@ public class HoodiePrintHelper {
    * @param rows List of rows
    * @return Serialized form for printing
    */
-  public static String print(TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
+  public static String print(
+      TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
       String sortByField, boolean isDescending, Integer limit, boolean headerOnly, List<Comparable[]> rows) {
+    return print(rowHeader, fieldNameToConverterMap, false, sortByField, isDescending, limit, headerOnly, rows);
+  }
+
+  /**
+   * Serialize Table to printable string.
+   *
+   * @param rowHeader               Row Header
+   * @param fieldNameToConverterMap Field Specific Converters
+   * @param withRowNo               Whether to add row number
+   * @param sortByField             Sorting field
+   * @param isDescending            Order
+   * @param limit                   Limit
+   * @param headerOnly              Headers only
+   * @param rows                    List of rows
+   * @return Serialized form for printing
+   */
+  public static String print(
+      TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap, boolean withRowNo,
+      String sortByField, boolean isDescending, Integer limit, boolean headerOnly, List<Comparable[]> rows) {
+    return print(rowHeader, fieldNameToConverterMap, withRowNo, sortByField, isDescending, limit, headerOnly, rows, "");
+  }
+
+  /**
+   * Serialize Table to printable string and also export a temporary view to easily write sql queries.
+   * <p>
+   * Ideally, exporting view needs to be outside PrintHelper, but all commands use this. So this is easy
+   * way to add support for all commands
+   *
+   * @param rowHeader               Row Header
+   * @param fieldNameToConverterMap Field Specific Converters
+   * @param sortByField             Sorting field
+   * @param isDescending            Order
+   * @param limit                   Limit
+   * @param headerOnly              Headers only
+   * @param rows                    List of rows
+   * @param tempTableName           table name to export
+   * @return Serialized form for printing
+   */
+  public static String print(
+      TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
+      String sortByField, boolean isDescending, Integer limit, boolean headerOnly,
+      List<Comparable[]> rows, String tempTableName) {
+    return print(rowHeader, fieldNameToConverterMap, false, sortByField, isDescending, limit,
+        headerOnly, rows, tempTableName);
+  }
+
+  /**
+   * Serialize Table to printable string and also export a temporary view to easily write sql queries.
+   * <p>
+   * Ideally, exporting view needs to be outside PrintHelper, but all commands use this. So this is easy
+   * way to add support for all commands
+   *
+   * @param rowHeader               Row Header
+   * @param fieldNameToConverterMap Field Specific Converters
+   * @param withRowNo               Whether to add row number
+   * @param sortByField             Sorting field
+   * @param isDescending            Order
+   * @param limit                   Limit
+   * @param headerOnly              Headers only
+   * @param rows                    List of rows
+   * @param tempTableName           table name to export
+   * @return Serialized form for printing
+   */
+  public static String print(
+      TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
+      boolean withRowNo, String sortByField, boolean isDescending, Integer limit, boolean headerOnly,
+      List<Comparable[]> rows, String tempTableName) {
 
     if (headerOnly) {
       return HoodiePrintHelper.print(rowHeader);
     }
 
+    if (!StringUtils.isNullOrEmpty(tempTableName)) {
+      HoodieCLI.getTempViewProvider().createOrReplace(tempTableName, rowHeader.getFieldNames(),
+          rows.stream().map(columns -> Arrays.asList(columns)).collect(Collectors.toList()));
+    }
+
+    if (!sortByField.isEmpty() && !rowHeader.containsField(sortByField)) {
+      return String.format("Field[%s] is not in table, given columns[%s]", sortByField, rowHeader.getFieldNames());
+    }
+
     Table table =
-        new Table(rowHeader, fieldNameToConverterMap, Option.ofNullable(sortByField.isEmpty() ? null : sortByField),
+        new Table(rowHeader, fieldNameToConverterMap, withRowNo,
+            Option.ofNullable(sortByField.isEmpty() ? null : sortByField),
             Option.ofNullable(isDescending), Option.ofNullable(limit <= 0 ? null : limit)).addAllRows(rows).flip();
 
     return HoodiePrintHelper.print(table);
   }
 
   /**
-   * Render rows in Table
+   * Render rows in Table.
    *
    * @param buffer Table
    * @return output
@@ -77,12 +161,12 @@ public class HoodiePrintHelper {
     buffer.getFieldNames().toArray(header);
 
     String[][] rows =
-        buffer.getRenderRows().stream().map(l -> l.stream().toArray(String[]::new)).toArray(String[][]::new);
+        buffer.getRenderRows().stream().map(l -> l.toArray(new String[l.size()])).toArray(String[][]::new);
     return printTextTable(header, rows);
   }
 
   /**
-   * Render only header of the table
+   * Render only header of the table.
    *
    * @param header Table Header
    * @return output
@@ -94,7 +178,7 @@ public class HoodiePrintHelper {
   }
 
   /**
-   * Print Text table
+   * Print Text table.
    *
    * @param headers Headers
    * @param data Table

@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.5.1-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -29,6 +29,7 @@
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <skipTests>true</skipTests>
   </properties>
 
   <build>
@@ -48,7 +49,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <createSourcesJar>true</createSourcesJar>
+              <createSourcesJar>${shadeSources}</createSourcesJar>
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
               <transformers>
@@ -61,31 +62,90 @@
                   <resource>META-INF/LICENSE</resource>
                   <file>target/classes/META-INF/LICENSE</file>
                 </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
-                <includes>
+                <includes combine.children="append">
+                  <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
-                  <include>org.apache.parquet:parquet-avro</include>
+                  <!-- Kryo -->
                   <include>com.esotericsoftware:kryo-shaded</include>
-                  <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
+                  <include>org.objenesis:objenesis</include>
+
+                  <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.apache.avro:avro</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
+                  <include>org.codehaus.jackson:*</include>
+                  <include>org.apache.commons:commons-lang3</include>
+                  <include>com.yammer.metrics:metrics-core</include>
+                  <include>com.google.guava:guava</include>
+                  <include>commons-io:commons-io</include>
+                  <include>commons-lang:commons-lang</include>
+                  <include>com.google.protobuf:protobuf-java</include>
+                  <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
-              <relocations>
-
+              <relocations combine.children="append">
+                <!-- Kryo -->
                 <relocation>
                   <pattern>com.esotericsoftware.kryo.</pattern>
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.objenesis.</pattern>
-                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+                  <pattern>com.esotericsoftware.reflectasm.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.reflectasm.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.esotericsoftware.minlog.</pattern>
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.objenesis.</pattern>
+                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+                </relocation>
+
+                <relocation>
+                  <pattern>org.apache.parquet.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.io.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.yammer.metrics.</pattern>
+                  <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.common.</pattern>
+                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}com.google.common.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.lang.</pattern>
+                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}org.apache.commons.lang.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.lang3.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.lang3.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}com.google.protobuf.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.parquet.avro.</pattern>
+                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}org.apache.parquet.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.openjdk.jol.</pattern>
+                  <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -97,6 +157,9 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>**/*.proto</exclude>
+                    <exclude>hbase-webapps/**</exclude>
+                    <exclude>stringBehavior.avsc</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -109,9 +172,6 @@
     <resources>
       <resource>
         <directory>src/main/resources</directory>
-      </resource>
-      <resource>
-        <directory>src/test/resources</directory>
       </resource>
     </resources>
   </build>
@@ -128,5 +188,64 @@
       <artifactId>hudi-hadoop-mr-bundle</artifactId>
       <version>${project.version}</version>
     </dependency>
+
+    <!-- Kryo -->
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>${kryo.shaded.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
+    <!-- Parquet -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
+    <!-- Avro -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
+    <!--Guava needs to be shaded because HBase 1.2.3 depends on an earlier guava version i.e 12.0.1 and hits runtime
+    issues with the guava version present in Presto runtime-->
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>12.0.1</version>
+      <scope>${presto.bundle.bootstrap.scope}</scope>
+    </dependency>
+
+    <!--commons-lang needs to be shaded because HBase 1.2.3 needs it at runtime, but Presto runtime does not have this
+    dependency-->
+    <dependency>
+      <groupId>commons-lang</groupId>
+      <artifactId>commons-lang</artifactId>
+      <version>2.6</version>
+      <scope>${presto.bundle.bootstrap.scope}</scope>
+    </dependency>
+
+    <!--protobuf needs to be shaded because HBase 1.2.3 needs it at runtime, but Presto runtime does not have this
+    dependency-->
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>${proto.version}</version>
+      <scope>${presto.bundle.bootstrap.scope}</scope>
+    </dependency>
+
   </dependencies>
+  <profiles>
+    <profile>
+      <id>presto-shade-unbundle-bootstrap</id>
+      <properties>
+        <presto.bundle.bootstrap.scope>provided</presto.bundle.bootstrap.scope>
+        <presto.bundle.bootstrap.shade.prefix />
+      </properties>
+    </profile>
+  </profiles>
 </project>

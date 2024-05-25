@@ -1,0 +1,158 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl"?>
+<rdf:RDF xml:lang="en"
+         xmlns="http://usefulinc.com/ns/doap#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:asfext="http://projects.apache.org/ns/asfext#"
+         xmlns:foaf="http://xmlns.com/foaf/0.1/">
+<!--
+    Licensed to the Apache Software Foundation (ASF) under one or more
+    contributor license agreements.  See the NOTICE file distributed with
+    this work for additional information regarding copyright ownership.
+    The ASF licenses this file to You under the Apache License, Version 2.0
+    (the "License"); you may not use this file except in compliance with
+    the License.  You may obtain a copy of the License at
+
+         http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+-->
+  <Project rdf:about="https://hudi.apache.org">
+    <created>2019-12-31</created>
+    <license rdf:resource="http://usefulinc.com/doap/licenses/asl20" />
+    <name>Apache Hudi</name>
+    <homepage rdf:resource="https://hudi.apache.org" />
+    <asfext:pmc rdf:resource="https://hudi.apache.org" />
+    <shortdesc>Ingests and Manages storage of large analytical datasets</shortdesc>
+    <description>Hudi (pronounced “Hoodie”) brings stream processing to big data, providing upserts, deletes and incremental data streams.</description>
+    <bug-database rdf:resource="https://issues.apache.org/jira/browse/HUDI" />
+    <mailing-list rdf:resource="https://hudi.apache.org/community.html" />
+    <download-page rdf:resource="https://hudi.apache.org/community.html" />
+    <programming-language>Java</programming-language>
+    <programming-language>Scala</programming-language>
+    <category rdf:resource="http://projects.apache.org/category/library" />
+    <release>
+      <Version>
+        <name>Apache Hudi-incubating 0.5.0</name>
+        <created>2019-10-24</created>
+        <revision>0.5.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi-incubating 0.5.1</name>
+        <created>2020-01-31</created>
+        <revision>0.5.1</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi-incubating 0.5.2</name>
+        <created>2020-03-26</created>
+        <revision>0.5.2</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.5.3</name>
+        <created>2020-06-16</created>
+        <revision>0.5.3</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.6.0</name>
+        <created>2020-08-22</created>
+        <revision>0.6.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.7.0</name>
+        <created>2021-01-25</created>
+        <revision>0.7.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.8.0</name>
+        <created>2021-04-06</created>
+        <revision>0.8.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.9.0</name>
+        <created>2021-08-26</created>
+        <revision>0.9.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.10.0</name>
+        <created>2021-12-08</created>
+        <revision>0.10.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.10.1</name>
+        <created>2022-01-26</created>
+        <revision>0.10.1</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.11.0</name>
+        <created>2022-04-30</created>
+        <revision>0.11.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.11.1</name>
+        <created>2022-06-18</created>
+        <revision>0.11.1</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.12.0</name>
+        <created>2022-08-16</created>
+        <revision>0.12.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.12.1</name>
+        <created>2022-10-18</created>
+        <revision>0.12.1</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.12.2</name>
+        <created>2022-12-28</created>
+        <revision>0.12.2</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.13.0</name>
+        <created>2023-02-25</created>
+        <revision>0.13.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.12.3</name>
+        <created>2023-04-23</created>
+        <revision>0.12.3</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.13.1</name>
+        <created>2023-05-25</created>
+        <revision>0.13.1</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.14.0</name>
+        <created>2023-09-28</created>
+        <revision>0.14.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 1.0.0-beta1</name>
+        <created>2023-11-14</created>
+        <revision>1.0.0-beta1</revision>
+      </Version>
+      <Version> 
+        <name>Apache Hudi 0.14.1</name> 
+        <created>2024-01-04</created>
+        <revision>0.14.1</revision>
+      </Version>
+    </release>
+    <repository>
+      <GitRepository>
+        <location rdf:resource="https://github.com/apache/hudi.git"/>
+        <browse rdf:resource="https://github.com/apache/hudi"/>
+      </GitRepository>
+    </repository>
+    <maintainer>
+      <foaf:Person>
+        <foaf:name>Apache Hudi PMC</foaf:name>
+          <foaf:mbox rdf:resource="mailto:dev@hudi.apache.org"/>
+      </foaf:Person>
+    </maintainer>
+  </Project>
+</rdf:RDF>

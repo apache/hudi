@@ -20,21 +20,41 @@ package org.apache.hudi.common.util;
 
 import java.io.Serializable;
 
+/**
+ * An interface contains a set of functions.
+ */
 public interface Functions {
 
-  public interface Function0<R> extends Serializable {
+  static Runnable noop() {
+    return () -> {
+    };
+  }
+
+  /**
+   * A function which has not any parameter.
+   */
+  interface Function0<R> extends Serializable {
     R apply();
   }
 
-  public interface Function1<T1, R> extends Serializable {
+  /**
+   * A function which contains only one parameter.
+   */
+  interface Function1<T1, R> extends Serializable {
     R apply(T1 val1);
   }
 
-  public interface Function2<T1, T2, R> extends Serializable {
+  /**
+   * A function which contains two parameters.
+   */
+  interface Function2<T1, T2, R> extends Serializable {
     R apply(T1 val1, T2 val2);
   }
 
-  public interface Function3<T1, T2, T3, R> extends Serializable {
+  /**
+   * A function which contains three parameters.
+   */
+  interface Function3<T1, T2, T3, R> extends Serializable {
     R apply(T1 val1, T2 val2, T3 val3);
   }
 }

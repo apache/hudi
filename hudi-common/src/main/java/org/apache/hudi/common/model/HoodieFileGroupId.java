@@ -22,9 +22,9 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Unique ID to identify a file-group in a data-set
+ * Unique ID to identify a file-group in a data-set.
  */
-public class HoodieFileGroupId implements Serializable {
+public class HoodieFileGroupId implements Serializable, Comparable<HoodieFileGroupId> {
 
   private final String partitionPath;
 
@@ -62,6 +62,15 @@ public class HoodieFileGroupId implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieFileGroupId{" + "partitionPath='" + partitionPath + '\'' + ", fileId='" + fileId + '\'' + '}';
+    return "HoodieFileGroupId{partitionPath='" + partitionPath + '\'' + ", fileId='" + fileId + '\'' + '}';
+  }
+
+  @Override
+  public int compareTo(HoodieFileGroupId o) {
+    int ret = partitionPath.compareTo(o.partitionPath);
+    if (ret == 0) {
+      ret = fileId.compareTo(o.fileId);
+    }
+    return ret;
   }
 }

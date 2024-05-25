@@ -18,16 +18,19 @@
 
 package org.apache.hudi.utilities.transform;
 
-import java.util.UUID;
-import org.apache.hudi.common.util.TypedProperties;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.exception.HoodieTransformExecutionException;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.UUID;
 
 /**
  * Transformer that can flatten nested objects. It currently doesn't unnest arrays.
@@ -35,18 +38,25 @@ import org.apache.spark.sql.types.StructType;
 public class FlatteningTransformer implements Transformer {
 
   private static final String TMP_TABLE = "HUDI_SRC_TMP_TABLE_";
-  private static volatile Logger log = LogManager.getLogger(SqlQueryBasedTransformer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlatteningTransformer.class);
 
-  /** Configs supported */
+  /**
+   * Configs supported.
+   */
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
       TypedProperties properties) {
-
-    // tmp table name doesn't like dashes
-    String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-    log.info("Registering tmp table : " + tmpTable);
-    rowDataset.registerTempTable(tmpTable);
-    return sparkSession.sql("select " + flattenSchema(rowDataset.schema(), null) + " from " + tmpTable);
+    try {
+      // tmp table name doesn't like dashes
+      String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
+      LOG.info("Registering tmp table : " + tmpTable);
+      rowDataset.createOrReplaceTempView(tmpTable);
+      Dataset<Row> transformed = sparkSession.sql("select " + flattenSchema(rowDataset.schema(), null) + " from " + tmpTable);
+      sparkSession.catalog().dropTempView(tmpTable);
+      return transformed;
+    }  catch (Exception e) {
+      throw new HoodieTransformExecutionException("Failed to apply flattening transformer", e);
+    }
   }
 
   public String flattenSchema(StructType schema, String prefix) {

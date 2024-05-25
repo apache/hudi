@@ -18,18 +18,25 @@
 
 package org.apache.hudi.cli.utils;
 
-import java.io.IOException;
-import java.util.List;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
+import java.io.IOException;
+import java.time.ZonedDateTime;
+import java.util.Date;
+import java.util.List;
+
+/**
+ * Utilities related to commit operation.
+ */
 public class CommitUtil {
 
-  public static long countNewRecords(HoodieTableMetaClient target, List<String> commitsToCatchup) throws IOException {
+  public static long countNewRecords(HoodieTableMetaClient metaClient, List<String> commitsToCatchup) throws IOException {
     long totalNew = 0;
-    HoodieTimeline timeline = target.getActiveTimeline().reload().getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     for (String commit : commitsToCatchup) {
       HoodieCommitMetadata c = HoodieCommitMetadata.fromBytes(
           timeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commit)).get(),
@@ -37,5 +44,10 @@ public class CommitUtil {
       totalNew += c.fetchTotalRecordsWritten() - c.fetchTotalUpdateRecordsWritten();
     }
     return totalNew;
+  }
+
+  public static String getTimeDaysAgo(int numberOfDays) {
+    Date date = Date.from(ZonedDateTime.now().minusDays(numberOfDays).toInstant());
+    return HoodieActiveTimeline.formatDate(date);
   }
 }

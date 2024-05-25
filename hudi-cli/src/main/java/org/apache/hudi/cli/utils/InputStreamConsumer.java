@@ -18,15 +18,20 @@
 
 package org.apache.hudi.cli.utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.logging.Logger;
+import java.nio.charset.StandardCharsets;
 
+/**
+ * This class is responsible to read a Process output.
+ */
 public class InputStreamConsumer extends Thread {
 
-  protected static final Logger LOG = Logger.getLogger(InputStreamConsumer.class.getName());
+  private static final Logger LOG = LoggerFactory.getLogger(InputStreamConsumer.class);
   private InputStream is;
 
   public InputStreamConsumer(InputStream is) {
@@ -36,15 +41,12 @@ public class InputStreamConsumer extends Thread {
   @Override
   public void run() {
     try {
-      InputStreamReader isr = new InputStreamReader(is);
+      InputStreamReader isr = new InputStreamReader(is, StandardCharsets.UTF_8);
       BufferedReader br = new BufferedReader(isr);
-      String line;
-      while ((line = br.readLine()) != null) {
-        LOG.info(line);
-      }
-    } catch (IOException ioe) {
-      LOG.severe(ioe.toString());
-      ioe.printStackTrace();
+      br.lines().forEach(LOG::info);
+    } catch (Exception e) {
+      LOG.warn(e.toString());
+      e.printStackTrace();
     }
   }
 
@@ -56,6 +58,5 @@ public class InputStreamConsumer extends Thread {
     errout.start();
     stdout.start();
   }
-
 
 }

@@ -18,29 +18,47 @@
 
 package org.apache.hudi.utilities.schema;
 
-import java.io.Serializable;
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.common.config.TypedProperties;
+
 import org.apache.avro.Schema;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.Serializable;
+
 /**
- * Class to provide schema for reading data and also writing into a Hoodie table
+ * Class to provide schema for reading data and also writing into a Hoodie table,
+ * used by deltastreamer (runs over Spark).
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public abstract class SchemaProvider implements Serializable {
 
   protected TypedProperties config;
 
   protected JavaSparkContext jssc;
 
+  public SchemaProvider(TypedProperties props) {
+    this(props, null);
+  }
+
   protected SchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     this.config = props;
     this.jssc = jssc;
   }
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract Schema getSourceSchema();
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public Schema getTargetSchema() {
-    // by default, use source schema as target for hoodie dataset as well
+    // by default, use source schema as target for hoodie table as well
     return getSourceSchema();
+  }
+
+  //every schema provider has the ability to refresh itself, which will mean something different per provider.
+  public void refresh() {
+
   }
 }

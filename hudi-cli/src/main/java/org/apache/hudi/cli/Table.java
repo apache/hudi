@@ -18,9 +18,10 @@
 
 package org.apache.hudi.cli;
 
+import org.apache.hudi.common.util.Option;
+
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +29,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.hudi.common.util.Option;
 
 /**
  * Table to be rendered. This class takes care of ordering rows and limiting before renderer renders it.
@@ -37,6 +37,8 @@ public class Table implements Iterable<List<String>> {
 
   // Header for this table
   private final TableHeader rowHeader;
+  // Whether to print row number
+  private final boolean addRowNo;
   // User-specified conversions before rendering
   private final Map<String, Function<Object, String>> fieldNameToConverterMap;
   // Option attribute to track sorting field
@@ -49,12 +51,17 @@ public class Table implements Iterable<List<String>> {
   private final List<List<Comparable>> rawRows;
   // Flag to determine if all the rows have been added
   private boolean finishedAdding = false;
-  // Rows ready for Rendering
+  // Headers ready for rendering
+  private TableHeader renderHeaders;
+  // Rows ready for rendering
   private List<List<String>> renderRows;
 
-  public Table(TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
-      Option<String> orderingFieldNameOptional, Option<Boolean> isDescendingOptional, Option<Integer> limitOptional) {
+  public Table(
+      TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
+      boolean addRowNo, Option<String> orderingFieldNameOptional,
+      Option<Boolean> isDescendingOptional, Option<Integer> limitOptional) {
     this.rowHeader = rowHeader;
+    this.addRowNo = addRowNo;
     this.fieldNameToConverterMap = fieldNameToConverterMap;
     this.orderingFieldNameOptional = orderingFieldNameOptional;
     this.isDescendingOptional = isDescendingOptional;
@@ -63,8 +70,8 @@ public class Table implements Iterable<List<String>> {
   }
 
   /**
-   * Main API to add row to the table
-   * 
+   * Main API to add row to the table.
+   *
    * @param row Row
    */
   public Table add(List<Comparable> row) {
@@ -82,18 +89,18 @@ public class Table implements Iterable<List<String>> {
   }
 
   /**
-   * Add all rows
+   * Add all rows.
    * 
-   * @param rows Rows to be aded
+   * @param rows Rows to be added
    * @return
    */
   public Table addAll(List<List<Comparable>> rows) {
-    rows.forEach(r -> add(r));
+    rows.forEach(this::add);
     return this;
   }
 
   /**
-   * Add all rows
+   * Add all rows.
    * 
    * @param rows Rows to be added
    * @return
@@ -104,7 +111,7 @@ public class Table implements Iterable<List<String>> {
   }
 
   /**
-   * API to let the table know writing is over and reading is going to start
+   * API to let the table know writing is over and reading is going to start.
    */
   public Table flip() {
     this.finishedAdding = true;
@@ -113,22 +120,17 @@ public class Table implements Iterable<List<String>> {
   }
 
   /**
-   * Sorting of rows by a specified field
+   * Sorting of rows by a specified field.
    * 
    * @return
    */
   private List<List<Comparable>> orderRows() {
     return orderingFieldNameOptional.map(orderingColumnName -> {
-      return rawRows.stream().sorted(new Comparator<List<Comparable>>() {
-        @Override
-        public int compare(List<Comparable> row1, List<Comparable> row2) {
-          Comparable fieldForRow1 = row1.get(rowHeader.indexOf(orderingColumnName));
-          Comparable fieldForRow2 = row2.get(rowHeader.indexOf(orderingColumnName));
-          int cmpRawResult = fieldForRow1.compareTo(fieldForRow2);
-          return isDescendingOptional.map(isDescending -> {
-            return isDescending ? -1 * cmpRawResult : cmpRawResult;
-          }).orElse(cmpRawResult);
-        }
+      return rawRows.stream().sorted((row1, row2) -> {
+        Comparable fieldForRow1 = row1.get(rowHeader.indexOf(orderingColumnName));
+        Comparable fieldForRow2 = row2.get(rowHeader.indexOf(orderingColumnName));
+        int cmpRawResult = fieldForRow1.compareTo(fieldForRow2);
+        return isDescendingOptional.map(isDescending -> isDescending ? -1 * cmpRawResult : cmpRawResult).orElse(cmpRawResult);
       }).collect(Collectors.toList());
     }).orElse(rawRows);
   }
@@ -139,17 +141,34 @@ public class Table implements Iterable<List<String>> {
   private void sortAndLimit() {
     this.renderRows = new ArrayList<>();
     final int limit = this.limitOptional.orElse(rawRows.size());
-    final List<List<Comparable>> orderedRows = orderRows();
-    renderRows = orderedRows.stream().limit(limit).map(row -> {
-      return IntStream.range(0, rowHeader.getNumFields()).mapToObj(idx -> {
-        String fieldName = rowHeader.get(idx);
-        if (fieldNameToConverterMap.containsKey(fieldName)) {
-          return fieldNameToConverterMap.get(fieldName).apply(row.get(idx));
-        }
-        Object v = row.get(idx);
-        return v == null ? "null" : v.toString();
-      }).collect(Collectors.toList());
-    }).collect(Collectors.toList());
+    // Row number is added here if enabled
+    final List<List<Comparable>> rawOrderedRows = orderRows();
+    final List<List<Comparable>> orderedRows;
+    if (addRowNo) {
+      orderedRows = new ArrayList<>();
+      int rowNo = 0;
+      for (List<Comparable> row : rawOrderedRows) {
+        List<Comparable> newRow = new ArrayList<>();
+        newRow.add(rowNo++);
+        newRow.addAll(row);
+        orderedRows.add(newRow);
+      }
+    } else {
+      orderedRows = rawOrderedRows;
+    }
+    renderHeaders = addRowNo
+        ? new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_ROW_NO)
+        .addTableHeaderFields(rowHeader)
+        : rowHeader;
+    renderRows = orderedRows.stream().limit(limit)
+        .map(row -> IntStream.range(0, renderHeaders.getNumFields()).mapToObj(idx -> {
+          String fieldName = renderHeaders.get(idx);
+          if (fieldNameToConverterMap.containsKey(fieldName)) {
+            return fieldNameToConverterMap.get(fieldName).apply(row.get(idx));
+          }
+          Object v = row.get(idx);
+          return v == null ? "null" : v.toString();
+        }).collect(Collectors.toList())).collect(Collectors.toList());
   }
 
   @Override
@@ -169,6 +188,9 @@ public class Table implements Iterable<List<String>> {
   }
 
   public List<String> getFieldNames() {
+    if (renderHeaders != null) {
+      return renderHeaders.getFieldNames();
+    }
     return rowHeader.getFieldNames();
   }
 

@@ -7,71 +7,35 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import com.codahale.metrics.Timer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metrics.Metrics;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.utilities.streamer.HoodieStreamerMetrics;
 
-public class HoodieDeltaStreamerMetrics {
+/**
+ * HoodieDeltaStreamerMetrics is renamed to {@link HoodieStreamerMetrics}.
+ * Please use {@link HoodieStreamerMetrics} instead.
+ */
+@Deprecated
+public class HoodieDeltaStreamerMetrics extends HoodieStreamerMetrics {
 
-  private HoodieWriteConfig config = null;
-  private String tableName = null;
-
-  public String overallTimerName = null;
-  public String hiveSyncTimerName = null;
-  private Timer overallTimer = null;
-  public Timer hiveSyncTimer = null;
-
-  public HoodieDeltaStreamerMetrics(HoodieWriteConfig config) {
-    this.config = config;
-    this.tableName = config.getTableName();
-    if (config.isMetricsOn()) {
-      Metrics.init(config);
-      this.overallTimerName = getMetricsName("timer", "deltastreamer");
-      this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
-    }
+  public HoodieDeltaStreamerMetrics(HoodieWriteConfig writeConfig, HoodieStorage storage) {
+    super(writeConfig.getMetricsConfig(), storage);
   }
 
-  public Timer.Context getOverallTimerContext() {
-    if (config.isMetricsOn() && overallTimer == null) {
-      overallTimer = createTimer(overallTimerName);
-    }
-    return overallTimer == null ? null : overallTimer.time();
-  }
-
-  public Timer.Context getHiveSyncTimerContext() {
-    if (config.isMetricsOn() && hiveSyncTimer == null) {
-      hiveSyncTimer = createTimer(hiveSyncTimerName);
-    }
-    return hiveSyncTimer == null ? null : hiveSyncTimer.time();
-  }
-
-  private Timer createTimer(String name) {
-    return config.isMetricsOn() ? Metrics.getInstance().getRegistry().timer(name) : null;
-  }
-
-  String getMetricsName(String action, String metric) {
-    return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
-  }
-
-  public void updateDeltaStreamerMetrics(long durationInNs, long hiveSyncNs) {
-    if (config.isMetricsOn()) {
-      Metrics.registerGauge(getMetricsName("deltastreamer", "duration"), getDurationInMs(durationInNs));
-      Metrics.registerGauge(getMetricsName("deltastreamer", "hiveSyncDuration"), getDurationInMs(hiveSyncNs));
-    }
-  }
-
-  public long getDurationInMs(long ctxDuration) {
-    return ctxDuration / 1000000;
+  public HoodieDeltaStreamerMetrics(HoodieMetricsConfig metricsConfig, HoodieStorage storage) {
+    super(metricsConfig, storage);
   }
 }

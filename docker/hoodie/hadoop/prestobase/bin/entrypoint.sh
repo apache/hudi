@@ -1,6 +1,5 @@
 #!/bin/bash
 
-################################################################################
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -16,7 +15,6 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 # limitations under the License.
-################################################################################
 
 set -eo pipefail
 
@@ -56,6 +54,9 @@ do
     conf_file=${template%.mustache}
     cat ${conf_file}.mustache | mustache.sh > ${conf_file}
 done
+
+# Copy the presto bundle at run time so that locally built bundle overrides the one that is present in the image
+cp ${HUDI_PRESTO_BUNDLE} ${PRESTO_HOME}/plugin/hive-hadoop2/
 
 case "$1" in
     "coordinator" | "worker" )

@@ -18,19 +18,25 @@
 
 package org.apache.hudi.utilities.transform;
 
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.common.config.TypedProperties;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 
 /**
- * Transform source to target dataset before writing
+ * Transform source to target dataset before writing.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public interface Transformer {
 
   /**
-   * Transform source RDD to target RDD
+   * Transform source RDD to target RDD.
    *
    * @param jsc JavaSparkContext
    * @param sparkSession Spark Session
@@ -38,5 +44,13 @@ public interface Transformer {
    * @param properties Config properties
    * @return Transformed Dataset
    */
-  Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties);
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties);
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  default StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+    Dataset<Row> emptyDataset = sparkSession.createDataFrame(sparkSession.emptyDataFrame().rdd(), incomingStruct);
+    Dataset<Row> transformedDataset = this.apply(jsc, sparkSession, emptyDataset, properties);
+    return transformedDataset.schema();
+  }
 }

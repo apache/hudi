@@ -15,21 +15,21 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.5.1-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-  <artifactId>hudi-utilities-bundle</artifactId>
+  <artifactId>hudi-utilities-bundle_${scala.binary.version}</artifactId>
   <packaging>jar</packaging>
 
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <skipTests>true</skipTests>
   </properties>
 
   <build>
@@ -37,6 +37,28 @@
       <plugin>
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
+        <configuration>
+          <excludeSubProjects>false</excludeSubProjects>
+          <numUnapprovedLicenses>0</numUnapprovedLicenses>
+          <excludes>
+            <exclude>NOTICE</exclude>
+            <exclude>DISCLAIMER</exclude>
+            <exclude>**/.*</exclude>
+            <exclude>**/*.json</exclude>
+            <exclude>**/*.log</exclude>
+            <exclude>**/*.sqltemplate</exclude>
+            <exclude>**/compose_env</exclude>
+            <exclude>**/*NOTICE*</exclude>
+            <exclude>**/*LICENSE*</exclude>
+            <exclude>**/dependency-reduced-pom.xml</exclude>
+            <exclude>**/test/resources/*.data</exclude>
+            <exclude>**/test/resources/*.commit</exclude>
+            <exclude>**/target/**</exclude>
+            <exclude>**/generated-sources/**</exclude>
+            <exclude>.github/**</exclude>
+            <exclude>**/*.sql</exclude>
+          </excludes>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -49,7 +71,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <createSourcesJar>true</createSourcesJar>
+              <createSourcesJar>${shadeSources}</createSourcesJar>
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
               <transformers>
@@ -62,17 +84,29 @@
                   <resource>META-INF/LICENSE</resource>
                   <file>target/classes/META-INF/LICENSE</file>
                 </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>META-INF/services/org.apache.spark.sql.sources.DataSourceRegister</resource>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
-                <includes>
+                <includes combine.children="append">
+                  <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
-                  <include>org.apache.hudi:hudi-client</include>
-                  <include>org.apache.hudi:hudi-utilities</include>
-                  <include>org.apache.hudi:hudi-spark</include>
-                  <include>org.apache.hudi:hudi-hive</include>
+                  <include>org.apache.hudi:hudi-client-common</include>
+                  <include>org.apache.hudi:hudi-spark-client</include>
+                  <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
+                  <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
+                  <include>org.apache.hudi:${hudi.spark.common.modules.1}</include>
+                  <include>org.apache.hudi:${hudi.spark.common.modules.2}</include>
+                  <include>org.apache.hudi:hudi-hive-sync</include>
+                  <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
 
+                  <include>com.yammer.metrics:metrics-core</include>
                   <include>com.beust:jcommander</include>
                   <include>io.javalin:javalin</include>
                   <!-- Spark only has mortbay jetty -->
@@ -80,22 +114,39 @@
                   <include>org.eclipse.jetty.websocket:*</include>
                   <include>org.jetbrains.kotlin:*</include>
                   <include>org.rocksdb:rocksdbjni</include>
-                  <include>org.apache.httpcomponents:httpclient</include>
-                  <include>org.apache.httpcomponents:fluent-hc</include>
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
-
-                  <include>com.twitter:bijection-avro_2.11</include>
-                  <include>com.twitter:bijection-core_2.11</include>
+                  <include>org.roaringbitmap:RoaringBitmap</include>
+                  <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
+                       bundle the same JSR310 version that is included in spark runtime -->
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
+                  <include>com.lmax:disruptor</include>
+                  <include>com.github.davidmoten:guava-mini</include>
+                  <include>com.github.davidmoten:hilbert-curve</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
+                  <!-- SPARK-43489 Spark 3.5+ has marked protobuf as provided -->
+                  <include>com.google.protobuf:protobuf-java</include>
+                  <include>com.twitter:bijection-avro_${scala.binary.version}</include>
+                  <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.confluent:kafka-avro-serializer</include>
+                  <include>io.confluent:kafka-schema-serializer</include>
                   <include>io.confluent:common-config</include>
                   <include>io.confluent:common-utils</include>
                   <include>io.confluent:kafka-schema-registry-client</include>
+                  <include>io.confluent:kafka-protobuf-serializer</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
-                  <include>com.yammer.metrics:metrics-core</include>
-                  <include>org.apache.spark:spark-streaming-kafka-0-8_2.11</include>
-                  <include>org.apache.kafka:kafka_2.11</include>
+                  <include>io.dropwizard.metrics:metrics-jmx</include>
+                  <include>io.prometheus:simpleclient</include>
+                  <include>io.prometheus:simpleclient_httpserver</include>
+                  <include>io.prometheus:simpleclient_dropwizard</include>
+                  <include>io.prometheus:simpleclient_pushgateway</include>
+                  <include>io.prometheus:simpleclient_common</include>
+                  <include>com.uber.m3:tally-m3</include>
+                  <include>com.uber.m3:tally-core</include>
+                  <include>org.apache.spark:spark-streaming-kafka-0-10_${scala.binary.version}</include>
+                  <include>org.apache.spark:spark-token-provider-kafka-0-10_${scala.binary.version}</include>
+                  <include>org.apache.kafka:kafka_${scala.binary.version}</include>
                   <include>com.101tec:zkclient</include>
                   <include>org.apache.kafka:kafka-clients</include>
 
@@ -104,40 +155,62 @@
                   <include>org.apache.hive:hive-service-rpc</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
+
+                  <include>org.apache.curator:curator-framework</include>
+                  <include>org.apache.curator:curator-client</include>
+                  <include>org.apache.curator:curator-recipes</include>
+                  <include>commons-codec:commons-codec</include>
+                  <include>commons-io:commons-io</include>
+                  <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
-              <relocations>
+              <relocations combine.children="append">
+                <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
+                           potential classpath collisions in case users would like to also use "spark-avro" w/in
+                           their runtime, since Hudi carries some of the same classes as "spark-avro" -->
+                <relocation>
+                  <pattern>org.apache.spark.sql.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.spark.sql.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.yammer.metrics.</pattern>
+                  <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>com.beust.jcommander.</pattern>
                   <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.jdbc.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hive.jdbc.</shadedPattern>
+                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.io.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.metastore.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.metastore.</shadedPattern>
+                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hadoop.hive.metastore.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.common.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hive.common.</shadedPattern>
+                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.common.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.common.</shadedPattern>
+                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hadoop.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.conf.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.conf.</shadedPattern>
+                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hadoop.hive.conf.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.service.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hive.service.</shadedPattern>
+                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.service.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.service.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.service.</shadedPattern>
+                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hadoop.hive.service.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.codahale.metrics.</pattern>
@@ -146,6 +219,30 @@
                 <relocation>
                   <pattern>org.apache.commons.codec.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.eclipse.jetty.</pattern>
+                  <shadedPattern>org.apache.hudi.org.eclipse.jetty.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.openjdk.jol.</pattern>
+                  <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.httpcomponents.</pattern>
+                  <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.roaringbitmap.</pattern>
+                  <shadedPattern>org.apache.hudi.org.roaringbitmap.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.uber.m3.</pattern>
+                  <shadedPattern>org.apache.hudi.com.uber.m3.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
@@ -156,6 +253,8 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>**/*.proto</exclude>
+                    <exclude>hbase-webapps/**</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -169,27 +268,23 @@
       <resource>
         <directory>src/main/resources</directory>
       </resource>
-      <resource>
-        <directory>src/test/resources</directory>
-      </resource>
     </resources>
   </build>
 
   <dependencies>
-    <!-- Hoodie -->
+    <!-- Hoodie - Spark -->
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-common</artifactId>
+      <artifactId>hudi-spark_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
+
+    <!-- Hoodie - Other -->
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-client</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hive</artifactId>
+      <artifactId>hudi-hive-sync</artifactId>
       <version>${project.version}</version>
       <exclusions>
         <exclusion>
@@ -198,14 +293,10 @@
         </exclusion>
       </exclusions>
     </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-utilities</artifactId>
+      <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
 
@@ -221,36 +312,84 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-service</artifactId>
       <version>${hive.version}</version>
-      <scope>compile</scope>
+      <scope>${utilities.bundle.hive.scope}</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-service-rpc</artifactId>
       <version>${hive.version}</version>
-      <scope>compile</scope>
+      <scope>${utilities.bundle.hive.scope}</scope>
     </dependency>
 
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-jdbc</artifactId>
       <version>${hive.version}</version>
-      <scope>compile</scope>
+      <scope>${utilities.bundle.hive.scope}</scope>
     </dependency>
 
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-metastore</artifactId>
       <version>${hive.version}</version>
-      <scope>compile</scope>
+      <scope>${utilities.bundle.hive.scope}</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-common</artifactId>
       <version>${hive.version}</version>
+      <scope>${utilities.bundle.hive.scope}</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.htrace</groupId>
+      <artifactId>htrace-core</artifactId>
+      <version>${htrace.version}</version>
       <scope>compile</scope>
     </dependency>
+
+    <!-- zookeeper -->
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-framework</artifactId>
+      <version>${zk-curator.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-client</artifactId>
+      <version>${zk-curator.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-recipes</artifactId>
+      <version>${zk-curator.version}</version>
+    </dependency>
   </dependencies>
+
+  <profiles>
+    <profile>
+      <id>utilities-bundle-shade-hive</id>
+      <properties>
+        <utilities.bundle.hive.scope>compile</utilities.bundle.hive.scope>
+        <utilities.bundle.hive.shade.prefix>org.apache.hudi.</utilities.bundle.hive.shade.prefix>
+      </properties>
+    </profile>
+  </profiles>
 </project>
 

@@ -1,0 +1,70 @@
+{
+  "type" : "record",
+  "name" : "Product",
+  "doc" : "A product from Acme's catalog",
+  "namespace" : "example.com",
+  "fields" : [ {
+    "name" : "productId",
+    "doc" : "The unique identifier for a product",
+    "type" : "long"
+  }, {
+    "name" : "productName",
+    "doc" : "Name of the product",
+    "type" : "string"
+  }, {
+    "name" : "price",
+    "doc" : "The price of the product",
+    "type" : "double"
+  }, {
+    "name" : "tags",
+    "doc" : "Tags for the product",
+    "type" : {
+      "type" : "array",
+      "items" : {
+        "name" : "tags_child",
+        "doc" : "",
+        "type" : "string"
+      }
+    }
+  }, {
+    "name" : "dimensions",
+    "doc" : "",
+    "type" : {
+      "type" : "record",
+      "name" : "dimensions",
+      "fields" : [ {
+        "name" : "length",
+        "doc" : "",
+        "type" : "double"
+      }, {
+        "name" : "width",
+        "doc" : "",
+        "type" : "double"
+      }, {
+        "name" : "height",
+        "doc" : "",
+        "type" : "double"
+      } ]
+    }
+  }, {
+    "name" : "owners",
+    "doc" : "Owners for the product",
+    "type" : {
+      "type" : "array",
+      "items" : {
+        "type" : "record",
+        "name" : "owners_child",
+        "fields" : [ {
+          "name" : "name",
+          "doc" : "",
+          "type" : "string"
+        }, {
+          "name" : "company",
+          "doc" : "",
+          "default" : null,
+          "type" : [ "null", "string" ]
+        } ]
+      }
+    }
+  } ]
+}

@@ -18,6 +18,9 @@
 
 package org.apache.hudi.exception;
 
+/**
+ * An exception throws when meet not supported operation.
+ */
 public class HoodieNotSupportedException extends HoodieException {
 
   public HoodieNotSupportedException(String errorMsg) {

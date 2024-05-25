@@ -18,46 +18,56 @@
 
 package org.apache.hudi.utilities.sources;
 
-import java.util.List;
-import java.util.stream.Collectors;
-import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * An implementation of {@link Source}, that emits test upserts.
  */
 public class TestDataSource extends AbstractBaseTestSource {
 
-  private static volatile Logger log = LogManager.getLogger(TestDataSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestDataSource.class);
+  public static boolean returnEmptyBatch = false;
+  private static int counter = 0;
 
   public TestDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
     initDataGen();
+    returnEmptyBatch = false;
   }
 
   @Override
   protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
 
     int nextCommitNum = lastCheckpointStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
-    String commitTime = String.format("%05d", nextCommitNum);
-    log.info("Source Limit is set to " + sourceLimit);
+    String instantTime = String.format("%05d", nextCommitNum);
+    LOG.info("Source Limit is set to " + sourceLimit);
 
     // No new data.
-    if (sourceLimit <= 0) {
+    if (sourceLimit <= 0 || returnEmptyBatch) {
+      LOG.warn("Return no new data from Test Data source " + counter + ", source limit " + sourceLimit);
       return new InputBatch<>(Option.empty(), lastCheckpointStr.orElse(null));
+    } else {
+      LOG.warn("Returning valid data from Test Data source " + counter + ", source limit " + sourceLimit);
     }
+    counter++;
 
     List<GenericRecord> records =
-        fetchNextBatch(props, (int) sourceLimit, commitTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());
+        fetchNextBatch(props, (int) sourceLimit, instantTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
-    return new InputBatch<>(Option.of(avroRDD), commitTime);
+    return new InputBatch<>(Option.of(avroRDD), instantTime);
   }
 }

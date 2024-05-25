@@ -1,0 +1,8 @@
+{"uuid": "id1", "name": "Danny", "age": 24, "ts": "1970-01-01T00:00:01", "partition": "par1"}
+{"uuid": "id2", "name": "Stephen", "age": 34, "ts": "1970-01-01T00:00:02", "partition": "par1"}
+{"uuid": "id3", "name": "Julian", "age": 54, "ts": "1970-01-01T00:00:03", "partition": "par2"}
+{"uuid": "id4", "name": "Fabian", "age": 32, "ts": "1970-01-01T00:00:04", "partition": "par2"}
+{"uuid": "id5", "name": "Sophia", "age": 18, "ts": "1970-01-01T00:00:05", "partition": "par3"}
+{"uuid": "id9", "name": "Jane", "age": 19, "ts": "1970-01-01T00:00:06", "partition": "par3"}
+{"uuid": "id10", "name": "Ella", "age": 38, "ts": "1970-01-01T00:00:07", "partition": "par4"}
+{"uuid": "id11", "name": "Phoebe", "age": 52, "ts": "1970-01-01T00:00:08", "partition": "par4"}
