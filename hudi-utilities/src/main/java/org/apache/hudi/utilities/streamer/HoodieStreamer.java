@@ -74,6 +74,7 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -178,7 +179,7 @@ public class HoodieStreamer implements Serializable {
     } else if (cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
       hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
     } else {
-      hoodieConfig.setAll(readConfig(hadoopConf, new StoragePath(cfg.propsFilePath), cfg.configs).getProps());
+      hoodieConfig.setAll(readConfig(hadoopConf, new Path(cfg.propsFilePath), cfg.configs).getProps());
     }
 
     // set any configs that Deltastreamer has to override explicitly
@@ -447,7 +448,7 @@ public class HoodieStreamer implements Serializable {
     public static TypedProperties getProps(Configuration conf, Config cfg) {
       return cfg.propsFilePath.isEmpty()
           ? buildProperties(cfg.configs)
-          : readConfig(conf, new StoragePath(cfg.propsFilePath), cfg.configs).getProps();
+          : readConfig(conf, new Path(cfg.propsFilePath), cfg.configs).getProps();
     }
 
     @Override
