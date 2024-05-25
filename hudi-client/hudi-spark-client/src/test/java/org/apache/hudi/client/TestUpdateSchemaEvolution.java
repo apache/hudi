@@ -133,7 +133,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(updateTable.getConfig(), "101", updateTable,
             updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
         List<GenericRecord> oldRecords = FileFormatUtils.getInstance(updateTable.getBaseFileFormat())
-            .readAvroRecords(updateTable.getStorageConf(),
+            .readAvroRecords(updateTable.getStorage(),
                 new StoragePath(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
                 mergeHandle.getWriterSchemaWithMetaFields());
         for (GenericRecord rec : oldRecords) {

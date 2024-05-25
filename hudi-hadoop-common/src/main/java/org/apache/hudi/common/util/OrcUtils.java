@@ -31,8 +31,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hadoop.OrcReaderIterator;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -74,14 +72,14 @@ public class OrcUtils extends FileFormatUtils {
   /**
    * Provides a closable iterator for reading the given ORC file.
    *
-   * @param configuration configuration to build storage object
-   * @param filePath      The ORC file path
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath The ORC file path
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the ORC file
    */
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
     try {
-      Configuration conf = configuration.unwrapCopyAs(Configuration.class);
+      Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
       conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
       Reader reader = OrcFile.createReader(convertToHadoopPath(filePath), OrcFile.readerOptions(conf));
 
@@ -113,33 +111,33 @@ public class OrcUtils extends FileFormatUtils {
   /**
    * Fetch {@link HoodieKey}s from the given ORC file.
    *
-   * @param configuration configuration to build storage object
-   * @param filePath      The ORC file path.
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath The ORC file path.
    * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
    */
   @Override
-  public List<HoodieKey> fetchHoodieKeys(StorageConfiguration<?> configuration, StoragePath filePath) {
+  public List<HoodieKey> fetchHoodieKeys(HoodieStorage storage, StoragePath filePath) {
     try {
-      if (!HoodieStorageUtils.getStorage(filePath, configuration).exists(filePath)) {
+      if (!storage.exists(filePath)) {
         return Collections.emptyList();
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
     }
     List<HoodieKey> hoodieKeys = new ArrayList<>();
-    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, Option.empty()))  {
+    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(storage, filePath, Option.empty()))  {
       iterator.forEachRemaining(hoodieKeys::add);
     }
     return hoodieKeys;
   }
 
   @Override
-  public List<HoodieKey> fetchHoodieKeys(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public List<HoodieKey> fetchHoodieKeys(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new UnsupportedOperationException("Custom key generator is not supported yet");
   }
 
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(StorageConfiguration<?> configuration, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new UnsupportedOperationException("Custom key generator is not supported yet");
   }
 
@@ -147,28 +145,28 @@ public class OrcUtils extends FileFormatUtils {
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
   @Override
-  public List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath) {
+  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath) {
     Schema avroSchema;
     try (Reader reader = OrcFile.createReader(
-        convertToHadoopPath(filePath), OrcFile.readerOptions(configuration.unwrapAs(Configuration.class)))) {
+        convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
       avroSchema = AvroOrcUtils.createAvroSchema(reader.getSchema());
     } catch (IOException io) {
       throw new HoodieIOException("Unable to read Avro records from an ORC file:" + filePath, io);
     }
-    return readAvroRecords(configuration, filePath, avroSchema);
+    return readAvroRecords(storage, filePath, avroSchema);
   }
 
   /**
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
   @Override
-  public List<GenericRecord> readAvroRecords(StorageConfiguration<?> configuration, StoragePath filePath, Schema avroSchema) {
+  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, Schema avroSchema) {
     List<GenericRecord> records = new ArrayList<>();
     try (Reader reader = OrcFile.createReader(
-        convertToHadoopPath(filePath), OrcFile.readerOptions(configuration.unwrapAs(Configuration.class)))) {
+        convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
       TypeDescription orcSchema = reader.getSchema();
       try (RecordReader recordReader = reader.rows(
-          new Options(configuration.unwrapAs(Configuration.class)).schema(orcSchema))) {
+          new Options(storage.getConf().unwrapAs(Configuration.class)).schema(orcSchema))) {
         OrcReaderIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, avroSchema, orcSchema);
         while (iterator.hasNext()) {
           GenericRecord record = iterator.next();
@@ -185,17 +183,17 @@ public class OrcUtils extends FileFormatUtils {
    * Read the rowKey list matching the given filter, from the given ORC file. If the filter is empty, then this will
    * return all the rowkeys.
    *
-   * @param conf     configuration to build storage object.
+   * @param storage  {@link HoodieStorage} instance.
    * @param filePath The ORC file path.
    * @param filter   record keys filter
    * @return Set of row keys matching candidateRecordKeys
    */
   @Override
-  public Set<String> filterRowKeys(StorageConfiguration<?> conf, StoragePath filePath, Set<String> filter)
+  public Set<String> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filter)
       throws HoodieIOException {
-    try (Reader reader = OrcFile.createReader(new Path(filePath.toUri()), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)));) {
+    try (Reader reader = OrcFile.createReader(new Path(filePath.toUri()), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)));) {
       TypeDescription schema = reader.getSchema();
-      try (RecordReader recordReader = reader.rows(new Options(conf.unwrapAs(Configuration.class)).schema(schema))) {
+      try (RecordReader recordReader = reader.rows(new Options(storage.getConf().unwrapAs(Configuration.class)).schema(schema))) {
         Set<String> filteredRowKeys = new HashSet<>();
         List<String> fieldNames = schema.getFieldNames();
         VectorizedRowBatch batch = schema.createRowBatch();
@@ -228,10 +226,10 @@ public class OrcUtils extends FileFormatUtils {
   }
 
   @Override
-  public Map<String, String> readFooter(StorageConfiguration<?> conf, boolean required,
+  public Map<String, String> readFooter(HoodieStorage storage, boolean required,
                                         StoragePath filePath, String... footerNames) {
     try (Reader reader = OrcFile.createReader(
-        convertToHadoopPath(filePath), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)))) {
+        convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
       Map<String, String> footerVals = new HashMap<>();
       List<UserMetadataItem> metadataItemList = reader.getFileTail().getFooter().getMetadataList();
       Map<String, String> metadata = metadataItemList.stream().collect(Collectors.toMap(
@@ -252,9 +250,9 @@ public class OrcUtils extends FileFormatUtils {
   }
 
   @Override
-  public Schema readAvroSchema(StorageConfiguration<?> conf, StoragePath filePath) {
+  public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
     try (Reader reader = OrcFile.createReader(
-        convertToHadoopPath(filePath), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)))) {
+        convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
       if (reader.hasMetadataValue("orc.avro.schema")) {
         ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
         byte[] bytes = toBytes(metadataValue);
@@ -269,7 +267,7 @@ public class OrcUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(StorageConfiguration<?> storageConf, StoragePath filePath, List<String> columnList) {
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage, StoragePath filePath, List<String> columnList) {
     throw new UnsupportedOperationException(
         "Reading column statistics from metadata is not supported for ORC format yet");
   }
@@ -280,9 +278,9 @@ public class OrcUtils extends FileFormatUtils {
   }
 
   @Override
-  public long getRowCount(StorageConfiguration<?> conf, StoragePath filePath) {
+  public long getRowCount(HoodieStorage storage, StoragePath filePath) {
     try (Reader reader = OrcFile.createReader(
-        convertToHadoopPath(filePath), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)))) {
+        convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
       return reader.getNumberOfRows();
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get row count for ORC file:" + filePath, io);
@@ -305,7 +303,7 @@ public class OrcUtils extends FileFormatUtils {
   }
 
   @Override
-  public byte[] serializeRecordsToLogBlock(StorageConfiguration<?> storageConf,
+  public byte[] serializeRecordsToLogBlock(HoodieStorage storage,
                                            List<HoodieRecord> records,
                                            Schema writerSchema,
                                            Schema readerSchema, String keyFieldName,

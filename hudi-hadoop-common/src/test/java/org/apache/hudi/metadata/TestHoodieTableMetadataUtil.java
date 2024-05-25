@@ -141,7 +141,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
         instant,
         path,
-        metaClient.getStorageConf(),
+        metaClient.getStorage(),
         metaClient.getTableConfig(),
         HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS,
         engineContext.getTaskContextSupplier(),

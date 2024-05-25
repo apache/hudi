@@ -51,6 +51,7 @@ import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Transient;
 
@@ -102,13 +103,18 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   // Latest file slices in the metadata partitions
   private final Map<String, List<FileSlice>> partitionFileSliceMap = new ConcurrentHashMap<>();
 
-  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath) {
-    this(engineContext, metadataConfig, datasetBasePath, false);
+  public HoodieBackedTableMetadata(HoodieEngineContext engineContext,
+                                   HoodieStorage storage,
+                                   HoodieMetadataConfig metadataConfig,
+                                   String datasetBasePath) {
+    this(engineContext, storage, metadataConfig, datasetBasePath, false);
   }
 
-  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+  public HoodieBackedTableMetadata(HoodieEngineContext engineContext,
+                                   HoodieStorage storage,
+                                   HoodieMetadataConfig metadataConfig,
                                    String datasetBasePath, boolean reuse) {
-    super(engineContext, metadataConfig, datasetBasePath);
+    super(engineContext, storage, metadataConfig, datasetBasePath);
     this.reuse = reuse;
     this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(dataBasePath.toString());
 
@@ -446,7 +452,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Option<HoodieBaseFile> basefile = slice.getBaseFile();
     if (basefile.isPresent()) {
       StoragePath baseFilePath = basefile.get().getStoragePath();
-      baseFileReader = (HoodieSeekingFileReader<?>) HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecordType.AVRO)
+      baseFileReader = (HoodieSeekingFileReader<?>) HoodieIOFactory.getIOFactory(metadataMetaClient.getStorage())
+          .getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, baseFilePath);
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", baseFilePath,

@@ -132,7 +132,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //validate that metadata table file listing matches reality
     metaClient = HoodieTableMetaClient.reload(metaClient);
     TestHoodieBackedMetadata.validateMetadata(getConfigToTestMDTRollbacks(true), Option.empty(), fs(), basePath, metaClient,
-        storageConf().unwrap(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
+        storageConf().unwrap(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client, hoodieStorage()));
   }
 
   /**
@@ -194,7 +194,8 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     updateRecords(client, dataGen, "004", records);
     //validate that metadata table file listing matches reality
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), fs(), basePath, metaClient, storageConf().unwrap(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
+    TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), fs(), basePath, metaClient, storageConf().unwrap(), new HoodieSparkEngineContext(jsc()),
+        TestHoodieBackedMetadata.metadata(client, hoodieStorage()));
   }
 
   private void copyOut(HoodieTableType tableType, String commitTime) throws IOException {
@@ -261,7 +262,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //validate that metadata table file listing matches reality
     metaClient = HoodieTableMetaClient.reload(metaClient);
     TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), fs(), basePath, metaClient,
-        storageConf().unwrap(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
+        storageConf().unwrap(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client, hoodieStorage()));
   }
 
   /**

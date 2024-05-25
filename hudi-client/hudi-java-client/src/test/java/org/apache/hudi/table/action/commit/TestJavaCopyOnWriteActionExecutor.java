@@ -161,13 +161,13 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path filePath = allFiles[0].getPath();
-    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(storageConf, new StoragePath(filePath.toUri()));
+    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(storage, new StoragePath(filePath.toUri()));
     for (HoodieRecord record : records) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
 
     // Read the base file, check the record content
-    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(storageConf, new StoragePath(filePath.toUri()));
+    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(storage, new StoragePath(filePath.toUri()));
     GenericRecord newRecord;
     int index = 0;
     for (GenericRecord record : fileRecords) {
@@ -202,7 +202,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     // Check whether the record has been updated
     Path updatedFilePath = allFiles[0].getPath();
     BloomFilter updatedFilter =
-        fileUtils.readBloomFilterFromMetadata(storageConf, new StoragePath(updatedFilePath.toUri()));
+        fileUtils.readBloomFilterFromMetadata(storage, new StoragePath(updatedFilePath.toUri()));
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));
@@ -508,13 +508,13 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path filePath = allFiles[0].getPath();
-    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(storageConf, new StoragePath(filePath.toUri()));
+    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(storage, new StoragePath(filePath.toUri()));
     for (HoodieRecord record : records) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
 
     // Read the base file, check the record content
-    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(storageConf, new StoragePath(filePath.toUri()));
+    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(storage, new StoragePath(filePath.toUri()));
     int index = 0;
     for (GenericRecord record : fileRecords) {
       assertEquals(records.get(index).getRecordKey(), record.get("_row_key").toString());
@@ -533,7 +533,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     filePath = allFiles[0].getPath();
     // Read the base file, check the record content
-    fileRecords = fileUtils.readAvroRecords(storageConf, new StoragePath(filePath.toUri()));
+    fileRecords = fileUtils.readAvroRecords(storage, new StoragePath(filePath.toUri()));
     // Check that the two records are deleted successfully
     assertEquals(1, fileRecords.size());
     assertEquals(records.get(1).getRecordKey(), fileRecords.get(0).get("_row_key").toString());
@@ -550,7 +550,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     filePath = allFiles[0].getPath();
     // Read the base file, check the record content
-    fileRecords = fileUtils.readAvroRecords(storageConf, new StoragePath(filePath.toUri()));
+    fileRecords = fileUtils.readAvroRecords(storage, new StoragePath(filePath.toUri()));
     // Check whether all records have been deleted
     assertEquals(0, fileRecords.size());
   }

@@ -52,9 +52,9 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
   private List<HoodieKey> fetchHoodieKeys(HoodieBaseFile baseFile) {
     FileFormatUtils fileFormatUtils = FileFormatUtils.getInstance(baseFile.getStoragePath());
     if (keyGeneratorOpt.isPresent()) {
-      return fileFormatUtils.fetchHoodieKeys(hoodieTable.getStorageConf(), baseFile.getStoragePath(), keyGeneratorOpt);
+      return fileFormatUtils.fetchHoodieKeys(hoodieTable.getStorage(), baseFile.getStoragePath(), keyGeneratorOpt);
     } else {
-      return fileFormatUtils.fetchHoodieKeys(hoodieTable.getStorageConf(), baseFile.getStoragePath());
+      return fileFormatUtils.fetchHoodieKeys(hoodieTable.getStorage(), baseFile.getStoragePath());
     }
   }
 

@@ -300,7 +300,7 @@ public class HoodieDataTableValidator implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     try {
       HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(
-          engineContext, metaClient.getTableConfig(), engineContext.getStorageConf(), cfg.basePath, cfg.assumeDatePartitioning);
+          engineContext, metaClient.getTableConfig(), metaClient.getStorage(), cfg.basePath, cfg.assumeDatePartitioning);
       List<StoragePath> allDataFilePaths = HoodieDataTableUtils.getBaseAndLogFilePathsFromFileSystem(tableMetadata, cfg.basePath);
       // verify that no data files present with commit time < earliest commit in active timeline.
       if (metaClient.getActiveTimeline().firstInstant().isPresent()) {

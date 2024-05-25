@@ -206,14 +206,14 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path filePath = allFiles[0].getPath();
     BloomFilter filter = FileFormatUtils.getInstance(table.getBaseFileFormat())
-        .readBloomFilterFromMetadata(storageConf, new StoragePath(filePath.toUri()));
+        .readBloomFilterFromMetadata(storage, new StoragePath(filePath.toUri()));
     for (HoodieRecord record : records) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
 
     // Read the base file, check the record content
     List<GenericRecord> fileRecords = FileFormatUtils.getInstance(table.getBaseFileFormat())
-        .readAvroRecords(storageConf, new StoragePath(filePath.toUri()));
+        .readAvroRecords(storage, new StoragePath(filePath.toUri()));
     GenericRecord newRecord;
     int index = 0;
     for (GenericRecord record : fileRecords) {
@@ -248,7 +248,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     // Check whether the record has been updated
     Path updatedFilePath = allFiles[0].getPath();
     BloomFilter updatedFilter =
-        FileFormatUtils.getInstance(metaClient).readBloomFilterFromMetadata(storageConf, new StoragePath(updatedFilePath.toUri()));
+        FileFormatUtils.getInstance(metaClient).readBloomFilterFromMetadata(storage, new StoragePath(updatedFilePath.toUri()));
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));

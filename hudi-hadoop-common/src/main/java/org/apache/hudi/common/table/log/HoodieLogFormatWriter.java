@@ -160,7 +160,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       // bytes for header
       byte[] headerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockHeader());
       // content bytes
-      byte[] content = block.getContentBytes(storage.getConf());
+      byte[] content = block.getContentBytes(storage);
       // bytes for footer
       byte[] footerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockFooter());
 

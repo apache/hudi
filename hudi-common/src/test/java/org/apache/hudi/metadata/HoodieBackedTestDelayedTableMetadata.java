@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,10 +34,11 @@ public class HoodieBackedTestDelayedTableMetadata extends HoodieBackedTableMetad
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTestDelayedTableMetadata.class);
 
   public HoodieBackedTestDelayedTableMetadata(HoodieEngineContext engineContext,
+                                              HoodieStorage storage,
                                               HoodieMetadataConfig metadataConfig,
                                               String datasetBasePath,
                                               boolean reuse) {
-    super(engineContext, metadataConfig, datasetBasePath, reuse);
+    super(engineContext, storage, metadataConfig, datasetBasePath, reuse);
   }
 
   @Override
