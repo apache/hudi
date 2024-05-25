@@ -102,7 +102,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.heartbeatClient = new HoodieHeartbeatClient(storage, this.basePath,
         clientConfig.getHoodieClientHeartbeatIntervalInMs(),
         clientConfig.getHoodieClientHeartbeatTolerableMisses());
-    this.metrics = new HoodieMetrics(config, context.getStorageConf());
+    this.metrics = new HoodieMetrics(config, storage);
     this.txnManager = new TransactionManager(config, storage);
     this.timeGenerator = TimeGenerators.getTimeGenerator(
         config.getTimeGeneratorConfig(), HadoopFSUtils.getStorageConf(hadoopConf));

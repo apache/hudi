@@ -269,7 +269,7 @@ public class LSMTimelineWriter {
     try (HoodieFileWriter writer = openWriter(new StoragePath(metaClient.getArchivePath(), compactedFileName))) {
       for (String fileName : candidateFiles) {
         // Read the input source file
-        try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieIOFactory.getIOFactory(metaClient.getStorageConf())
+        try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
             .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
             .getFileReader(config, new StoragePath(metaClient.getArchivePath(), fileName))) {
           // Read the meta entry
@@ -382,7 +382,7 @@ public class LSMTimelineWriter {
 
   private HoodieFileWriter openWriter(StoragePath filePath) {
     try {
-      return HoodieFileWriterFactory.getFileWriter("", filePath, metaClient.getStorageConf(), getOrCreateWriterConfig(),
+      return HoodieFileWriterFactory.getFileWriter("", filePath, metaClient.getStorage(), getOrCreateWriterConfig(),
           HoodieLSMTimelineInstant.getClassSchema(), taskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize archiving writer", e);

@@ -24,7 +24,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -40,9 +39,9 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
  */
 public class HoodieFileReaderFactory {
 
-  protected final StorageConfiguration<?> storageConf;
-  public HoodieFileReaderFactory(StorageConfiguration<?> storageConf) {
-    this.storageConf = storageConf;
+  protected final HoodieStorage storage;
+  public HoodieFileReaderFactory(HoodieStorage storage) {
+    this.storage = storage;
   }
 
   public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePath path) throws IOException {

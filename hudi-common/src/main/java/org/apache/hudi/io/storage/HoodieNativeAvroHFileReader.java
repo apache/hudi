@@ -38,8 +38,6 @@ import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.hfile.KeyValue;
 import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
@@ -69,14 +67,14 @@ import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
 public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieNativeAvroHFileReader.class);
 
-  private final StorageConfiguration<?> conf;
+  private final HoodieStorage storage;
   private final Option<StoragePath> path;
   private final Option<byte[]> bytesContent;
   private Option<HFileReader> sharedHFileReader;
   private final Lazy<Schema> schema;
 
-  public HoodieNativeAvroHFileReader(StorageConfiguration<?> conf, StoragePath path, Option<Schema> schemaOption) {
-    this.conf = conf;
+  public HoodieNativeAvroHFileReader(HoodieStorage storage, StoragePath path, Option<Schema> schemaOption) {
+    this.storage = storage;
     this.path = Option.of(path);
     this.bytesContent = Option.empty();
     this.sharedHFileReader = Option.empty();
@@ -84,8 +82,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         .orElseGet(() -> Lazy.lazily(() -> fetchSchema(getSharedHFileReader())));
   }
 
-  public HoodieNativeAvroHFileReader(StorageConfiguration<?> conf, byte[] content, Option<Schema> schemaOption) {
-    this.conf = conf;
+  public HoodieNativeAvroHFileReader(HoodieStorage storage, byte[] content, Option<Schema> schemaOption) {
+    this.storage = storage;
     this.path = Option.empty();
     this.bytesContent = Option.of(content);
     this.sharedHFileReader = Option.empty();
@@ -261,7 +259,6 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     SeekableDataInputStream inputStream;
     long fileSize;
     if (path.isPresent()) {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(path.get(), conf);
       fileSize = storage.getPathInfo(path.get()).getLength();
       inputStream = storage.openSeekable(path.get(), false);
     } else {

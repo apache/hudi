@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
@@ -110,11 +110,11 @@ public class HoodieMetrics {
   private Counter compactionRequestedCounter = null;
   private Counter compactionCompletedCounter = null;
 
-  public HoodieMetrics(HoodieWriteConfig config, StorageConfiguration<?> storageConf) {
+  public HoodieMetrics(HoodieWriteConfig config, HoodieStorage storage) {
     this.config = config;
     this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
-      metrics = Metrics.getInstance(config.getMetricsConfig(), storageConf);
+      metrics = Metrics.getInstance(config.getMetricsConfig(), storage);
       this.rollbackTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.ROLLBACK_ACTION);
       this.cleanTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.CLEAN_ACTION);
       this.archiveTimerName = getMetricsName(TIMER_ACTION, ARCHIVE_ACTION);

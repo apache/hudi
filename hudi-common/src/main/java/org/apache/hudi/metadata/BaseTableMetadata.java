@@ -39,10 +39,9 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -79,11 +78,14 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected final boolean hiveStylePartitioningEnabled;
   protected final boolean urlEncodePartitioningEnabled;
 
-  protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String dataBasePath) {
-    super(engineContext, engineContext.getStorageConf(), dataBasePath);
+  protected BaseTableMetadata(HoodieEngineContext engineContext,
+                              HoodieStorage storage,
+                              HoodieMetadataConfig metadataConfig,
+                              String dataBasePath) {
+    super(engineContext, storage, dataBasePath);
 
     this.dataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf.newInstance())
+        .setConf(storage.getConf().newInstance())
         .setBasePath(dataBasePath)
         .build();
 
@@ -94,7 +96,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     if (metadataConfig.isMetricsEnabled()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(HoodieMetricsConfig.newBuilder()
-          .fromProperties(metadataConfig.getProps()).build(), getStorageConf()));
+          .fromProperties(metadataConfig.getProps()).build(), dataMetaClient.getStorage()));
     } else {
       this.metrics = Option.empty();
     }
@@ -356,9 +358,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           HoodieMetadataPayload metadataPayload = record.getData();
           checkForSpuriousDeletes(metadataPayload, recordKey);
           try {
-            return metadataPayload.getFileList(getStorageConf(), partitionPath);
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to extract file-pathInfoList from the payload", e);
+            return metadataPayload.getFileList(dataMetaClient.getStorage(), partitionPath);
+          } catch (Exception e) {
+            throw new HoodieException("Failed to extract file-pathInfoList from the payload", e);
           }
         })
         .orElseGet(Collections::emptyList);
@@ -386,9 +388,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     metrics.ifPresent(
         m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
-    HoodieStorage storage =
-        HoodieStorageUtils.getStorage(partitionPaths.get(0), getStorageConf());
-
     Map<String, List<StoragePathInfo>> partitionPathToFilesMap =
         partitionIdRecordPairs.entrySet().stream()
             .map(e -> {
@@ -398,7 +397,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
               HoodieMetadataPayload metadataPayload = e.getValue().getData();
               checkForSpuriousDeletes(metadataPayload, partitionId);
 
-              List<StoragePathInfo> files = metadataPayload.getFileList(storage, partitionPath);
+              List<StoragePathInfo> files = metadataPayload.getFileList(dataMetaClient.getStorage(), partitionPath);
               return Pair.of(partitionPath.toString(), files);
             })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));

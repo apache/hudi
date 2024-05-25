@@ -622,7 +622,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, basePath, metaClient.getStorage(),
         completedTimeline);
 
-    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, basePath);
+    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, basePath, metaClient.getStorage());
 
     Collections.sort(allPartitionPathsFromFS);
     Collections.sort(allPartitionPathsMeta);
@@ -675,14 +675,15 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   @VisibleForTesting
-   List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath) {
-    return FSUtils.getAllPartitionPaths(engineContext, basePath, true);
+  List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath,
+                                    HoodieStorage storage) {
+    return FSUtils.getAllPartitionPaths(engineContext, storage, basePath, true);
   }
 
   @VisibleForTesting
   List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, String basePath,
                                            HoodieStorage storage, HoodieTimeline completedTimeline) {
-    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false);
+    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, storage, basePath, false);
 
     // ignore partitions created by uncommitted ingestion.
     return allPartitionPathsFromFS.stream().parallel().filter(part -> {
@@ -1392,7 +1393,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           .build();
       this.fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
           metaClient, metadataConfig);
-      this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePathV2().toString());
+      this.tableMetadata = HoodieTableMetadata.create(
+          engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePathV2().toString());
       if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
         this.allColumnNameList = getAllColumnNames();
       }
@@ -1439,7 +1441,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       } else {
         return baseFileNameList.stream().flatMap(filename ->
                 FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readColumnStatsFromMetadata(
-                    metaClient.getStorageConf(),
+                    metaClient.getStorage(),
                     new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath), filename),
                     allColumnNameList).stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
@@ -1487,7 +1489,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieConfig hoodieConfig = new HoodieConfig();
       hoodieConfig.setValue(HoodieReaderConfig.USE_NATIVE_HFILE_READER,
           Boolean.toString(ConfigUtils.getBooleanWithAltKeys(props, HoodieReaderConfig.USE_NATIVE_HFILE_READER)));
-      try (HoodieFileReader fileReader = getHoodieSparkIOFactory(metaClient.getStorageConf())
+      try (HoodieFileReader fileReader = getHoodieSparkIOFactory(metaClient.getStorage())
           .getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(hoodieConfig, path)) {
         bloomFilter = fileReader.readBloomFilter();

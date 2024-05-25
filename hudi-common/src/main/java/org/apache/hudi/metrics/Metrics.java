@@ -24,8 +24,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import com.codahale.metrics.MetricRegistry;
@@ -53,10 +51,10 @@ public class Metrics {
   private final String basePath;
   private boolean initialized = false;
   private transient Thread shutdownThread = null;
-  private final  StorageConfiguration<?> storageConf;
+  private final HoodieStorage storage;
 
-  public Metrics(HoodieMetricsConfig metricConfig, StorageConfiguration<?> storageConf) {
-    this.storageConf = storageConf;
+  public Metrics(HoodieMetricsConfig metricConfig, HoodieStorage storage) {
+    this.storage = storage;
     registry = new MetricRegistry();
     commonMetricPrefix = metricConfig.getMetricReporterMetricsNamePrefix();
     reporters = new ArrayList<>();
@@ -80,13 +78,13 @@ public class Metrics {
     registerGauges(Registry.getAllMetrics(true, true), Option.of(commonMetricPrefix));
   }
 
-  public static synchronized Metrics getInstance(HoodieMetricsConfig metricConfig, StorageConfiguration<?> storageConf) {
+  public static synchronized Metrics getInstance(HoodieMetricsConfig metricConfig, HoodieStorage storage) {
     String basePath = getBasePath(metricConfig);
     if (METRICS_INSTANCE_PER_BASEPATH.containsKey(basePath)) {
       return METRICS_INSTANCE_PER_BASEPATH.get(basePath);
     }
 
-    Metrics metrics = new Metrics(metricConfig, storageConf);
+    Metrics metrics = new Metrics(metricConfig, storage);
     METRICS_INSTANCE_PER_BASEPATH.put(basePath, metrics);
     return metrics;
   }
@@ -100,10 +98,10 @@ public class Metrics {
   private List<MetricsReporter> addAdditionalMetricsExporters(HoodieMetricsConfig metricConfig) {
     List<MetricsReporter> reporterList = new ArrayList<>();
     List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
-    try (HoodieStorage storage = HoodieStorageUtils.getStorage(propPathList.get(0), storageConf)) {
+    try (HoodieStorage newStorage = storage.newInstance(new StoragePath(propPathList.get(0)), storage.getConf())) {
       for (String propPath : propPathList) {
         HoodieMetricsConfig secondarySourceConfig = HoodieMetricsConfig.newBuilder().fromInputStream(
-            storage.open(new StoragePath(propPath))).withPath(metricConfig.getBasePath()).build();
+            newStorage.open(new StoragePath(propPath))).withPath(metricConfig.getBasePath()).build();
         Option<MetricsReporter> reporter = MetricsReporterFactory.createReporter(secondarySourceConfig, registry);
         if (reporter.isPresent()) {
           reporterList.add(reporter.get());

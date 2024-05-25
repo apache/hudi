@@ -38,8 +38,9 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.{Function, Supplier}
-import scala.collection.mutable
+
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 /**
  * Calculate the degree of overlap between column stats.
@@ -108,7 +109,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
     val fsView = buildFileSystemView(table)
     val engineCtx = new HoodieSparkEngineContext(jsc)
-    val metaTable = HoodieTableMetadata.create(engineCtx, metadataConfig, basePath)
+    val metaTable = HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, basePath)
     val allFileSlices = getAllFileSlices(partitionsSeq, metaTable, fsView)
     val fileSlicesSizeByPartition = allFileSlices.groupBy(_.getPartitionPath).mapValues(_.size)
 

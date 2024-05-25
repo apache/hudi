@@ -89,7 +89,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
     this.skipLocking = skipLocking;
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
+    this.txnManager = new TransactionManager(config, table.getStorage());
   }
 
   /**
@@ -174,7 +174,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
           && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
         // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
         try {
-          if (!HoodieHeartbeatClient.heartbeatExists(table.getMetaClient().getStorage(),
+          if (!HoodieHeartbeatClient.heartbeatExists(table.getStorage(),
               config.getBasePath(), instantTimeToRollback)) {
             throw new HoodieRollbackException(
                 "Found commits after time :" + instantTimeToRollback + ", please rollback greater commits first");

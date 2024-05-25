@@ -207,7 +207,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
-      table.getMetaClient().getStorage().deleteDirectory(new StoragePath(
+      table.getStorage().deleteDirectory(new StoragePath(
           table.getMetaClient().getTempFolderPath() + "/" + commitInstant.getTimestamp()
               + "/" + toDeleteMarkerFile));
       markerPaths.remove(toDeleteMarkerFile);
@@ -621,7 +621,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
-      table.getMetaClient().getStorage().deleteDirectory(new StoragePath(
+      table.getStorage().deleteDirectory(new StoragePath(
           table.getMetaClient().getTempFolderPath() + "/" + commitInstant.getTimestamp()
               + "/" + toDeleteMarkerFile));
       markerPaths.remove(toDeleteMarkerFile);
@@ -660,7 +660,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       assertTrue(writeMarkers.doesMarkerDirExist());
       assertEquals(0, getTimelineServerBasedMarkerFileCount(
           table.getMetaClient().getMarkerFolderPath(commitInstant.getTimestamp()),
-          (FileSystem) table.getMetaClient().getStorage().getFileSystem()));
+          (FileSystem) table.getStorage().getFileSystem()));
     } else {
       assertFalse(writeMarkers.doesMarkerDirExist());
     }

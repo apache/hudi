@@ -22,8 +22,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
@@ -100,8 +100,7 @@ public class HeartbeatUtils {
       if (config.getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instantTime)) {
         throw new HoodieException(
             "Heartbeat for instant " + instantTime + " has expired, last heartbeat "
-                + getLastHeartbeatTime(
-                table.getMetaClient().getStorage(), config.getBasePath(), instantTime));
+                + getLastHeartbeatTime(table.getStorage(), config.getBasePath(), instantTime));
       }
     } catch (IOException io) {
       throw new HoodieException("Unable to read heartbeat", io);
