@@ -85,7 +85,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     super(engineContext, storage, dataBasePath);
 
     this.dataMetaClient = HoodieTableMetaClient.builder()
-        .setStorage(storage.newInstance(new StoragePath(dataBasePath), storage.getConf().newInstance()))
+        .setStorage(storage)
         .setBasePath(dataBasePath)
         .build();
 
