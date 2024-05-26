@@ -112,7 +112,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFro
  * called Metadata Table. This table is created by listing files and partitions (first time)
  * and kept in sync using the instants on the main dataset.
  *
- * @param <I> Type of input for the write client
+ * @param <I> Type of input for the write client 
  */
 public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableMetadataWriter {
 
