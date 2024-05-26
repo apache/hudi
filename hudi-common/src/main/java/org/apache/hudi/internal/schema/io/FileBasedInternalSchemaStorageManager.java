@@ -72,7 +72,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   private HoodieTableMetaClient getMetaClient() {
     if (metaClient == null) {
       metaClient = HoodieTableMetaClient.builder().setBasePath(baseSchemaPath.getParent().getParent().toString())
-          .setStorage(storage.newInstance(baseSchemaPath, storage.getConf().newInstance()))
+          .setStorage(storage)
           .build();
     }
     return metaClient;
