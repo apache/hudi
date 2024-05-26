@@ -130,7 +130,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     } else if (this.metadataMetaClient == null) {
       try {
         this.metadataMetaClient = HoodieTableMetaClient.builder()
-            .setStorage(storage.newInstance(new StoragePath(metadataBasePath), storage.getConf().newInstance()))
+            .setStorage(storage)
             .setBasePath(metadataBasePath)
             .build();
         this.metadataFileSystemView = getFileSystemView(metadataMetaClient);
