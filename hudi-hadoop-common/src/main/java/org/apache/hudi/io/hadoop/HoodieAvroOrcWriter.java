@@ -25,6 +25,7 @@ import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.AvroOrcUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
@@ -35,6 +36,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.exec.vector.ColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
@@ -61,7 +63,8 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private final Writer writer;
 
   private final Path file;
-  private final HoodieWrapperFileSystem fs;
+  private final boolean isWrapperFileSystem;
+  private final Option<HoodieWrapperFileSystem> wrapperFs;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
 
@@ -74,7 +77,9 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
 
     Configuration conf = HadoopFSUtils.registerFileSystem(file, config.getStorageConf().unwrapAs(Configuration.class));
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
-    this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
+    FileSystem fs = this.file.getFileSystem(conf);
+    this.isWrapperFileSystem = fs instanceof HoodieWrapperFileSystem;
+    this.wrapperFs = this.isWrapperFileSystem ? Option.of((HoodieWrapperFileSystem) fs) : Option.empty();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
 
@@ -104,7 +109,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
 
   @Override
   public boolean canWrite() {
-    return fs.getBytesWritten(file) < maxFileSize;
+    return !isWrapperFileSystem || wrapperFs.get().getBytesWritten(file) < maxFileSize;
   }
 
   @Override
