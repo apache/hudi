@@ -5,17 +5,6 @@ on:
     branches:
       - 'release-*'
   pull_request:
-    paths-ignore:
-      - '**.bmp'
-      - '**.gif'
-      - '**.jpg'
-      - '**.jpeg'
-      - '**.md'
-      - '**.pdf'
-      - '**.png'
-      - '**.svg'
-      - '**.yaml'
-      - '.gitignore'
     branches:
       - 'release-*'
 
