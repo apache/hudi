@@ -38,6 +38,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.table.HoodieTable;
@@ -200,7 +201,8 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     Option<HoodieInstant> latestCommitTime = commitsTimeline.filterCompletedInstants().lastInstant();
 
     if (latestCommitTime.isPresent()) {
-      FileFormatUtils fileUtils = FileFormatUtils.getInstance(this.hoodieTable.getBaseFileFormat());
+      FileFormatUtils fileUtils = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
+          .getFileFormatUtils(hoodieTable.getBaseFileFormat());
       Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
 
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()

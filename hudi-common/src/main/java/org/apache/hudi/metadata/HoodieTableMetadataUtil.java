@@ -58,7 +58,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
-import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -1175,7 +1174,8 @@ public class HoodieTableMetadataUtil {
     try {
       if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePathV2(), filePath);
-        return FileFormatUtils.getInstance(HoodieFileFormat.PARQUET)
+        return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
+            .getFileFormatUtils(HoodieFileFormat.PARQUET)
             .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex);
       }
 
