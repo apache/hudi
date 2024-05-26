@@ -131,7 +131,8 @@ fi
 TMP_JARS_DIR=/tmp/jars/$(date +%s)
 mkdir -p $TMP_JARS_DIR
 
-if [[ "$HUDI_VERSION" == *"SNAPSHOT" ]]; then
+if [[ -z "$STAGING_REPO_NUM" ]]; then
+  echo 'Adding built bundle jars for validation'
   if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
     # For Scala 2.13, Flink is not support, so skipping the Flink bundle validation
     cp ${GITHUB_WORKSPACE}/packaging/hudi-flink-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
@@ -178,7 +179,7 @@ else
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.5-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
-  elif [[ ${SPARK_PROFILE} == 'spark3.5' && ${SCALA_PROFILE} == 'scala-2.12' ]]; then
+  elif [[ ${SPARK_PROFILE} == 'spark3.5' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.5-bundle_2.13
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13

@@ -36,9 +36,10 @@ declare -a bundles=("hudi-aws-bundle" "hudi-cli-bundle_2.11" "hudi-cli-bundle_2.
 "hudi-flink1.15-bundle" "hudi-flink1.16-bundle" "hudi-flink1.17-bundle" "hudi-flink1.18-bundle" "hudi-gcp-bundle" "hudi-hadoop-mr-bundle" "hudi-hive-sync-bundle" "hudi-integ-test-bundle"
 "hudi-kafka-connect-bundle" "hudi-metaserver-server-bundle" "hudi-presto-bundle" "hudi-spark-bundle_2.11" "hudi-spark-bundle_2.12"
 "hudi-spark2.4-bundle_2.11" "hudi-spark2.4-bundle_2.12" "hudi-spark3-bundle_2.12" "hudi-spark3.0-bundle_2.12" "hudi-spark3.1-bundle_2.12"
-"hudi-spark3.2-bundle_2.12" "hudi-spark3.3-bundle_2.12" "hudi-spark3.4-bundle_2.12" "hudi-spark3.5-bundle_2.12" "hudi-timeline-server-bundle"
-"hudi-trino-bundle" "hudi-utilities-bundle_2.11" "hudi-utilities-bundle_2.12" "hudi-utilities-slim-bundle_2.11"
-"hudi-utilities-slim-bundle_2.12")
+"hudi-spark3.2-bundle_2.12" "hudi-spark3.3-bundle_2.12" "hudi-spark3.4-bundle_2.12" "hudi-spark3.5-bundle_2.12"
+"hudi-spark3.5-bundle_2.13" "hudi-timeline-server-bundle" "hudi-trino-bundle"
+"hudi-utilities-bundle_2.11" "hudi-utilities-bundle_2.12" "hudi-utilities-bundle_2.13"
+"hudi-utilities-slim-bundle_2.11" "hudi-utilities-slim-bundle_2.12" "hudi-utilities-slim-bundle_2.13")
 
 NOW=$(date +%s)
 TMP_DIR_FOR_BUNDLES=/tmp/${NOW}
