@@ -116,7 +116,7 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> LOCK_HEARTBEAT_INTERVAL_MS = ConfigProperty
       .key(LOCK_HEARTBEAT_INTERVAL_MS_KEY)
       .defaultValue(DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS)
-      .sinceVersion("1.0.0")
+      .sinceVersion("0.15.0")
       .withDocumentation("Heartbeat interval in ms, to send a heartbeat to indicate that hive client holding locks.");
 
   public static final ConfigProperty<String> FILESYSTEM_LOCK_PATH = ConfigProperty
