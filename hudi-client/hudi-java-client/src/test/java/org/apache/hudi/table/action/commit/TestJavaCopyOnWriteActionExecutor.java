@@ -41,6 +41,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieJavaCopyOnWriteTable;
 import org.apache.hudi.table.HoodieJavaTable;
@@ -131,7 +132,8 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    FileFormatUtils fileUtils = FileFormatUtils.getInstance(metaClient);
+    FileFormatUtils fileUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+        .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat());
 
     String partitionPath = "2016/01/31";
 
@@ -480,7 +482,8 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    FileFormatUtils fileUtils = FileFormatUtils.getInstance(metaClient);
+    FileFormatUtils fileUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+        .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat());
 
     String partitionPath = "2022/04/09";
 

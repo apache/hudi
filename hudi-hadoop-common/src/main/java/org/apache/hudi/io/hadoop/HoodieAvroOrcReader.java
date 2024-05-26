@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -57,7 +58,7 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
   public HoodieAvroOrcReader(HoodieStorage storage, StoragePath path) {
     this.storage = storage;
     this.path = path;
-    this.orcUtils = FileFormatUtils.getInstance(HoodieFileFormat.ORC);
+    this.orcUtils = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.ORC);
   }
 
   @Override

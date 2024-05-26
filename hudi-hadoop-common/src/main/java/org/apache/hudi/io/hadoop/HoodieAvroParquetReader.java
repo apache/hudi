@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -67,7 +68,8 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     // by the Reader (for proper config propagation to Parquet components)
     this.storage = storage.newInstance(path, tryOverrideDefaultConfigs(storage.getConf().newInstance()));
     this.path = path;
-    this.parquetUtils = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET);
+    this.parquetUtils = HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(HoodieFileFormat.PARQUET);
   }
 
   @Override

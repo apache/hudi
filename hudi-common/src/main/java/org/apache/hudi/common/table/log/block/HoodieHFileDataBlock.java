@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -105,9 +104,10 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   protected byte[] serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException {
     Schema writerSchema = new Schema.Parser().parse(
         super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
-    return FileFormatUtils.getInstance(HoodieFileFormat.HFILE).serializeRecordsToLogBlock(
-        storage, records, writerSchema, getSchema(), getKeyFieldName(),
-        Collections.singletonMap(HFILE_COMPRESSION_ALGORITHM_NAME.key(), compressionCodec.get()));
+    return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.HFILE)
+        .serializeRecordsToLogBlock(
+            storage, records, writerSchema, getSchema(), getKeyFieldName(),
+            Collections.singletonMap(HFILE_COMPRESSION_ALGORITHM_NAME.key(), compressionCodec.get()));
   }
 
   @Override
