@@ -35,6 +35,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.KeyValue;
@@ -68,7 +69,8 @@ public class HoodieAvroHFileWriter
   private static AtomicLong recordIndex = new AtomicLong(1);
   private final Path file;
   private HoodieHFileConfig hfileConfig;
-  private final HoodieWrapperFileSystem fs;
+  private final boolean isWrapperFileSystem;
+  private final Option<HoodieWrapperFileSystem> wrapperFs;
   private final long maxFileSize;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
@@ -88,7 +90,9 @@ public class HoodieAvroHFileWriter
 
     Configuration conf = HadoopFSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
-    this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
+    FileSystem fs = this.file.getFileSystem(conf);
+    this.isWrapperFileSystem = fs instanceof HoodieWrapperFileSystem;
+    this.wrapperFs = this.isWrapperFileSystem ? Option.of((HoodieWrapperFileSystem) fs) : Option.empty();
     this.hfileConfig = hfileConfig;
     this.schema = schema;
     this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
@@ -114,7 +118,7 @@ public class HoodieAvroHFileWriter
         String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
     CacheConfig cacheConfig = new CacheConfig(conf);
     this.writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withPath(this.fs, this.file)
+        .withPath(fs, this.file)
         .withFileContext(context)
         .create();
 
@@ -136,7 +140,7 @@ public class HoodieAvroHFileWriter
 
   @Override
   public boolean canWrite() {
-    return fs.getBytesWritten(file) < maxFileSize;
+    return !isWrapperFileSystem || wrapperFs.get().getBytesWritten(file) < maxFileSize;
   }
 
   @Override
