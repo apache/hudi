@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
-import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
@@ -36,6 +35,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -134,7 +134,8 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
       Executable executable = () -> {
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(updateTable.getConfig(), "101", updateTable,
             updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
-        List<GenericRecord> oldRecords = FileFormatUtils.getInstance(updateTable.getBaseFileFormat())
+        List<GenericRecord> oldRecords = HoodieIOFactory.getIOFactory(updateTable.getStorage())
+            .getFileFormatUtils(updateTable.getBaseFileFormat())
             .readAvroRecords(updateTable.getStorage(),
                 new StoragePath(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
                 mergeHandle.getWriterSchemaWithMetaFields());

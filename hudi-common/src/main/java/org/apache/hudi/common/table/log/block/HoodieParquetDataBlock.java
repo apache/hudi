@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.SeekableDataInputStream;
@@ -98,8 +97,9 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     Schema writerSchema = new Schema.Parser().parse(
         super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
 
-    return FileFormatUtils.getInstance(PARQUET).serializeRecordsToLogBlock(
-        storage, records, writerSchema, getSchema(), getKeyFieldName(), paramsMap);
+    return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(PARQUET)
+        .serializeRecordsToLogBlock(
+            storage, records, writerSchema, getSchema(), getKeyFieldName(), paramsMap);
   }
 
   /**
