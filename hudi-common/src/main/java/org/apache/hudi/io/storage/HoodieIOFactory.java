@@ -19,17 +19,23 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 /**
- * Base class to get HoodieFileReaderFactory and HoodieFileWriterFactory
+ * Base class to get {@link HoodieFileReaderFactory}, {@link HoodieFileWriterFactory}, and {@link FileFormatUtils}
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class HoodieIOFactory {
   protected final HoodieStorage storage;
 
@@ -48,12 +54,45 @@ public abstract class HoodieIOFactory {
     }
   }
 
+  /**
+   * @param recordType {@link HoodieRecord} type.
+   * @return a factory to create file readers.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType);
 
+  /**
+   * @param recordType {@link HoodieRecord} type.
+   * @return a factory to create file writers.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType);
 
+  /**
+   * @param fileFormat file format supported in Hudi.
+   * @return a util class to support read and write in the file format.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract FileFormatUtils getFileFormatUtils(HoodieFileFormat fileFormat);
+
+  /**
+   * @param storagePath file path.
+   * @return {@link HoodieStorage} instance.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract HoodieStorage getStorage(StoragePath storagePath);
 
+  /**
+   * @param path                   file path.
+   * @param enableRetry            whether to retry operations.
+   * @param maxRetryIntervalMs     maximum retry interval in milliseconds.
+   * @param maxRetryNumbers        maximum number of retries.
+   * @param initialRetryIntervalMs initial delay before retry in milliseconds.
+   * @param retryExceptions        retry exception list.
+   * @param consistencyGuard       {@link ConsistencyGuard} instance.
+   * @return {@link HoodieStorage} instance with retry capability if applicable.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract HoodieStorage getStorage(StoragePath path,
                                            boolean enableRetry,
                                            long maxRetryIntervalMs,
@@ -61,4 +100,19 @@ public abstract class HoodieIOFactory {
                                            long initialRetryIntervalMs,
                                            String retryExceptions,
                                            ConsistencyGuard consistencyGuard);
+
+  /**
+   * @param path file path.
+   * @return a util class to support read and write in the file format.
+   */
+  public final FileFormatUtils getFileFormatUtils(StoragePath path) {
+    if (path.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())) {
+      return getFileFormatUtils(HoodieFileFormat.PARQUET);
+    } else if (path.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension())) {
+      return getFileFormatUtils(HoodieFileFormat.ORC);
+    } else if (path.getFileExtension().equals(HoodieFileFormat.HFILE.getFileExtension())) {
+      return getFileFormatUtils(HoodieFileFormat.HFILE);
+    }
+    throw new UnsupportedOperationException("The format for file " + path + " is not supported yet.");
+  }
 }

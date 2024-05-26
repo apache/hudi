@@ -20,7 +20,12 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.FileFormatUtils;
+import org.apache.hudi.common.util.HFileUtils;
+import org.apache.hudi.common.util.OrcUtils;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -76,6 +81,20 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
         }
       default:
         throw new UnsupportedOperationException(recordType + " record type not supported");
+    }
+  }
+
+  @Override
+  public FileFormatUtils getFileFormatUtils(HoodieFileFormat fileFormat) {
+    switch (fileFormat) {
+      case PARQUET:
+        return new ParquetUtils();
+      case ORC:
+        return new OrcUtils();
+      case HFILE:
+        return new HFileUtils();
+      default:
+        throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
     }
   }
 

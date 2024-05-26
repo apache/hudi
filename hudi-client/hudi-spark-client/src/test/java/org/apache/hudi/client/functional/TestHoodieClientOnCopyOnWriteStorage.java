@@ -105,6 +105,7 @@ import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
@@ -1197,7 +1198,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    FileFormatUtils fileUtils = FileFormatUtils.getInstance(metaClient);
+    FileFormatUtils fileUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+        .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat());
 
     // Inserts => will write file1
     String commitTime1 = "001";
@@ -1310,7 +1312,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit, false, mergeAllowDuplicateInserts); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    FileFormatUtils fileUtils = FileFormatUtils.getInstance(metaClient);
+    FileFormatUtils fileUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+        .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat());
 
     // Inserts => will write file1
     String commitTime1 = "001";
@@ -1407,8 +1410,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
-    assertEquals(100,
-        FileFormatUtils.getInstance(metaClient).readRowKeys(storage, new StoragePath(basePath, statuses.get(0).getStat().getPath()))
+    assertEquals(100, HoodieIOFactory.getIOFactory(metaClient.getStorage())
+        .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
+        .readRowKeys(storage, new StoragePath(basePath, statuses.get(0).getStat().getPath()))
             .size(), "file should contain 100 records");
 
     // Delete 20 among 100 inserted
@@ -2090,7 +2094,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   private Set<String> verifyRecordKeys(List<HoodieRecord> expectedRecords, List<WriteStatus> allStatus, List<GenericRecord> records) {
     for (WriteStatus status : allStatus) {
       StoragePath filePath = new StoragePath(basePath, status.getStat().getPath());
-      records.addAll(FileFormatUtils.getInstance(metaClient).readAvroRecords(storage, filePath));
+      records.addAll(HoodieIOFactory.getIOFactory(metaClient.getStorage())
+          .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
+          .readAvroRecords(storage, filePath));
     }
     Set<String> expectedKeys = recordsToRecordKeySet(expectedRecords);
     assertEquals(records.size(), expectedKeys.size());
@@ -2179,10 +2185,14 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     StoragePath newFile = new StoragePath(basePath, statuses.get(0).getStat().getPath());
     assertEquals(expectedRecords,
-        FileFormatUtils.getInstance(metaClient).readRowKeys(storage, newFile).size(),
+        HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
+            .readRowKeys(storage, newFile).size(),
         "file should contain 110 records");
 
-    List<GenericRecord> records = FileFormatUtils.getInstance(metaClient).readAvroRecords(storage, newFile);
+    List<GenericRecord> records = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+        .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
+        .readAvroRecords(storage, newFile);
     for (GenericRecord record : records) {
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       assertTrue(keys.contains(recordKey), "key expected to be part of " + instantTime);

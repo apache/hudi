@@ -25,7 +25,6 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
@@ -47,36 +46,6 @@ import java.util.Set;
  * Utils for file format used in Hudi.
  */
 public abstract class FileFormatUtils {
-  public static final String PARQUET_UTILS = "org.apache.hudi.common.util.ParquetUtils";
-  public static final String ORC_UTILS = "org.apache.hudi.common.util.OrcUtils";
-  public static final String HFILE_UTILS = "org.apache.hudi.common.util.HFileUtils";
-
-  public static FileFormatUtils getInstance(StoragePath path) {
-    if (path.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())) {
-      return ReflectionUtils.loadClass(PARQUET_UTILS);
-    } else if (path.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension())) {
-      return ReflectionUtils.loadClass(ORC_UTILS);
-    } else if (path.getFileExtension().equals(HoodieFileFormat.HFILE.getFileExtension())) {
-      return ReflectionUtils.loadClass(HFILE_UTILS);
-    }
-    throw new UnsupportedOperationException("The format for file " + path + " is not supported yet.");
-  }
-
-  public static FileFormatUtils getInstance(HoodieFileFormat fileFormat) {
-    if (HoodieFileFormat.PARQUET.equals(fileFormat)) {
-      return ReflectionUtils.loadClass(PARQUET_UTILS);
-    } else if (HoodieFileFormat.ORC.equals(fileFormat)) {
-      return ReflectionUtils.loadClass(ORC_UTILS);
-    } else if (HoodieFileFormat.HFILE.equals(fileFormat)) {
-      return ReflectionUtils.loadClass(HFILE_UTILS);
-    }
-    throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
-  }
-
-  public static FileFormatUtils getInstance(HoodieTableMetaClient metaClient) {
-    return getInstance(metaClient.getTableConfig().getBaseFileFormat());
-  }
-
   /**
    * Read the rowKey list from the given data file.
    *
