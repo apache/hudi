@@ -28,8 +28,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -90,7 +90,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     super(engineContext, storage, dataBasePath);
 
     this.dataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(storage.getConf().newInstance())
+        .setStorage(storage)
         .setBasePath(dataBasePath)
         .build();
 
