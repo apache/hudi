@@ -67,7 +67,7 @@ jobs:
             sparkProfile: 'spark'
             sparkRuntime: 'spark2.4.8'
           - scalaProfile: 'scala-2.11'
-            flinkProfile: 'flink1.11'
+            flinkProfile: 'flink1.14'
             sparkProfile: 'spark2.4'
             sparkRuntime: 'spark2.4.8'
     steps:
