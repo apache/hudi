@@ -47,12 +47,15 @@ import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -61,6 +64,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -72,6 +76,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -81,6 +90,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("functional")
 public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFunctionalTestHarness {
@@ -161,6 +171,85 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     config.setValue(AUTO_COMMIT_ENABLE, "true");
     client.compact(compactionTime);
     assertEquals(300, readTableTotalRecordsNum());
+  }
+
+  @Test
+  public void testOutOfOrderCompactionSchedules() throws IOException, ExecutionException, InterruptedException {
+    HoodieWriteConfig config = getWriteConfigWithMockCompactionStrategy();
+    HoodieWriteConfig config2 = getWriteConfig();
+
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, new Properties());
+    client = getHoodieWriteClient(config);
+
+    // write data and commit
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 100, true);
+
+    // 2nd batch
+    String commit2 = HoodieActiveTimeline.createNewInstantTime();
+    JavaRDD records = jsc().parallelize(dataGen.generateUniqueUpdates(commit2, 50), 2);
+    client.startCommitWithTime(commit2);
+    List<WriteStatus> writeStatuses = client.upsert(records, commit2).collect();
+    List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
+    client.commitStats(commit2, context().parallelize(writeStatuses, 1), writeStats, Option.empty(), metaClient.getCommitActionType());
+
+    // schedule compaction
+    String compactionInstant1 = HoodieActiveTimeline.createNewInstantTime();
+    Thread.sleep(10);
+    String compactionInstant2 = HoodieActiveTimeline.createNewInstantTime();
+
+    final AtomicBoolean writer1Completed = new AtomicBoolean(false);
+    final AtomicBoolean writer2Completed = new AtomicBoolean(false);
+    final ExecutorService executors = Executors.newFixedThreadPool(2);
+    final SparkRDDWriteClient client2 = getHoodieWriteClient(config2);
+    Future future1 = executors.submit(() -> {
+      try {
+        client.scheduleCompactionAtInstant(compactionInstant1, Option.empty());
+        // since compactionInstant1 is earlier than compactionInstant2, and compaction strategy sleeps for 10s, this is expected to throw.
+        fail("Should not have reached here");
+      } catch (Exception e) {
+        writer1Completed.set(true);
+      }
+    });
+
+    Future future2 = executors.submit(() -> {
+      try {
+        Thread.sleep(10);
+        assertTrue(client2.scheduleCompactionAtInstant(compactionInstant2, Option.empty()));
+        writer2Completed.set(true);
+      } catch (Exception e) {
+        throw new HoodieException("Should not have reached here");
+      }
+    });
+
+    future1.get();
+    future2.get();
+
+    // both should have been completed successfully. I mean, we already assert for conflict for writer2 at L155.
+    assertTrue(writer1Completed.get() && writer2Completed.get());
+    client.close();
+    client2.close();
+    executors.shutdownNow();
+  }
+
+  private HoodieWriteConfig getWriteConfigWithMockCompactionStrategy() {
+    MockCompactionStrategy compactionStrategy = new MockCompactionStrategy();
+    return getWriteConfig(compactionStrategy);
+  }
+
+  private HoodieWriteConfig getWriteConfig() {
+    return getWriteConfig(new LogFileSizeBasedCompactionStrategy());
+  }
+
+  private HoodieWriteConfig getWriteConfig(CompactionStrategy compactionStrategy) {
+    return HoodieWriteConfig.newBuilder()
+        .forTable("test-trip-table")
+        .withPath(basePath())
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withAutoCommit(false)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withCompactionStrategy(compactionStrategy)
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
   }
 
   @ParameterizedTest
