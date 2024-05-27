@@ -27,9 +27,10 @@
 # This is to run by GitHub Actions CI tasks from the project root directory
 # and it contains the CI environment-specific variables.
 
-HUDI_VERSION=$1
-JAVA_RUNTIME_VERSION=$2
-STAGING_REPO_NUM=$3
+CONTAINER_NAME=$1
+HUDI_VERSION=$2
+JAVA_RUNTIME_VERSION=$3
+STAGING_REPO_NUM=$4
 echo "HUDI_VERSION: $HUDI_VERSION JAVA_RUNTIME_VERSION: $JAVA_RUNTIME_VERSION"
 echo "SPARK_RUNTIME: $SPARK_RUNTIME SPARK_PROFILE (optional): $SPARK_PROFILE"
 echo "SCALA_PROFILE: $SCALA_PROFILE"
@@ -237,7 +238,7 @@ docker build \
 .
 
 # run validation script in docker
-docker run --name hudi_docker \
+docker run --name $CONTAINER_NAME \
   -v ${GITHUB_WORKSPACE}:/opt/bundle-validation/docker-test \
   -v $TMP_JARS_DIR:/opt/bundle-validation/jars \
   -v $TMP_DATA_DIR:/opt/bundle-validation/data \

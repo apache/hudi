@@ -81,7 +81,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
         run: |
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8 $STAGING_REPO_NUM
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java8 $HUDI_VERSION openjdk8 $STAGING_REPO_NUM
       - name: IT - Bundle Validation - OpenJDK 11
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -89,7 +89,7 @@ jobs:
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
         if: ${{ startsWith(env.SPARK_PROFILE, 'spark3') }} # Only Spark 3.x supports Java 11 as of now
         run: |
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11 $STAGING_REPO_NUM
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11 $STAGING_REPO_NUM
       - name: IT - Bundle Validation - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -97,4 +97,4 @@ jobs:
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
         if: ${{ endsWith(env.SPARK_PROFILE, '3.3') }} # Only Spark 3.3 supports Java 17 as of now
         run: |
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17 $STAGING_REPO_NUM
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17 $STAGING_REPO_NUM
