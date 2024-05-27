@@ -81,6 +81,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       boolean deleteResult = fs.delete(deletePath, isDirectory);
       if (deleteResult) {
         LOG.debug("Cleaned file at path :" + deletePath);
+      } else {
+        throw new HoodieIOException("Failed to delete path during clean execution " + deletePath);
       }
       return deleteResult;
     } catch (FileNotFoundException fio) {
