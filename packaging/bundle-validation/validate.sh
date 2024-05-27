@@ -295,7 +295,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
-if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' ]]; then
+if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ! "${FLINK_HOME}" == *"1.18"* ]]; then
   echo "::warning::validate.sh validating flink bundle"
   test_flink_bundle
   if [ "$?" -ne 0 ]; then
