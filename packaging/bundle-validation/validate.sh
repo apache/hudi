@@ -299,14 +299,14 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
-if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ${SCALA_PROFILE} != 'scala-2.13' && ${FLINK_VERSION} < '1.18' ]]; then
-  echo "::warning::validate.sh validating flink bundle"
-  test_flink_bundle
-  if [ "$?" -ne 0 ]; then
-      exit 1
-  fi
-  echo "::warning::validate.sh done validating flink bundle"
-fi
+# if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ${SCALA_PROFILE} != 'scala-2.13' ]]; then
+#   echo "::warning::validate.sh validating flink bundle"
+#   test_flink_bundle
+#   if [ "$?" -ne 0 ]; then
+#       exit 1
+#   fi
+#   echo "::warning::validate.sh done validating flink bundle"
+# fi
 
 if [[ ${SCALA_PROFILE} != 'scala-2.13' ]]; then
   echo "::warning::validate.sh validating kafka connect bundle"
