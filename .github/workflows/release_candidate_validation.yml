@@ -20,8 +20,8 @@ jobs:
   validate-release-candidate-bundles:
     runs-on: ubuntu-latest
     env:
-      HUDI_VERSION: 0.14.1
-      STAGING_REPO_NUM: 1123
+      HUDI_VERSION: 0.15.0
+      STAGING_REPO_NUM: 1135
     strategy:
       matrix:
         include:
