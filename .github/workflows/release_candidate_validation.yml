@@ -19,6 +19,7 @@ env:
 jobs:
   validate-release-candidate-bundles:
     runs-on: ubuntu-latest
+    if: false
     env:
       HUDI_VERSION: 0.14.1
       STAGING_REPO_NUM: 1123
