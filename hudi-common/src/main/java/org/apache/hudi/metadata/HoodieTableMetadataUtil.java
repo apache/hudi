@@ -1870,7 +1870,7 @@ public class HoodieTableMetadataUtil {
 
       if (!filePath.isEmpty()) {
         dataFilePath = Option.of(filePath(basePath, "", filePath));
-        tableSchema = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readAvroSchema(metaClient.getStorageConf(), dataFilePath.get());
+        tableSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getFileFormatUtils(HoodieFileFormat.PARQUET).readAvroSchema(metaClient.getStorage(), dataFilePath.get());
       } else {
         TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
         tableSchema = schemaResolver.getTableAvroSchema();
@@ -1943,7 +1943,7 @@ public class HoodieTableMetadataUtil {
 
     Option<HoodieFileReader> baseFileReader = Option.empty();
     if (dataFilePath.isPresent()) {
-      baseFileReader = Option.of(HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(recordMerger.getRecordType()).getFileReader(getReaderConfigs(storageConf), dataFilePath.get()));
+      baseFileReader = Option.of(HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType()).getFileReader(getReaderConfigs(storageConf), dataFilePath.get()));
     }
     HoodieFileSliceReader fileSliceReader = new HoodieFileSliceReader(baseFileReader, mergedLogRecordScanner, tableSchema, metaClient.getTableConfig().getPreCombineField(), recordMerger,
         metaClient.getTableConfig().getProps(),
