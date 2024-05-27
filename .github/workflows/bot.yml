@@ -128,7 +128,6 @@ jobs:
           java-version: '8'
           distribution: 'adopt'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
