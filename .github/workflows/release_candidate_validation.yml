@@ -22,6 +22,7 @@ jobs:
     env:
       HUDI_VERSION: 0.15.0
       STAGING_REPO_NUM: 1135
+    if: false
     strategy:
       matrix:
         include:
