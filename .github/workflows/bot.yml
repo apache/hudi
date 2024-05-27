@@ -336,21 +336,23 @@ jobs:
       - name: IT - Bundle Validation - OpenJDK 8
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
         if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java8 $HUDI_VERSION openjdk8
       - name: IT - Bundle Validation - OpenJDK 11
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
         if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
       - name: IT - Bundle Validation - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -360,7 +362,7 @@ jobs:
         if: ${{ env.SPARK_PROFILE >= 'spark3.3' }} # Only Spark 3.3 and above support Java 17
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
   validate-release-candidate-bundles:
     if: false
