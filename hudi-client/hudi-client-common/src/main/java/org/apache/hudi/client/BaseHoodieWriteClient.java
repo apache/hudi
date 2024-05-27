@@ -30,6 +30,7 @@ import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
+import org.apache.hudi.client.timeline.TimestampUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -924,11 +925,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
             + "table could be in an inconsistent state. Pending restores: " + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream()
             .map(instant -> instant.getTimestamp()).collect(Collectors.toList()).toArray()));
+    TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
 
     if (config.getFailedWritesCleanPolicy().isLazy()) {
       this.heartbeatClient.start(instantTime);
     }
-
     if (actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
       metaClient.getActiveTimeline().createRequestedReplaceCommit(instantTime, actionType);
     } else {
