@@ -80,28 +80,35 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
   test("Test Delete Table Without Primary Key") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
+        Seq (true, false).foreach { isPartitioned =>
         val tableName = generateTableName
+        val partitionedClause = if (isPartitioned) {
+          "PARTITIONED BY (name)"
+        } else {
+          ""
+        }
         // create table
         spark.sql(
           s"""
              |create table $tableName (
              |  id int,
-             |  name string,
              |  price double,
-             |  ts long
+             |  ts long,
+             |  name string,
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
              | tblproperties (
              |  type = '$tableType',
              |  preCombineField = 'ts'
              | )
+             | $partitionedClause
    """.stripMargin)
 
         // test with optimized sql writes enabled.
         spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
 
         // insert data to table
-        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+        spark.sql(s"insert into $tableName select 1, 10, 1000, 'a1'")
         checkAnswer(s"select id, name, price, ts from $tableName")(
           Seq(1, "a1", 10.0, 1000)
         )
@@ -112,7 +119,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
           Seq(0)
         )
 
-        spark.sql(s"insert into $tableName select 2, 'a2', 10, 1000")
+        spark.sql(s"insert into $tableName select 2, 10, 1000, 'a2'")
         spark.sql(s"delete from $tableName where id = 1")
         checkAnswer(s"select id, name, price, ts from $tableName")(
           Seq(2, "a2", 10.0, 1000)
@@ -123,6 +130,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
           Seq(0)
         )
       }
+    }
     }
   }
 
