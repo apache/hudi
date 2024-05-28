@@ -25,10 +25,13 @@ import org.apache.hudi.common.util.OrcUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
@@ -41,21 +44,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestHoodieHadoopIOFactory {
   @Test
-  public void testGetFileFormatUtils() {
-    HoodieIOFactory ioFactory = new HoodieHadoopIOFactory(
-        new HoodieHadoopStorage(HadoopFSUtils.getFs(DEFAULT_URI, getDefaultStorageConf())));
-    assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.parquet")) instanceof ParquetUtils);
-    assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.orc")) instanceof OrcUtils);
-    assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.hfile")) instanceof HFileUtils);
-    assertThrows(
-        UnsupportedOperationException.class,
-        () -> ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.log")));
+  public void testGetFileFormatUtils() throws IOException {
+    try (HoodieStorage storage =
+             new HoodieHadoopStorage(HadoopFSUtils.getFs(DEFAULT_URI, getDefaultStorageConf()))) {
+      HoodieIOFactory ioFactory = new HoodieHadoopIOFactory(storage);
+      assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.parquet")) instanceof ParquetUtils);
+      assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.orc")) instanceof OrcUtils);
+      assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.hfile")) instanceof HFileUtils);
+      assertThrows(
+          UnsupportedOperationException.class,
+          () -> ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.log")));
 
-    assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.PARQUET) instanceof ParquetUtils);
-    assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.ORC) instanceof OrcUtils);
-    assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.HFILE) instanceof HFileUtils);
-    assertThrows(
-        UnsupportedOperationException.class,
-        () -> ioFactory.getFileFormatUtils(HoodieFileFormat.HOODIE_LOG));
+      assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.PARQUET) instanceof ParquetUtils);
+      assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.ORC) instanceof OrcUtils);
+      assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.HFILE) instanceof HFileUtils);
+      assertThrows(
+          UnsupportedOperationException.class,
+          () -> ioFactory.getFileFormatUtils(HoodieFileFormat.HOODIE_LOG));
+    }
   }
 }
