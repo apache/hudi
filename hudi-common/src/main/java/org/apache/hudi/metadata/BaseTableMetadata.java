@@ -331,7 +331,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     })
         .orElse(Collections.emptyList());
 
-    LOG.info("Listed partitions from metadata: #partitions=" + partitions.size());
+    LOG.info("Listed partitions from metadata: #partitions={}", partitions.size());
     return partitions;
   }
 
@@ -360,7 +360,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     })
         .orElseGet(() -> new FileStatus[0]);
 
-    LOG.info("Listed file in partition from metadata: partition=" + relativePartitionPath + ", #files=" + statuses.length);
+    LOG.debug("Listed file in partition from metadata: partition={}, #files={}", relativePartitionPath, statuses.length);
     return statuses;
   }
 
@@ -394,7 +394,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    LOG.info("Listed files in " + partitionPaths.size() + " partitions from metadata");
+    LOG.info("Listed files in {} partitions from metadata", partitionPaths.size());
 
     return partitionPathToFilesMap;
   }

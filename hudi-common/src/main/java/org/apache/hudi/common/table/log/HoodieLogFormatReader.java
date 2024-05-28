@@ -91,7 +91,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }
-      LOG.info("Moving to the next reader for logfile " + currentReader.getLogFile());
+      LOG.debug("Moving to the next reader for logfile {}", currentReader.getLogFile());
       return hasNext();
     }
     return false;
