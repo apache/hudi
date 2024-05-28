@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.internal.SQLConf
@@ -152,8 +153,8 @@ trait SparkAdapter extends Serializable {
     }
   }
 
-  def isHoodieTable(table: Table): Boolean = {
-    table.getClass.getName.contains("HoodieInternalV2Table")
+  def isHoodieTable(v2Table: V2TableWithV1Fallback): Boolean = {
+    v2Table.getClass.getName.contains("HoodieInternalV2Table")
   }
 
   def isHoodieTable(map: java.util.Map[String, String]): Boolean = {
