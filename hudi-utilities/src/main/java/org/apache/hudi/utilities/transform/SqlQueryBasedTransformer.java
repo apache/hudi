@@ -31,6 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
@@ -59,6 +61,24 @@ public class SqlQueryBasedTransformer implements Transformer {
       return rowDataset;
     }
 
+    // Extract except clause into formattedColumns if found
+    Pattern pattern = Pattern.compile("(?i)(.*\\*) except\\(([^)]*)\\)(.*)");
+    Matcher matcher = pattern.matcher(transformerSQL);
+    String[] formattedColumns = {};
+    boolean dropColumns = false;
+    if (matcher.find()) {
+      String columnString = matcher.group(2);
+      String[] columns = columnString.split(",", 0);
+      formattedColumns = new String[columns.length];
+      for (int i = 0; i < columns.length; i++) {
+        formattedColumns[i] = columns[i].trim();
+      }
+      LOG.info("Found 'except' clause in SQL query transform for columns: " + String.join(", ", formattedColumns));
+      dropColumns = true;
+      transformerSQL = matcher.group(1) + matcher.group(3);
+      LOG.info("Generated new SQL query transform: " + transformerSQL);
+    }
+
     try {
       // tmp table name doesn't like dashes
       String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
@@ -68,6 +88,12 @@ public class SqlQueryBasedTransformer implements Transformer {
       LOG.debug("SQL Query for transformation : (" + sqlStr + ")");
       Dataset<Row> transformed = sparkSession.sql(sqlStr);
       sparkSession.catalog().dropTempView(tmpTable);
+      if (dropColumns) {
+        LOG.info("Dropping columns: " + String.join(", ", formattedColumns));
+        for (String column : formattedColumns) {
+          transformed = transformed.drop(column);
+        }
+      }
       return transformed;
     } catch (Exception e) {
       throw new HoodieTransformExecutionException("Failed to apply sql query based transformer", e);
