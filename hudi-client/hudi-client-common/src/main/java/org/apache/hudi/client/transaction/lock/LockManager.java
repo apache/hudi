@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
@@ -36,6 +37,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
@@ -58,6 +60,8 @@ public class LockManager implements Serializable, AutoCloseable {
   private transient HoodieLockMetrics metrics;
   private volatile LockProvider lockProvider;
 
+  private FileSystem fs;
+
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs) {
     this(writeConfig, fs, writeConfig.getProps());
   }
@@ -66,6 +70,7 @@ public class LockManager implements Serializable, AutoCloseable {
     this.writeConfig = writeConfig;
     this.storageConf = HadoopFSUtils.getStorageConfWithCopy(fs.getConf());
     this.lockConfiguration = new LockConfiguration(lockProps);
+    this.fs = fs;
     maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
         Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
     maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
@@ -81,12 +86,16 @@ public class LockManager implements Serializable, AutoCloseable {
         metrics.startLockApiTimerContext();
         if (!getLockProvider().tryLock(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS)) {
           metrics.updateLockNotAcquiredMetric();
+          if (getLockProvider() instanceof FileSystemBasedLockProvider) {
+            fs.delete(new Path(((FileSystemBasedLockProvider) getLockProvider()).getLock()), true);
+            LOG.warn("Lock is FileSystemBasedLockProvider, had deleted lock files to avoid blocking next write job");
+          }
           throw new HoodieLockException("Unable to acquire the lock. Current lock owner information : "
               + getLockProvider().getCurrentOwnerLockInfo());
         }
         metrics.updateLockAcquiredMetric();
         return true;
-      } catch (InterruptedException e) {
+      } catch (InterruptedException | IOException e) {
         throw new HoodieLockException(e);
       }
     });
