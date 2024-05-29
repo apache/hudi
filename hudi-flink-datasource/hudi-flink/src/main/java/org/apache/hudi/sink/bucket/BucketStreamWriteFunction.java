@@ -21,6 +21,7 @@ package org.apache.hudi.sink.bucket;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
@@ -30,6 +31,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
+import org.apache.hudi.sink.utils.BucketIndexUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,6 +76,11 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   private Set<String> incBucketIndex;
 
   /**
+   * Functions for calculating the task partition to dispatch.
+   */
+  private Functions.Function2<String, Integer, Integer> partitionIndexFunc;
+
+  /**
    * Constructs a BucketStreamWriteFunction.
    *
    * @param config The config options
@@ -92,6 +99,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
+    this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(bucketNum, parallelism);
   }
 
   @Override
@@ -135,12 +143,10 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
   /**
    * Determine whether the current fileID belongs to the current task.
-   * (partition + curBucket) % numPartitions == this taskID belongs to this task.
+   * partitionIndex == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
-    final int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) % parallelism;
-    int globalIndex = partitionIndex + bucketNumber;
-    return BucketIdentifier.mod(globalIndex, parallelism)  == taskID;
+    return this.partitionIndexFunc.apply(partition, bucketNumber) == taskID;
   }
 
   /**
