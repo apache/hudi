@@ -482,7 +482,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * and pass this reader on parquet file. So that, we can query the partition columns.
    */
 
-  protected def getPartitionColumnsAsInternalRow(file: StoragePathInfo): InternalRow =
+  def getPartitionColumnsAsInternalRow(file: StoragePathInfo): InternalRow =
     getPartitionColumnsAsInternalRowInternal(file,
       new Path(metaClient.getBasePathV2.toUri), shouldExtractPartitionValuesFromPartitionPath)
 
@@ -497,23 +497,27 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       val tablePathWithoutScheme = baseStoragePath.getPathWithoutSchemeAndAuthority
       val partitionPathWithoutScheme = file.getPath.getParent.getPathWithoutSchemeAndAuthority
       val relativePath = tablePathWithoutScheme.toUri.relativize(partitionPathWithoutScheme.toUri).toString
-      val timeZoneId = conf.get("timeZone", sparkSession.sessionState.conf.sessionLocalTimeZone)
-      val rowValues = HoodieSparkUtils.parsePartitionColumnValues(
-        partitionColumns,
-        relativePath,
-        baseStoragePath,
-        tableStructSchema,
-        timeZoneId,
-        sparkAdapter.getSparkParsePartitionUtil,
-        conf.getBoolean("spark.sql.sources.validatePartitionColumns", true))
-      if(rowValues.length != partitionColumns.length) {
-        throw new HoodieException("Failed to get partition column values from the partition-path:"
-            + s"partition column size: ${partitionColumns.length}, parsed partition value size: ${rowValues.length}")
-      }
-      InternalRow.fromSeq(rowValues)
+      getPartitionColumnsAsInternalRowWithRelativePath(relativePath)
     } else {
       InternalRow.empty
     }
+  }
+
+  def getPartitionColumnsAsInternalRowWithRelativePath(relativePath: String): InternalRow = {
+    val timeZoneId = conf.get("timeZone", sparkSession.sessionState.conf.sessionLocalTimeZone)
+    val rowValues = HoodieSparkUtils.parsePartitionColumnValues(
+      partitionColumns,
+      relativePath,
+      convertToStoragePath(basePath),
+      tableStructSchema,
+      timeZoneId,
+      sparkAdapter.getSparkParsePartitionUtil,
+      conf.getBoolean("spark.sql.sources.validatePartitionColumns", true))
+    if (rowValues.length != partitionColumns.length) {
+      throw new HoodieException("Failed to get partition column values from the partition-path:"
+        + s"partition column size: ${partitionColumns.length}, parsed partition value size: ${rowValues.length}")
+    }
+    InternalRow.fromSeq(rowValues)
   }
 
   /**

@@ -268,7 +268,7 @@ object DefaultSource {
 
       val useNewParquetFileFormat = parameters.getOrElse(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
         HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean &&
-        !metaClient.isMetadataTable && (globPaths == null || globPaths.isEmpty) &&
+        !metaClient.isMetadataTable &&
         !parameters.getOrElse(SCHEMA_EVOLUTION_ENABLED.key(), SCHEMA_EVOLUTION_ENABLED.defaultValue().toString).toBoolean &&
         parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue()).equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
       if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
@@ -277,10 +277,10 @@ object DefaultSource {
         if (useNewParquetFileFormat) {
           if (tableType == COPY_ON_WRITE) {
             new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
           } else {
             new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
           }
         } else {
           CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
@@ -293,14 +293,14 @@ object DefaultSource {
                (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
             if (useNewParquetFileFormat) {
               new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
             } else {
               resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
             }
           case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
             if (useNewParquetFileFormat) {
               new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrappedTable).build()
             } else {
               new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
             }
@@ -308,7 +308,7 @@ object DefaultSource {
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
             if (useNewParquetFileFormat) {
               new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
             } else {
               new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
             }
@@ -316,7 +316,7 @@ object DefaultSource {
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
             if (useNewParquetFileFormat) {
               new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = true).build()
             } else {
               HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
             }
@@ -324,7 +324,7 @@ object DefaultSource {
           case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
             if (useNewParquetFileFormat) {
               new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrappedTable).build()
             } else {
               MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
             }
@@ -332,7 +332,7 @@ object DefaultSource {
           case (_, _, true) =>
             if (useNewParquetFileFormat) {
               new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+                sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = true).build()
             } else {
               resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
             }
