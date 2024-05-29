@@ -77,54 +77,61 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
   test("Test Update Table Without Primary Key") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName
-        // create table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
-             | tblproperties (
-             |  type = '$tableType',
-             |  preCombineField = 'ts'
-             | )
-   """.stripMargin)
+        Seq(true, false).foreach { isPartitioned =>
+          val tableName = generateTableName
+          val partitionedClause = if (isPartitioned) {
+            "PARTITIONED BY (name)"
+          } else {
+            ""
+          }
+          // create table
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  price double,
+               |  ts long,
+               |  name string
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | $partitionedClause
+            """.stripMargin)
 
-        // insert data to table
-        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000)
-        )
+          // insert data to table
+          spark.sql(s"insert into $tableName select 1,10, 1000, 'a1'")
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 10.0, 1000)
+          )
 
-        // test with optimized sql writes enabled.
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
+          // test with optimized sql writes enabled.
+          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
 
-        // update data
-        spark.sql(s"update $tableName set price = 20 where id = 1")
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 20.0, 1000)
-        )
+          // update data
+          spark.sql(s"update $tableName set price = 20 where id = 1")
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 20.0, 1000)
+          )
 
-        // update data
-        spark.sql(s"update $tableName set price = price * 2 where id = 1")
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 40.0, 1000)
-        )
-
-        // verify default compaction w/ MOR
-        if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
+          // update data
           spark.sql(s"update $tableName set price = price * 2 where id = 1")
-          spark.sql(s"update $tableName set price = price * 2 where id = 1")
-          spark.sql(s"update $tableName set price = price * 2 where id = 1")
-          // verify compaction is complete
-          val metaClient = createMetaClient(spark, tmp.getCanonicalPath + "/" + tableName)
-          assertEquals(metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getLeft.getAction, "commit")
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 40.0, 1000)
+          )
+
+          // verify default compaction w/ MOR
+          if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
+            spark.sql(s"update $tableName set price = price * 2 where id = 1")
+            spark.sql(s"update $tableName set price = price * 2 where id = 1")
+            spark.sql(s"update $tableName set price = price * 2 where id = 1")
+            // verify compaction is complete
+            val metaClient = createMetaClient(spark, tmp.getCanonicalPath + "/" + tableName)
+            assertEquals(metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getLeft.getAction, "commit")
+          }
         }
-
       }
     })
   }
