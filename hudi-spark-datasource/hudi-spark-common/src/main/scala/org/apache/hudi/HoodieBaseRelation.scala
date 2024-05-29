@@ -46,7 +46,7 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 
 import org.apache.avro.Schema
@@ -69,6 +69,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext, SparkSession}
+import org.apache.spark.util.SerializableConfiguration
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -750,10 +751,10 @@ object HoodieBaseRelation extends SparkAdapterSupport {
                                 filters: Seq[Filter],
                                 options: Map[String, String],
                                 hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    val storageConfBroadcast = spark.sparkContext.broadcast(HadoopFSUtils.getStorageConf(hadoopConf))
+    val hadoopConfBroadcast = spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
     partitionedFile => {
-      val storageConf = storageConfBroadcast.value
+      val storageConf = new HadoopStorageConfiguration(hadoopConfBroadcast.value.value)
       val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(partitionedFile)
       val hoodieConfig = new HoodieConfig()
       hoodieConfig.setValue(USE_NATIVE_HFILE_READER,
