@@ -49,8 +49,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -96,19 +97,27 @@ public class TestCleanActionExecutor {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testPartialCleanFailure(boolean simulateFailedDeletion) throws IOException {
+  @EnumSource(CleanFailureType.class)
+  void testPartialCleanFailure(CleanFailureType failureType) throws IOException {
     HoodieWriteConfig config = getCleanByCommitsConfig();
     String fileGroup = UUID.randomUUID() + "-0";
     HoodieBaseFile baseFile = new HoodieBaseFile(String.format("/tmp/base/%s_1-0-1_%s.parquet", fileGroup, "001"));
     FileSystem localFs = new Path(baseFile.getPath()).getFileSystem(CONF.unwrap());
     Path filePath = new Path(baseFile.getPath());
     localFs.create(filePath);
-    String exceptionMsg = "throwing run time exception";
-    if (simulateFailedDeletion) {
-      when(fs.delete(filePath, false)).thenThrow(new RuntimeException(exceptionMsg));
-    } else {
+    if (failureType == CleanFailureType.TRUE_ON_DELETE) {
       when(fs.delete(filePath, false)).thenReturn(true);
+    } else if (failureType == CleanFailureType.FALSE_ON_DELETE_IS_EXISTS_FALSE) {
+      when(fs.delete(filePath, false)).thenReturn(false);
+      when(fs.exists(filePath)).thenReturn(false);
+    } else if (failureType == CleanFailureType.FALSE_ON_DELETE_IS_EXISTS_TRUE) {
+      when(fs.delete(filePath, false)).thenReturn(false);
+      when(fs.exists(filePath)).thenReturn(true);
+    } else if (failureType == CleanFailureType.FILE_NOT_FOUND_EXC_ON_DELETE) {
+      when(fs.delete(filePath, false)).thenThrow(new FileNotFoundException("throwing file not found exception"));
+    } else {
+      // run time exception
+      when(fs.delete(filePath, false)).thenThrow(new RuntimeException("throwing run time exception"));
     }
 
     Map<String, List<HoodieCleanFileInfo>> partitionCleanFileInfoMap = new HashMap<>();
@@ -136,21 +145,44 @@ public class TestCleanActionExecutor {
     when(mockHoodieTable.getMetadataWriter("002")).thenReturn(Option.empty());
 
     CleanActionExecutor cleanActionExecutor = new CleanActionExecutor(context, config, mockHoodieTable, "002");
-    if (simulateFailedDeletion) {
-      assertThrows(HoodieException.class, () -> {
-        cleanActionExecutor.execute();
-      });
+    if (failureType == CleanFailureType.TRUE_ON_DELETE) {
+      assertCleanExecutionSuccess(cleanActionExecutor, filePath);
+    } else if (failureType == CleanFailureType.FALSE_ON_DELETE_IS_EXISTS_FALSE) {
+      assertCleanExecutionSuccess(cleanActionExecutor, filePath);
+    } else if (failureType == CleanFailureType.FALSE_ON_DELETE_IS_EXISTS_TRUE) {
+      assertCleanExecutionFailure(cleanActionExecutor);
+    } else if (failureType == CleanFailureType.FILE_NOT_FOUND_EXC_ON_DELETE) {
+      assertCleanExecutionSuccess(cleanActionExecutor, filePath);
     } else {
-      HoodieCleanMetadata cleanMetadata = cleanActionExecutor.execute();
-      assertTrue(cleanMetadata.getPartitionMetadata().containsKey(PARTITION1));
-      HoodieCleanPartitionMetadata cleanPartitionMetadata = cleanMetadata.getPartitionMetadata().get(PARTITION1);
-      assertTrue(cleanPartitionMetadata.getDeletePathPatterns().contains(filePath.getName()));
+      // run time exception
+      assertCleanExecutionFailure(cleanActionExecutor);
     }
+  }
+
+  private void assertCleanExecutionFailure(CleanActionExecutor cleanActionExecutor) {
+    assertThrows(HoodieException.class, () -> {
+      cleanActionExecutor.execute();
+    });
+  }
+
+  private void assertCleanExecutionSuccess(CleanActionExecutor cleanActionExecutor, Path filePath) {
+    HoodieCleanMetadata cleanMetadata = cleanActionExecutor.execute();
+    assertTrue(cleanMetadata.getPartitionMetadata().containsKey(PARTITION1));
+    HoodieCleanPartitionMetadata cleanPartitionMetadata = cleanMetadata.getPartitionMetadata().get(PARTITION1);
+    assertTrue(cleanPartitionMetadata.getDeletePathPatterns().contains(filePath.getName()));
   }
 
   private static HoodieWriteConfig getCleanByCommitsConfig() {
     return HoodieWriteConfig.newBuilder().withPath("/tmp")
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
+  }
+
+  enum CleanFailureType {
+    TRUE_ON_DELETE,
+    FALSE_ON_DELETE_IS_EXISTS_FALSE,
+    FALSE_ON_DELETE_IS_EXISTS_TRUE,
+    FILE_NOT_FOUND_EXC_ON_DELETE,
+    RUNTIME_EXC_ON_DELETE
   }
 }
