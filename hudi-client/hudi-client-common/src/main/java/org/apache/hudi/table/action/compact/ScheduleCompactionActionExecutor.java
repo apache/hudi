@@ -129,7 +129,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
 
   private Option<Pair<Integer, String>> getLatestDeltaCommitInfo() {
     Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
-        CompactionUtils.getDeltaCommitsSinceLatestCompaction(table.getActiveTimeline());
+        CompactionUtils.getCompletedDeltaCommitsSinceLatestCompaction(table.getActiveTimeline());
     if (deltaCommitsInfo.isPresent()) {
       return Option.of(Pair.of(
           deltaCommitsInfo.get().getLeft().countInstants(),
