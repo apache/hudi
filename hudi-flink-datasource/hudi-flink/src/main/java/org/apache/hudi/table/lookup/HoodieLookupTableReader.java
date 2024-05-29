@@ -29,6 +29,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Hudi look up table reader.
@@ -41,6 +44,8 @@ public class HoodieLookupTableReader implements Serializable {
 
   private InputFormat inputFormat;
 
+  private List<InputSplit> inputSplits;
+
   public HoodieLookupTableReader(SerializableSupplier<InputFormat<RowData, ?>> inputFormatSupplier, Configuration conf) {
     this.inputFormatSupplier = inputFormatSupplier;
     this.conf = conf;
@@ -49,15 +54,24 @@ public class HoodieLookupTableReader implements Serializable {
   public void open() throws IOException {
     this.inputFormat = inputFormatSupplier.get();
     inputFormat.configure(conf);
-    InputSplit[] inputSplits = inputFormat.createInputSplits(1);
+    this.inputSplits = Arrays.stream(inputFormat.createInputSplits(1)).collect(Collectors.toList());
     ((RichInputFormat) inputFormat).openInputFormat();
-    inputFormat.open(inputSplits[0]);
+    inputFormat.open(inputSplits.remove(0));
   }
 
   @Nullable
   public RowData read(RowData reuse) throws IOException {
     if (!inputFormat.reachedEnd()) {
       return (RowData) inputFormat.nextRecord(reuse);
+    } else {
+      while (!inputSplits.isEmpty()) {
+        // release the last itr first.
+        inputFormat.close();
+        inputFormat.open(inputSplits.remove(0));
+        if (!inputFormat.reachedEnd()) {
+          return (RowData) inputFormat.nextRecord(reuse);
+        }
+      }
     }
     return null;
   }

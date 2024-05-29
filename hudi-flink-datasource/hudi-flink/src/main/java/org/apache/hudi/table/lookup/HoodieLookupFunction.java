@@ -47,7 +47,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Lookup function for filesystem connector tables.
+ * Lookup function for Hoodie dimension table.
  *
  * <p>Note: reference Flink FileSystemLookupFunction to avoid additional connector jar dependencies.
  */
