@@ -89,8 +89,12 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   }
 
   public HoodieWriteConfig getConfig() {
+    return getConfig(1);
+  }
+
+  public HoodieWriteConfig getConfig(int numCommitsBeforeCompaction) {
     return getConfigBuilder()
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(numCommitsBeforeCompaction).build())
         .withMetricsConfig(getMetricsConfig())
         .build();
   }
@@ -178,6 +182,34 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // create one compaction instance before exist inflight instance.
       String compactionTime = "101";
       writeClient.scheduleCompactionAtInstant(compactionTime, Option.empty());
+    }
+  }
+
+  @Test
+  public void testNeedCompactionCondition() throws Exception {
+    HoodieWriteConfig config = getConfig(3);
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
+      // insert 100 records.
+      String newCommitTime = "100";
+      writeClient.startCommitWithTime(newCommitTime);
+
+      // commit 1
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      writeClient.insert(recordsRDD, newCommitTime).collect();
+
+      // commit 2
+      updateRecords(config, "101", records);
+
+      // commit 3 (inflight)
+      newCommitTime = "102";
+      writeClient.startCommitWithTime(newCommitTime);
+      metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
+          HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
+
+      // check that compaction will not be scheduled
+      String compactionTime = "107";
+      assertFalse(writeClient.scheduleCompactionAtInstant(compactionTime, Option.empty()));
     }
   }
 

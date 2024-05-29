@@ -48,6 +48,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -82,6 +83,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADAT
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 public class HoodieInputFormatUtils {
 
@@ -360,14 +362,15 @@ public class HoodieInputFormatUtils {
     Path baseDir = partitionPath;
     HoodieStorage storage = HoodieStorageUtils.getStorage(
         partitionPath.toString(), HadoopFSUtils.getStorageConf(conf));
-    if (HoodiePartitionMetadata.hasPartitionMetadata(storage, new StoragePath(partitionPath.toUri()))) {
-      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, new StoragePath(partitionPath.toUri()));
+    StoragePath partitionStoragePath = convertToStoragePath(partitionPath);
+    if (HoodiePartitionMetadata.hasPartitionMetadata(storage,  partitionStoragePath)) {
+      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, partitionStoragePath);
       metadata.readFromFS();
       int levels = metadata.getPartitionDepth();
       baseDir = HoodieHiveUtils.getNthParent(partitionPath, levels);
     } else {
       for (int i = 0; i < partitionPath.depth(); i++) {
-        if (storage.exists(new StoragePath(new StoragePath(baseDir.toUri()), METAFOLDER_NAME))) {
+        if (storage.exists(new StoragePath(convertToStoragePath(baseDir), METAFOLDER_NAME))) {
           break;
         } else if (i == partitionPath.depth() - 1) {
           throw new TableNotFoundException(partitionPath.toString());
@@ -522,10 +525,10 @@ public class HoodieInputFormatUtils {
                                                                   List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
+    HoodieStorage storage = new HoodieHadoopStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf));
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata : metadataList) {
-      fullPathToInfoMap.putAll(metadata.getFullPathToInfo(
-          HadoopFSUtils.getStorageConf(hadoopConf), basePath.toString()));
+      fullPathToInfoMap.putAll(metadata.getFullPathToInfo(storage, basePath.toString()));
     }
     return new ArrayList<>(fullPathToInfoMap.values());
   }

@@ -18,8 +18,9 @@
 package org.apache.hudi
 
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
@@ -869,6 +870,27 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       val partitionPath = entry.getString(3)
       expectedPartitions.count(p => partitionPath.equals(p)) != 1
     }).count())
+  }
+
+  @Test
+  def testDeletePartitionsWithWrongPartition(): Unit = {
+    var (_, fooTableModifier) = deletePartitionSetup()
+    fooTableModifier = fooTableModifier
+      .updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(), "2016/03/15" + "," + "2025/03")
+      .updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, spark.emptyDataFrame)
+    val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
+    assertEquals(0, snapshotDF3.filter(entry => {
+      val partitionPath = entry.getString(3)
+      Seq("2015/03/16", "2015/03/17").count(p => partitionPath.equals(p)) != 1
+    }).count())
+
+    val activeTimeline = createMetaClient(spark, tempBasePath).getActiveTimeline
+    val metadata = TimelineUtils.getCommitMetadata(activeTimeline.lastInstant().get(), activeTimeline)
+      .asInstanceOf[HoodieReplaceCommitMetadata]
+    assertTrue(metadata.getOperationType.equals(WriteOperationType.DELETE_PARTITION))
+    // "2025/03" should not be in partitionToReplaceFileIds
+    assertEquals(Collections.singleton("2016/03/15"), metadata.getPartitionToReplaceFileIds.keySet())
   }
 
   /**

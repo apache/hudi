@@ -22,8 +22,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
@@ -54,7 +54,7 @@ public class HeartbeatUtils {
     boolean deleted = false;
     try {
       String heartbeatFolderPath = HoodieTableMetaClient.getHeartbeatFolderPath(basePath);
-      deleted = storage.deleteFile(new StoragePath(heartbeatFolderPath + StoragePath.SEPARATOR + instantTime));
+      deleted = storage.deleteFile(new StoragePath(heartbeatFolderPath, instantTime));
       if (!deleted) {
         LOG.error("Failed to delete heartbeat for instant " + instantTime);
       } else {
@@ -100,8 +100,7 @@ public class HeartbeatUtils {
       if (config.getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instantTime)) {
         throw new HoodieException(
             "Heartbeat for instant " + instantTime + " has expired, last heartbeat "
-                + getLastHeartbeatTime(
-                table.getMetaClient().getStorage(), config.getBasePath(), instantTime));
+                + getLastHeartbeatTime(table.getStorage(), config.getBasePath(), instantTime));
       }
     } catch (IOException io) {
       throw new HoodieException("Unable to read heartbeat", io);

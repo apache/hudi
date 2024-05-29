@@ -137,7 +137,7 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(1, timeline.getRestoreTimeline().countInstants());
 
     // 103 instant had rollback
-    assertFalse(timeline.getCommitTimeline().containsInstant(
+    assertFalse(timeline.getCommitAndReplaceTimeline().containsInstant(
         new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "103")));
   }
 
@@ -182,9 +182,9 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(1, timeline.getRestoreTimeline().countInstants());
 
     // 103 and 104 instant had rollback
-    assertFalse(timeline.getCommitTimeline().containsInstant(
+    assertFalse(timeline.getCommitAndReplaceTimeline().containsInstant(
         new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "103")));
-    assertFalse(timeline.getCommitTimeline().containsInstant(
+    assertFalse(timeline.getCommitAndReplaceTimeline().containsInstant(
         new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "104")));
   }
 

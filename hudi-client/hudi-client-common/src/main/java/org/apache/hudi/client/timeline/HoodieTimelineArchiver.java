@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
@@ -81,12 +82,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.config = config;
     this.table = table;
     this.metaClient = table.getMetaClient();
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
+    this.txnManager = new TransactionManager(config, table.getStorage());
     this.timelineWriter = LSMTimelineWriter.getInstance(config, table);
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
-    this.metrics = new HoodieMetrics(config, table.getStorageConf());
+    this.metrics = new HoodieMetrics(config, metaClient.getStorage());
   }
 
   public int archiveIfRequired(HoodieEngineContext context) throws IOException {
@@ -102,6 +103,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         // there is no owner or instant time per se for archival.
         txnManager.beginTransaction(Option.empty(), Option.empty());
       }
+    } catch (HoodieLockException e) {
+      LOG.error("Fail to begin transaction", e);
+      return 0;
+    }
+
+    try {
       // Sort again because the cleaning and rollback instants could break the sequence.
       List<ActiveAction> instantsToArchive = getInstantsToArchive().sorted().collect(Collectors.toList());
       if (!instantsToArchive.isEmpty()) {
@@ -207,7 +214,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // 4. If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
     if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
-      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getMetadataConfig(), config.getBasePath())) {
+      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
+          table.getContext(), table.getStorage(), config.getMetadataConfig(), config.getBasePath())) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {
           LOG.info("Not archiving as there is no compaction yet on the metadata table");

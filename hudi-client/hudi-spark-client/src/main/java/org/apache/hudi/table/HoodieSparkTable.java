@@ -38,7 +38,6 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
 import org.apache.hadoop.conf.Configuration;
@@ -112,8 +111,8 @@ public abstract class HoodieSparkTable<T>
           context.getStorageConf(), config, failedWritesCleaningPolicy, context,
           Option.of(triggeringInstantTimestamp));
       try {
-        if (isMetadataTableExists || metaClient.getStorage().exists(new StoragePath(
-            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
+        if (isMetadataTableExists || metaClient.getStorage().exists(
+            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePathV2()))) {
           isMetadataTableExists = true;
           return Option.of(metadataWriter);
         }

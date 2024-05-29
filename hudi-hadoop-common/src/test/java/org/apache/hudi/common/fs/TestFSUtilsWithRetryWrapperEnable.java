@@ -22,8 +22,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieRetryWrapperFileSystem;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -70,14 +70,14 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     initialRetryIntervalMs = fileSystemRetryConfig.getInitialRetryIntervalMs();
 
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(
-        HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getStorageConf()), 2);
+        HadoopFSUtils.getFs(metaClient.getMetaPath().toString(), metaClient.getStorageConf()), 2);
     FileSystem fileSystem =
         new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers,
             initialRetryIntervalMs, "");
 
     HoodieWrapperFileSystem fs =
         new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
-    HoodieStorage storage = HoodieStorageUtils.getStorage(fs);
+    HoodieStorage storage = new HoodieHadoopStorage(fs);
     metaClient.setHoodieStorage(storage);
   }
 
@@ -85,13 +85,13 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
   @Test
   public void testProcessFilesWithExceptions() throws Exception {
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(
-        HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getStorageConf()), 100);
+        HadoopFSUtils.getFs(metaClient.getMetaPath().toString(), metaClient.getStorageConf()), 100);
     FileSystem fileSystem =
         new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers,
             initialRetryIntervalMs, "");
     HoodieWrapperFileSystem fs =
         new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
-    HoodieStorage storage = HoodieStorageUtils.getStorage(fs);
+    HoodieStorage storage = new HoodieHadoopStorage(fs);
     metaClient.setHoodieStorage(storage);
     List<String> folders =
         Arrays.asList("2016/04/15", ".hoodie/.temp/2/2016/04/15");
@@ -102,7 +102,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
   @Test
   public void testGetSchema() {
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(
-        HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getStorageConf()), 100);
+        HadoopFSUtils.getFs(metaClient.getMetaPath().toString(), metaClient.getStorageConf()), 100);
     FileSystem fileSystem =
         new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers,
             initialRetryIntervalMs, "");
@@ -114,7 +114,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
   @Test
   public void testGetDefaultReplication() {
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(
-        HadoopFSUtils.getFs(metaClient.getMetaPath(), metaClient.getStorageConf()), 100);
+        HadoopFSUtils.getFs(metaClient.getMetaPath().toString(), metaClient.getStorageConf()), 100);
     FileSystem fileSystem =
         new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers,
             initialRetryIntervalMs, "");

@@ -27,12 +27,13 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -145,9 +146,10 @@ public class GenericRecordValidationTestUtils {
   public static Stream<GenericRecord> readHFile(Configuration conf, String[] paths) {
     List<GenericRecord> valuesAsList = new LinkedList<>();
     for (String path : paths) {
+      HoodieStorage storage = new HoodieHadoopStorage(path, conf);
       try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
-          HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-              .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, HadoopFSUtils.getStorageConf(conf), new StoragePath(path), HoodieFileFormat.HFILE)) {
+          HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+              .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(path), HoodieFileFormat.HFILE)) {
         valuesAsList.addAll(HoodieAvroHFileReaderImplBase.readAllRecords(reader)
             .stream().map(e -> (GenericRecord) e).collect(Collectors.toList()));
       } catch (IOException e) {

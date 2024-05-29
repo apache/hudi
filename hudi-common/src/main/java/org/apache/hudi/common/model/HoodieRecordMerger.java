@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * HoodieMerge defines how to merge two records. It is a stateless component.
@@ -124,6 +125,13 @@ public interface HoodieRecordMerger extends Serializable {
    **/
   default boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
     return true;
+  }
+
+  /**
+   * Merges two records with the same key in full outer merge fashion i.e. all fields from both records are included.
+   */
+  default List<Pair<HoodieRecord, Schema>> fullOuterMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    throw new UnsupportedOperationException("Partial merging logic is not implemented.");
   }
 
   default String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg) {

@@ -39,8 +39,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static org.apache.hudi.storage.StorageConfiguration.castConfiguration;
-
 /**
  * Provides I/O APIs on files and directories on storage.
  * The APIs are mainly based on {@code org.apache.hadoop.fs.FileSystem} class.
@@ -48,6 +46,21 @@ import static org.apache.hudi.storage.StorageConfiguration.castConfiguration;
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class HoodieStorage implements Closeable {
   public static final Logger LOG = LoggerFactory.getLogger(HoodieStorage.class);
+
+  protected final StorageConfiguration<?> storageConf;
+
+  public HoodieStorage(StorageConfiguration<?> storageConf) {
+    this.storageConf = storageConf;
+  }
+
+  /**
+   * @param path        path to instantiate the storage.
+   * @param storageConf new storage configuration.
+   * @return new {@link HoodieStorage} instance with the configuration.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract HoodieStorage newInstance(StoragePath path,
+                                            StorageConfiguration<?> storageConf);
 
   /**
    * @return the scheme of the storage.
@@ -253,31 +266,24 @@ public abstract class HoodieStorage implements Closeable {
   public abstract boolean deleteFile(StoragePath path) throws IOException;
 
   /**
-   * Qualifies a path to one which uses this storage and, if relative, made absolute.
-   *
-   * @param path to qualify.
-   * @return Qualified path.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract StoragePath makeQualified(StoragePath path);
-
-  /**
    * @return the underlying file system instance if exists.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract Object getFileSystem();
 
   /**
+   * @return the raw storage.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract HoodieStorage getRawStorage();
+
+  /**
    * @return the storage configuration.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract StorageConfiguration<?> getConf();
-
-  /**
-   * @return the underlying configuration instance.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract Object unwrapConf();
+  public final StorageConfiguration<?> getConf() {
+    return storageConf;
+  }
 
   /**
    * Creates a new file with overwrite set to false. This ensures files are created
@@ -430,15 +436,5 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public List<StoragePathInfo> globEntries(StoragePath pathPattern) throws IOException {
     return globEntries(pathPattern, e -> true);
-  }
-
-  /**
-   * @param clazz class of U.
-   * @param <U>   type to return.
-   * @return the underlying configuration cast to type {@link U}.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public final <U> U unwrapConfAs(Class<U> clazz) {
-    return castConfiguration(unwrapConf(), clazz);
   }
 }

@@ -46,7 +46,7 @@ class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuild
     val basePath = getBasePath(table)
     val client = createMetaClient(jsc, basePath)
     val activeTimeline = client.getActiveTimeline
-    val timeline = activeTimeline.getCommitTimeline.filterCompletedInstants()
+    val timeline = activeTimeline.getCommitAndReplaceTimeline.filterCompletedInstants()
 
     val rows = new java.util.ArrayList[Row]
     val df = new DecimalFormat("#.00")

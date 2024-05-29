@@ -153,7 +153,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         engineContext, FileSystemViewStorageConfig.newBuilder().build(),
         HoodieCommonConfig.newBuilder().build(),
         mc -> HoodieTableMetadata.create(
-            engineContext, metadataConfig, mc.getBasePathV2().toString()));
+            engineContext, mc.getStorage(), metadataConfig, mc.getBasePathV2().toString()));
     SyncableFileSystemView fsView = viewManager.getFileSystemView(metaClient);
     FileSlice fileSlice = fsView.getAllFileSlices(partitionPaths[0]).findFirst().get();
     List<String> logFilePathList = getLogFileListFromFileSlice(fileSlice);
@@ -170,7 +170,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     assertEquals(containsBaseFile, fileSlice.getBaseFile().isPresent());
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         getHoodieReaderContext(tablePath, avroSchema),
-        storageConf,
+        metaClient.getStorage(),
         tablePath,
         metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
         fileSlice,

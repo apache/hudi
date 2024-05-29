@@ -18,12 +18,13 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -137,7 +138,8 @@ public class HoodiePartitionMetadata {
         HOODIE_PARTITION_METAFILE_PREFIX + "_" + UUID.randomUUID() + getMetafileExtension());
     try {
       // write to temporary file
-      BaseFileUtils.getInstance(format).writeMetaFile(storage, tmpPath, props);
+      HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(format)
+          .writeMetaFile(storage, tmpPath, props);
       // move to actual path
       storage.rename(tmpPath, filePath);
     } finally {
@@ -185,10 +187,11 @@ public class HoodiePartitionMetadata {
   private boolean readBaseFormatMetaFile() {
     for (StoragePath metafilePath : baseFormatMetaFilePaths(partitionPath)) {
       try {
-        BaseFileUtils reader = BaseFileUtils.getInstance(metafilePath);
+        FileFormatUtils reader = HoodieIOFactory.getIOFactory(storage)
+            .getFileFormatUtils(metafilePath);
         // Data file format
         Map<String, String> metadata = reader.readFooter(
-            storage.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
+            storage, true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
         props.clear();
         props.putAll(metadata);
         format = Option.of(reader.getFormat());

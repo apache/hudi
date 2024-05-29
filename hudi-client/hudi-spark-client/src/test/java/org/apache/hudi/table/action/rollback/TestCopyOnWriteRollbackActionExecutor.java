@@ -289,7 +289,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     //2. rollback
     HoodieInstant commitInstant;
     if (isUsingMarkers) {
-      commitInstant = table.getActiveTimeline().getCommitTimeline().filterInflights().lastInstant().get();
+      commitInstant = table.getActiveTimeline().getCommitAndReplaceTimeline().filterInflights().lastInstant().get();
     } else {
       commitInstant = table.getCompletedCommitTimeline().lastInstant().get();
     }
@@ -361,7 +361,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     HoodieTable table =
         this.getHoodieTable(metaClient, getConfigBuilder().withRollbackBackupEnabled(true).build());
     HoodieInstant needRollBackInstant = HoodieTestUtils.getCompleteInstant(
-        metaClient.getStorage(), new StoragePath(metaClient.getMetaPath()),
+        metaClient.getStorage(), metaClient.getMetaPath(),
         "002", HoodieTimeline.COMMIT_ACTION);
 
     // Create the rollback plan and perform the rollback

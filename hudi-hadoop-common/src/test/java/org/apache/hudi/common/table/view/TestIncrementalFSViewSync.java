@@ -678,7 +678,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     }
     StoragePath instantPath = HoodieTestUtils
         .getCompleteInstantPath(metaClient.getStorage(),
-            new StoragePath(metaClient.getMetaPath()),
+            metaClient.getMetaPath(),
             instant.getTimestamp(), instant.getAction());
     boolean deleted = metaClient.getStorage().deleteFile(instantPath);
     assertTrue(deleted);

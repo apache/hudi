@@ -57,8 +57,6 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
 
-import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
-
 /**
  * CLI command to display and trigger repair options.
  */
@@ -120,10 +118,10 @@ public class RepairsCommand {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     String latestCommit =
-        client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp();
+        client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getTimestamp();
     List<String> partitionPaths =
         FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.storage, client.getBasePath());
-    StoragePath basePath = new StoragePath(client.getBasePath());
+    StoragePath basePath = client.getBasePathV2();
     String[][] rows = new String[partitionPaths.size()][];
 
     int ind = 0;
@@ -163,8 +161,7 @@ public class RepairsCommand {
       newProps.load(fileInputStream);
     }
     Map<String, String> oldProps = client.getTableConfig().propsMap();
-    StoragePath metaPathDir = new StoragePath(client.getBasePath(), METAFOLDER_NAME);
-    HoodieTableConfig.create(client.getStorage(), metaPathDir, newProps);
+    HoodieTableConfig.create(client.getStorage(), client.getMetaPath(), newProps);
     // reload new props as checksum would have been added
     newProps =
         HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig().getProps();
@@ -230,8 +227,8 @@ public class RepairsCommand {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HoodieCLI.conf);
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     List<String> partitionPaths =
-        FSUtils.getAllPartitionPaths(engineContext, client.getBasePath(), false);
-    StoragePath basePath = new StoragePath(client.getBasePath());
+        FSUtils.getAllPartitionPaths(engineContext, client.getStorage(), client.getBasePath(), false);
+    StoragePath basePath = client.getBasePathV2();
 
     String[][] rows = new String[partitionPaths.size()][];
     int ind = 0;
@@ -243,7 +240,7 @@ public class RepairsCommand {
       Option<StoragePath> baseFormatFile =
           HoodiePartitionMetadata.baseFormatMetaPathIfExists(HoodieCLI.storage, partition);
       String latestCommit =
-          client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp();
+          client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getTimestamp();
 
       String[] row = new String[] {
           partitionPath,
@@ -277,7 +274,7 @@ public class RepairsCommand {
 
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(), "true");
-    HoodieTableConfig.update(HoodieCLI.storage, new StoragePath(client.getMetaPath()), props);
+    HoodieTableConfig.update(HoodieCLI.storage, client.getMetaPath(), props);
 
     return HoodiePrintHelper.print(new String[] {
         HoodieTableHeaderFields.HEADER_PARTITION_PATH,

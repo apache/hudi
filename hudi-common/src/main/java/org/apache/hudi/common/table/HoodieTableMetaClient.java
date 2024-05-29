@@ -79,6 +79,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -140,7 +141,7 @@ public class HoodieTableMetaClient implements Serializable {
    * Instantiate HoodieTableMetaClient.
    * Can only be called if table already exists
    */
-  protected HoodieTableMetaClient(StorageConfiguration<?> conf, String basePath, boolean loadActiveTimelineOnLoad,
+  protected HoodieTableMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
                                   ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                   String payloadClassName, String recordMergerStrategy, HoodieTimeGeneratorConfig timeGeneratorConfig,
                                   FileSystemRetryConfig fileSystemRetryConfig) {
@@ -148,12 +149,12 @@ public class HoodieTableMetaClient implements Serializable {
     this.timeGeneratorConfig = timeGeneratorConfig;
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.fileSystemRetryConfig = fileSystemRetryConfig;
-    this.storageConf = conf;
+    this.storageConf = storage.getConf();
+    this.storage = storage;
     this.basePath = new StoragePath(basePath);
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
-    this.storage = getStorage();
-    TableNotFoundException.checkTableValidity(storage, this.basePath, metaPath);
-    this.tableConfig = new HoodieTableConfig(storage, metaPath.toString(), payloadClassName, recordMergerStrategy);
+    TableNotFoundException.checkTableValidity(this.storage, this.basePath, metaPath);
+    this.tableConfig = new HoodieTableConfig(this.storage, metaPath, payloadClassName, recordMergerStrategy);
     this.functionalIndexMetadata = getFunctionalIndexMetadata();
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
@@ -243,7 +244,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
     return HoodieTableMetaClient.builder()
-        .setConf(oldMetaClient.storageConf.newInstance())
+        .setStorage(oldMetaClient.getStorage())
         .setBasePath(oldMetaClient.basePath.toString())
         .setLoadActiveTimelineOnLoad(oldMetaClient.loadActiveTimelineOnLoad)
         .setConsistencyGuardConfig(oldMetaClient.consistencyGuardConfig)
@@ -295,8 +296,8 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * @return Meta path
    */
-  public String getMetaPath() {
-    return metaPath.toString();  // this invocation is cached
+  public StoragePath getMetaPath() {
+    return metaPath;
   }
 
   /**
@@ -383,23 +384,27 @@ public class HoodieTableMetaClient implements Serializable {
 
   public HoodieStorage getStorage() {
     if (storage == null) {
-      ConsistencyGuard consistencyGuard = consistencyGuardConfig.isConsistencyCheckEnabled()
-          ? new FailSafeConsistencyGuard(
-          HoodieStorageUtils.getStorage(metaPath, getStorageConf()),
-          consistencyGuardConfig)
-          : new NoOpConsistencyGuard();
-
-      storage = HoodieStorageUtils.getStorage(
-          metaPath,
-          getStorageConf(),
-          fileSystemRetryConfig.isFileSystemActionRetryEnable(),
-          fileSystemRetryConfig.getMaxRetryIntervalMs(),
-          fileSystemRetryConfig.getMaxRetryNumbers(),
-          fileSystemRetryConfig.getInitialRetryIntervalMs(),
-          fileSystemRetryConfig.getRetryExceptions(),
-          consistencyGuard);
+      storage = getStorage(metaPath, getStorageConf(), consistencyGuardConfig, fileSystemRetryConfig);
     }
     return storage;
+  }
+
+  private static HoodieStorage getStorage(StoragePath path,
+                                          StorageConfiguration<?> storageConf,
+                                          ConsistencyGuardConfig consistencyGuardConfig,
+                                          FileSystemRetryConfig fileSystemRetryConfig) {
+    HoodieStorage newStorage = HoodieStorageUtils.getStorage(path, storageConf);
+    ConsistencyGuard consistencyGuard = consistencyGuardConfig.isConsistencyCheckEnabled()
+        ? new FailSafeConsistencyGuard(newStorage, consistencyGuardConfig)
+        : new NoOpConsistencyGuard();
+
+    return getIOFactory(newStorage).getStorage(path,
+        fileSystemRetryConfig.isFileSystemActionRetryEnable(),
+        fileSystemRetryConfig.getMaxRetryIntervalMs(),
+        fileSystemRetryConfig.getMaxRetryNumbers(),
+        fileSystemRetryConfig.getInitialRetryIntervalMs(),
+        fileSystemRetryConfig.getRetryExceptions(),
+        consistencyGuard);
   }
 
   public void setHoodieStorage(HoodieStorage storage) {
@@ -407,7 +412,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public HoodieStorage getRawHoodieStorage() {
-    return HoodieStorageUtils.getRawStorage(getStorage());
+    return getStorage().getRawStorage();
   }
 
   public StorageConfiguration<?> getStorageConf() {
@@ -666,7 +671,7 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieTimeline getCommitsTimeline() {
     switch (this.getTableType()) {
       case COPY_ON_WRITE:
-        return getActiveTimeline().getCommitTimeline();
+        return getActiveTimeline().getCommitAndReplaceTimeline();
       case MERGE_ON_READ:
         // We need to include the parquet files written out in delta commits
         // Include commit action to be able to start doing a MOR over a COW table - no
@@ -686,7 +691,7 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieTimeline getCommitsAndCompactionTimeline() {
     switch (this.getTableType()) {
       case COPY_ON_WRITE:
-        return getActiveTimeline().getCommitTimeline();
+        return getActiveTimeline().getCommitAndReplaceTimeline();
       case MERGE_ON_READ:
         return getActiveTimeline().getWriteTimeline();
       default:
@@ -702,7 +707,7 @@ public class HoodieTableMetaClient implements Serializable {
       case COPY_ON_WRITE:
       case MERGE_ON_READ:
         // We need to include the parquet files written out in delta commits in tagging
-        return getActiveTimeline().getCommitTimeline();
+        return getActiveTimeline().getCommitAndReplaceTimeline();
       default:
         throw new HoodieException("Unsupported table type :" + this.getTableType());
     }
@@ -786,18 +791,18 @@ public class HoodieTableMetaClient implements Serializable {
     initializeBootstrapDirsIfNotExists(basePath.toString(), getStorage());
   }
 
-  private static HoodieTableMetaClient newMetaClient(StorageConfiguration<?> conf, String basePath, boolean loadActiveTimelineOnLoad,
+  private static HoodieTableMetaClient newMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
                                                      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                                      String payloadClassName, String recordMergerStrategy,
                                                      HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig,
                                                      HoodieMetaserverConfig metaserverConfig) {
     return metaserverConfig.isMetaserverEnabled()
         ? (HoodieTableMetaClient) ReflectionUtils.loadClass("org.apache.hudi.common.table.HoodieTableMetaserverClient",
-        new Class<?>[] {StorageConfiguration.class, String.class, ConsistencyGuardConfig.class, String.class, HoodieTimeGeneratorConfig.class,
+        new Class<?>[] {HoodieStorage.class, String.class, ConsistencyGuardConfig.class, String.class, HoodieTimeGeneratorConfig.class,
             FileSystemRetryConfig.class, Option.class, Option.class, HoodieMetaserverConfig.class},
-        conf, basePath, consistencyGuardConfig, recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig,
+        storage, basePath, consistencyGuardConfig, recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig,
         Option.ofNullable(metaserverConfig.getDatabaseName()), Option.ofNullable(metaserverConfig.getTableName()), metaserverConfig)
-        : new HoodieTableMetaClient(conf, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, recordMergerStrategy,
+        : new HoodieTableMetaClient(storage, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, recordMergerStrategy,
         timeGeneratorConfig, fileSystemRetryConfig);
   }
 
@@ -811,6 +816,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static class Builder {
 
     private StorageConfiguration<?> conf;
+    private HoodieStorage storage;
     private String basePath;
     private boolean loadActiveTimelineOnLoad = false;
     private String payloadClassName = null;
@@ -823,6 +829,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public Builder setConf(StorageConfiguration<?> conf) {
       this.conf = conf;
+      return this;
+    }
+
+    public Builder setStorage(HoodieStorage storage) {
+      this.storage = storage;
       return this;
     }
 
@@ -878,12 +889,16 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public HoodieTableMetaClient build() {
-      ValidationUtils.checkArgument(conf != null, "Configuration needs to be set to init HoodieTableMetaClient");
+      ValidationUtils.checkArgument(conf != null || storage != null,
+          "Storage configuration or HoodieStorage needs to be set to init HoodieTableMetaClient");
       ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
       if (timeGeneratorConfig == null) {
         timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().withPath(basePath).build();
       }
-      return newMetaClient(conf, basePath,
+      if (storage == null) {
+        storage = getStorage(new StoragePath(basePath), conf, consistencyGuardConfig, fileSystemRetryConfig);
+      }
+      return newMetaClient(storage, basePath,
           loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName,
           recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig, metaserverConfig);
     }

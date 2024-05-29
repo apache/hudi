@@ -30,9 +30,9 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Given a path is a part of - Hoodie table = accepts ONLY the latest version of each path - Non-Hoodie table = then
@@ -132,8 +133,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
     Path folder = null;
     try {
       if (storage == null) {
-        storage =
-            HoodieStorageUtils.getStorage(new StoragePath(path.toUri()), conf);
+        storage = new HoodieHadoopStorage(convertToStoragePath(path), conf);
       }
 
       // Assumes path is a file
@@ -166,8 +166,9 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
       // Perform actual checking.
       Path baseDir;
-      if (HoodiePartitionMetadata.hasPartitionMetadata(storage, new StoragePath(folder.toUri()))) {
-        HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, new StoragePath(folder.toUri()));
+      StoragePath storagePath = convertToStoragePath(folder);
+      if (HoodiePartitionMetadata.hasPartitionMetadata(storage, storagePath)) {
+        HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, storagePath);
         metadata.readFromFS();
         baseDir = HoodieHiveUtils.getNthParent(folder, metadata.getPartitionDepth());
       } else {

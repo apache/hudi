@@ -67,9 +67,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -82,7 +82,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -156,6 +156,7 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
   public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
   public static final String PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX = "func_index_";
+  public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
 
   private HoodieTableMetadataUtil() {
   }
@@ -516,9 +517,8 @@ public class HoodieTableMetadataUtil {
       }
 
       final StoragePath writeFilePath = new StoragePath(dataMetaClient.getBasePathV2(), pathWithPartition);
-      try (HoodieFileReader fileReader =
-               HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-                   hoodieConfig, dataMetaClient.getStorageConf(), writeFilePath)) {
+      try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(dataMetaClient.getStorage())
+          .getReaderFactory(HoodieRecordType.AVRO).getFileReader(hoodieConfig, writeFilePath)) {
         try {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
@@ -904,7 +904,7 @@ public class HoodieTableMetadataUtil {
       if (!isDeleted) {
         final String pathWithPartition = partitionName + "/" + filename;
         final StoragePath addedFilePath = new StoragePath(dataMetaClient.getBasePathV2(), pathWithPartition);
-        bloomFilterBuffer = readBloomFilter(dataMetaClient.getStorageConf(), addedFilePath);
+        bloomFilterBuffer = readBloomFilter(dataMetaClient.getStorage(), addedFilePath);
 
         // If reading the bloom filter failed then do not add a record for this file
         if (bloomFilterBuffer == null) {
@@ -959,10 +959,10 @@ public class HoodieTableMetadataUtil {
     });
   }
 
-  private static ByteBuffer readBloomFilter(StorageConfiguration<?> conf, StoragePath filePath) throws IOException {
-    HoodieConfig hoodieConfig = getReaderConfigs(conf);
-    try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(hoodieConfig, conf, filePath)) {
+  private static ByteBuffer readBloomFilter(HoodieStorage storage, StoragePath filePath) throws IOException {
+    HoodieConfig hoodieConfig = getReaderConfigs(storage.getConf());
+    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(hoodieConfig, filePath)) {
       final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
       if (fileBloomFilter == null) {
         return null;
@@ -1213,8 +1213,9 @@ public class HoodieTableMetadataUtil {
     try {
       if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePathV2(), filePath);
-        return BaseFileUtils.getInstance(HoodieFileFormat.PARQUET)
-            .readColumnStatsFromMetadata(datasetMetaClient.getStorageConf(), fullFilePath, columnsToIndex);
+        return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
+            .getFileFormatUtils(HoodieFileFormat.PARQUET)
+            .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex);
       }
 
       LOG.warn("Column range index not supported for: {}", filePath);
@@ -1279,7 +1280,7 @@ public class HoodieTableMetadataUtil {
    * it could subsequently be used in column stats
    *
    * NOTE: This method has to stay compatible with the semantic of
-   *      {@link ParquetUtils#readColumnStatsFromMetadata} as they are used in tandem
+   *      {@link FileFormatUtils#readColumnStatsFromMetadata} as they are used in tandem
    */
   private static Comparable<?> coerceToComparable(Schema schema, Object val) {
     if (val == null) {
@@ -1476,8 +1477,7 @@ public class HoodieTableMetadataUtil {
   public static String deleteMetadataTable(HoodieTableMetaClient dataMetaClient, HoodieEngineContext context, boolean backup) {
     final StoragePath metadataTablePath =
         HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2());
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
-        metadataTablePath.toString(), context.getStorageConf());
+    HoodieStorage storage = dataMetaClient.getStorage();
     dataMetaClient.getTableConfig().clearMetadataPartitions(dataMetaClient);
     try {
       if (!storage.exists(metadataTablePath)) {
@@ -1532,7 +1532,7 @@ public class HoodieTableMetadataUtil {
     }
 
     final StoragePath metadataTablePartitionPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2()), partitionPath);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(metadataTablePartitionPath, context.getStorageConf());
+    HoodieStorage storage = dataMetaClient.getStorage();
     dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, false);
     try {
       if (!storage.exists(metadataTablePartitionPath)) {
@@ -1764,8 +1764,9 @@ public class HoodieTableMetadataUtil {
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
-      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-          .getFileReader(config, configuration, dataFilePath);
+      HoodieFileReader reader = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(basePath, configuration))
+          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+          .getFileReader(config, dataFilePath);
       return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime);
     });
   }
@@ -1825,8 +1826,9 @@ public class HoodieTableMetadataUtil {
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
       HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
-      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-          .getFileReader(hoodieConfig, storageConf, dataFilePath);
+      HoodieFileReader reader = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+          .getFileReader(hoodieConfig, dataFilePath);
       return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime);
     });
   }
@@ -1894,7 +1896,7 @@ public class HoodieTableMetadataUtil {
           .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
       // Step 3: Aggregate Column Ranges
       Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-          .map(entry -> BaseFileUtils.getColumnRangeInPartition(entry.getValue()));
+          .map(entry -> FileFormatUtils.getColumnRangeInPartition(entry.getValue()));
       return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(toList()), false).iterator();
     });
   }
@@ -1958,7 +1960,7 @@ public class HoodieTableMetadataUtil {
             .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
         // Step 3: Aggregate Column Ranges
         Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-            .map(entry -> BaseFileUtils.getColumnRangeInPartition(entry.getValue()));
+            .map(entry -> FileFormatUtils.getColumnRangeInPartition(entry.getValue()));
         return HoodieMetadataPayload.createPartitionStatsRecords(partitionName, partitionStatsRangeMetadata.collect(toList()), false).iterator();
       });
     } catch (Exception e) {

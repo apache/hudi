@@ -44,9 +44,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -198,7 +198,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       createMarkerFile(partitionPath, newFilePath.getName());
 
       // Create the writer for writing the new version file
-      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getStorageConf(),
+      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getStorage(),
           config, writeSchemaWithMetaFields, taskContextSupplier, recordMerger.getRecordType());
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
@@ -470,8 +470,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
 
     long oldNumWrites = 0;
-    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.recordMerger.getRecordType())
-        .getFileReader(config, hoodieTable.getStorageConf(), oldFilePath)) {
+    try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
+        .getReaderFactory(this.recordMerger.getRecordType())
+        .getFileReader(config, oldFilePath)) {
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);

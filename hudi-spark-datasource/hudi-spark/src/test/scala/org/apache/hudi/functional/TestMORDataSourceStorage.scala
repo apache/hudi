@@ -25,10 +25,10 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtil
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
@@ -180,7 +180,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
         .save(basePath)
     }
     // compaction should have been completed
-    val metaClient = HoodieTestUtils.createMetaClient(fs.getConf, basePath)
-    assertEquals(1, metaClient.getActiveTimeline.getCommitTimeline.countInstants())
+    val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(fs.getConf), basePath)
+    assertEquals(1, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.countInstants())
   }
 }

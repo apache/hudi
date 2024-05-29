@@ -46,7 +46,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
@@ -87,6 +86,7 @@ import static org.apache.hudi.common.model.WriteOperationType.COMPACT;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
+import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -124,7 +124,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     testTable.doWriteOperation("000001", INSERT, emptyList(), asList("p1"), 1);
-    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), reuse);
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), reuse);
     assertTrue(tableMetadata.enabled());
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
     String partition = metadataPartitions.get(0);
@@ -168,7 +168,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
   private void verifyBaseMetadataTable(boolean reuseMetadataReaders) throws IOException {
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
-        context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), reuseMetadataReaders);
+        context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), reuseMetadataReaders);
     assertTrue(tableMetadata.enabled());
     List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
@@ -211,7 +211,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     init(tableType);
 
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
-        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), false);
+        storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), false);
 
     assertEquals(HoodieTableMetadataKeyGenerator.class.getCanonicalName(),
         tableMetadata.getMetadataMetaClient().getTableConfig().getKeyGeneratorClassName());
@@ -225,7 +225,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   public void testNotExistPartition(final HoodieTableType tableType) throws Exception {
     init(tableType);
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
-        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), false);
+        storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), false);
     List<StoragePathInfo> allFilesInPartition = tableMetadata.getAllFilesInPartition(
         new StoragePath(writeConfig.getBasePath() + "dummy"));
     assertEquals(allFilesInPartition.size(), 0);
@@ -382,6 +382,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   private Set<String> getFilePathsInPartition(String partition) throws IOException {
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
         new HoodieLocalEngineContext(storageConf),
+        storage,
         HoodieMetadataConfig.newBuilder().enable(true).build(),
         basePath);
     return tableMetadata.getAllFilesInPartition(new StoragePath(basePath, partition))
@@ -491,7 +492,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
    */
   private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<String> logFilePaths, String latestCommitTimestamp) {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
-    HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder()
+    HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder(FILES.getPartitionPath())
         .withStorage(metadataMetaClient.getStorage())
         .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
@@ -527,8 +528,9 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     final HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
 
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
-        HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-            table.getConfig(), context.getStorageConf(), new StoragePath(baseFile.getPath()));
+        getHoodieSparkIOFactory(storage)
+            .getReaderFactory(HoodieRecordType.AVRO)
+            .getFileReader(table.getConfig(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       assertNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));

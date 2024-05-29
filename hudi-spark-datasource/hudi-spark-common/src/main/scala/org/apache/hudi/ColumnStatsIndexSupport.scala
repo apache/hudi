@@ -116,8 +116,8 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    * w/in the Metadata Table
    */
   def isIndexAvailable: Boolean = {
-    checkState(metadataConfig.isEnabled, "Metadata Table support has to be enabled")
-    metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+    metadataConfig.isEnabled &&
+      metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
   }
 
   /**

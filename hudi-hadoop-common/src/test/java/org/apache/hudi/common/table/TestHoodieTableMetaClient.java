@@ -59,7 +59,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals(HoodieTestUtils.RAW_TRIPS_TEST_NAME, metaClient.getTableConfig().getTableName(),
         "Table name should be raw_trips");
     assertEquals(basePath, metaClient.getBasePath(), "Basepath should be the one assigned");
-    assertEquals(basePath + "/.hoodie", metaClient.getMetaPath(),
+    assertEquals(basePath + "/.hoodie", metaClient.getMetaPath().toString(),
         "Metapath should be ${basepath}/.hoodie");
     assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
     assertTrue(HoodieTableConfig.validateChecksum(metaClient.getTableConfig().getProps()));
@@ -86,7 +86,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   @Test
   public void checkCommitTimeline() {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
@@ -95,12 +95,12 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
     // Commit timeline should not auto-reload every time getActiveCommitTimeline(), it should be cached
     activeTimeline = metaClient.getActiveTimeline();
-    activeCommitTimeline = activeTimeline.getCommitTimeline();
+    activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
     activeTimeline = activeTimeline.reload();
     HoodieInstant completedInstant = activeTimeline.getCommitsTimeline().getInstantsAsStream().findFirst().get();
-    activeCommitTimeline = activeTimeline.getCommitTimeline();
+    activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
     assertTrue(completedInstant.isCompleted());
     assertTrue(completedInstant.getTimestamp().equals(instant.getTimestamp()));

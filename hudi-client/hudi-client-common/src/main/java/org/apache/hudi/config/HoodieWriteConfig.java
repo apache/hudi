@@ -84,9 +84,7 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.orc.CompressionKind;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -355,14 +353,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.buffer.record.sampling.rate")
       .defaultValue(String.valueOf(64))
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("0.15.0")
       .withDocumentation("Sampling rate of in-memory buffer used to estimate object size. Higher value lead to lower CPU usage.");
 
   public static final ConfigProperty<String> WRITE_BUFFER_RECORD_CACHE_LIMIT = ConfigProperty
       .key("hoodie.write.buffer.record.cache.limit")
       .defaultValue(String.valueOf(128 * 1024))
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("0.15.0")
       .withDocumentation("Maximum queue size of in-memory buffer for parallelizing network reads and lake storage writes.");
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_BUFFER_LIMIT_BYTES = ConfigProperty
@@ -2137,9 +2135,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION);
   }
 
-  public CompressionCodecName getParquetCompressionCodec() {
-    String codecName = getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
-    return CompressionCodecName.fromConf(StringUtils.isNullOrEmpty(codecName) ? null : codecName);
+  public String getParquetCompressionCodec() {
+    return getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
   }
 
   public boolean parquetDictionaryEnabled() {
@@ -2183,8 +2180,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE);
   }
 
-  public Compression.Algorithm getHFileCompressionAlgorithm() {
-    return Compression.Algorithm.valueOf(getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME));
+  public String getHFileCompressionAlgorithm() {
+    return getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME);
   }
 
   public long getOrcMaxFileSize() {

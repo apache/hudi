@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -105,19 +106,17 @@ public class ArchivedCommitsCommand {
               defaultValue = "false") final boolean headerOnly)
       throws IOException {
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
-    String basePath = HoodieCLI.getTableMetaClient().getBasePath();
-    StoragePath archivePath = new StoragePath(
-        HoodieCLI.getTableMetaClient().getArchivePath() + "/.commits_.archive*");
-    if (folder != null && !folder.isEmpty()) {
-      archivePath = new StoragePath(basePath + "/.hoodie/" + folder);
-    }
-    List<StoragePathInfo> pathInfoList =
-        HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    StoragePath archivePath = folder != null && !folder.isEmpty()
+        ? new StoragePath(metaClient.getMetaPath(), folder)
+        : new StoragePath(metaClient.getArchivePath(), ".commits_.archive*");
+    HoodieStorage storage = metaClient.getStorage();
+    List<StoragePathInfo> pathInfoList = storage.globEntries(archivePath);
     List<Comparable[]> allStats = new ArrayList<>();
     for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file
-      try (Reader reader = HoodieLogFormat.newReader(HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf),
-          new HoodieLogFile(pathInfo.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
+      try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(pathInfo.getPath()),
+          HoodieArchivedMetaEntry.getClassSchema())) {
         List<IndexedRecord> readRecords = new ArrayList<>();
         // read the avro blocks
         while (reader.hasNext()) {

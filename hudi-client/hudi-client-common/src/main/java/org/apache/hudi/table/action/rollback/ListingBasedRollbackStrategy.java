@@ -33,7 +33,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -54,6 +53,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.getHoodieCommitMetadata;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STRING;
 
 /**
@@ -90,7 +90,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     try {
       HoodieTableMetaClient metaClient = table.getMetaClient();
       List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(context, table.getMetaClient().getBasePath(), false);
+          FSUtils.getAllPartitionPaths(context, table.getStorage(), table.getMetaClient().getBasePath(), false);
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan: " + config.getTableName());
@@ -186,7 +186,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         return HoodieTimeline.compareTimestamps(commit, HoodieTimeline.LESSER_THAN_OR_EQUALS,
             fileCommitTime);
       } else if (HadoopFSUtils.isLogFile(path)) {
-        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(path.toUri()));
+        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(convertToStoragePath(path));
         return completionTimeQueryView.isSlicedAfterOrOn(commit, fileCommitTime);
       }
       return false;
@@ -299,7 +299,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         return commit.equals(fileCommitTime);
       } else if (HadoopFSUtils.isLogFile(path)) {
         // Since the baseCommitTime is the only commit for new log files, it's okay here
-        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(path.toUri()));
+        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(convertToStoragePath(path));
         return commit.equals(fileCommitTime);
       }
       return false;

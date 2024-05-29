@@ -20,8 +20,8 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -205,7 +205,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     }
 
     @Override
-    List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath) {
+    List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath, HoodieStorage storage) {
       return metadataPartitionsToReturn;
     }
 

@@ -39,9 +39,9 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hadoop.HoodieAvroParquetReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -269,8 +269,9 @@ public class LSMTimelineWriter {
     try (HoodieFileWriter writer = openWriter(new StoragePath(metaClient.getArchivePath(), compactedFileName))) {
       for (String fileName : candidateFiles) {
         // Read the input source file
-        try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-            .getFileReader(config, metaClient.getStorageConf(), new StoragePath(metaClient.getArchivePath(), fileName))) {
+        try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+            .getFileReader(config, new StoragePath(metaClient.getArchivePath(), fileName))) {
           // Read the meta entry
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), HoodieLSMTimelineInstant.getClassSchema())) {
             while (iterator.hasNext()) {
@@ -381,7 +382,7 @@ public class LSMTimelineWriter {
 
   private HoodieFileWriter openWriter(StoragePath filePath) {
     try {
-      return HoodieFileWriterFactory.getFileWriter("", filePath, metaClient.getStorageConf(), getOrCreateWriterConfig(),
+      return HoodieFileWriterFactory.getFileWriter("", filePath, metaClient.getStorage(), getOrCreateWriterConfig(),
           HoodieLSMTimelineInstant.getClassSchema(), taskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize archiving writer", e);

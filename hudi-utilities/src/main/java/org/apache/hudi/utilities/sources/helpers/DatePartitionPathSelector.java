@@ -24,12 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -136,28 +131,25 @@ public class DatePartitionPathSelector extends DFSPathSelector {
             + currentDate);
     long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
-    StorageConfiguration<?> storageConf = storage.getConf();
+    HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(fs.getConf());
     List<String> prunedPartitionPaths = pruneDatePartitionPaths(
-        context, storage, getStringWithAltKeys(props, ROOT_INPUT_PATH),
-        currentDate);
+        context, fs, getStringWithAltKeys(props, ROOT_INPUT_PATH), currentDate);
 
-    List<StoragePathInfo> eligibleFiles = context.flatMap(prunedPartitionPaths,
+    List<FileStatus> eligibleFiles = context.flatMap(prunedPartitionPaths,
         path -> {
-          HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
-          return listEligibleFiles(storage, new StoragePath(path), lastCheckpointTime).stream();
+          FileSystem fs = new Path(path).getFileSystem(storageConf.unwrap());
+          return listEligibleFiles(fs, new Path(path), lastCheckpointTime).stream();
         }, partitionsListParallelism);
     // sort them by modification time ascending.
-    List<StoragePathInfo> sortedEligibleFiles = eligibleFiles.stream()
-        .sorted(Comparator.comparingLong(StoragePathInfo::getModificationTime))
-        .collect(Collectors.toList());
+    List<FileStatus> sortedEligibleFiles = eligibleFiles.stream()
+        .sorted(Comparator.comparingLong(FileStatus::getModificationTime)).collect(Collectors.toList());
 
     // Filter based on checkpoint & input size, if needed
     long currentBytes = 0;
     long newCheckpointTime = lastCheckpointTime;
-    List<StoragePathInfo> filteredFiles = new ArrayList<>();
-    for (StoragePathInfo f : sortedEligibleFiles) {
-      if (currentBytes + f.getLength() >= sourceLimit
-          && f.getModificationTime() > newCheckpointTime) {
+    List<FileStatus> filteredFiles = new ArrayList<>();
+    for (FileStatus f : sortedEligibleFiles) {
+      if (currentBytes + f.getLen() >= sourceLimit && f.getModificationTime() > newCheckpointTime) {
         // we have enough data, we are done
         // Also, we've read up to a file with a newer modification time
         // so that some files with the same modification time won't be skipped in next read
@@ -165,7 +157,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
       }
 
       newCheckpointTime = f.getModificationTime();
-      currentBytes += f.getLength();
+      currentBytes += f.getLen();
       filteredFiles.add(f);
     }
 
@@ -175,9 +167,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
     }
 
     // read the files out.
-    String pathStr =
-        filteredFiles.stream().map(f -> f.getPath().toString())
-            .collect(Collectors.joining(","));
+    String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
 
     return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(newCheckpointTime));
   }
@@ -186,25 +176,21 @@ public class DatePartitionPathSelector extends DFSPathSelector {
    * Prunes date level partitions to last few days configured by 'NUM_PREV_DAYS_TO_LIST' from
    * 'CURRENT_DATE'. Parallelizes listing by leveraging HoodieSparkEngineContext's methods.
    */
-  public List<String> pruneDatePartitionPaths(HoodieSparkEngineContext context,
-                                              HoodieStorage storage,
-                                              String rootPath, LocalDate currentDate) {
+  public List<String> pruneDatePartitionPaths(HoodieSparkEngineContext context, FileSystem fs, String rootPath, LocalDate currentDate) {
     List<String> partitionPaths = new ArrayList<>();
     // get all partition paths before date partition level
     partitionPaths.add(rootPath);
     if (datePartitionDepth <= 0) {
       return partitionPaths;
     }
-    StorageConfiguration<Configuration> storageConf = HadoopFSUtils.getStorageConfWithCopy(
-        ((FileSystem) storage.getFileSystem()).getConf());
+    HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(fs.getConf());
     for (int i = 0; i < datePartitionDepth; i++) {
       partitionPaths = context.flatMap(partitionPaths, path -> {
         Path subDir = new Path(path);
         FileSystem fileSystem = subDir.getFileSystem(storageConf.unwrap());
         // skip files/dirs whose names start with (_, ., etc)
         FileStatus[] statuses = fileSystem.listStatus(subDir,
-            file -> IGNORE_FILEPREFIX_LIST.stream()
-                .noneMatch(pfx -> file.getName().startsWith(pfx)));
+            file -> IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
         List<String> res = new ArrayList<>();
         for (FileStatus status : statuses) {
           res.add(status.getPath().toString());

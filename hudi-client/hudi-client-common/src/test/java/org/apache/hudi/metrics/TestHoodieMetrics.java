@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import com.codahale.metrics.Timer;
 import org.junit.jupiter.api.AfterEach;
@@ -51,7 +50,6 @@ public class TestHoodieMetrics {
   HoodieWriteConfig writeConfig;
   @Mock
   HoodieMetricsConfig metricsConfig;
-  StorageConfiguration storageConf = HoodieTestUtils.getDefaultStorageConf();
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -61,7 +59,7 @@ public class TestHoodieMetrics {
     when(writeConfig.isMetricsOn()).thenReturn(true);
     when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     metrics = hoodieMetrics.getMetrics();
   }
 
@@ -85,6 +83,14 @@ public class TestHoodieMetrics {
     hoodieMetrics.updateIndexMetrics("some_action", hoodieMetrics.getDurationInMs(timer.stop()));
     String metricName = hoodieMetrics.getMetricsName("index", "some_action.duration");
     long msec = (Long)metrics.getRegistry().getGauges().get(metricName).getValue();
+    assertTrue(msec > 0);
+
+    // Source read and index metrics
+    timer = hoodieMetrics.getSourceReadAndIndexTimerCtx();
+    Thread.sleep(5); // Ensure timer duration is > 0
+    hoodieMetrics.updateSourceReadAndIndexMetrics("some_action", hoodieMetrics.getDurationInMs(timer.stop()));
+    metricName = hoodieMetrics.getMetricsName("source_read_and_index", "some_action.duration");
+    msec = (Long)metrics.getRegistry().getGauges().get(metricName).getValue();
     assertTrue(msec > 0);
 
     // test index type

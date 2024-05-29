@@ -49,9 +49,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -62,12 +62,12 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.utilities.util.BloomFilterData;
 
 import com.beust.jcommander.JCommander;
@@ -108,6 +108,7 @@ import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -258,7 +259,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    * @return the {@link TypedProperties} instance.
    */
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new StoragePath(cfg.propsFilePath), cfg.configs)
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
         .getProps(true);
   }
 
@@ -622,7 +623,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, basePath, metaClient.getStorage(),
         completedTimeline);
 
-    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, basePath);
+    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, basePath, metaClient.getStorage());
 
     Collections.sort(allPartitionPathsFromFS);
     Collections.sort(allPartitionPathsMeta);
@@ -675,14 +676,15 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   @VisibleForTesting
-   List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath) {
-    return FSUtils.getAllPartitionPaths(engineContext, basePath, true);
+  List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath,
+                                    HoodieStorage storage) {
+    return FSUtils.getAllPartitionPaths(engineContext, storage, basePath, true);
   }
 
   @VisibleForTesting
   List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, String basePath,
                                            HoodieStorage storage, HoodieTimeline completedTimeline) {
-    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false);
+    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, storage, basePath, false);
 
     // ignore partitions created by uncommitted ingestion.
     return allPartitionPathsFromFS.stream().parallel().filter(part -> {
@@ -1392,7 +1394,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           .build();
       this.fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
           metaClient, metadataConfig);
-      this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePathV2().toString());
+      this.tableMetadata = HoodieTableMetadata.create(
+          engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePathV2().toString());
       if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
         this.allColumnNameList = getAllColumnNames();
       }
@@ -1437,11 +1440,13 @@ public class HoodieMetadataTableValidator implements Serializable {
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
       } else {
+        FileFormatUtils formatUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getFileFormatUtils(HoodieFileFormat.PARQUET);
         return baseFileNameList.stream().flatMap(filename ->
-                BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).readColumnStatsFromMetadata(
-                    metaClient.getStorageConf(),
-                    new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath), filename),
-                    allColumnNameList).stream())
+                formatUtils.readColumnStatsFromMetadata(
+                        metaClient.getStorage(),
+                        new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath), filename),
+                        allColumnNameList).stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
       }
@@ -1487,8 +1492,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieConfig hoodieConfig = new HoodieConfig();
       hoodieConfig.setValue(HoodieReaderConfig.USE_NATIVE_HFILE_READER,
           Boolean.toString(ConfigUtils.getBooleanWithAltKeys(props, HoodieReaderConfig.USE_NATIVE_HFILE_READER)));
-      try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(hoodieConfig, metaClient.getStorageConf(), path)) {
+      try (HoodieFileReader fileReader = getHoodieSparkIOFactory(metaClient.getStorage())
+          .getReaderFactory(HoodieRecordType.AVRO)
+          .getFileReader(hoodieConfig, path)) {
         bloomFilter = fileReader.readBloomFilter();
         if (bloomFilter == null) {
           LOG.error("Failed to read bloom filter for {}", path);

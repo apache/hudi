@@ -207,7 +207,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
-      table.getMetaClient().getStorage().deleteDirectory(new StoragePath(
+      table.getStorage().deleteDirectory(new StoragePath(
           table.getMetaClient().getTempFolderPath() + "/" + commitInstant.getTimestamp()
               + "/" + toDeleteMarkerFile));
       markerPaths.remove(toDeleteMarkerFile);
@@ -509,8 +509,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     metaClient = HoodieTestUtils.init(storageConf, basePath, getTableType(), properties);
     // set hoodie.table.version to 4 in hoodie.properties file
     metaClient.getTableConfig().setTableVersion(HoodieTableVersion.FOUR);
-    HoodieTableConfig.update(metaClient.getStorage(),
-        new StoragePath(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(),
+        metaClient.getTableConfig().getProps());
 
     String metadataTablePath =
         HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePathV2().toString());
@@ -519,8 +519,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
           .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metadataTablePath).build();
       metaClient.getTableConfig().setTableVersion(HoodieTableVersion.FOUR);
       HoodieTableConfig.update(
-          mdtMetaClient.getStorage(),
-          new StoragePath(mdtMetaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+          mdtMetaClient.getStorage(), mdtMetaClient.getMetaPath(),
+          metaClient.getTableConfig().getProps());
     }
 
     assertTableVersionOnDataAndMetadataTable(metaClient, HoodieTableVersion.FOUR);
@@ -621,7 +621,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
-      table.getMetaClient().getStorage().deleteDirectory(new StoragePath(
+      table.getStorage().deleteDirectory(new StoragePath(
           table.getMetaClient().getTempFolderPath() + "/" + commitInstant.getTimestamp()
               + "/" + toDeleteMarkerFile));
       markerPaths.remove(toDeleteMarkerFile);
@@ -660,7 +660,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       assertTrue(writeMarkers.doesMarkerDirExist());
       assertEquals(0, getTimelineServerBasedMarkerFileCount(
           table.getMetaClient().getMarkerFolderPath(commitInstant.getTimestamp()),
-          (FileSystem) table.getMetaClient().getStorage().getFileSystem()));
+          (FileSystem) table.getStorage().getFileSystem()));
     } else {
       assertFalse(writeMarkers.doesMarkerDirExist());
     }
@@ -902,7 +902,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   private void prepForDowngradeFromVersion(HoodieTableVersion fromVersion) throws IOException {
     metaClient.getTableConfig().setTableVersion(fromVersion);
     StoragePath propertyFile = new StoragePath(
-        metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+        metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     try (OutputStream os = metaClient.getStorage().create(propertyFile)) {
       metaClient.getTableConfig().getProps().store(os, "");
     }
@@ -910,9 +910,9 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   private void createResidualFile() throws IOException {
     Path propertyFile =
-        new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+        new Path(metaClient.getMetaPath().toString(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     Path updatedPropertyFile =
-        new Path(metaClient.getMetaPath() + "/" + UpgradeDowngrade.HOODIE_UPDATED_PROPERTY_FILE);
+        new Path(metaClient.getMetaPath().toString(), UpgradeDowngrade.HOODIE_UPDATED_PROPERTY_FILE);
 
     // Step1: Copy hoodie.properties to hoodie.properties.orig
     FileSystem fs = (FileSystem) metaClient.getStorage().getFileSystem();
@@ -938,7 +938,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     assertEquals(expectedVersion.versionCode(),
         metaClient.getTableConfig().getTableVersion().versionCode());
     StoragePath propertyFile = new StoragePath(
-        metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+        metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     // Load the properties and verify
     InputStream inputStream = metaClient.getStorage().open(propertyFile);
     HoodieConfig config = new HoodieConfig();

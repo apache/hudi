@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;
@@ -273,7 +272,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     deleteInstantFile(instant);
   }
 
-  public static void deleteInstantFile(HoodieStorage storage, String metaPath, HoodieInstant instant) {
+  public static void deleteInstantFile(HoodieStorage storage, StoragePath metaPath, HoodieInstant instant) {
     try {
       storage.deleteFile(new StoragePath(metaPath, instant.getFileName()));
     } catch (IOException e) {
@@ -750,7 +749,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private StoragePath getInstantFileNamePath(String fileName) {
-    return new StoragePath(fileName.contains(SCHEMA_COMMIT_ACTION) ? metaClient.getSchemaFolderName() : metaClient.getMetaPath(), fileName);
+    return new StoragePath(fileName.contains(SCHEMA_COMMIT_ACTION) ? metaClient.getSchemaFolderName() : metaClient.getMetaPath().toString(), fileName);
   }
 
   public void transitionRequestedToInflight(String commitType, String inFlightInstant) {
@@ -919,10 +918,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     StoragePath srcPath = new StoragePath(metaClient.getMetaPath(), getInstantFileName(instant));
     StoragePath dstPath = new StoragePath(dstDir, getInstantFileName(instant));
     try {
-      HoodieStorage srcStorage = HoodieStorageUtils.getStorage(srcPath, metaClient.getStorageConf());
-      HoodieStorage dstStorage = HoodieStorageUtils.getStorage(dstPath, metaClient.getStorageConf());
-      dstStorage.createDirectory(dstDir);
-      FileIOUtils.copy(srcStorage, srcPath, dstStorage, dstPath, false, true);
+      HoodieStorage storage = metaClient.getStorage();
+      storage.createDirectory(dstDir);
+      FileIOUtils.copy(storage, srcPath, storage, dstPath, false, true);
     } catch (IOException e) {
       throw new HoodieIOException("Could not copy instant from " + srcPath + " to " + dstPath, e);
     }

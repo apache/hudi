@@ -177,7 +177,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'").count() > 0)
     assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH + "'").count() > 0)
     assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH + "'").count() > 0)
-    val storage = HoodieStorageUtils.getStorage(new StoragePath(basePath), HoodieTestUtils.getDefaultStorageConf)
+    val storage = HoodieTestUtils.getStorage(new StoragePath(basePath))
     assertTrue(storage.exists(new StoragePath(basePath + "/" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
     assertTrue(storage.exists(new StoragePath(basePath + "/" + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)))
     assertTrue(storage.exists(new StoragePath(basePath + "/" + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)))
@@ -202,7 +202,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     snapshot1.cache()
     assertEquals(300, snapshot1.count())
 
-    var partitionPaths = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), HoodieMetadataConfig.newBuilder().build(), basePath)
+    var partitionPaths = FSUtils.getAllPartitionPaths(
+      new HoodieSparkEngineContext(jsc), storage, HoodieMetadataConfig.newBuilder().build(), basePath)
     assertTrue(partitionPaths.contains("100/rider-123"))
     assertTrue(partitionPaths.contains("200/rider-456"))
 
@@ -225,7 +226,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    partitionPaths = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), HoodieMetadataConfig.newBuilder().build(), basePath)
+    partitionPaths = FSUtils.getAllPartitionPaths(
+      new HoodieSparkEngineContext(jsc), storage, HoodieMetadataConfig.newBuilder().build(), basePath)
     assertEquals(partitionPaths.size(), 1)
     assertEquals(partitionPaths.get(0), "")
   }

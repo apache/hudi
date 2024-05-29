@@ -296,7 +296,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
 
   private BaseErrorTableWriter getAnonymousErrorTableWriter(TypedProperties props) {
     return new BaseErrorTableWriter<ErrorEvent<String>>(new HoodieDeltaStreamer.Config(),
-        spark(), props, new HoodieSparkEngineContext(jsc()), hoodieStorage()) {
+        spark(), props, new HoodieSparkEngineContext(jsc()), fs()) {
       List<JavaRDD<HoodieAvroRecord>> errorEvents = new LinkedList();
 
       @Override

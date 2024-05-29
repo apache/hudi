@@ -49,14 +49,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -70,6 +67,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.DELETE_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
@@ -198,7 +197,7 @@ public class HoodieFileSliceTestUtils {
         return new HoodieHFileDataBlock(
             records,
             header,
-            Compression.Algorithm.GZ,
+            HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(),
             pathForReader,
             HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
       case PARQUET_DATA_BLOCK:
@@ -207,7 +206,7 @@ public class HoodieFileSliceTestUtils {
             false,
             header,
             HoodieRecord.RECORD_KEY_METADATA_FIELD,
-            CompressionCodecName.GZIP,
+            PARQUET_COMPRESSION_CODEC_NAME.defaultValue(),
             0.1,
             true);
       default:
@@ -245,7 +244,7 @@ public class HoodieFileSliceTestUtils {
       Schema schema,
       String baseInstantTime
   ) throws IOException {
-    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConfWithDefaults();
+    HoodieStorage storage = HoodieTestUtils.getStorage(baseFilePath);
 
     // TODO: Optimize these hard-coded parameters for test purpose. (HUDI-7214)
     HoodieConfig cfg = new HoodieConfig();
@@ -268,7 +267,7 @@ public class HoodieFileSliceTestUtils {
     cfg.setValue(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED.key(), "true");
 
     try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory
-        .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), conf, cfg,
+        .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), storage, cfg,
             schema, new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
       for (IndexedRecord record : records) {
         writer.writeAvro(

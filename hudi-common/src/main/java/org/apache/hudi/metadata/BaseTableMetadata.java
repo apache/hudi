@@ -39,10 +39,9 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -79,11 +78,14 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected final boolean hiveStylePartitioningEnabled;
   protected final boolean urlEncodePartitioningEnabled;
 
-  protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String dataBasePath) {
-    super(engineContext, engineContext.getStorageConf(), dataBasePath);
+  protected BaseTableMetadata(HoodieEngineContext engineContext,
+                              HoodieStorage storage,
+                              HoodieMetadataConfig metadataConfig,
+                              String dataBasePath) {
+    super(engineContext, storage, dataBasePath);
 
     this.dataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf.newInstance())
+        .setStorage(storage)
         .setBasePath(dataBasePath)
         .build();
 
@@ -94,7 +96,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     if (metadataConfig.isMetricsEnabled()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(HoodieMetricsConfig.newBuilder()
-          .fromProperties(metadataConfig.getProps()).build(), getStorageConf()));
+          .fromProperties(metadataConfig.getProps()).build(), dataMetaClient.getStorage()));
     } else {
       this.metrics = Option.empty();
     }
@@ -173,7 +175,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     final Pair<String, String> partitionFileName = Pair.of(partitionName, fileName);
     Map<Pair<String, String>, BloomFilter> bloomFilters = getBloomFilters(Collections.singletonList(partitionFileName));
     if (bloomFilters.isEmpty()) {
-      LOG.error("Meta index: missing bloom filter for partition: " + partitionName + ", file: " + fileName);
+      LOG.error("Meta index: missing bloom filter for partition: {}, file: {}", partitionName, fileName);
       return Option.empty();
     }
 
@@ -226,7 +228,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getKey()), bloomFilter);
         }
       } else {
-        LOG.error("Meta index bloom filter missing for: " + fileToKeyMap.get(entry.getKey()));
+        LOG.error("Meta index bloom filter missing for: {}", fileToKeyMap.get(entry.getKey()));
       }
     }
     return partitionFileToBloomFilterMap;
@@ -270,7 +272,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           fileToColumnStatMap.put(partitionFileNamePair, columnStatMetadata.get());
         }
       } else {
-        LOG.error("Meta index column stats missing for: " + entry.getKey());
+        LOG.error("Meta index column stats missing for: {}", entry.getKey());
       }
     }
     return fileToColumnStatMap;
@@ -333,7 +335,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     })
         .orElse(Collections.emptyList());
 
-    LOG.info("Listed partitions from metadata: #partitions=" + partitions.size());
+    LOG.info("Listed partitions from metadata: #partitions={}", partitions.size());
     return partitions;
   }
 
@@ -356,14 +358,14 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           HoodieMetadataPayload metadataPayload = record.getData();
           checkForSpuriousDeletes(metadataPayload, recordKey);
           try {
-            return metadataPayload.getFileList(getStorageConf(), partitionPath);
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to extract file-pathInfoList from the payload", e);
+            return metadataPayload.getFileList(dataMetaClient.getStorage(), partitionPath);
+          } catch (Exception e) {
+            throw new HoodieException("Failed to extract file-pathInfoList from the payload", e);
           }
         })
         .orElseGet(Collections::emptyList);
 
-    LOG.info("Listed file in partition from metadata: partition=" + relativePartitionPath + ", #files=" + pathInfoList.size());
+    LOG.debug("Listed file in partition from metadata: partition={}, #files={}", relativePartitionPath, pathInfoList.size());
     return pathInfoList;
   }
 
@@ -386,9 +388,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     metrics.ifPresent(
         m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
-    HoodieStorage storage =
-        HoodieStorageUtils.getStorage(partitionPaths.get(0), getStorageConf());
-
     Map<String, List<StoragePathInfo>> partitionPathToFilesMap =
         partitionIdRecordPairs.entrySet().stream()
             .map(e -> {
@@ -398,12 +397,12 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
               HoodieMetadataPayload metadataPayload = e.getValue().getData();
               checkForSpuriousDeletes(metadataPayload, partitionId);
 
-              List<StoragePathInfo> files = metadataPayload.getFileList(storage, partitionPath);
+              List<StoragePathInfo> files = metadataPayload.getFileList(dataMetaClient.getStorage(), partitionPath);
               return Pair.of(partitionPath.toString(), files);
             })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    LOG.info("Listed files in " + partitionPaths.size() + " partitions from metadata");
+    LOG.info("Listed files in {} partitions from metadata", partitionPaths.size());
 
     return partitionPathToFilesMap;
   }

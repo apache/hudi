@@ -58,6 +58,7 @@ import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.HASHI
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX;
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.getTimestampFromFile;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Utilities class for consistent bucket index metadata management.
@@ -142,7 +143,7 @@ public class ConsistentBucketIndexUtils {
           && maxCommitMetaFileTs.equals(HoodieConsistentHashingMetadata.getTimestampFromFile(maxMetadataFile.getPath().getName()))) {
         return loadMetadataFromGivenFile(table, maxMetadataFile);
       }
-      HoodieTimeline completedCommits = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+      HoodieTimeline completedCommits = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
 
       // fix the in-consistency between un-committed and committed hashing metadata files.
       List<FileStatus> fixed = new ArrayList<>();
@@ -186,7 +187,7 @@ public class ConsistentBucketIndexUtils {
    * @return true if the metadata is saved successfully
    */
   public static boolean saveMetadata(HoodieTable table, HoodieConsistentHashingMetadata metadata, boolean overwrite) {
-    HoodieStorage storage = table.getMetaClient().getStorage();
+    HoodieStorage storage = table.getStorage();
     StoragePath dir = FSUtils.constructAbsolutePath(
         table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     StoragePath fullPath = new StoragePath(dir, metadata.getFilename());
@@ -210,9 +211,9 @@ public class ConsistentBucketIndexUtils {
    * @throws IOException
    */
   private static void createCommitMarker(HoodieTable table, Path fileStatus, Path partitionPath) throws IOException {
-    HoodieStorage storage = table.getMetaClient().getStorage();
-    StoragePath fullPath = new StoragePath(
-        partitionPath.toString(), getTimestampFromFile(fileStatus.getName()) + HASHING_METADATA_COMMIT_FILE_SUFFIX);
+    HoodieStorage storage = table.getStorage();
+    StoragePath fullPath = new StoragePath(convertToStoragePath(partitionPath),
+        getTimestampFromFile(fileStatus.getName()) + HASHING_METADATA_COMMIT_FILE_SUFFIX);
     if (storage.exists(fullPath)) {
       return;
     }
@@ -239,8 +240,7 @@ public class ConsistentBucketIndexUtils {
     if (metaFile == null) {
       return Option.empty();
     }
-    try (InputStream is = table.getMetaClient().getStorage().open(
-        new StoragePath(metaFile.getPath().toUri()))) {
+    try (InputStream is = table.getStorage().open(convertToStoragePath(metaFile.getPath()))) {
       byte[] content = FileIOUtils.readAsByteArray(is);
       return Option.of(HoodieConsistentHashingMetadata.fromBytes(content));
     } catch (FileNotFoundException e) {

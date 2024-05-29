@@ -26,7 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -266,8 +266,9 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
           .filter(fileName -> filter == null || LSMTimeline.isFileInRange(filter, fileName))
           .parallel().forEach(fileName -> {
             // Read the archived file
-            try (HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-                .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, metaClient.getStorageConf(), new StoragePath(metaClient.getArchivePath(), fileName))) {
+            try (HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
+                .getReaderFactory(HoodieRecordType.AVRO)
+                .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(metaClient.getArchivePath(), fileName))) {
               try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
                 while (iterator.hasNext()) {
                   GenericRecord record = (GenericRecord) iterator.next();

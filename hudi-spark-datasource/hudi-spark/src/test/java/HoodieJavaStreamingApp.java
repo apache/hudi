@@ -30,6 +30,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import com.beust.jcommander.JCommander;
@@ -201,9 +202,9 @@ public class HoodieJavaStreamingApp {
     HoodieTableMetaClient metaClient = HoodieClientTestUtils.createMetaClient(jssc, tablePath);
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       // Ensure we have successfully completed one compaction commit
-      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().countInstants() == 1);
+      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitAndReplaceTimeline().countInstants() == 1);
     } else {
-      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().countInstants() >= 1);
+      ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitAndReplaceTimeline().countInstants() >= 1);
     }
 
     // Deletes Stream
@@ -263,7 +264,7 @@ public class HoodieJavaStreamingApp {
         if (timeline.countInstants() >= numCommits) {
           return;
         }
-        HoodieTableMetaClient metaClient = createMetaClient(fs.getConf(), tablePath);
+        HoodieTableMetaClient metaClient = createMetaClient(new HadoopStorageConfiguration(fs.getConf()), tablePath);
         System.out.println("Instants :" + metaClient.getActiveTimeline().getInstants());
       } catch (TableNotFoundException te) {
         LOG.info("Got table not found exception. Retrying");

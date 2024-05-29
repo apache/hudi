@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import com.beust.jcommander.IValueValidator;
@@ -114,7 +113,7 @@ public class HDFSParquetImporter implements Serializable {
   public int dataImport(JavaSparkContext jsc, int retry) {
     this.fs = HadoopFSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
-        : UtilHelpers.readConfig(fs.getConf(), new StoragePath(cfg.propsFilePath), cfg.configs).getProps(true);
+        : UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps(true);
     LOG.info("Starting data import with configs : " + props.toString());
     int ret = -1;
     try {

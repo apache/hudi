@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -79,11 +79,11 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       long length,
       Schema dataSchema,
       Schema requiredSchema,
-      StorageConfiguration<?> conf
+      HoodieStorage storage
   ) throws IOException {
-    HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieFileReaderFactory
+    HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            conf, filePath, HoodieFileFormat.PARQUET, Option.empty());
+            filePath, HoodieFileFormat.PARQUET, Option.empty());
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }
 
