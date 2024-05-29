@@ -53,14 +53,7 @@ class SecondaryIndexTestBase extends HoodieSparkClientTestBase {
   override def setUp(): Unit = {
     initPath()
     initSparkContexts()
-    initHoodieStorage()
-    initTestDataGenerator()
-
     setTableName("hoodie_test_si")
-    initMetaClient()
-
-    instantTime = new AtomicInteger(1)
-
     spark = sqlContext.sparkSession
   }
 

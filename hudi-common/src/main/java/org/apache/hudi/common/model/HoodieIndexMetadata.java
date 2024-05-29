@@ -30,23 +30,24 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.StringJoiner;
 
 /**
  * Represents the metadata for all functional and secondary indexes in Hudi.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class HoodieIndexesMetadata implements Serializable {
+public class HoodieIndexMetadata implements Serializable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexesMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexMetadata.class);
 
   // Map to hold the index definitions keyed by their names.
   private Map<String, HoodieIndexDefinition> indexDefinitions;
 
-  public HoodieIndexesMetadata() {
+  public HoodieIndexMetadata() {
     this.indexDefinitions = new HashMap<>();
   }
 
-  public HoodieIndexesMetadata(Map<String, HoodieIndexDefinition> indexDefinitions) {
+  public HoodieIndexMetadata(Map<String, HoodieIndexDefinition> indexDefinitions) {
     this.indexDefinitions = indexDefinitions;
   }
 
@@ -79,17 +80,17 @@ public class HoodieIndexesMetadata implements Serializable {
    * @return Deserialized instance of HoodieIndexesMetadata.
    * @throws IOException If any deserialization errors occur.
    */
-  public static HoodieIndexesMetadata fromJson(String json) throws IOException {
+  public static HoodieIndexMetadata fromJson(String json) throws IOException {
     if (json == null || json.isEmpty()) {
-      return new HoodieIndexesMetadata();
+      return new HoodieIndexMetadata();
     }
-    return JsonUtils.getObjectMapper().readValue(json, HoodieIndexesMetadata.class);
+    return JsonUtils.getObjectMapper().readValue(json, HoodieIndexMetadata.class);
   }
 
   @Override
   public String toString() {
-    return "HoodieIndexesMetadata{"
-        + "indexDefinitions=" + indexDefinitions
-        + '}';
+    return new StringJoiner(", ", HoodieIndexMetadata.class.getSimpleName() + "[", "]")
+        .add("indexDefinitions=" + indexDefinitions)
+        .toString();
   }
 }

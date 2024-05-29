@@ -118,7 +118,6 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiFunction;
@@ -1846,66 +1845,73 @@ public class HoodieTableMetadataUtil {
 
   public static HoodieData<HoodieRecord> readSecondaryKeysFromBaseFiles(HoodieEngineContext engineContext,
                                                                         List<Pair<String, Pair<String, List<String>>>> partitionFiles,
-                                                                        int recordIndexMaxParallelism,
+                                                                        int secondaryIndexMaxParallelism,
                                                                         String activeModule, HoodieTableMetaClient metaClient, EngineType engineType,
                                                                         HoodieIndexDefinition indexDefinition) {
     if (partitionFiles.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
+    final int parallelism = Math.min(partitionFiles.size(), secondaryIndexMaxParallelism);
+    final String basePath = metaClient.getBasePathV2().toString();
+    Schema tableSchema;
+    try {
+      tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePathV2(), e);
+    }
 
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFiles.size() + " partitions");
-    final int parallelism = Math.min(partitionFiles.size(), recordIndexMaxParallelism);
-    final String basePath = metaClient.getBasePathV2().toString();
     return engineContext.parallelize(partitionFiles, parallelism).flatMap(partitionAndBaseFile -> {
       final String partition = partitionAndBaseFile.getKey();
       final Pair<String, List<String>> baseAndLogFiles = partitionAndBaseFile.getValue();
       List<String> logFilePaths = new ArrayList<>();
-      baseAndLogFiles.getValue().forEach(logFile -> {
-        logFilePaths.add(basePath + StoragePath.SEPARATOR + partition + StoragePath.SEPARATOR + logFile);
-      });
+      baseAndLogFiles.getValue().forEach(logFile -> logFilePaths.add(basePath + StoragePath.SEPARATOR + partition + StoragePath.SEPARATOR + logFile));
       String filePath = baseAndLogFiles.getKey();
-
-      Option<StoragePath> dataFilePath = Option.empty();
-      Schema tableSchema;
-
-      if (!filePath.isEmpty()) {
-        dataFilePath = Option.of(filePath(basePath, "", filePath));
-        tableSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getFileFormatUtils(HoodieFileFormat.PARQUET).readAvroSchema(metaClient.getStorage(), dataFilePath.get());
+      Option<StoragePath> dataFilePath = filePath.isEmpty() ? Option.empty() : Option.of(filePath(basePath, partition, filePath));
+      Schema readerSchema;
+      if (dataFilePath.isPresent()) {
+        readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
+            .readAvroSchema(metaClient.getStorage(), dataFilePath.get());
       } else {
-        TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-        tableSchema = schemaResolver.getTableAvroSchema();
+        readerSchema = tableSchema;
       }
-
-      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, tableSchema, partition, dataFilePath, indexDefinition);
+      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition);
     });
   }
 
   public static HoodieData<HoodieRecord> readSecondaryKeysFromFileSlices(HoodieEngineContext engineContext,
                                                                          List<Pair<String, FileSlice>> partitionFileSlicePairs,
-                                                                         int recordIndexMaxParallelism,
+                                                                         int secondaryIndexMaxParallelism,
                                                                          String activeModule, HoodieTableMetaClient metaClient, EngineType engineType,
-                                                                         HoodieIndexDefinition indexDefinition) throws IOException {
+                                                                         HoodieIndexDefinition indexDefinition) {
     if (partitionFileSlicePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
+    final int parallelism = Math.min(partitionFileSlicePairs.size(), secondaryIndexMaxParallelism);
+    final String basePath = metaClient.getBasePathV2().toString();
+    Schema tableSchema;
+    try {
+      tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePathV2(), e);
+    }
 
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFileSlicePairs.size() + " file slices");
-    final int parallelism = Math.min(partitionFileSlicePairs.size(), recordIndexMaxParallelism);
-    final String basePath = metaClient.getBasePathV2().toString();
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
       final String partition = partitionAndBaseFile.getKey();
       final FileSlice fileSlice = partitionAndBaseFile.getValue();
-
-      final HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
-      final String filename = baseFile.getFileName();
-      StoragePath dataFilePath = filePath(basePath, partition, filename);
-      TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-      Schema tableSchema = schemaResolver.getTableAvroSchema();
-
-      List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-          .map(l -> l.getPath().toString()).collect(toList());
-
-      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, tableSchema, partition, Option.of(dataFilePath), indexDefinition);
+      List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(l -> l.getPath().toString()).collect(toList());
+      Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> filePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
+      Schema readerSchema;
+      if (dataFilePath.isPresent()) {
+        readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
+            .readAvroSchema(metaClient.getStorage(), dataFilePath.get());
+      } else {
+        readerSchema = tableSchema;
+      }
+      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition);
     });
   }
 
@@ -1967,7 +1973,7 @@ public class HoodieTableMetadataUtil {
         String secondaryKeyFields = String.join(".", indexDefinition.getSourceFields());
         String secondaryKey;
         try {
-          GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(tableSchema, new Properties()).get()).getData();
+          GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(tableSchema, CollectionUtils.emptyProps()).get()).getData();
           secondaryKey = HoodieAvroUtils.getNestedFieldValAsString(genericRecord, secondaryKeyFields, true, false);
         } catch (IOException e) {
           throw new RuntimeException("Failed to fetch records." + e);

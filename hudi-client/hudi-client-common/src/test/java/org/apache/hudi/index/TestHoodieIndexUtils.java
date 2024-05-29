@@ -20,7 +20,7 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.model.HoodieIndexesMetadata;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -48,8 +48,8 @@ public class TestHoodieIndexUtils {
     indexDefinitions.put(
         indexName,
         new HoodieIndexDefinition("func_index_testIndex", "column_stats", "lower", Collections.singletonList("name"), null));
-    HoodieIndexesMetadata indexMetadata = new HoodieIndexesMetadata(indexDefinitions);
-    when(metaClient.getIndexesMetadata()).thenReturn(Option.of(indexMetadata));
+    HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(indexDefinitions);
+    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
 
     String result = HoodieIndexUtils.getPartitionNameFromPartitionType(partitionType, metaClient, indexName);
     assertEquals("func_index_testIndex", result);
@@ -68,7 +68,7 @@ public class TestHoodieIndexUtils {
   public void testExceptionForMissingFunctionalIndexMetadata() {
     MetadataPartitionType partitionType = MetadataPartitionType.FUNCTIONAL_INDEX;
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getIndexesMetadata()).thenReturn(Option.empty());
+    when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
 
     assertThrows(IllegalArgumentException.class,
         () -> HoodieIndexUtils.getPartitionNameFromPartitionType(partitionType, metaClient, "testIndex"));

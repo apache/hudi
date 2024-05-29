@@ -24,6 +24,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.index.functional.HoodieFunctionalIndex.SPARK_IDENTITY;
@@ -82,12 +83,12 @@ public class HoodieIndexDefinition implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieIndexDefinition{"
-        + "indexName='" + indexName + '\''
-        + ", indexType='" + indexType + '\''
-        + ", indexFunction='" + indexFunction + '\''
-        + ", sourceFields=" + sourceFields
-        + ", indexOptions=" + indexOptions
-        + '}';
+    return new StringJoiner(", ", HoodieIndexDefinition.class.getSimpleName() + "[", "]")
+        .add("indexName='" + indexName + "'")
+        .add("indexType='" + indexType + "'")
+        .add("indexFunction='" + indexFunction + "'")
+        .add("sourceFields=" + sourceFields)
+        .add("indexOptions=" + indexOptions)
+        .toString();
   }
 }

@@ -27,6 +27,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -37,7 +38,7 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.model.HoodieIndexesMetadata;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
@@ -108,6 +109,8 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForFunctionalIndex;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFromBaseFiles;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromBaseFiles;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromFileSlices;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
@@ -412,10 +415,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             break;
           case SECONDARY_INDEX:
             Set<String> secondaryIndexPartitionsToInit = getSecondaryIndexPartitionsToInit();
-            if (secondaryIndexPartitionsToInit.isEmpty()) {
+            if (secondaryIndexPartitionsToInit.size() != 1) {
+              LOG.warn("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
               continue;
             }
-            ValidationUtils.checkState(secondaryIndexPartitionsToInit.size() == 1, "Only one secondary index at a time is supported for now");
             fileGroupCountAndRecordsPair = initializeSecondaryIndexPartition(secondaryIndexPartitionsToInit.iterator().next());
             break;
           default:
@@ -513,11 +516,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                                                         int parallelism, Schema readerSchema,
                                                                         StorageConfiguration<?> storageConf);
 
-  protected abstract HoodieData<HoodieRecord> getSecondaryIndexRecordsFromFileSlices(List<Pair<String, FileSlice>> partitionFileSlicePairs,
-                                                                                     HoodieIndexDefinition indexDefinition, int parallelism) throws IOException;
-
-  protected abstract HoodieData<HoodieRecord> getSecondaryIndexRecordsFromBaseFiles(List<Pair<String, Pair<String, List<String>>>> partitionBaseFilePairs,
-                                                                                    HoodieIndexDefinition indexDefinition, int parallelism) throws IOException;
+  protected abstract EngineType getEngineType();
 
   public abstract HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext,
                                                                             Map<String, String> recordKeySecondaryKeyMap,
@@ -535,14 +534,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private Set<String> getFunctionalIndexPartitionsToInit() {
-    Set<String> functionalIndexPartitions = dataMetaClient.getIndexesMetadata().get().getIndexDefinitions().keySet();
+    Set<String> functionalIndexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().keySet();
     Set<String> completedMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
     functionalIndexPartitions.removeAll(completedMetadataPartitions);
     return functionalIndexPartitions;
   }
 
   private HoodieIndexDefinition getFunctionalIndexDefinition(String indexName) {
-    Option<HoodieIndexesMetadata> functionalIndexMetadata = dataMetaClient.getIndexesMetadata();
+    Option<HoodieIndexMetadata> functionalIndexMetadata = dataMetaClient.getIndexMetadata();
     if (functionalIndexMetadata.isPresent()) {
       return functionalIndexMetadata.get().getIndexDefinitions().get(indexName);
     } else {
@@ -551,7 +550,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private Set<String> getSecondaryIndexPartitionsToInit() {
-    Set<String> secondaryIndexPartitions = dataMetaClient.getIndexesMetadata().get().getIndexDefinitions().values().stream()
+    Set<String> secondaryIndexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
         .map(HoodieIndexDefinition::getIndexName)
         .filter(indexName -> indexName.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
         .collect(Collectors.toSet());
@@ -567,7 +566,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // Reuse record index parallelism config to build secondary index
     int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
-    HoodieData<HoodieRecord> records = getSecondaryIndexRecordsFromFileSlices(partitionFileSlicePairs, indexDefinition, parallelism);
+    HoodieData<HoodieRecord> records = readSecondaryKeysFromFileSlices(
+        engineContext,
+        partitionFileSlicePairs,
+        parallelism,
+        this.getClass().getSimpleName(),
+        dataMetaClient,
+        getEngineType(),
+        indexDefinition);
 
     // Initialize the file groups - using the same estimation logic as that of record index
     final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(RECORD_INDEX, records.count(),
@@ -1123,7 +1129,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieData<HoodieRecord> deletedRecords = getDeletedSecondaryRecordMapping(engineContext, recordKeySecondaryKeyMap, indexDefinition);
 
     int parallelism = Math.min(partitionFilePairs.size(), dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
-    return deletedRecords.union(getSecondaryIndexRecordsFromBaseFiles(partitionFilePairs, indexDefinition, parallelism));
+    return deletedRecords.union(readSecondaryKeysFromBaseFiles(
+        engineContext,
+        partitionFilePairs,
+        parallelism,
+        this.getClass().getSimpleName(),
+        dataMetaClient,
+        getEngineType(),
+        indexDefinition));
   }
 
   /**

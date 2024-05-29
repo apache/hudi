@@ -87,16 +87,16 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     }
 
     if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent()
-        || !metaClient.getIndexesMetadata().isPresent()
-        || !metaClient.getIndexesMetadata().get().getIndexDefinitions().containsKey(indexName)) {
+        || !metaClient.getIndexMetadata().isPresent()
+        || !metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexName)) {
       LOG.info("Index definition is not present. Registering the index first");
       register(metaClient, indexName, indexType, columns, options);
     }
 
-    ValidationUtils.checkState(metaClient.getIndexesMetadata().isPresent(), "Index definition is not present");
+    ValidationUtils.checkState(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
 
     LOG.info("Creating index {} of using {}", indexName, indexType);
-    HoodieIndexDefinition functionalIndexDefinition = metaClient.getIndexesMetadata().get().getIndexDefinitions().get(indexName);
+    HoodieIndexDefinition functionalIndexDefinition = metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName);
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
         sparkSession, metaClient.getBasePathV2().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, functionalIndexDefinition)), toScalaOption(Option.empty()))) {
       // generate index plan

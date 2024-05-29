@@ -22,77 +22,77 @@ package org.apache.hudi.functional
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.Tag
+import org.apache.spark.sql.Row
+import org.junit.jupiter.api.{Tag, Test}
+import org.scalatest.Assertions.assertResult
 
 /**
  * Test cases for secondary index
  */
 @Tag("functional")
-class TestSecondaryIndexWithSql extends HoodieSparkSqlTestBase {
+class TestSecondaryIndexWithSql extends SecondaryIndexTestBase {
 
-  test("Test Create Secondary Index") {
+  @Test
+  def testSecondaryIndexWithSQL(): Unit = {
     if (HoodieSparkUtils.gteqSpark3_2) {
-      withTempDir { tmp =>
-        //create a new table
-        val tableName = generateTableName
-        val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  ts bigint,
-             |  id string,
-             |  rider string,
-             |  driver string,
-             |  fare int,
-             |  city string,
-             |  state string
-             |) using hudi
-             | options (
-             |  primaryKey ='id',
-             |  type = 'mor',
-             |  preCombineField = 'ts',
-             |  hoodie.metadata.enable = 'true',
-             |  hoodie.metadata.record.index.enable = 'true',
-             |  hoodie.metadata.index.secondary.enable = 'true',
-             |  hoodie.datasource.write.recordkey.field = 'id'
-             | )
-             | partitioned by(state)
-             | location '$basePath'
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ts bigint,
+           |  id string,
+           |  rider string,
+           |  driver string,
+           |  fare int,
+           |  city string,
+           |  state string
+           |) using hudi
+           | options (
+           |  primaryKey ='id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.metadata.index.secondary.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'id'
+           | )
+           | partitioned by(state)
+           | location '$basePath'
        """.stripMargin)
-        spark.sql(
-          s"""
-             | insert into $tableName
-             | values
-             | (1695159649087, '334e26e9-8355-45cc-97c6-c31daf0df330', 'rider-A', 'driver-K', 19, 'san_francisco', 'california'),
-             | (1695091554787, 'e96c4396-3fad-413a-a942-4cb36106d720', 'rider-B', 'driver-M', 27, 'austin', 'texas')
-             | """.stripMargin
-        )
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | values
+           | (1695159649087, '334e26e9-8355-45cc-97c6-c31daf0df330', 'rider-A', 'driver-K', 19, 'san_francisco', 'california'),
+           | (1695091554787, 'e96c4396-3fad-413a-a942-4cb36106d720', 'rider-B', 'driver-M', 27, 'austin', 'texas')
+           | """.stripMargin
+      )
 
-        // validate record_index created successfully
-        val metadataDF = spark.sql(s"select key from hudi_metadata('$basePath') where type=5")
-        assert(metadataDF.count() == 2)
+      // validate record_index created successfully
+      val metadataDF = spark.sql(s"select key from hudi_metadata('$basePath') where type=5")
+      assert(metadataDF.count() == 2)
 
-        var metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(basePath)
-          .setConf(HoodieTestUtils.getDefaultStorageConf)
-          .build()
-        assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
-        // create secondary index
-        spark.sql(s"create index idx_city on $tableName using secondary_index(city)")
-        metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(basePath)
-          .setConf(HoodieTestUtils.getDefaultStorageConf)
-          .build()
-        assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_city"))
-        assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
+      var metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
+      // create secondary index
+      spark.sql(s"create index idx_city on $tableName using secondary_index(city)")
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_city"))
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
 
-        checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-          Seq("austin", "e96c4396-3fad-413a-a942-4cb36106d720"),
-          Seq("san_francisco", "334e26e9-8355-45cc-97c6-c31daf0df330")
-        )
-      }
+      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
+        Seq("austin", "e96c4396-3fad-413a-a942-4cb36106d720"),
+        Seq("san_francisco", "334e26e9-8355-45cc-97c6-c31daf0df330")
+      )
     }
+  }
+
+  private def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
+    assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
   }
 }

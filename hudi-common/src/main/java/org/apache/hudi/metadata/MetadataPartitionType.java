@@ -76,8 +76,8 @@ public enum MetadataPartitionType {
 
     @Override
     public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
-      if (metaClient.getIndexesMetadata().isPresent()) {
-        return metaClient.getIndexesMetadata().get().getIndexDefinitions().values().stream()
+      if (metaClient.getIndexMetadata().isPresent()) {
+        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
             .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX));
       }
       return false;
@@ -93,8 +93,8 @@ public enum MetadataPartitionType {
 
     @Override
     public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
-      if (metaClient.getIndexesMetadata().isPresent()) {
-        return metaClient.getIndexesMetadata().get().getIndexDefinitions().values().stream()
+      if (metaClient.getIndexMetadata().isPresent()) {
+        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
             .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX));
       }
       return false;
