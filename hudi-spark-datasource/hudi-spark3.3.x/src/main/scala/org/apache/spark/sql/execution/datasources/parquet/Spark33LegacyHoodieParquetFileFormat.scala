@@ -25,7 +25,6 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.collection.Pair
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
@@ -51,6 +50,7 @@ import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedF
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
+import org.apache.spark.util.SerializableConfiguration
 
 import java.net.URI
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
@@ -114,8 +114,8 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, prunedInternalSchemaStr)
     }
 
-    val broadcastedStorageConf =
-      sparkSession.sparkContext.broadcast(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
+    val broadcastedHadoopConf =
+      sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
     // TODO: if you move this into the closure it reverts to the default values.
     // If true, enable using the custom RecordReader for parquet. This only works for
@@ -148,7 +148,7 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       val filePath = new Path(new URI(file.filePath))
       val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-      val sharedConf = broadcastedStorageConf.value.unwrap
+      val sharedConf = broadcastedHadoopConf.value.value
 
       // Fetch internal schema
       val internalSchemaStr = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
@@ -161,7 +161,7 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       val fileSchema = if (shouldUseInternalSchema) {
         val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
         val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
-        val storage = new HoodieHadoopStorage(tablePath, broadcastedStorageConf.value)
+        val storage = new HoodieHadoopStorage(tablePath, sharedConf)
         InternalSchemaCache.getInternalSchemaByVersionId(
           commitInstantTime, tablePath, storage, if (validCommits == null) "" else validCommits)
       } else {
@@ -230,7 +230,7 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
 
       // Clone new conf
-      val hadoopAttemptConf = broadcastedStorageConf.value.unwrapCopy
+      val hadoopAttemptConf = new Configuration(broadcastedHadoopConf.value.value)
       val typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = if (shouldUseInternalSchema) {
         val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
         val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
