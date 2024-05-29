@@ -188,3 +188,8 @@ dbe2b4d7e08 [ENG-9189][HUDI-7778] Fixing global index for duplicate updates (#72
 2dd9899b7ae [ENG-9189][HUDI-7712] Fixing RLI initialization to account for file slices instead of just base files while initializing (#713)
 819af5a4eb6 [ENG-9644][INTERNAL] Spark3.4 build workflow (#724)
 f488c527fde [AUDIT-795] Upgrade to version release-v1.14.5 (#719)
+
+---[2024-05-28 18:13:35] [release-v1.16.0] Upgrade to version release-v1.16.0---
+19faaa08b [ENG-10032][MINOR] Update log level for some MDT logs (#726)
+d18adf3e0 [ENG-9990][CHERRYPICK] Upgrade h2 and hive dependency version (#729)
+846030351 [AUDIT-802]: Upgrade to version release-v1.15.0 (#725)
