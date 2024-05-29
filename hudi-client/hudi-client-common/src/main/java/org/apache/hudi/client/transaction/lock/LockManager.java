@@ -86,7 +86,7 @@ public class LockManager implements Serializable, AutoCloseable {
         if (!getLockProvider().tryLock(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS)) {
           metrics.updateLockNotAcquiredMetric();
           if (getLockProvider() instanceof FileSystemBasedLockProvider) {
-            fs.delete(new Path(((FileSystemBasedLockProvider) getLockProvider()).getCurrentOwnerLockInfo()), true);
+            fs.delete(new Path(((FileSystemBasedLockProvider) getLockProvider()).getLock()), true);
             LOG.warn("Lock is FileSystemBasedLockProvider, had deleted lock files to avoid blocking next write job");
           }
           throw new HoodieLockException("Unable to acquire the lock. Current lock owner information : "
