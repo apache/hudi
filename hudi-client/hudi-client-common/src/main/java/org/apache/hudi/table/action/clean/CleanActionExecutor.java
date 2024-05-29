@@ -82,7 +82,11 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       if (deleteResult) {
         LOG.debug("Cleaned file at path :" + deletePath);
       } else {
-        throw new HoodieIOException("Failed to delete path during clean execution " + deletePath);
+        if (fs.exists(deletePath)) {
+          throw new HoodieIOException("Failed to delete path during clean execution " + deletePath);
+        } else {
+          LOG.debug("Already cleaned up file at path :" + deletePath);
+        }
       }
       return deleteResult;
     } catch (FileNotFoundException fio) {
