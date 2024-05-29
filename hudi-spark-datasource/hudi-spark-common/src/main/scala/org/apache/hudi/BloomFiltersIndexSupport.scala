@@ -43,8 +43,8 @@ class BloomFiltersIndexSupport(spark: SparkSession,
                                          shouldPushDownFilesFilter: Boolean
                                         ): Option[Set[String]] = {
     lazy val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
-    val allFiles = getPrunedFileNames(prunedPartitionsAndFileSlices).map(new StoragePath(_) ).toSeq
     if (recordKeys.nonEmpty) {
+      val allFiles = getPrunedFileNames(prunedPartitionsAndFileSlices).map(new StoragePath(_) ).toSeq
       Option.apply(getCandidateFilesForRecordKeys(allFiles, recordKeys))
     } else {
       Option.empty

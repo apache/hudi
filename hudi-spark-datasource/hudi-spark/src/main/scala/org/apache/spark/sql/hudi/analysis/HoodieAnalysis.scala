@@ -194,17 +194,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
     rules.toSeq
   }
 
-  // CBO is only supported in Spark >= 3.1.x
-  def customPreCBORules: Seq[RuleBuilder] = {
-    val rules: ListBuffer[RuleBuilder] = ListBuffer(
-      // Default rules
-    )
-    if (HoodieSparkUtils.gteqSpark3_1) {
-      rules += (spark => HoodiePruneFileSourceFiles(spark))
-    }
-    rules.toSeq
-  }
-
   /**
    * This rule adjusts output of the [[LogicalRelation]] resolving int Hudi tables such that all of the
    * default Spark resolution could be applied resolving standard Spark SQL commands
