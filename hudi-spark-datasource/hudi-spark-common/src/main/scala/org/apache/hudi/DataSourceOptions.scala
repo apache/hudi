@@ -433,7 +433,7 @@ object DataSourceWriteOptions {
    * will be obtained by invoking .toString() on the field value. Nested fields can be specified using
    * the dot notation eg: `a.b.c`
    */
-  val SECONDARYKEY_FIELD = KeyGeneratorOptions.SECONDARYKEY_FIELD_NAME
+  val SECONDARYKEY_COLUMN_NAME = KeyGeneratorOptions.SECONDARYKEY_COLUMN_NAME
 
   /**
    * Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual

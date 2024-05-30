@@ -26,8 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
-import static org.apache.hudi.index.functional.HoodieFunctionalIndex.SPARK_IDENTITY;
 
 /**
  * Class representing the metadata for a functional or secondary index in Hudi.
@@ -56,7 +56,7 @@ public class HoodieIndexDefinition implements Serializable {
                                Map<String, String> indexOptions) {
     this.indexName = indexName;
     this.indexType = indexType;
-    this.indexFunction = nonEmpty(indexFunction) ? indexFunction : SPARK_IDENTITY;
+    this.indexFunction = nonEmpty(indexFunction) ? indexFunction : EMPTY_STRING;
     this.sourceFields = sourceFields;
     this.indexOptions = indexOptions;
   }

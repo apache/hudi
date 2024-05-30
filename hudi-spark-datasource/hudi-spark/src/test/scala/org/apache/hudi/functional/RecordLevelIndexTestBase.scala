@@ -72,7 +72,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     HoodieWriteConfig.TBL_NAME.key -> "trips_table",
     RECORDKEY_FIELD.key -> "uuid",
-    SECONDARYKEY_FIELD.key -> "city",
+    SECONDARYKEY_COLUMN_NAME.key -> "city",
     PARTITIONPATH_FIELD.key -> "state",
     PRECOMBINE_FIELD.key -> "ts",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
