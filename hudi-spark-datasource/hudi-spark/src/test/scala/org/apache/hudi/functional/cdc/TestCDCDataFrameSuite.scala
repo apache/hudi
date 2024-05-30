@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
-
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SaveMode}
@@ -333,6 +332,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF4.write.format("org.apache.hudi")
       .options(options)
+      .option("hoodie.compact.inline", "false")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -357,6 +357,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .options(options)
       .option("hoodie.clustering.inline", "true")
       .option("hoodie.clustering.inline.max.commits", "1")
+      .option("hoodie.compact.inline", "false")
       .mode(SaveMode.Append)
       .save(basePath)
     val instant5 = metaClient.reloadActiveTimeline.lastInstant().get()
@@ -385,6 +386,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val inputDF6 = spark.read.json(spark.sparkContext.parallelize(records6, 2))
     inputDF6.write.format("org.apache.hudi")
       .options(options)
+      .option("hoodie.compact.inline", "false")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -407,27 +409,32 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val inputDF7 = spark.read.json(spark.sparkContext.parallelize(records7, 2))
     inputDF7.write.format("org.apache.hudi")
       .options(options)
+      .option("hoodie.compact.inline", "false")
       .mode(SaveMode.Append)
       .save(basePath)
+    totalInsertedCnt += 7
 
     val records8 = recordsToStrings(dataGen.generateInserts("007", 3)).asScala.toList
     val inputDF8 = spark.read.json(spark.sparkContext.parallelize(records8, 2))
     inputDF8.write.format("org.apache.hudi")
       .options(options)
+      .option("hoodie.compact.inline", "false")
       .mode(SaveMode.Append)
       .save(basePath)
     val instant8 = metaClient.reloadActiveTimeline.lastInstant().get()
     val commitTime8 = instant8.getTimestamp
+    totalInsertedCnt += 3
 
     // 8. Upsert Operation With Clean Operation
-    val records9 = recordsToStrings(dataGen.generateUniqueUpdates("008", 30)).asScala.toList
-    val inputDF9 = spark.read.json(spark.sparkContext.parallelize(records9, 2))
+    val inputDF9 = inputDF6.limit(30) // 30 updates to inserts added after insert overwrite table. if not for this, updates generated from datagne,
+    // could split as inserts and updates from hudi standpoint due to insert overwrite table operation.
     inputDF9.write.format("org.apache.hudi")
       .options(options)
       .option("hoodie.clean.automatic", "true")
-      .option("hoodie.keep.min.commits", "4")
-      .option("hoodie.keep.max.commits", "5")
-      .option("hoodie.clean.commits.retained", "3")
+      .option("hoodie.keep.min.commits", "16")
+      .option("hoodie.keep.max.commits", "17")
+      .option("hoodie.clean.commits.retained", "15")
+      .option("hoodie.compact.inline", "false")
       .mode(SaveMode.Append)
       .save(basePath)
     val instant9 = metaClient.reloadActiveTimeline.lastInstant().get()
@@ -440,13 +447,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val updatedCnt9 = 30 - insertedCnt9
     assertCDCOpCnt(cdcDataOnly9, insertedCnt9, updatedCnt9, 0)
 
-    // here cause we do the clean operation and just remain the commit6 and commit7, so we need to reset the total cnt.
-    // 70 is the number of inserted records at commit 6.
-    totalInsertedCnt = 80 + insertedCnt9
-    totalUpdatedCnt = updatedCnt9
-    totalDeletedCnt = 0
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
-    assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
+    assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt + 30, totalDeletedCnt)
   }
 
   /**

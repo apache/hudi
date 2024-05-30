@@ -159,12 +159,12 @@ public abstract class HoodieReaderContext<T> {
    * @param length         Bytes to read.
    * @param dataSchema     Schema of records in the file in {@link Schema}.
    * @param requiredSchema Schema containing required fields to read in {@link Schema} for projection.
-   * @param conf           {@link StorageConfiguration} for reading records.
+   * @param storage        {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
       StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
-      StorageConfiguration<?> conf) throws IOException;
+      HoodieStorage storage) throws IOException;
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.

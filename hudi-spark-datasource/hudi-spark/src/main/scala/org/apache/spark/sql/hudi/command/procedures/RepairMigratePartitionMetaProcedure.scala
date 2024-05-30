@@ -33,6 +33,7 @@ import java.io.IOException
 import java.util
 import java.util.Properties
 import java.util.function.{Consumer, Supplier}
+
 import scala.collection.JavaConverters._
 
 class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBuilder with Logging {
@@ -62,7 +63,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
     val metaClient = createMetaClient(jsc, tablePath)
 
     val engineContext: HoodieLocalEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf)
-    val partitionPaths: util.List[String] = FSUtils.getAllPartitionPaths(engineContext, tablePath, false)
+    val partitionPaths: util.List[String] = FSUtils.getAllPartitionPaths(engineContext, metaClient.getStorage, tablePath, false)
     val basePath: StoragePath = new StoragePath(tablePath)
 
     val rows = new util.ArrayList[Row](partitionPaths.size)
@@ -72,7 +73,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
         metaClient.getStorage, partition)
       val baseFormatFile: Option[StoragePath] = HoodiePartitionMetadata.baseFormatMetaPathIfExists(
         metaClient.getStorage, partition)
-      val latestCommit: String = metaClient.getActiveTimeline.getCommitTimeline.lastInstant.get.getTimestamp
+      val latestCommit: String = metaClient.getActiveTimeline.getCommitAndReplaceTimeline.lastInstant.get.getTimestamp
       var action = if (textFormatFile.isPresent) "MIGRATE" else "NONE"
       if (!dryRun) {
         if (!baseFormatFile.isPresent) {

@@ -41,9 +41,11 @@ class PartitionStatsIndexSupport(spark: SparkSession,
                                  allowCaching: Boolean = false)
   extends ColumnStatsIndexSupport(spark, tableSchema, metadataConfig, metaClient, allowCaching) {
 
+  override def getIndexName: String = PartitionStatsIndexSupport.INDEX_NAME
+
   override def isIndexAvailable: Boolean = {
-    checkState(metadataConfig.isEnabled, "Metadata Table support has to be enabled")
-    metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS)
+    metadataConfig.isEnabled &&
+      metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS)
   }
 
   override def loadColumnStatsIndexRecords(targetColumns: Seq[String], shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
@@ -62,4 +64,8 @@ class PartitionStatsIndexSupport(spark: SparkSession,
 
     columnStatsRecords
   }
+}
+
+object PartitionStatsIndexSupport {
+  val INDEX_NAME = "PARTITION_STATS"
 }

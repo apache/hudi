@@ -857,7 +857,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // delete compaction commit
     HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
-    HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = meta.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     HoodieInstant commitInstant = timeline.lastInstant().get();
     String commitFileName = tableBasePath + "/.hoodie/" + commitInstant.getFileName();
     fs.delete(new Path(commitFileName), false);
@@ -2883,7 +2883,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(HoodieTestUtils.getDefaultStorageConf()).build();
-    List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getBasePath(), false);
+    List<String> partitions = FSUtils.getAllPartitionPaths(
+        new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getStorage(), metaClient.getBasePath(), false);
     StorageConfiguration hadoopConf = metaClient.getStorageConf();
     HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
@@ -2894,7 +2895,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(baseFiles.size(), partitions.size());
     // Verify if each parquet file is actually sorted by sortColumn.
     for (String filePath : baseFiles) {
-      try (HoodieAvroParquetReader parquetReader = new HoodieAvroParquetReader(HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath))) {
+      try (HoodieAvroParquetReader parquetReader = new HoodieAvroParquetReader(HoodieTestUtils.getStorage(filePath), new StoragePath(filePath))) {
         ClosableIterator<HoodieRecord<IndexedRecord>> iterator = parquetReader.getRecordIterator();
         List<Float> sortColumnValues = new ArrayList<>();
         while (iterator.hasNext()) {

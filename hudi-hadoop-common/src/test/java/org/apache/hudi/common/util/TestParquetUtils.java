@@ -98,13 +98,13 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     List<String> rowKeysInFile = new ArrayList<>(parquetUtils.readRowKeys(
-        HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath)));
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath)));
     Collections.sort(rowKeysInFile);
     Collections.sort(rowKeys);
 
     assertEquals(rowKeys, rowKeysInFile, "Did not read back the expected list of keys");
     BloomFilter filterInFile = parquetUtils.readBloomFilterFromMetadata(
-        HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath));
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath));
     for (String rowKey : rowKeys) {
       assertTrue(filterInFile.mightContain(rowKey), "key should be found in bloom filter");
     }
@@ -128,7 +128,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     Set<Pair<String, Long>> filtered = parquetUtils.filterRowKeys(
-        HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath), filter);
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), filter);
 
     assertEquals(filter.size(), filtered.size(), "Filtered count does not match");
 
@@ -155,7 +155,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     List<Pair<HoodieKey, Long>> fetchedRows = parquetUtils.fetchRecordKeysWithPositions(
-        HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath));
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath));
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
     for (Pair<HoodieKey, Long> entry : fetchedRows) {
@@ -181,7 +181,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     List<Pair<HoodieKey, Long>> fetchedRows = parquetUtils.fetchRecordKeysWithPositions(
-        HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath),
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath),
         Option.of(new TestBaseKeyGen("abc", "def")));
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
@@ -200,7 +200,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys);
 
     assertEquals(123, parquetUtils.getRowCount(
-        HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath)));
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath)));
   }
 
   @Test
@@ -266,7 +266,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     columnList.add(dataField);
 
     List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = parquetUtils.readColumnStatsFromMetadata(
-            HoodieTestUtils.getDefaultStorageConf(), new StoragePath(filePath), columnList)
+            HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), columnList)
         .stream()
         .sorted(Comparator.comparing(HoodieColumnRangeMetadata::getColumnName))
         .collect(Collectors.toList());

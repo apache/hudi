@@ -110,7 +110,7 @@ public class ArchivedCommitsCommand {
     StoragePath archivePath = folder != null && !folder.isEmpty()
         ? new StoragePath(metaClient.getMetaPath(), folder)
         : new StoragePath(metaClient.getArchivePath(), ".commits_.archive*");
-    HoodieStorage storage = HoodieStorageUtils.getStorage(metaClient.getBasePathV2(), HoodieCLI.conf);
+    HoodieStorage storage = metaClient.getStorage();
     List<StoragePathInfo> pathInfoList = storage.globEntries(archivePath);
     List<Comparable[]> allStats = new ArrayList<>();
     for (StoragePathInfo pathInfo : pathInfoList) {

@@ -19,14 +19,14 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.secondary.SecondaryIndexType;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -50,7 +50,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
     subGroupName = ConfigGroups.SubGroupNames.FUNCTIONAL_INDEX,
     areCommonConfigs = true,
     description = "")
-public class HoodieFunctionalIndexConfig extends HoodieConfig {
+public class HoodieIndexingConfig extends HoodieConfig {
 
   public static final String INDEX_DEFINITION_FILE = "index.properties";
   public static final String INDEX_DEFINITION_FILE_BACKUP = "index.properties.backup";
@@ -65,7 +65,8 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
       .defaultValue(MetadataPartitionType.COLUMN_STATS.name())
       .withValidValues(
           MetadataPartitionType.COLUMN_STATS.name(),
-          MetadataPartitionType.BLOOM_FILTERS.name()
+          MetadataPartitionType.BLOOM_FILTERS.name(),
+          MetadataPartitionType.SECONDARY_INDEX.name()
       )
       .sinceVersion("1.0.0")
       .withDocumentation("Type of the functional index. Default is `column_stats` if there are no functions and expressions in the command. "
@@ -87,7 +88,7 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
 
   private static final String INDEX_DEFINITION_CHECKSUM_FORMAT = "%s.%s"; // <index_name>.<index_type>
 
-  public HoodieFunctionalIndexConfig() {
+  public HoodieIndexingConfig() {
     super();
   }
 
@@ -219,12 +220,12 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
     return Long.parseLong(props.getProperty(INDEX_DEFINITION_CHECKSUM.key())) == generateChecksum(props);
   }
 
-  public static HoodieFunctionalIndexConfig.Builder newBuilder() {
-    return new HoodieFunctionalIndexConfig.Builder();
+  public static HoodieIndexingConfig.Builder newBuilder() {
+    return new HoodieIndexingConfig.Builder();
   }
 
   public static class Builder {
-    private final HoodieFunctionalIndexConfig functionalIndexConfig = new HoodieFunctionalIndexConfig();
+    private final HoodieIndexingConfig functionalIndexConfig = new HoodieIndexingConfig();
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -238,7 +239,7 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder fromIndexConfig(HoodieFunctionalIndexConfig functionalIndexConfig) {
+    public Builder fromIndexConfig(HoodieIndexingConfig functionalIndexConfig) {
       this.functionalIndexConfig.getProps().putAll(functionalIndexConfig.getProps());
       return this;
     }
@@ -258,21 +259,21 @@ public class HoodieFunctionalIndexConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieFunctionalIndexConfig build() {
-      functionalIndexConfig.setDefaults(HoodieFunctionalIndexConfig.class.getName());
+    public HoodieIndexingConfig build() {
+      functionalIndexConfig.setDefaults(HoodieIndexingConfig.class.getName());
       return functionalIndexConfig;
     }
   }
 
-  public static HoodieFunctionalIndexConfig copy(HoodieFunctionalIndexConfig functionalIndexConfig) {
+  public static HoodieIndexingConfig copy(HoodieIndexingConfig functionalIndexConfig) {
     return newBuilder().fromIndexConfig(functionalIndexConfig).build();
   }
 
-  public static HoodieFunctionalIndexConfig merge(HoodieFunctionalIndexConfig functionalIndexConfig1, HoodieFunctionalIndexConfig functionalIndexConfig2) {
+  public static HoodieIndexingConfig merge(HoodieIndexingConfig functionalIndexConfig1, HoodieIndexingConfig functionalIndexConfig2) {
     return newBuilder().fromIndexConfig(functionalIndexConfig1).fromIndexConfig(functionalIndexConfig2).build();
   }
 
-  public static HoodieFunctionalIndexConfig fromIndexDefinition(HoodieFunctionalIndexDefinition indexDefinition) {
+  public static HoodieIndexingConfig fromIndexDefinition(HoodieIndexDefinition indexDefinition) {
     return newBuilder().withIndexName(indexDefinition.getIndexName())
         .withIndexType(indexDefinition.getIndexType())
         .withIndexFunction(indexDefinition.getIndexFunction())

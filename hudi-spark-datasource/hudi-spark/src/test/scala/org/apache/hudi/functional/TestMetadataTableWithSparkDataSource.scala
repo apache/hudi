@@ -30,6 +30,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
@@ -137,7 +138,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val partitionPathToTest = "2015/03/16"
     val engineContext = new HoodieSparkEngineContext(jsc())
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build();
-    val baseTableMetada: HoodieTableMetadata = new HoodieBackedTableMetadata(engineContext, metadataConfig, s"$basePath", false)
+    val baseTableMetada: HoodieTableMetadata = new HoodieBackedTableMetadata(
+      engineContext, hoodieStorage(), metadataConfig, s"$basePath", false)
 
     val fileStatuses = baseTableMetada.getAllFilesInPartition(new StoragePath(s"$basePath/" + partitionPathToTest))
     val fileName = fileStatuses.get(0).getPath.getName
@@ -151,7 +153,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // read parquet file and verify stats
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
-      .readColumnStatsFromMetadata(HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()),
+      .readColumnStatsFromMetadata(
+        new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
         fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"))
     val columnRangeMetadata = colRangeMetadataList.get(0)
 
@@ -189,7 +192,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val partitionPathToTest = ""
     val engineContext = new HoodieSparkEngineContext(jsc())
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build();
-    val baseTableMetada: HoodieTableMetadata = new HoodieBackedTableMetadata(engineContext, metadataConfig, s"$basePath", false)
+    val baseTableMetada: HoodieTableMetadata = new HoodieBackedTableMetadata(
+      engineContext, hoodieStorage(), metadataConfig, s"$basePath", false)
 
     val allPartitionPaths = baseTableMetada.getAllPartitionPaths
     assertEquals(allPartitionPaths.size(), 1)
@@ -207,7 +211,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // read parquet file and verify stats
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
-      .readColumnStatsFromMetadata(HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()),
+      .readColumnStatsFromMetadata(
+        new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
         fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"))
     val columnRangeMetadata = colRangeMetadataList.get(0)
 

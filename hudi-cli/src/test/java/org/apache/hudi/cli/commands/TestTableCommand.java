@@ -207,7 +207,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     assertTrue(prepareTable());
 
     HoodieTimeline timeline =
-        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     assertEquals(0, timeline.countInstants(), "There should have no instant at first");
 
     // generate four savepoints
@@ -218,14 +218,14 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
 
     // Before refresh, no instant
     timeline =
-        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     assertEquals(0, timeline.countInstants(), "there should have no instant");
 
     Object result = shell.evaluate(() -> command);
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     timeline =
-        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
 
     // After refresh, there are 4 instants
     assertEquals(4, timeline.countInstants(), "there should have 4 instants");

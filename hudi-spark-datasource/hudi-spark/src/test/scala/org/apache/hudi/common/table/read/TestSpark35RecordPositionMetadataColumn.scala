@@ -98,7 +98,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
       readerContext.setHasBootstrapBaseFile(false)
       //dataschema param is set to null because it is not used
       val fileRecordIterator = readerContext.getFileRecordIterator(allBaseFiles.get(0).getPath, 0, allBaseFiles.get(0).getLength, null,
-        sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), HadoopFSUtils.getStorageConf(hadoopConf))
+        sparkAdapter.getAvroSchemaConverters.toAvroType(dataSchema, nullable = true, "record"), metaClient.getStorage)
 
       // Make sure we can read all the positions out from base file.
       // Here we don't add filters since enabling filter push-down

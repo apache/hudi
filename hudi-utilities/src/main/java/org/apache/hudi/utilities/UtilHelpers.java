@@ -118,6 +118,7 @@ import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Bunch of helper methods.
@@ -242,13 +243,14 @@ public class UtilHelpers {
   }
 
   public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig,
-                                                      StoragePath cfgPath,
+                                                      Path cfgPath,
                                                       List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
+    StoragePath storagePath = convertToStoragePath(cfgPath);
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, storagePath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgPath);
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), storagePath);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -274,7 +276,7 @@ public class UtilHelpers {
   public static TypedProperties buildProperties(Configuration hadoopConf, String propsFilePath, List<String> props) {
     return StringUtils.isNullOrEmpty(propsFilePath)
         ? UtilHelpers.buildProperties(props)
-        : UtilHelpers.readConfig(hadoopConf, new StoragePath(propsFilePath), props)
+        : UtilHelpers.readConfig(hadoopConf, new Path(propsFilePath), props)
         .getProps(true);
   }
 

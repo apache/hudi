@@ -107,7 +107,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   @Test
   public void testGetPartitionsWithReplaceCommits() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty());
 
     String ts1 = "1";
@@ -146,7 +146,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   @Test
   public void testGetPartitions() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty());
 
     String olderPartition = "0"; // older partitions that is modified by all cleans
@@ -185,7 +185,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   @Test
   public void testGetPartitionsUnPartitioned() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty());
 
     String partitionPath = "";
@@ -213,7 +213,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   @Test
   public void testRestoreInstants() throws Exception {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty());
 
     for (int i = 1; i <= 5; i++) {
@@ -238,7 +238,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     String extraMetadataKey = "test_key";
     String extraMetadataValue1 = "test_value1";
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty());
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, extraMetadataKey).isPresent());
 
@@ -616,7 +616,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   @Test
   public void testGetDroppedPartitions() throws Exception {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty());
 
     String olderPartition = "p1"; // older partitions that will be deleted by clean commit

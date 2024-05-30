@@ -503,6 +503,6 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       streamingWrite(inputDF.schema, sourcePath, destPath, opts, id)
     }
     val metaClient = HoodieTestUtils.createMetaClient(storage, destPath);
-    assertTrue(metaClient.getActiveTimeline.getCommitTimeline.empty())
+    assertTrue(metaClient.getActiveTimeline.getCommitAndReplaceTimeline.empty())
   }
 }

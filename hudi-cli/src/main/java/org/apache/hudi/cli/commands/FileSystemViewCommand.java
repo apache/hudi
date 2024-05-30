@@ -247,7 +247,7 @@ public class FileSystemViewCommand {
 
     HoodieTimeline timeline;
     if (basefileOnly) {
-      timeline = metaClient.getActiveTimeline().getCommitTimeline();
+      timeline = metaClient.getActiveTimeline().getCommitAndReplaceTimeline();
     } else if (excludeCompaction) {
       timeline = metaClient.getActiveTimeline().getCommitsTimeline();
     } else {

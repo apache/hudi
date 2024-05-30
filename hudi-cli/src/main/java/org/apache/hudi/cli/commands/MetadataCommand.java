@@ -187,10 +187,10 @@ public class MetadataCommand {
 
   @ShellMethod(key = "metadata stats", value = "Print stats about the metadata")
   public String stats() throws IOException {
-    HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
-    try (HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(HoodieCLI.conf),
-        config, HoodieCLI.basePath)) {
+    try (HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
+        new HoodieLocalEngineContext(HoodieCLI.conf), metaClient.getStorage(), config, HoodieCLI.basePath)) {
       Map<String, String> stats = metadata.stats();
 
       final List<Comparable[]> rows = new ArrayList<>();
@@ -212,11 +212,11 @@ public class MetadataCommand {
   public String listPartitions(
       @ShellOption(value = "--sparkMaster", defaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master
   ) throws IOException {
-    HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     initJavaSparkContext(Option.of(master));
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
-    try (HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), config,
-        HoodieCLI.basePath)) {
+    try (HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
+        new HoodieSparkEngineContext(jsc), metaClient.getStorage(), config, HoodieCLI.basePath)) {
 
       if (!metadata.enabled()) {
         return "[ERROR] Metadata Table not enabled/initialized\n\n";
@@ -241,10 +241,10 @@ public class MetadataCommand {
   @ShellMethod(key = "metadata list-files", value = "Print a list of all files in a partition from the metadata")
   public String listFiles(
       @ShellOption(value = {"--partition"}, help = "Name of the partition to list files", defaultValue = "") final String partition) throws IOException {
-    HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
     try (HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath)) {
+        new HoodieLocalEngineContext(HoodieCLI.conf), metaClient.getStorage(), config, HoodieCLI.basePath)) {
 
       if (!metaReader.enabled()) {
         return "[ERROR] Metadata Table not enabled/initialized\n\n";
@@ -278,18 +278,17 @@ public class MetadataCommand {
   public String validateFiles(
           @ShellOption(value = {"--verbose"}, help = "Print all file details", defaultValue = "false") final boolean verbose)
         throws IOException {
-    HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
     HoodieBackedTableMetadata metadataReader = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath);
+        new HoodieLocalEngineContext(HoodieCLI.conf), metaClient.getStorage(), config, HoodieCLI.basePath);
 
     if (!metadataReader.enabled()) {
       return "[ERROR] Metadata Table not enabled/initialized\n\n";
     }
 
     FileSystemBackedTableMetadata fsMetaReader = new FileSystemBackedTableMetadata(new HoodieLocalEngineContext(HoodieCLI.conf),
-        HoodieCLI.getTableMetaClient().getTableConfig(), HoodieCLI.conf,
-            HoodieCLI.basePath);
+        metaClient.getTableConfig(), metaClient.getStorage(), HoodieCLI.basePath);
     HoodieMetadataConfig fsConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
 
     HoodieTimer timer = HoodieTimer.start();

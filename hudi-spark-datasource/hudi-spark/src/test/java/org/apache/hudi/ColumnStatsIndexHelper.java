@@ -18,14 +18,12 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.SparkContext;
@@ -51,6 +49,7 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
+import org.apache.spark.util.SerializableConfiguration;
 
 import javax.annotation.Nonnull;
 
@@ -163,7 +162,7 @@ public class ColumnStatsIndexHelper {
         .map(StructField::name)
         .collect(Collectors.toList());
 
-    StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConfWithCopy(sc.hadoopConfiguration());
+    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(sc.hadoopConfiguration());
     int numParallelism = (baseFilesPaths.size() / 3 + 1);
 
     String previousJobDescription = sc.getLocalProperty("spark.job.description");
@@ -174,16 +173,18 @@ public class ColumnStatsIndexHelper {
       colMinMaxInfos =
           jsc.parallelize(baseFilesPaths, numParallelism)
               .mapPartitions(paths -> {
-                ParquetUtils utils = (ParquetUtils) FileFormatUtils.getInstance(HoodieFileFormat.PARQUET);
+                ParquetUtils utils = new ParquetUtils();
                 Iterable<String> iterable = () -> paths;
                 return StreamSupport.stream(iterable.spliterator(), false)
-                    .flatMap(path ->
-                        utils.readColumnStatsFromMetadata(
-                                storageConf,
-                                new StoragePath(path),
-                                columnNames
-                            )
-                            .stream()
+                    .flatMap(path -> {
+                      HoodieStorage storage = new HoodieHadoopStorage(path, serializableConfiguration.value());
+                          return utils.readColumnStatsFromMetadata(
+                                  storage,
+                                  new StoragePath(path),
+                                  columnNames
+                              )
+                              .stream();
+                        }
                     )
                     .iterator();
               })

@@ -29,7 +29,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
-import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
@@ -67,12 +67,12 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                      length: Long,
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
-                                     conf: StorageConfiguration[_]): ClosableIterator[InternalRow] = {
+                                     storage: HoodieStorage): ClosableIterator[InternalRow] = {
     val structType: StructType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
       val projection: UnsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
       new CloseableMappingIterator[InternalRow, UnsafeRow](
-        new HoodieSparkFileReaderFactory(conf).newParquetFileReader(filePath)
+        new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
           .asInstanceOf[HoodieSparkParquetReader].getInternalRowIterator(dataSchema, requiredSchema),
         new java.util.function.Function[InternalRow, UnsafeRow] {
           override def apply(data: InternalRow): UnsafeRow = {
@@ -88,7 +88,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType)
       new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
-        readSchema, StructType(Seq.empty), readFilters, conf.asInstanceOf[StorageConfiguration[Configuration]]))
+        readSchema, StructType(Seq.empty), readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
   }
 

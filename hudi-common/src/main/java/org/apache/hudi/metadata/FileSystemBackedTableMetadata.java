@@ -41,10 +41,10 @@ import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Implementation of {@link HoodieTableMetadata} based file-system-backed table metadata.
@@ -65,19 +66,18 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   private final boolean urlEncodePartitioningEnabled;
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, HoodieTableConfig tableConfig,
-                                       StorageConfiguration<?> conf, String datasetBasePath) {
-    super(engineContext, conf, datasetBasePath);
+                                       HoodieStorage storage, String datasetBasePath) {
+    super(engineContext, storage, datasetBasePath);
 
     this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
   }
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext,
-                                       StorageConfiguration<?> conf,
+                                       HoodieStorage storage,
                                        String datasetBasePath) {
-    super(engineContext, conf, datasetBasePath);
+    super(engineContext, storage, datasetBasePath);
 
-    HoodieStorage storage = HoodieStorageUtils.getStorage(dataBasePath, conf);
     StoragePath metaPath =
         new StoragePath(dataBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
     TableNotFoundException.checkTableValidity(storage, this.dataBasePath, metaPath);
@@ -88,10 +88,16 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
   }
 
+  public HoodieStorage getStorage() {
+    if (storage == null) {
+      storage = HoodieStorageUtils.getStorage(dataBasePath, storageConf);
+    }
+    return storage;
+  }
+
   @Override
   public List<StoragePathInfo> getAllFilesInPartition(StoragePath partitionPath) throws IOException {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(partitionPath, storageConf);
-    return FSUtils.getAllDataFilesInPartition(storage, partitionPath);
+    return FSUtils.getAllDataFilesInPartition(getStorage(), partitionPath);
   }
 
   @Override
@@ -163,8 +169,12 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
           "Listing all partitions with prefix " + relativePathPrefix);
       // Need to use serializable file status here, see HUDI-5936
       List<StoragePathInfo> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
-        HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
-        return storage.listDirectEntries(path).stream();
+        try {
+          return getStorage().listDirectEntries(path).stream();
+        } catch (FileNotFoundException e) {
+          // The partition may have been cleaned.
+          return Stream.empty();
+        }
       }, listingParallelism);
       pathsToList.clear();
 
@@ -179,9 +189,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
             engineContext.map(dirToFileListing,
                 fileInfo -> {
                   StoragePath path = fileInfo.getPath();
-                  HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
                   if (fileInfo.isDirectory()) {
-                    if (HoodiePartitionMetadata.hasPartitionMetadata(storage, path)) {
+                    if (HoodiePartitionMetadata.hasPartitionMetadata(getStorage(), path)) {
                       return Pair.of(
                           Option.of(FSUtils.getRelativePartitionPath(dataBasePath,
                               path)),
@@ -250,9 +259,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         engineContext.map(new ArrayList<>(partitionPaths),
             partitionPathStr -> {
               StoragePath partitionPath = new StoragePath(partitionPathStr);
-              HoodieStorage storage = HoodieStorageUtils.getStorage(partitionPath, storageConf);
               return Pair.of(partitionPathStr,
-                  FSUtils.getAllDataFilesInPartition(storage, partitionPath));
+                  FSUtils.getAllDataFilesInPartition(getStorage(), partitionPath));
             }, parallelism);
 
     return partitionToFiles.stream().collect(Collectors.toMap(pair -> pair.getLeft(),

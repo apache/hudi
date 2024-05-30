@@ -517,7 +517,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         0, 150);
 
     HoodieActiveTimeline activeTimeline = new HoodieActiveTimeline(metaClient, false);
-    List<HoodieInstant> instants = activeTimeline.getCommitTimeline().getInstants();
+    List<HoodieInstant> instants = activeTimeline.getCommitAndReplaceTimeline().getInstants();
     assertEquals(5, instants.size());
     assertEquals(new HoodieInstant(COMPLETED, COMMIT_ACTION, "001"),
         instants.get(0));
@@ -1025,7 +1025,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   private Set<String> verifyRecordKeys(List<HoodieRecord> expectedRecords, List<WriteStatus> allStatus, List<GenericRecord> records) {
     for (WriteStatus status : allStatus) {
       StoragePath filePath = new StoragePath(basePath, status.getStat().getPath());
-      records.addAll(getFileUtilsInstance(metaClient).readAvroRecords(storageConf, filePath));
+      records.addAll(getFileUtilsInstance(metaClient).readAvroRecords(storage, filePath));
     }
     Set<String> expectedKeys = recordsToRecordKeySet(expectedRecords);
     assertEquals(records.size(), expectedKeys.size());

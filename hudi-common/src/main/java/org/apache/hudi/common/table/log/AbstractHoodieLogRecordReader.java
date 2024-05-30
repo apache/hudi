@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -65,7 +66,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.log.block.HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME;
@@ -160,7 +160,8 @@ public abstract class AbstractHoodieLogRecordReader {
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = hoodieTableMetaClientOption.orElseGet(
         () -> HoodieTableMetaClient.builder()
-            .setConf(storage.getConf().newInstance()).setBasePath(basePath).build());
+            .setStorage(storage)
+            .setBasePath(basePath).build());
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
@@ -619,7 +620,7 @@ public abstract class AbstractHoodieLogRecordReader {
    *
    * @param hoodieRecord Hoodie Record to process
    */
-  public abstract <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception;
+  protected abstract <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception;
 
   /**
    * Process next deleted record.
@@ -861,6 +862,30 @@ public abstract class AbstractHoodieLogRecordReader {
     }
 
     public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withKeyFieldOverride(String keyFieldOverride) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withForceFullScan(boolean forceFullScan) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withMaxMemorySizeInBytes(Long maxMemorySizeInBytes) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withSpillableMapBasePath(String spillableMapBasePath) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withBitCaskDiskMapCompressionEnabled(boolean bitCaskDiskMapCompressionEnabled) {
       throw new UnsupportedOperationException();
     }
 

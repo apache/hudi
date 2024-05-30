@@ -46,7 +46,6 @@ public class TestHoodieFlinkQuickstart extends AbstractTestBase {
   @TempDir
   File tempFile;
 
-  @Disabled
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testHoodieFlinkQuickstart(HoodieTableType tableType) throws Exception {

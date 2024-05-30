@@ -40,18 +40,20 @@ import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -481,25 +483,23 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
 
   protected def getPartitionColumnsAsInternalRow(file: StoragePathInfo): InternalRow =
-    getPartitionColumnsAsInternalRowInternal(file,
-      new Path(metaClient.getBasePathV2.toUri), shouldExtractPartitionValuesFromPartitionPath)
+    getPartitionColumnsAsInternalRowInternal(file, metaClient.getBasePathV2, shouldExtractPartitionValuesFromPartitionPath)
 
   protected def getPartitionColumnValuesAsInternalRow(file: StoragePathInfo): InternalRow =
     getPartitionColumnsAsInternalRowInternal(file,
-      new Path(metaClient.getBasePathV2.toUri), extractPartitionValuesFromPartitionPath = true)
+      metaClient.getBasePathV2, extractPartitionValuesFromPartitionPath = true)
 
-  protected def getPartitionColumnsAsInternalRowInternal(file: StoragePathInfo, basePath: Path,
+  protected def getPartitionColumnsAsInternalRowInternal(file: StoragePathInfo, basePath: StoragePath,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     if (extractPartitionValuesFromPartitionPath) {
-      val baseStoragePath = convertToStoragePath(basePath)
-      val tablePathWithoutScheme = baseStoragePath.getPathWithoutSchemeAndAuthority
+      val tablePathWithoutScheme = basePath.getPathWithoutSchemeAndAuthority
       val partitionPathWithoutScheme = file.getPath.getParent.getPathWithoutSchemeAndAuthority
       val relativePath = tablePathWithoutScheme.toUri.relativize(partitionPathWithoutScheme.toUri).toString
       val timeZoneId = conf.get("timeZone", sparkSession.sessionState.conf.sessionLocalTimeZone)
       val rowValues = HoodieSparkUtils.parsePartitionColumnValues(
         partitionColumns,
         relativePath,
-        baseStoragePath,
+        basePath,
         tableStructSchema,
         timeZoneId,
         sparkAdapter.getSparkParsePartitionUtil,
@@ -854,7 +854,8 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       val hoodieConfig = new HoodieConfig()
       hoodieConfig.setValue(USE_NATIVE_HFILE_READER,
         options.getOrElse(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue().toString))
-      val reader = new HoodieSparkIOFactory(storageConf).getReaderFactory(HoodieRecordType.AVRO)
+      val reader = new HoodieSparkIOFactory(new HoodieHadoopStorage(filePath, storageConf))
+        .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, filePath, HFILE)
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema

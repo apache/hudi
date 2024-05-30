@@ -325,15 +325,6 @@ public abstract class TestHoodieStorageBase {
   }
 
   @Test
-  public void testMakeQualified() {
-    HoodieStorage storage = getStorage();
-    StoragePath path = new StoragePath("/tmp/testMakeQualified/1.file");
-    assertEquals(
-        new StoragePath("file:/tmp/testMakeQualified/1.file"),
-        storage.makeQualified(path));
-  }
-
-  @Test
   public void testGetFileSystem() {
     Object conf = getConf();
     Object fs = getFileSystem(conf);

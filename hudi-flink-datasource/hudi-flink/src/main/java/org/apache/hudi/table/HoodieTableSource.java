@@ -53,7 +53,10 @@ import org.apache.hudi.source.rebalance.selector.StreamReadBucketIndexKeySelecto
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
@@ -61,10 +64,13 @@ import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
+import org.apache.hudi.table.lookup.HoodieLookupFunction;
+import org.apache.hudi.table.lookup.HoodieLookupTableReader;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.ExpressionUtils;
 import org.apache.hudi.util.InputFormats;
+import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -80,11 +86,11 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.InputFormatSourceFunction;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.catalog.Column;
-import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
+import org.apache.flink.table.connector.source.TableFunctionProvider;
 import org.apache.flink.table.connector.source.abilities.SupportsFilterPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
@@ -99,6 +105,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.io.Serializable;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -111,6 +119,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_JOIN_CACHE_TTL;
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
 import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
@@ -122,18 +131,21 @@ public class HoodieTableSource implements
     ScanTableSource,
     SupportsProjectionPushDown,
     SupportsLimitPushDown,
-    SupportsFilterPushDown {
+    SupportsFilterPushDown,
+    LookupTableSource,
+    Serializable {
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
 
   private static final long NO_LIMIT_CONSTANT = -1;
 
-  private final transient org.apache.hadoop.conf.Configuration hadoopConf;
-  private final transient HoodieTableMetaClient metaClient;
+  private final StorageConfiguration<org.apache.hadoop.conf.Configuration> hadoopConf;
+  private final HoodieTableMetaClient metaClient;
   private final long maxCompactionMemoryInBytes;
 
-  private final ResolvedSchema schema;
+  private final SerializableSchema schema;
   private final RowType tableRowType;
-  private final Path path;
+  private final StoragePath path;
   private final List<String> partitionKeys;
   private final String defaultPartName;
   private final Configuration conf;
@@ -145,11 +157,11 @@ public class HoodieTableSource implements
   private DataPruner dataPruner;
   private PartitionPruners.PartitionPruner partitionPruner;
   private int dataBucket;
-  private FileIndex fileIndex;
+  private transient FileIndex fileIndex;
 
   public HoodieTableSource(
-      ResolvedSchema schema,
-      Path path,
+      SerializableSchema schema,
+      StoragePath path,
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf) {
@@ -157,8 +169,8 @@ public class HoodieTableSource implements
   }
 
   public HoodieTableSource(
-      ResolvedSchema schema,
-      Path path,
+      SerializableSchema schema,
+      StoragePath path,
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf,
@@ -170,7 +182,7 @@ public class HoodieTableSource implements
       @Nullable Long limit,
       @Nullable HoodieTableMetaClient metaClient,
       @Nullable InternalSchemaManager internalSchemaManager) {
-    this.schema = ResolvedSchema.of(schema.getColumns().stream().filter(Column::isPhysical).collect(Collectors.toList()));
+    this.schema = schema;
     this.tableRowType = (RowType) this.schema.toSourceRowDataType().notNull().getLogicalType();
     this.path = path;
     this.partitionKeys = partitionKeys;
@@ -182,8 +194,8 @@ public class HoodieTableSource implements
     this.dataBucket = dataBucket;
     this.requiredPos = Optional.ofNullable(requiredPos).orElseGet(() -> IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
     this.limit = Optional.ofNullable(limit).orElse(NO_LIMIT_CONSTANT);
-    this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    this.metaClient = Optional.ofNullable(metaClient).orElseGet(() -> StreamerUtil.metaClientForReader(conf, hadoopConf));
+    this.hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
+    this.metaClient = Optional.ofNullable(metaClient).orElseGet(() -> StreamerUtil.metaClientForReader(conf, this.hadoopConf.unwrap()));
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
     this.internalSchemaManager = Optional.ofNullable(internalSchemaManager).orElseGet(() -> InternalSchemaManager.get(this.conf, this.metaClient));
   }
@@ -290,6 +302,19 @@ public class HoodieTableSource implements
     this.limit = limit;
   }
 
+  @Override
+  public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext context) {
+    Duration duration = conf.get(LOOKUP_JOIN_CACHE_TTL);
+    return TableFunctionProvider.of(
+        new HoodieLookupFunction(
+            new HoodieLookupTableReader(this::getBatchInputFormat, conf),
+            tableRowType,
+            getLookupKeys(context.getKeys()),
+            duration,
+            conf
+        ));
+  }
+
   private DataType getProducedDataType() {
     String[] schemaFieldNames = this.schema.getColumnNames().toArray(new String[0]);
     DataType[] schemaTypes = this.schema.getColumnDataTypes().toArray(new DataType[0]);
@@ -325,8 +350,8 @@ public class HoodieTableSource implements
     LOG.info("Partition pruner for hoodie source, condition is:\n" + joiner);
     List<ExpressionEvaluators.Evaluator> evaluators = ExpressionEvaluators.fromExpression(partitionFilters);
     List<DataType> partitionTypes = this.partitionKeys.stream().map(name ->
-        this.schema.getColumn(name).orElseThrow(() -> new HoodieValidationException("Field " + name + " does not exist")))
-        .map(Column::getDataType)
+            this.schema.getColumn(name).orElseThrow(() -> new HoodieValidationException("Field " + name + " does not exist")))
+        .map(SerializableSchema.Column::getDataType)
         .collect(Collectors.toList());
     String defaultParName = conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME);
     boolean hivePartition = conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING);
@@ -348,11 +373,11 @@ public class HoodieTableSource implements
   private List<MergeOnReadInputSplit> buildInputSplits() {
     FileIndex fileIndex = getOrBuildFileIndex();
     List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
-    if (relPartitionPaths.size() == 0) {
+    if (relPartitionPaths.isEmpty()) {
       return Collections.emptyList();
     }
     List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
-    if (pathInfoList.size() == 0) {
+    if (pathInfoList.isEmpty()) {
       throw new HoodieException("No files found for reading in user provided path.");
     }
 
@@ -404,7 +429,7 @@ public class HoodieTableSource implements
         switch (tableType) {
           case MERGE_ON_READ:
             final List<MergeOnReadInputSplit> inputSplits = buildInputSplits();
-            if (inputSplits.size() == 0) {
+            if (inputSplits.isEmpty()) {
               // When there is no input splits, just return an empty source.
               LOG.warn("No input splits generate for MERGE_ON_READ input format, returns empty collection instead");
               return InputFormats.EMPTY_INPUT_FORMAT;
@@ -536,7 +561,7 @@ public class HoodieTableSource implements
 
   private InputFormat<RowData, ?> baseFileOnlyInputFormat() {
     final List<StoragePathInfo> pathInfoList = getReadFiles();
-    if (pathInfoList.size() == 0) {
+    if (pathInfoList.isEmpty()) {
       return InputFormats.EMPTY_INPUT_FORMAT;
     }
 
@@ -560,7 +585,7 @@ public class HoodieTableSource implements
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
         this.predicates,
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
-        getParquetConf(this.conf, this.hadoopConf),
+        getParquetConf(this.conf, this.hadoopConf.unwrap()),
         this.conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE),
         this.internalSchemaManager
     );
@@ -583,6 +608,20 @@ public class HoodieTableSource implements
           .build();
     }
     return this.fileIndex;
+  }
+
+  private int[] getLookupKeys(int[][] keys) {
+    int[] keyIndices = new int[keys.length];
+    int i = 0;
+    for (int[] key : keys) {
+      if (key.length > 1) {
+        throw new UnsupportedOperationException(
+            "Hoodie lookup can not support nested key now.");
+      }
+      keyIndices[i] = key[0];
+      i++;
+    }
+    return keyIndices;
   }
 
   @VisibleForTesting
@@ -623,7 +662,7 @@ public class HoodieTableSource implements
   public List<StoragePathInfo> getReadFiles() {
     FileIndex fileIndex = getOrBuildFileIndex();
     List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
-    if (relPartitionPaths.size() == 0) {
+    if (relPartitionPaths.isEmpty()) {
       return Collections.emptyList();
     }
     return fileIndex.getFilesInPartitions();

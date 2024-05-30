@@ -54,7 +54,7 @@ public class ManifestFileWriter {
   private final HoodieTableMetaClient metaClient;
   private final boolean useFileListingFromMetadata;
 
-  private ManifestFileWriter(HoodieTableMetaClient metaClient, boolean useFileListingFromMetadata) {
+  protected ManifestFileWriter(HoodieTableMetaClient metaClient, boolean useFileListingFromMetadata) {
     this.metaClient = metaClient;
     this.useFileListingFromMetadata = useFileListingFromMetadata;
   }
@@ -64,7 +64,7 @@ public class ManifestFileWriter {
    */
   public synchronized void writeManifestFile(boolean useAbsolutePath) {
     try {
-      List<String> baseFiles = fetchLatestBaseFilesForAllPartitions(metaClient, useFileListingFromMetadata, useAbsolutePath)
+      List<String> baseFiles = fetchLatestBaseFilesForAllPartitions(useAbsolutePath)
           .collect(Collectors.toList());
       if (baseFiles.isEmpty()) {
         LOG.warn("No base file to generate manifest file.");
@@ -86,8 +86,7 @@ public class ManifestFileWriter {
   }
 
   @VisibleForTesting
-  public static Stream<String> fetchLatestBaseFilesForAllPartitions(HoodieTableMetaClient metaClient,
-      boolean useFileListingFromMetadata, boolean useAbsolutePath) {
+  public Stream<String> fetchLatestBaseFilesForAllPartitions(boolean useAbsolutePath) {
     try {
       StorageConfiguration storageConf = metaClient.getStorageConf();
       HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(storageConf);
@@ -105,7 +104,7 @@ public class ManifestFileWriter {
   @VisibleForTesting
   static Stream<String> getLatestBaseFiles(boolean canUseMetadataTable, HoodieEngineContext engContext, HoodieTableMetaClient metaClient,
                                            boolean useAbsolutePath) {
-    List<String> partitions = FSUtils.getAllPartitionPaths(engContext, metaClient.getBasePath(), canUseMetadataTable);
+    List<String> partitions = FSUtils.getAllPartitionPaths(engContext, metaClient.getStorage(), metaClient.getBasePath(), canUseMetadataTable);
     LOG.info("Retrieve all partitions: " + partitions.size());
     HoodieTableFileSystemView fsView = null;
     try {
