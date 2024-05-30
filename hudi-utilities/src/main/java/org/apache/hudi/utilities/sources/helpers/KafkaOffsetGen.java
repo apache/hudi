@@ -476,6 +476,8 @@ public class KafkaOffsetGen {
         fromOffsets.put(topicPartition, committedOffsetAndMetadata.offset());
       } else {
         LOG.warn("There are no commits associated with this consumer group, starting to consume from earliest offset");
+        // Fetching the offset from the beginning will be done only for the first time.
+        // When the offsets are not yet committed to Kafka.
         fromOffsets = consumer.beginningOffsets(topicPartitions);
         break;
       }
