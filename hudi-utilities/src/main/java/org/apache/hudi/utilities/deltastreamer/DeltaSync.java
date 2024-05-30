@@ -698,10 +698,10 @@ public class DeltaSync implements Serializable, Closeable {
     boolean hasErrors = totalErrorRecords > 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
-      if (cfg.checkpointWriteToHoodie && checkpointStr != null) {
+      if (!cfg.disableCheckpointWriteToHoodie && checkpointStr != null) {
         checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
       }
-      if (cfg.checkpointWriteToHoodie && cfg.checkpoint != null) {
+      if (!cfg.disableCheckpointWriteToHoodie && cfg.checkpoint != null) {
         checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
       }
 
