@@ -88,7 +88,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
 
       // Prepare the file and Parquet file reader.
       val metaClient = getHoodieMetaClient(
-        HadoopFSUtils.getStorageConfWithCopy(_spark.sparkContext.hadoopConfiguration), basePath)
+        HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath)
       val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
       assertFalse(allBaseFiles.isEmpty)
       val readerContext = new SparkFileFormatInternalRowReaderContext(reader, HoodieRecord.RECORD_KEY_METADATA_FIELD, Seq.empty)
