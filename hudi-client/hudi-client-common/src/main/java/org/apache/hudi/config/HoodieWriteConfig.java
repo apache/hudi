@@ -27,7 +27,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieFunctionalIndexConfig;
+import org.apache.hudi.common.config.HoodieIndexingConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
@@ -801,7 +801,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private HoodieCommonConfig commonConfig;
   private HoodieStorageConfig storageConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
-  private HoodieFunctionalIndexConfig functionalIndexConfig;
+  private HoodieIndexingConfig indexingConfig;
   private EngineType engineType;
 
   /**
@@ -1199,7 +1199,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
     this.timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().fromProperties(props)
         .withDefaultLockProvider(!isLockRequired()).build();
-    this.functionalIndexConfig = HoodieFunctionalIndexConfig.newBuilder().fromProperties(props).build();
+    this.indexingConfig = HoodieIndexingConfig.newBuilder().fromProperties(props).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -2434,8 +2434,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return timeGeneratorConfig;
   }
 
-  public HoodieFunctionalIndexConfig getFunctionalIndexConfig() {
-    return functionalIndexConfig;
+  public HoodieIndexingConfig getIndexingConfig() {
+    return indexingConfig;
   }
 
   /**
@@ -2737,6 +2737,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public Integer getPartitionTTLMaxPartitionsToDelete() {
     return getInt(HoodieTTLConfig.MAX_PARTITION_TO_DELETE);
+  }
+
+  public boolean isSecondaryIndexEnabled() {
+    return metadataConfig.isSecondaryIndexEnabled();
+  }
+
+  public int getSecondaryIndexParallelism() {
+    return metadataConfig.getSecondaryIndexParallelism();
   }
 
   public static class Builder {

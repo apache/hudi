@@ -313,6 +313,17 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   /**
+   * Returns a map of (record-key -> secondary-key) for the provided record keys.
+   */
+  public Map<String, String> getSecondaryKeys(List<String> recordKeys) {
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
+        "Record index is not initialized in MDT");
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.SECONDARY_INDEX),
+        "Secondary index is not initialized in MDT");
+    return getSecondaryKeysForRecordKeys(recordKeys, MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+  }
+
+  /**
    * Returns a list of all partitions.
    */
   protected List<String> fetchAllPartitionPaths() {
@@ -425,6 +436,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
   protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
+
+  protected abstract Map<String, String> getSecondaryKeysForRecordKeys(List<String> recordKeys, String partitionName);
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;

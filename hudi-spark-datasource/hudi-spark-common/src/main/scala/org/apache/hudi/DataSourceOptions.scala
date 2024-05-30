@@ -429,6 +429,13 @@ object DataSourceWriteOptions {
   val RECORDKEY_FIELD = KeyGeneratorOptions.RECORDKEY_FIELD_NAME
 
   /**
+   * Secondary key field. Columns to be used as the secondary index columns. Actual value
+   * will be obtained by invoking .toString() on the field value. Nested fields can be specified using
+   * the dot notation eg: `a.b.c`
+   */
+  val SECONDARYKEY_COLUMN_NAME = KeyGeneratorOptions.SECONDARYKEY_COLUMN_NAME
+
+  /**
    * Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual
    * value obtained by invoking .toString()
    */

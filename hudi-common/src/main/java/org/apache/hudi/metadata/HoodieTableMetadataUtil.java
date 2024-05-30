@@ -50,16 +50,18 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
@@ -93,6 +95,7 @@ import org.apache.hudi.util.Lazy;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,6 +136,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMOR
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
+import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -157,6 +161,7 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
   public static final String PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX = "func_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
+  public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
 
   private HoodieTableMetadataUtil() {
   }
@@ -1805,7 +1810,7 @@ public class HoodieTableMetadataUtil {
                 MAX_MEMORY_FOR_COMPACTION.key(), DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES))
             .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())
             .withPartition(fileSlice.getPartitionPath())
-            .withOptimizedLogBlocksScan(storageConf.getBoolean("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN, false))
+            .withOptimizedLogBlocksScan(storageConf.getBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), false))
             .withDiskMapType(storageConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()))
             .withBitCaskDiskMapCompressionEnabled(storageConf.getBoolean(
                 DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
@@ -1833,10 +1838,151 @@ public class HoodieTableMetadataUtil {
     });
   }
 
-  public static Schema getProjectedSchemaForFunctionalIndex(HoodieFunctionalIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
+  public static Schema getProjectedSchemaForFunctionalIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
     Schema tableSchema = schemaResolver.getTableAvroSchema();
     return addMetadataFields(getSchemaForFields(tableSchema, indexDefinition.getSourceFields()));
+  }
+
+  public static HoodieData<HoodieRecord> readSecondaryKeysFromBaseFiles(HoodieEngineContext engineContext,
+                                                                        List<Pair<String, Pair<String, List<String>>>> partitionFiles,
+                                                                        int secondaryIndexMaxParallelism,
+                                                                        String activeModule, HoodieTableMetaClient metaClient, EngineType engineType,
+                                                                        HoodieIndexDefinition indexDefinition) {
+    if (partitionFiles.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+    final int parallelism = Math.min(partitionFiles.size(), secondaryIndexMaxParallelism);
+    final String basePath = metaClient.getBasePathV2().toString();
+    Schema tableSchema;
+    try {
+      tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePathV2(), e);
+    }
+
+    engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFiles.size() + " partitions");
+    return engineContext.parallelize(partitionFiles, parallelism).flatMap(partitionAndBaseFile -> {
+      final String partition = partitionAndBaseFile.getKey();
+      final Pair<String, List<String>> baseAndLogFiles = partitionAndBaseFile.getValue();
+      List<String> logFilePaths = new ArrayList<>();
+      baseAndLogFiles.getValue().forEach(logFile -> logFilePaths.add(basePath + StoragePath.SEPARATOR + partition + StoragePath.SEPARATOR + logFile));
+      String filePath = baseAndLogFiles.getKey();
+      Option<StoragePath> dataFilePath = filePath.isEmpty() ? Option.empty() : Option.of(filePath(basePath, partition, filePath));
+      Schema readerSchema;
+      if (dataFilePath.isPresent()) {
+        readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
+            .readAvroSchema(metaClient.getStorage(), dataFilePath.get());
+      } else {
+        readerSchema = tableSchema;
+      }
+      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition);
+    });
+  }
+
+  public static HoodieData<HoodieRecord> readSecondaryKeysFromFileSlices(HoodieEngineContext engineContext,
+                                                                         List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                                         int secondaryIndexMaxParallelism,
+                                                                         String activeModule, HoodieTableMetaClient metaClient, EngineType engineType,
+                                                                         HoodieIndexDefinition indexDefinition) {
+    if (partitionFileSlicePairs.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+    final int parallelism = Math.min(partitionFileSlicePairs.size(), secondaryIndexMaxParallelism);
+    final String basePath = metaClient.getBasePathV2().toString();
+    Schema tableSchema;
+    try {
+      tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePathV2(), e);
+    }
+
+    engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFileSlicePairs.size() + " file slices");
+    return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
+      final String partition = partitionAndBaseFile.getKey();
+      final FileSlice fileSlice = partitionAndBaseFile.getValue();
+      List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(l -> l.getPath().toString()).collect(toList());
+      Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> filePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
+      Schema readerSchema;
+      if (dataFilePath.isPresent()) {
+        readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
+            .readAvroSchema(metaClient.getStorage(), dataFilePath.get());
+      } else {
+        readerSchema = tableSchema;
+      }
+      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition);
+    });
+  }
+
+  private static ClosableIterator<HoodieRecord> createSecondaryIndexGenerator(HoodieTableMetaClient metaClient,
+                                                                              EngineType engineType, List<String> logFilePaths,
+                                                                              Schema tableSchema, String partition,
+                                                                              Option<StoragePath> dataFilePath,
+                                                                              HoodieIndexDefinition indexDefinition) throws Exception {
+    final String basePath = metaClient.getBasePathV2().toString();
+    final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
+
+    HoodieRecordMerger recordMerger = HoodieRecordUtils.createRecordMerger(
+        basePath,
+        engineType,
+        Collections.emptyList(),
+        metaClient.getTableConfig().getRecordMergerStrategy());
+
+    HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
+        .withStorage(metaClient.getStorage())
+        .withBasePath(basePath)
+        .withLogFilePaths(logFilePaths)
+        .withReaderSchema(tableSchema)
+        .withLatestInstantTime(metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp).orElse(""))
+        .withReverseReader(false)
+        .withMaxMemorySizeInBytes(storageConf.getLong(MAX_MEMORY_FOR_COMPACTION.key(), DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES))
+        .withBufferSize(HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue())
+        .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())
+        .withPartition(partition)
+        .withOptimizedLogBlocksScan(storageConf.getBoolean("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN, false))
+        .withDiskMapType(storageConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()))
+        .withBitCaskDiskMapCompressionEnabled(storageConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
+        .withRecordMerger(recordMerger)
+        .withTableMetaClient(metaClient)
+        .build();
+
+    Option<HoodieFileReader> baseFileReader = Option.empty();
+    if (dataFilePath.isPresent()) {
+      baseFileReader = Option.of(HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType()).getFileReader(getReaderConfigs(storageConf), dataFilePath.get()));
+    }
+    HoodieFileSliceReader fileSliceReader = new HoodieFileSliceReader(baseFileReader, mergedLogRecordScanner, tableSchema, metaClient.getTableConfig().getPreCombineField(), recordMerger,
+        metaClient.getTableConfig().getProps(),
+        Option.empty());
+    ClosableIterator<HoodieRecord> fileSliceIterator = ClosableIterator.wrap(fileSliceReader);
+    return new ClosableIterator<HoodieRecord>() {
+      @Override
+      public void close() {
+        fileSliceIterator.close();
+      }
+
+      @Override
+      public boolean hasNext() {
+        return fileSliceIterator.hasNext();
+      }
+
+      @Override
+      public HoodieRecord next() {
+        HoodieRecord record = fileSliceIterator.next();
+        String recordKey = record.getRecordKey(tableSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        String secondaryKeyFields = String.join(".", indexDefinition.getSourceFields());
+        String secondaryKey;
+        try {
+          GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(tableSchema, CollectionUtils.emptyProps()).get()).getData();
+          secondaryKey = HoodieAvroUtils.getNestedFieldValAsString(genericRecord, secondaryKeyFields, true, false);
+        } catch (IOException e) {
+          throw new RuntimeException("Failed to fetch records." + e);
+        }
+
+        return HoodieMetadataPayload.createSecondaryIndex(recordKey, secondaryKey, indexDefinition.getIndexName(), false);
+      }
+    };
   }
 
   private static StoragePath filePath(String basePath, String partition, String filename) {

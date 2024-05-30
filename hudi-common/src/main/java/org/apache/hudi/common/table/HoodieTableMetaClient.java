@@ -28,8 +28,8 @@ import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.BootstrapIndexType;
-import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
-import org.apache.hudi.common.model.HoodieFunctionalIndexMetadata;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
@@ -135,7 +135,7 @@ public class HoodieTableMetaClient implements Serializable {
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
-  private Option<HoodieFunctionalIndexMetadata> functionalIndexMetadata = Option.empty();
+  private Option<HoodieIndexMetadata> indexMetadataOpt = Option.empty();
 
   /**
    * Instantiate HoodieTableMetaClient.
@@ -155,7 +155,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
     TableNotFoundException.checkTableValidity(this.storage, this.basePath, metaPath);
     this.tableConfig = new HoodieTableConfig(this.storage, metaPath, payloadClassName, recordMergerStrategy);
-    this.functionalIndexMetadata = getFunctionalIndexMetadata();
+    this.indexMetadataOpt = getIndexMetadata();
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
@@ -190,40 +190,40 @@ public class HoodieTableMetaClient implements Serializable {
    * @param columns       Columns on which index is built
    * @param options       Options for the index
    */
-  public void buildFunctionalIndexDefinition(String indexMetaPath,
-                                             String indexName,
-                                             String indexType,
-                                             Map<String, Map<String, String>> columns,
-                                             Map<String, String> options) {
+  public void buildIndexDefinition(String indexMetaPath,
+                                   String indexName,
+                                   String indexType,
+                                   Map<String, Map<String, String>> columns,
+                                   Map<String, String> options) {
     ValidationUtils.checkState(
-        !functionalIndexMetadata.isPresent() || !functionalIndexMetadata.get().getIndexDefinitions().containsKey(indexName),
-        "Functional index metadata is already present");
+        !indexMetadataOpt.isPresent() || !indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName),
+        "Index metadata is already present");
     List<String> columnNames = new ArrayList<>(columns.keySet());
-    HoodieFunctionalIndexDefinition functionalIndexDefinition = new HoodieFunctionalIndexDefinition(indexName, indexType, options.get("func"), columnNames, options);
-    if (functionalIndexMetadata.isPresent()) {
-      functionalIndexMetadata.get().getIndexDefinitions().put(indexName, functionalIndexDefinition);
+    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, indexType, options.get("func"), columnNames, options);
+    if (indexMetadataOpt.isPresent()) {
+      indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
     } else {
-      functionalIndexMetadata = Option.of(new HoodieFunctionalIndexMetadata(Collections.singletonMap(indexName, functionalIndexDefinition)));
+      indexMetadataOpt = Option.of(new HoodieIndexMetadata(Collections.singletonMap(indexName, indexDefinition)));
     }
     try {
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(functionalIndexMetadata.get().toJson())));
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
     } catch (IOException e) {
       throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
     }
   }
 
   /**
-   * Returns Option of {@link HoodieFunctionalIndexMetadata} from index definition file if present, else returns empty Option.
+   * Returns Option of {@link HoodieIndexMetadata} from index definition file if present, else returns empty Option.
    */
-  public Option<HoodieFunctionalIndexMetadata> getFunctionalIndexMetadata() {
-    if (functionalIndexMetadata.isPresent() && !functionalIndexMetadata.get().getIndexDefinitions().isEmpty()) {
-      return functionalIndexMetadata;
+  public Option<HoodieIndexMetadata> getIndexMetadata() {
+    if (indexMetadataOpt.isPresent() && !indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
+      return indexMetadataOpt;
     }
     if (tableConfig.getIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getIndexDefinitionPath().get())) {
       StoragePath indexDefinitionPath =
           new StoragePath(tableConfig.getIndexDefinitionPath().get());
       try {
-        return Option.of(HoodieFunctionalIndexMetadata.fromJson(
+        return Option.of(HoodieIndexMetadata.fromJson(
             new String(FileIOUtils.readDataFromPath(storage, indexDefinitionPath).get())));
       } catch (IOException e) {
         throw new HoodieIOException("Could not load functional index metadata at path: " + tableConfig.getIndexDefinitionPath().get(), e);
@@ -232,11 +232,11 @@ public class HoodieTableMetaClient implements Serializable {
     return Option.empty();
   }
 
-  public void updateFunctionalIndexMetadata(HoodieFunctionalIndexMetadata newFunctionalIndexMetadata, String indexMetaPath) {
-    this.functionalIndexMetadata = Option.of(newFunctionalIndexMetadata);
+  public void updateIndexMetadata(HoodieIndexMetadata newFunctionalIndexMetadata, String indexMetaPath) {
+    this.indexMetadataOpt = Option.of(newFunctionalIndexMetadata);
     try {
       // update the index metadata file as well
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(functionalIndexMetadata.get().toJson())));
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
     } catch (IOException e) {
       throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
     }
@@ -918,6 +918,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String tableName;
     private String tableCreateSchema;
     private String recordKeyFields;
+    private String secondaryKeyFields;
     private String archiveLogFolder;
     private String payloadClassName;
     private String payloadType;
@@ -982,6 +983,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setRecordKeyFields(String recordKeyFields) {
       this.recordKeyFields = recordKeyFields;
+      return this;
+    }
+
+    public PropertyBuilder setSecondaryKeyFields(String secondaryKeyFields) {
+      this.secondaryKeyFields = secondaryKeyFields;
       return this;
     }
 
