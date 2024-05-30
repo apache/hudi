@@ -564,7 +564,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs();
 
-    // Reuse record index parallelism config to build secondary index
     int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
     HoodieData<HoodieRecord> records = readSecondaryKeysFromFileSlices(
         engineContext,
