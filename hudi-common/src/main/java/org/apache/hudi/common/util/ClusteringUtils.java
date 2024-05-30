@@ -69,7 +69,7 @@ public class ClusteringUtils {
   public static Stream<Pair<HoodieInstant, HoodieClusteringPlan>> getAllPendingClusteringPlans(
       HoodieTableMetaClient metaClient) {
     List<HoodieInstant> pendingReplaceInstants =
-        metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
+        metaClient.reloadActiveTimeline().filterPendingReplaceTimeline().getInstants();
     return pendingReplaceInstants.stream().map(instant -> getClusteringPlan(metaClient, instant))
         .filter(Option::isPresent).map(Option::get);
   }
