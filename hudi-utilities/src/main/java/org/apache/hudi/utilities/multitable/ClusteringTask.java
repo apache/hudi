@@ -55,6 +55,7 @@ class ClusteringTask extends TableServiceTask {
     clusteringConfig.basePath = basePath;
     clusteringConfig.parallelism = parallelism;
     clusteringConfig.runningMode = clusteringMode;
+    // HoodieWriteClient within HoodieClusteringJob is closed internally. not closing HoodieCleaner here is not leaking any resources.
     new HoodieClusteringJob(jsc, clusteringConfig, props, metaClient).cluster(retry);
   }
 
