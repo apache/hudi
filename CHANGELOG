@@ -193,3 +193,8 @@ f488c527fde [AUDIT-795] Upgrade to version release-v1.14.5 (#719)
 19faaa08b [ENG-10032][MINOR] Update log level for some MDT logs (#726)
 d18adf3e0 [ENG-9990][CHERRYPICK] Upgrade h2 and hive dependency version (#729)
 846030351 [AUDIT-802]: Upgrade to version release-v1.15.0 (#725)
+
+---[2024-05-30 13:56:13] [release-v1.17.0] Upgrade to version release-v1.17.0---
+6f0beba06d9 [ENG-9739][HUDI-7816] Provide SourceProfileSupplier option into the SnapshotLoadQuerySplitter (#728)
+b004bdea59f [AUDIT-809] Upgrade to version release-v1.16.0 (#734)
+9e1c2150cf0 [ENG-9990][HUDI-7808] Upgrade io.acryl:datahub-client from 0.8.31 to 0.8.45 (#733)
