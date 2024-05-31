@@ -179,7 +179,21 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  public void testCheckpointCompleteWithPartialEvents() {
+  public void testCheckpointCompleteWithPartialEvents() throws Exception {
+    // reset
+    reset();
+    // override the default configuration
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
+
+    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
+    coordinator.start();
+    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+
+    coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
+    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
     String instant = coordinator.getInstant();

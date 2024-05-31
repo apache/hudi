@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
@@ -206,6 +207,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
         .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -798,6 +800,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.INDEX_TYPE, indexType)
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
