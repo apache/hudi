@@ -81,7 +81,11 @@ class TestSchemaRegistryProvider {
     SchemaRegistryProvider underTest = new SchemaRegistryProvider(props, null, useConverter ? Option.of(mockSchemaConverter) : Option.empty(),
         mockRestServiceFactory, mockRegistryClientFactory);
     SchemaMetadata metadata = new SchemaMetadata(1, 1, RAW_SCHEMA);
-    when(mockRegistryClient.getSchemaMetadata("test", version)).thenReturn(metadata);
+    if (version == -1) {
+      when(mockRegistryClient.getLatestSchemaMetadata("test")).thenReturn(metadata);
+    } else {
+      when(mockRegistryClient.getSchemaMetadata("test", version)).thenReturn(metadata);
+    }
     ParsedSchema mockParsedSchema = mock(ParsedSchema.class);
     when(mockRegistryClient.parseSchema("AVRO", RAW_SCHEMA, Collections.emptyList())).thenReturn(java.util.Optional.of(mockParsedSchema));
     if (useConverter) {

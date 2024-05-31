@@ -154,7 +154,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   public String fetchSchemaFromRegistry(String registryUrl) {
     try {
       Matcher matcher = Pattern.compile("://(.*?)@").matcher(registryUrl);
-      Triple<String, String, Integer> registryInfo;
+      Triple<String, String, String> registryInfo;
       String creds = null;
       if (matcher.find()) {
         creds = matcher.group(1);
@@ -169,9 +169,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
         setAuthorizationHeader(creds, restService);
       }
       String subject = registryInfo.getMiddle();
-      Integer version = registryInfo.getRight();
+      String version = registryInfo.getRight();
       SchemaRegistryClient registryClient = registryClientProvider.apply(restService);
-      SchemaMetadata schemaMetadata = registryClient.getSchemaMetadata(subject, version);
+      SchemaMetadata schemaMetadata = version.equals(LATEST) ? registryClient.getLatestSchemaMetadata(subject) : registryClient.getSchemaMetadata(subject, Integer.parseInt(version));
       ParsedSchema parsedSchema = registryClient.parseSchema(schemaMetadata.getSchemaType(), schemaMetadata.getSchema(), schemaMetadata.getReferences())
           .orElseThrow(() -> new HoodieSchemaException("Failed to parse schema from registry"));
       if (schemaConverter.isPresent()) {
@@ -184,11 +184,11 @@ public class SchemaRegistryProvider extends SchemaProvider {
     }
   }
 
-  private Triple<String, String, Integer> getUrlSubjectAndVersion(String registryUrl) {
+  private Triple<String, String, String> getUrlSubjectAndVersion(String registryUrl) {
     // url may be list of urls
     String[] splitRegistryUrls = registryUrl.split(",");
     String subjectName = null;
-    Integer version = null;
+    String version = null;
     List<String> urls = new ArrayList<>(splitRegistryUrls.length);
     // url will end with /subjects/{subject}/versions/{version}
     for (String url : splitRegistryUrls) {
@@ -198,8 +198,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
       }
       urls.add(matcher.group(1));
       subjectName = matcher.group(2);
-      String versionString = matcher.group(3);
-      version = versionString.equals(LATEST) ? -1 : Integer.parseInt(versionString);
+      version = matcher.group(3);
     }
     if (subjectName == null) {
       throw new HoodieSchemaFetchException("Failed to extract subject name from registry url");
