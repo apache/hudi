@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.TablePathUtils.getTablePath;
 import static org.apache.hudi.common.util.TablePathUtils.isHoodieTablePath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
@@ -102,7 +103,8 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);
       HoodieStorage storage = new HoodieHadoopStorage(fs);
-      return isHoodieTablePath(storage, convertToStoragePath(inputPath));
+      return getTablePath(storage, convertToStoragePath(inputPath))
+          .map(path -> isHoodieTablePath(storage, path)).orElse(false);
     } catch (IOException e) {
       return false;
     }
