@@ -38,6 +38,7 @@ import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -56,6 +57,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   protected final HoodieSyncConfig config;
   protected final PartitionValueExtractor partitionValueExtractor;
   protected final HoodieTableMetaClient metaClient;
+  private static final String TEMP_SUFFIX = "_temp";
 
   public HoodieSyncClient(HoodieSyncConfig config) {
     this.config = config;
@@ -242,5 +244,9 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
     }
     return paths;
+  }
+
+  protected String generateTempTableName(String tableName) {
+    return tableName + TEMP_SUFFIX + ZonedDateTime.now().toEpochSecond();
   }
 }

@@ -77,8 +77,16 @@ public final class SchemaTestUtil {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
   }
 
+  public static Schema getSchema(String path) throws IOException {
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(path));
+  }
+
   public static List<IndexedRecord> generateTestRecords(int from, int limit) throws IOException, URISyntaxException {
     return toRecords(getSimpleSchema(), getSimpleSchema(), from, limit);
+  }
+
+  public static List<IndexedRecord> generateTestRecords(String schemaPath, String dataPath) throws IOException, URISyntaxException {
+    return toRecords(getSchema(schemaPath), getSchema(schemaPath), dataPath);
   }
 
   public static List<GenericRecord> generateTestGenericRecords(int from, int limit) throws IOException, URISyntaxException {
@@ -113,6 +121,24 @@ public final class SchemaTestUtil {
     }
   }
 
+  private static <T extends IndexedRecord> List<T> toRecords(Schema writerSchema, Schema readerSchema, String path)
+      throws IOException, URISyntaxException {
+    GenericDatumReader<T> reader = new GenericDatumReader<>(writerSchema, readerSchema);
+    Path dataPath = initializeSampleDataPath(path);
+
+    try (Stream<String> stream = Files.lines(dataPath)) {
+      return stream.map(s -> {
+        try {
+          return reader.read(null, DecoderFactory.get().jsonDecoder(writerSchema, s));
+        } catch (IOException e) {
+          throw new HoodieIOException("Could not read data from " + path, e);
+        }
+      }).collect(Collectors.toList());
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not read data from " + path, e);
+    }
+  }
+
   /**
    * Required to register the necessary JAR:// file system.
    * @return Path to the sample data in the resource file.
@@ -125,6 +151,15 @@ public final class SchemaTestUtil {
       return uriToPath(resource);
     } else {
       return Paths.get(SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI());
+    }
+  }
+
+  private static Path initializeSampleDataPath(String path) throws IOException, URISyntaxException {
+    URI resource = SchemaTestUtil.class.getResource(path).toURI();
+    if (resource.toString().contains("!")) {
+      return uriToPath(resource);
+    } else {
+      return Paths.get(SchemaTestUtil.class.getResource(path).toURI());
     }
   }
 
