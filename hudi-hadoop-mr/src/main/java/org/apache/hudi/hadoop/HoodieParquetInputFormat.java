@@ -19,15 +19,15 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
@@ -50,6 +50,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static org.apache.hudi.common.util.TablePathUtils.isHoodieTablePath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the Hoodie Mode. If paths
@@ -96,11 +99,10 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
   private static boolean checkIfHudiTable(final InputSplit split, final JobConf job) {
     try {
-      Option<Path> tablePathOpt = TablePathUtils.getTablePath(((FileSplit) split).getPath(), job);
-      if (!tablePathOpt.isPresent()) {
-        return false;
-      }
-      return tablePathOpt.get().getFileSystem(job).exists(new Path(tablePathOpt.get(), HoodieTableMetaClient.METAFOLDER_NAME));
+      Path inputPath = ((FileSplit) split).getPath();
+      FileSystem fs = inputPath.getFileSystem(job);
+      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      return isHoodieTablePath(storage, convertToStoragePath(inputPath));
     } catch (IOException e) {
       return false;
     }

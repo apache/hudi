@@ -22,7 +22,6 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -40,6 +39,9 @@ import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -73,8 +75,18 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.fs.FSUtils.getCommitTime;
+import static org.apache.hudi.common.fs.FSUtils.getFileId;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePathInfo;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getDeltaCommitTimeFromLogPath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFileIdFromLogPath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getRelativePartitionPath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.isLogFile;
 
-public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWritable, ArrayWritable>  {
+public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
   public interface HiveReaderCreator {
     org.apache.hadoop.mapred.RecordReader<NullWritable, ArrayWritable> getRecordReader(
@@ -104,7 +116,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     FileSplit fileSplit = (FileSplit) split;
     String tableBasePath = getTableBasePath(split, jobConfCopy);
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(jobConfCopy)
+        .setConf(getStorageConf(jobConfCopy))
         .setBasePath(tableBasePath)
         .build();
     String latestCommitTime = getLatestCommitTime(split, metaClient);
@@ -116,15 +128,15 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     //get some config vals
     long maxMemoryForMerge = jobConf.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());
     String spillableMapPath = jobConf.get(SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath());
-    ExternalSpillableMap.DiskMapType spillMapType =  ExternalSpillableMap.DiskMapType.valueOf(jobConf.get(SPILLABLE_DISK_MAP_TYPE.key(),
+    ExternalSpillableMap.DiskMapType spillMapType = ExternalSpillableMap.DiskMapType.valueOf(jobConf.get(SPILLABLE_DISK_MAP_TYPE.key(),
         SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT));
     boolean bitmaskCompressEnabled = jobConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
 
-    this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, jobConfCopy, tableBasePath,
-        latestCommitTime, getFileSliceFromSplit(fileSplit, hosts, readerContext.getFs(tableBasePath, jobConfCopy), tableBasePath),
+    this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
+        latestCommitTime, getFileSliceFromSplit(fileSplit, hosts, getFs(tableBasePath, jobConfCopy), tableBasePath),
         tableSchema, requestedSchema, metaClient.getTableConfig().getProps(), metaClient.getTableConfig(), fileSplit.getStart(),
-        fileSplit.getLength(), false, maxMemoryForMerge, spillableMapPath,spillMapType, bitmaskCompressEnabled);
+        fileSplit.getLength(), false, maxMemoryForMerge, spillableMapPath, spillMapType, bitmaskCompressEnabled);
     this.fileGroupReader.initRecordIterators();
     //it expects the partition columns to be at the end
     Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,
@@ -178,8 +190,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
 
   public static List<String> getPartitionFieldNames(JobConf jobConf) {
     String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
-    return partitionFields.length() > 0 ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
-        : new ArrayList<>();
+    return partitionFields.isEmpty() ? new ArrayList<>() : Arrays.stream(partitionFields.split("/")).collect(Collectors.toList());
   }
 
   private static Schema getLatestTableSchema(HoodieTableMetaClient metaClient, JobConf jobConf, String latestCommitTime) {
@@ -198,9 +209,10 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
       return realtimeSplit.getBasePath();
     } else {
-      Path inputPath = ((FileSplit)split).getPath();
-      FileSystem fs =  inputPath.getFileSystem(jobConf);
-      Option<Path> tablePath = TablePathUtils.getTablePath(fs, inputPath);
+      Path inputPath = ((FileSplit) split).getPath();
+      FileSystem fs = inputPath.getFileSystem(jobConf);
+      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
       return tablePath.get().toString();
     }
   }
@@ -225,30 +237,32 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     if (split instanceof RealtimeSplit) {
       //mor
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
-      boolean isLogFile = FSUtils.isLogFile(realtimeSplit.getPath());
+      boolean isLogFile = isLogFile(realtimeSplit.getPath());
       String fileID;
       String commitTime;
       if (isLogFile) {
-        fileID = FSUtils.getFileIdFromLogPath(realtimeSplit.getPath());
-        commitTime = FSUtils.getDeltaCommitTimeFromLogPath(realtimeSplit.getPath());
+        fileID = getFileIdFromLogPath(realtimeSplit.getPath());
+        commitTime = getDeltaCommitTimeFromLogPath(realtimeSplit.getPath());
       } else {
-        fileID = FSUtils.getFileId(realtimeSplit.getPath().getName());
-        commitTime = FSUtils.getCommitTime(realtimeSplit.getPath().toString());
+        fileID = getFileId(realtimeSplit.getPath().getName());
+        commitTime = getCommitTime(realtimeSplit.getPath().toString());
       }
-      HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getPartitionPath(realtimeSplit.getBasePath(),
-          realtimeSplit.getPath().getParent().toString()).toString(), fileID);
+      HoodieFileGroupId fileGroupId = new HoodieFileGroupId(getRelativePartitionPath(new Path(realtimeSplit.getBasePath()), realtimeSplit.getPath()), fileID);
       if (isLogFile) {
         return new FileSlice(fileGroupId, commitTime, null, realtimeSplit.getDeltaLogFiles());
       }
       hosts.put(realtimeSplit.getPath().toString(), realtimeSplit.getLocations());
-      HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fs.getFileStatus(realtimeSplit.getPath()), bootstrapBaseFile);
+      HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(realtimeSplit.getPath())), bootstrapBaseFile);
       return new FileSlice(fileGroupId, commitTime, hoodieBaseFile, realtimeSplit.getDeltaLogFiles());
     }
     //cow
-    HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getFileId(split.getPath().getName()),
-        FSUtils.getPartitionPath(tableBasePath, split.getPath().getParent().toString()).toString());
+    HoodieFileGroupId fileGroupId = new HoodieFileGroupId(getFileId(split.getPath().getName()), getRelativePartitionPath(new Path(tableBasePath), split.getPath()));
     hosts.put(split.getPath().toString(), split.getLocations());
-    return new FileSlice(fileGroupId, FSUtils.getCommitTime(split.getPath().toString()), new HoodieBaseFile(fs.getFileStatus(split.getPath()), bootstrapBaseFile), Collections.emptyList());
+    return new FileSlice(
+        fileGroupId,
+        getCommitTime(split.getPath().toString()),
+        new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(split.getPath())), bootstrapBaseFile),
+        Collections.emptyList());
   }
 
   private static BaseFile createBootstrapBaseFile(FileSplit split, Map<String, String[]> hosts, FileSystem fs) throws IOException {
@@ -256,7 +270,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
       BootstrapBaseFileSplit bootstrapBaseFileSplit = (BootstrapBaseFileSplit) split;
       FileSplit bootstrapFileSplit = bootstrapBaseFileSplit.getBootstrapFileSplit();
       hosts.put(bootstrapFileSplit.getPath().toString(), bootstrapFileSplit.getLocations());
-      return new BaseFile(fs.getFileStatus(bootstrapFileSplit.getPath()));
+      return new BaseFile(convertToStoragePathInfo(fs.getFileStatus(bootstrapFileSplit.getPath())));
     }
     return null;
   }

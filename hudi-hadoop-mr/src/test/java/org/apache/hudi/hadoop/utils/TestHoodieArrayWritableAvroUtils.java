@@ -48,7 +48,7 @@ public class TestHoodieArrayWritableAvroUtils {
   @BeforeEach
   public void setup() {
     List<Schema.Field> fields = tableSchema.getFields();
-    Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
+    Configuration conf = HoodieTestUtils.getDefaultStorageConf().unwrap();
     JobConf jobConf = new JobConf(conf);
     jobConf.set(serdeConstants.LIST_COLUMNS, fields.stream().map(Schema.Field::name).collect(Collectors.joining(",")));
     jobConf.set(serdeConstants.LIST_COLUMN_TYPES, HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
