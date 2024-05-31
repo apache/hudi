@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.hadoop.HoodieFileGroupReaderRecordReader;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
@@ -47,6 +46,7 @@ import java.util.List;
 
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.isLogFile;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFilegroupReader;
 
 /**
  * Input Format, that provides a real-time view of data in a Hoodie table.
@@ -73,7 +73,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
         "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
     RealtimeSplit realtimeSplit = (RealtimeSplit) split;
 
-    if (HoodieFileGroupReaderRecordReader.useFilegroupReader(jobConf)) {
+    if (shouldUseFilegroupReader(jobConf)) {
       return super.getRecordReader(realtimeSplit, jobConf, reporter);
     }
 

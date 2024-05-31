@@ -67,9 +67,13 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getPartitionFieldNames;
 
+/**
+ * {@link HoodieReaderContext} for Hive-specific {@link HoodieFileGroupReaderBasedRecordReader}.
+ */
 public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> {
-  protected final HoodieFileGroupReaderRecordReader.HiveReaderCreator readerCreator;
+  protected final HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator;
   protected final InputSplit split;
   protected final JobConf jobConf;
   protected final Reporter reporter;
@@ -84,7 +88,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   private final String recordKeyField;
 
-  protected HiveHoodieReaderContext(HoodieFileGroupReaderRecordReader.HiveReaderCreator readerCreator,
+  protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
                                     InputSplit split,
                                     JobConf jobConf,
                                     Reporter reporter,
@@ -97,13 +101,10 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.reporter = reporter;
     this.writerSchema = writerSchema;
     this.hosts = hosts;
-    this.partitionCols = HoodieFileGroupReaderRecordReader.getPartitionFieldNames(jobConf).stream()
-        .filter(n -> writerSchema.getField(n) != null).collect(Collectors.toList());
+    this.partitionCols = getPartitionFieldNames(jobConf).stream().filter(n -> writerSchema.getField(n) != null).collect(Collectors.toList());
     this.partitionColSet = new HashSet<>(this.partitionCols);
     String tableName = metaClient.getTableConfig().getTableName();
-    recordKeyField = metaClient.getTableConfig().populateMetaFields()
-        ? HoodieRecord.RECORD_KEY_METADATA_FIELD
-        : assertSingleKey(metaClient.getTableConfig().getRecordKeyFields());
+    recordKeyField = getRecordKeyField(metaClient);
     this.objectInspectorCache = HoodieArrayWritableAvroUtils.getCacheForTable(tableName, writerSchema, jobConf);
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
   }
@@ -112,7 +113,12 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
    * If populate meta fields is false, then getRecordKeyFields()
    * should return exactly 1 recordkey field.
    */
-  private static String assertSingleKey(Option<String[]> recordKeyFieldsOpt) {
+  private static String getRecordKeyField(HoodieTableMetaClient metaClient) {
+    if (metaClient.getTableConfig().populateMetaFields()) {
+      return HoodieRecord.RECORD_KEY_METADATA_FIELD;
+    }
+
+    Option<String[]> recordKeyFieldsOpt = metaClient.getTableConfig().getRecordKeyFields();
     ValidationUtils.checkArgument(recordKeyFieldsOpt.isPresent(), "No record key field set in table config, but populateMetaFields is disabled");
     ValidationUtils.checkArgument(recordKeyFieldsOpt.get().length == 1, "More than 1 record key set in table config, but populateMetaFields is disabled");
     return recordKeyFieldsOpt.get()[0];
@@ -129,7 +135,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     }).collect(Collectors.toList());
     jobConf.set(serdeConstants.LIST_COLUMNS, String.join(",", dataColumnNameList));
     jobConf.set(serdeConstants.LIST_COLUMN_TYPES, dataColumnTypeList.stream().map(TypeInfo::getQualifiedName).collect(Collectors.joining(",")));
-    //don't replace `f -> f.name()` with lambda reference
+    // don't replace `f -> f.name()` with lambda reference
     String readColNames = requiredSchema.getFields().stream().map(f -> f.name()).collect(Collectors.joining(","));
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNames);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, requiredSchema.getFields()
@@ -158,7 +164,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     if (modifiedDataSchema.equals(requiredSchema)) {
       return recordIterator;
     }
-    //The record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
+    // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
     return new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
   }
 
@@ -172,7 +178,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     if (mergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID)) {
       return new HoodieHiveRecordMerger();
     }
-    throw new HoodieException("The merger strategy UUID is not supported, Default: %s, Passed: " + mergerStrategy);
+    throw new HoodieException(String.format("The merger strategy UUID is not supported, Default: %s, Passed: %s", mergerStrategy, DEFAULT_MERGER_STRATEGY_UUID));
   }
 
   @Override

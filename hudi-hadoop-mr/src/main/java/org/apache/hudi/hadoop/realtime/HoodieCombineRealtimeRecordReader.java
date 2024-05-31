@@ -19,7 +19,7 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.hadoop.HoodieFileGroupReaderRecordReader;
+import org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader;
 import org.apache.hudi.hadoop.hive.HoodieCombineRealtimeFileSplit;
 
 import org.apache.hadoop.fs.Path;
@@ -37,6 +37,8 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFilegroupReader;
+
 /**
  * Allows to read multiple realtime file splits grouped together by CombineInputFormat.
  */
@@ -52,7 +54,7 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
 
   public HoodieCombineRealtimeRecordReader(JobConf jobConf, CombineFileSplit split,
       List<RecordReader> readers) {
-    useFileGroupReader = HoodieFileGroupReaderRecordReader.useFilegroupReader(jobConf);
+    useFileGroupReader = shouldUseFilegroupReader(jobConf);
     try {
       ValidationUtils.checkArgument(((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits().size() == readers
           .size(), "Num Splits does not match number of unique RecordReaders!");
@@ -60,7 +62,7 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
         if (useFileGroupReader) {
           LOG.info("Creating new HoodieFileGroupReaderRecordReader for split");
           RecordReader reader = readers.remove(0);
-          ValidationUtils.checkArgument(reader instanceof HoodieFileGroupReaderRecordReader, reader.toString() + "not instance of HoodieFileGroupReaderRecordReader ");
+          ValidationUtils.checkArgument(reader instanceof HoodieFileGroupReaderBasedRecordReader, reader.toString() + "not instance of HoodieFileGroupReaderRecordReader ");
           recordReaders.add(reader);
         } else {
           LOG.info("Creating new RealtimeRecordReader for split");
@@ -86,8 +88,8 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
       Path path;
       if (useFileGroupReader) {
         reader = currentRecordReader;
-        jobConf = ((HoodieFileGroupReaderRecordReader) reader).getJobConf();
-        path = ((HoodieFileGroupReaderRecordReader) reader).getSplit().getPath();
+        jobConf = ((HoodieFileGroupReaderBasedRecordReader) reader).getJobConf();
+        path = ((HoodieFileGroupReaderBasedRecordReader) reader).getSplit().getPath();
       } else {
         reader = ((HoodieRealtimeRecordReader)currentRecordReader).getReader();
         jobConf = ((AbstractRealtimeRecordReader) reader).getJobConf();
@@ -104,7 +106,7 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
   @Override
   public NullWritable createKey() {
     if (useFileGroupReader) {
-      return ((HoodieFileGroupReaderRecordReader) this.currentRecordReader).createKey();
+      return ((HoodieFileGroupReaderBasedRecordReader) this.currentRecordReader).createKey();
     } else {
       return ((HoodieRealtimeRecordReader) this.currentRecordReader).createKey();
     }
@@ -113,7 +115,7 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
   @Override
   public ArrayWritable createValue() {
     if (useFileGroupReader) {
-      return ((HoodieFileGroupReaderRecordReader) this.currentRecordReader).createValue();
+      return ((HoodieFileGroupReaderBasedRecordReader) this.currentRecordReader).createValue();
     } else {
       return ((HoodieRealtimeRecordReader) this.currentRecordReader).createValue();
     }
