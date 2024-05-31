@@ -18,6 +18,9 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -31,6 +34,7 @@ import static org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter.Config
 /**
  * Abstract splitter responsible for managing the snapshot load query operations.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class SnapshotLoadQuerySplitter {
 
   /**
@@ -65,6 +69,7 @@ public abstract class SnapshotLoadQuerySplitter {
    * @param sourceProfileSupplier An Option of a SourceProfileSupplier to use in load splitting implementation
    * @return The next checkpoint as an Option.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract Option<String> getNextCheckpoint(Dataset<Row> df, String beginCheckpointStr, Option<SourceProfileSupplier> sourceProfileSupplier);
 
   /**
@@ -72,6 +77,7 @@ public abstract class SnapshotLoadQuerySplitter {
    *
    * @param df The dataset to process.
    * @param queryInfo The query information object.
+   * @param sourceProfileSupplier An Option of a SourceProfileSupplier to use in load splitting implementation
    * @return Updated query information with the next checkpoint, in case of empty checkpoint,
    * returning endPoint same as queryInfo.getEndInstant().
    */
