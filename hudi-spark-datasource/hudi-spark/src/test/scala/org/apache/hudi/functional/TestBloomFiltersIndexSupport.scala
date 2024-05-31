@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, E
 import org.apache.spark.sql.functions.{col, not}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
@@ -115,7 +115,7 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
       saveMode = SaveMode.Append)
 
     createTempTable(hudiOpts)
-    verifyQueryPredicate(hudiOpts)
+    verifyQueryPredicate(hudiOpts, "_row_key")
   }
 
   private def createTempTable(hudiOpts: Map[String, String]): Unit = {
@@ -123,10 +123,9 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
     readDf.createOrReplaceTempView(sqlTempTable)
   }
 
-  def verifyQueryPredicate(hudiOpts: Map[String, String]): Unit = {
-    val reckey = mergedDfList.last.limit(1).collect().map(row => row.getAs("_row_key").toString)
-    val dataFilter = EqualTo(attribute("_row_key"), Literal(reckey(0)))
-    assertEquals(1, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
+  def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String): Unit = {
+    val reckey = mergedDfList.last.limit(1).collect().map(row => row.getAs(columnName).toString)
+    val dataFilter = EqualTo(attribute(columnName), Literal(reckey(0)))
     verifyFilePruning(hudiOpts, dataFilter)
   }
 
@@ -142,12 +141,12 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
-    assertTrue(filteredFilesCount <= getLatestDataFilesCount(opts))
+    assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
 
     // with no data skipping
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
     val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
-    assertTrue(filteredFilesCount <= filesCountWithNoSkipping)
+    assertTrue(filesCountWithNoSkipping == getLatestDataFilesCount(opts))
   }
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {

@@ -20,13 +20,10 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
-import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
 
@@ -44,26 +41,35 @@ class BloomFiltersIndexSupport(spark: SparkSession,
                                         ): Option[Set[String]] = {
     lazy val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
     if (recordKeys.nonEmpty) {
-      val allFiles = getPrunedFileNames(prunedPartitionsAndFileSlices).map(new StoragePath(_) ).toSeq
-      Option.apply(getCandidateFilesForRecordKeys(allFiles, recordKeys))
+      val prunedPartitionAndFileNames = getPrunedPartitionAndFileNames(prunedPartitionsAndFileSlices)
+      Option.apply(getCandidateFilesForSecondaryKeys(prunedPartitionAndFileNames, recordKeys))
     } else {
       Option.empty
     }
   }
 
-  override def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
-    val candidateFiles = allFiles.filter { file =>
-      val relativePartitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePathV2, file)
-      val fileName = FSUtils.getFileName(file.getName, relativePartitionPath)
-      val bloomFilterOpt = toScalaOption(metadataTable.getBloomFilter(relativePartitionPath, fileName))
+  private def getPrunedPartitionAndFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])]): Seq[(String, String)] = {
+    prunedPartitionsAndFileSlices
+      .flatMap {
+        case (Some(partitionPath), fileSlices) => fileSlices.map(fileSlice => (partitionPath.getPath, fileSlice))
+        case (None, fileSlices) => fileSlices.map(fileSlice => ("", fileSlice))
+      }
+      .flatMap { case (partitionPath, fileSlice) =>
+        val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
+        baseFileOption.map(baseFile => (partitionPath, baseFile.getFileName))
+      }
+  }
 
+  private def getCandidateFilesForSecondaryKeys(prunedPartitionAndFileNames: Seq[(String, String)], recordKeys: List[String]): Set[String] = {
+    val candidateFiles = prunedPartitionAndFileNames.filter { partitionAndFileName =>
+      val bloomFilterOpt = toScalaOption(metadataTable.getBloomFilter(partitionAndFileName._1, partitionAndFileName._2))
       bloomFilterOpt match {
         case Some(bloomFilter) =>
           recordKeys.exists(bloomFilter.mightContain)
         case None =>
           true // If bloom filter is empty or undefined, assume the file might contain the record key
       }
-    }.map(_.getName).toSet
+    }.map(_._2).toSet
 
     candidateFiles
   }
@@ -71,21 +77,6 @@ class BloomFiltersIndexSupport(spark: SparkSession,
   override def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)
   }
-
-  override def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
-    val recordKeyOpt = getRecordKeyConfig
-    recordKeyOpt.map { recordKey =>
-      queryFilters.foldLeft((List.empty[Expression], List.empty[String])) {
-        case ((accQueries, accKeys), query) =>
-          filterQueryWithRecordKey(query, Some(recordKey)).foreach {
-            case (exp: Expression, recKeys: List[String]) =>
-              (accQueries :+ exp, accKeys ++ recKeys)
-          }
-          (accQueries, accKeys)
-      }
-    }.getOrElse((List.empty[Expression], List.empty[String]))
-  }
-
 }
 
 
