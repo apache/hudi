@@ -63,20 +63,17 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   mergeType: String,
                                                   mandatoryFields: Seq[String],
                                                   isMOR: Boolean,
+                                                  isBootstrap: Boolean,
                                                   isIncremental: Boolean,
+                                                  isCDC: Boolean,
                                                   validCommits: String,
                                                   shouldUseRecordPosition: Boolean,
-                                                  requiredFilters: Seq[Filter],
-                                                  @transient hoodieFileIndex: HoodieFileIndex
+                                                  requiredFilters: Seq[Filter]
                                                  ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
 
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
   private val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
-
-  private lazy val canSupportBatch = hoodieFileIndex.canEnableBatch
-  private lazy val isCDC = hoodieFileIndex.isInstanceOf[HoodieCDCFileIndex]
-
 
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
@@ -88,7 +85,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     if (!supportBatchCalled || supportBatchResult) {
       supportBatchCalled = true
-      supportBatchResult = !isCDC && !isIncremental && canSupportBatch && super.supportBatch(sparkSession, schema)
+      supportBatchResult = !isCDC && !isIncremental && !isMOR && !isBootstrap && super.supportBatch(sparkSession, schema)
     }
     sparkSession.conf.set(PARQUET_VECTORIZED_READER_ENABLED.key, supportBatchResult)
     supportBatchResult

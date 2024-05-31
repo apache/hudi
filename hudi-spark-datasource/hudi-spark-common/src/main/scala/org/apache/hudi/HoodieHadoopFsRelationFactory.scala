@@ -243,8 +243,8 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
     } else {
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        true, false, validCommits, shouldUseRecordPosition, Seq.empty, fileIndex)
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, true, isBootstrap,
+        false, fileIndex.isInstanceOf[HoodieCDCFileIndex], validCommits, shouldUseRecordPosition, Seq.empty)
     }
   }
 
@@ -288,7 +288,8 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        true, true, validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters, fileIndex)
+        true, isBootstrap, true, fileIndex.isInstanceOf[HoodieCDCFileIndex],
+        validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
     }
   }
 }
@@ -319,7 +320,8 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        false, false, validCommits, shouldUseRecordPosition, Seq.empty, fileIndex)
+        false, isBootstrap, false, fileIndex.isInstanceOf[HoodieCDCFileIndex], validCommits,
+        shouldUseRecordPosition, Seq.empty)
     }
   }
 }
@@ -347,7 +349,8 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        false, true, validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters, fileIndex)
+        false, isBootstrap, true, fileIndex.isInstanceOf[HoodieCDCFileIndex],
+        validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
     }
   }
 }
