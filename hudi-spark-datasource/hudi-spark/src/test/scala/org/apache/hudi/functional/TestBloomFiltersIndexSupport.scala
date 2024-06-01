@@ -234,7 +234,6 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
     } else {
       if (operation == INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL) {
         mergedDfList = mergedDfList :+ latestBatchDf
-        // after insert_overwrite_table, all previous snapshot's records should be deleted from RLI
         prevDfOpt.get
       } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
         val overwrittenPartitions = latestBatchDf.select("partition")
@@ -244,8 +243,6 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
           .filter(not(col("partition").isInCollection(overwrittenPartitions)))
           .union(latestBatchDf)
         mergedDfList = mergedDfList :+ latestSnapshot
-
-        // after insert_overwrite (partition), all records in the overwritten partitions should be deleted from RLI
         prevDf.filter(col("partition").isInCollection(overwrittenPartitions))
       } else {
         val prevDf = prevDfOpt.get
@@ -257,4 +254,5 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
       }
     }
   }
+
 }

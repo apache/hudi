@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 
 class BloomFiltersIndexSupport(spark: SparkSession,
                                metadataConfig: HoodieMetadataConfig,
-                               metaClient: HoodieTableMetaClient) extends RecordLevelIndexSupport(spark, metadataConfig, metaClient) {
+                               metaClient: HoodieTableMetaClient) extends SparkBaseIndexSupport(spark, metadataConfig, metaClient) {
 
   override def getIndexName: String = BloomFiltersIndexSupport.INDEX_NAME
 
@@ -77,6 +77,11 @@ class BloomFiltersIndexSupport(spark: SparkSession,
   override def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)
   }
+
+  override def invalidateCaches(): Unit = {
+    // no caches for this index type, do nothing
+  }
+
 }
 
 

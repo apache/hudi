@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, In, Literal}
 
@@ -64,7 +63,7 @@ class RecordLevelIndexSupport (spark: SparkSession,
    * @param recordKeys - List of record keys.
    * @return Sequence of file names which need to be queried
    */
-  def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
+  private def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
     val recordKeyLocationsMap = metadataTable.readRecordIndex(JavaConverters.seqAsJavaListConverter(recordKeys).asJava)
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
@@ -81,46 +80,6 @@ class RecordLevelIndexSupport (spark: SparkSession,
       }
     }
     candidateFiles.toSet
-  }
-
-  /**
-   * Returns the configured record key for the table if it is a simple record key else returns empty option.
-   */
-  def getRecordKeyConfig: Option[String] = {
-    val recordKeysOpt: org.apache.hudi.common.util.Option[Array[String]] = metaClient.getTableConfig.getRecordKeyFields
-    val recordKeyOpt = recordKeysOpt.map[String](JFunction.toJavaFunction[Array[String], String](arr =>
-      if (arr.length == 1) {
-        arr(0)
-      } else {
-        null
-      }))
-    Option.apply(recordKeyOpt.orElse(null))
-  }
-
-  /**
-   * Given query filters, it filters the EqualTo and IN queries on simple record key columns and returns a tuple of
-   * list of such queries and list of record key literals present in the query.
-   * If record index is not available, it returns empty list for record filters and record keys
-   * @param queryFilters The queries that need to be filtered.
-   * @return Tuple of List of filtered queries and list of record key literals that need to be matched
-   */
-  def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
-    if (!isIndexAvailable) {
-      (List.empty, List.empty)
-    } else {
-      var recordKeyQueries: List[Expression] = List.empty
-      var recordKeys: List[String] = List.empty
-      for (query <- queryFilters) {
-        val recordKeyOpt = getRecordKeyConfig
-        RecordLevelIndexSupport.filterQueryWithRecordKey(query, recordKeyOpt).foreach({
-          case (exp: Expression, recKeys: List[String]) =>
-            recordKeys = recordKeys ++ recKeys
-            recordKeyQueries = recordKeyQueries :+ exp
-        })
-      }
-
-      Tuple2.apply(recordKeyQueries, recordKeys)
-    }
   }
 
   /**
