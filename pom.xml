@@ -709,6 +709,7 @@
               <exclude>**/test/resources/*.commit</exclude>
               <exclude>**/test/resources/**/*.txt</exclude>
               <exclude>**/test/resources/**/*.avsc</exclude>
+              <exclude>**/test/resources/**/*.MockMaker</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
               <exclude>.github/**</exclude>
@@ -1697,6 +1698,12 @@
       <dependency>
         <groupId>org.mockito</groupId>
         <artifactId>mockito-junit-jupiter</artifactId>
+        <scope>test</scope>
+        <version>${mockito.jupiter.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.mockito</groupId>
+        <artifactId>mockito-inline</artifactId>
         <scope>test</scope>
         <version>${mockito.jupiter.version}</version>
       </dependency>
