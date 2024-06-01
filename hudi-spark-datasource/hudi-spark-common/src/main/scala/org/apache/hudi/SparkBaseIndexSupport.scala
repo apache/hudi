@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
-
+import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
@@ -104,6 +104,46 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       case None =>
         fileIndex.getFileSlicesCount * queryReferencedColumns.length < inMemoryProjectionThreshold
     }
+  }
+
+  /**
+   * Given query filters, it filters the EqualTo and IN queries on simple record key columns and returns a tuple of
+   * list of such queries and list of record key literals present in the query.
+   * If record index is not available, it returns empty list for record filters and record keys
+   * @param queryFilters The queries that need to be filtered.
+   * @return Tuple of List of filtered queries and list of record key literals that need to be matched
+   */
+  protected def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
+    if (!isIndexAvailable) {
+      (List.empty, List.empty)
+    } else {
+      var recordKeyQueries: List[Expression] = List.empty
+      var recordKeys: List[String] = List.empty
+      for (query <- queryFilters) {
+        val recordKeyOpt = getRecordKeyConfig
+        RecordLevelIndexSupport.filterQueryWithRecordKey(query, recordKeyOpt).foreach({
+          case (exp: Expression, recKeys: List[String]) =>
+            recordKeys = recordKeys ++ recKeys
+            recordKeyQueries = recordKeyQueries :+ exp
+        })
+      }
+
+      Tuple2.apply(recordKeyQueries, recordKeys)
+    }
+  }
+
+  /**
+   * Returns the configured record key for the table if it is a simple record key else returns empty option.
+   */
+  private def getRecordKeyConfig: Option[String] = {
+    val recordKeysOpt: org.apache.hudi.common.util.Option[Array[String]] = metaClient.getTableConfig.getRecordKeyFields
+    val recordKeyOpt = recordKeysOpt.map[String](JFunction.toJavaFunction[Array[String], String](arr =>
+      if (arr.length == 1) {
+        arr(0)
+      } else {
+        null
+      }))
+    Option.apply(recordKeyOpt.orElse(null))
   }
 
 }
