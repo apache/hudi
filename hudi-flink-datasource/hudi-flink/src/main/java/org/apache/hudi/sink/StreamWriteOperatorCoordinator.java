@@ -18,12 +18,14 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -35,6 +37,8 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.metrics.FlinkClusteringMetrics;
+import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
@@ -165,6 +169,16 @@ public class StreamWriteOperatorCoordinator
   private ClientIds clientIds;
 
   /**
+   *  flink hoodieCompactionMetrics
+   */
+  private transient FlinkCompactionMetrics hoodieCompactionMetrics;
+
+  /**
+   * flink hoodieClusteringMetrics
+   */
+  private transient FlinkClusteringMetrics hoodieClusteringMetrics;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -177,6 +191,7 @@ public class StreamWriteOperatorCoordinator
     this.context = context;
     this.parallelism = context.currentParallelism();
     this.storageConf = HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHiveConf(conf));
+    this.registerMetrics();
   }
 
   @Override
@@ -262,6 +277,8 @@ public class StreamWriteOperatorCoordinator
           // schedules the compaction or clustering if it is enabled in stream execution mode
           scheduleTableServices(committed);
 
+          emitCompactionAndClusteringMetrics(conf, metaClient);
+
           if (committed) {
             // start new instant.
             startInstant();
@@ -270,6 +287,30 @@ public class StreamWriteOperatorCoordinator
           }
         }, "commits the instant %s", this.instant
     );
+  }
+
+  private void emitCompactionAndClusteringMetrics(Configuration conf,
+      HoodieTableMetaClient metaClient) {
+    // reload timeline
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline().reload();
+    if (conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED)
+        && !conf.getBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED)) {
+      HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
+      this.hoodieClusteringMetrics.setPendingClusteringCount(pendingReplaceTimeline.countInstants());
+    }
+    if (conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED)
+        && !conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
+      HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
+      this.hoodieCompactionMetrics.setPendingCompactionCount(pendingCompactionTimeline.countInstants());
+    }
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = this.context.metricGroup();
+    hoodieCompactionMetrics = new FlinkCompactionMetrics(metrics);
+    hoodieCompactionMetrics.registerMetrics();
+    hoodieClusteringMetrics = new FlinkClusteringMetrics(metrics);
+    hoodieClusteringMetrics.registerMetrics();
   }
 
   @Override
