@@ -1517,14 +1517,6 @@
         <version>${hadoop.version}</version>
         <exclusions>
           <exclusion>
-            <groupId>javax.servlet</groupId>
-            <artifactId>*</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>javax.servlet.jsp</groupId>
-            <artifactId>*</artifactId>
-          </exclusion>
-          <exclusion>
             <groupId>jdk.tools</groupId>
             <artifactId>jdk.tools</artifactId>
           </exclusion>
@@ -1535,10 +1527,6 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.mortbay.jetty</groupId>
-            <artifactId>*</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.slf4j</groupId>
