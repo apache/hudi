@@ -278,14 +278,7 @@
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-service</artifactId>
-      <version>${hive.version}</version>
       <scope>${spark.bundle.hive.scope}</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>servlet-api</artifactId>
-          <groupId>javax.servlet</groupId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <dependency>
