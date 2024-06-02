@@ -26,6 +26,7 @@ import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -103,7 +104,8 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     try {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      // TODO: pass an actual storage strategy
+      HoodieStorage storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy());
       return getTablePath(storage, convertToStoragePath(inputPath))
           .map(path -> isHoodieTablePath(storage, path)).orElse(false);
     } catch (IOException e) {

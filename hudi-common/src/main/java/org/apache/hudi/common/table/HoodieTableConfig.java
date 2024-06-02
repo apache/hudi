@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -195,7 +196,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
-  
+
   public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
       .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING)
@@ -235,6 +236,10 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.timeline.path")
       .defaultValue("timeline")
       .withDocumentation("path under the meta folder, to store timeline instants at.");
+
+  public static final ConfigProperty<String> STORAGE_STRATEGY_CLASS = HoodieStorageConfig.STORAGE_STRATEGY_CLASS;
+
+  public static final ConfigProperty<String> STORAGE_PREFIX = HoodieStorageConfig.STORAGE_PREFIX;
 
   public static final ConfigProperty<Boolean> BOOTSTRAP_INDEX_ENABLE = ConfigProperty
       .key("hoodie.bootstrap.index.enable")
@@ -881,6 +886,14 @@ public class HoodieTableConfig extends HoodieConfig {
     // NOTE: We're adding a stub returning empty string to stay compatible w/ pre-existing
     //       behavior until this method is fully deprecated
     return getPartitionFieldProp(this).orElse("");
+  }
+
+  public String getStorageStrategy() {
+    return getStringOrDefault(STORAGE_STRATEGY_CLASS);
+  }
+
+  public String getStoragePrefix() {
+    return Option.ofNullable(getString(STORAGE_PREFIX)).orElse("");
   }
 
   public Option<String> getBootstrapBasePath() {

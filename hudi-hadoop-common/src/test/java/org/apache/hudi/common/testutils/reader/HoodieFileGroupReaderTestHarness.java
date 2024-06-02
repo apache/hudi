@@ -116,7 +116,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
       throws IOException, InterruptedException {
     assert (numFiles >= 1 && numFiles <= keyRanges.size());
 
-    HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, storageConf);
+    HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, storageConf, metaClient.getStorageStrategy());
 
     Option<FileSlice> fileSliceOpt =
         HoodieFileSliceTestUtils.getFileSlice(

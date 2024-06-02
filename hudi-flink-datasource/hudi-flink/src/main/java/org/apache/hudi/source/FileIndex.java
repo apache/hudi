@@ -32,6 +32,7 @@ import org.apache.hudi.source.stats.FileStatsIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -159,7 +160,9 @@ public class FileIndex implements Serializable {
     }
     List<StoragePathInfo> allFiles = FSUtils.getFilesInPartitions(
             new HoodieFlinkEngineContext(hadoopConf),
-            new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString(), partitions)
+            new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf),
+                new DefaultStorageStrategy(path.toString())),
+            metadataConfig, path.toString(), partitions)
         .values().stream()
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
@@ -228,9 +231,11 @@ public class FileIndex implements Serializable {
     if (this.partitionPaths != null) {
       return this.partitionPaths;
     }
-    List<String> allPartitionPaths = this.tableExists ? FSUtils.getAllPartitionPaths(
-        new HoodieFlinkEngineContext(hadoopConf),
-        new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString())
+    List<String> allPartitionPaths = this.tableExists
+        ? FSUtils.getAllPartitionPaths(
+            new HoodieFlinkEngineContext(hadoopConf), new HoodieHadoopStorage(path,
+              HadoopFSUtils.getStorageConf(hadoopConf), new DefaultStorageStrategy(path.toString())),
+          metadataConfig, path.toString())
         : Collections.emptyList();
     if (this.partitionPruner == null) {
       this.partitionPaths = allPartitionPaths;

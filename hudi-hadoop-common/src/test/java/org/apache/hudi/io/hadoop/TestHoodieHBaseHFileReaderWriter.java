@@ -67,7 +67,7 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
   @Override
   protected HoodieAvroFileReader createReader(
       HoodieStorage storage) throws Exception {
-    return new HoodieHBaseAvroHFileReader(storage.getConf(), getFilePath(), Option.empty());
+    return new HoodieHBaseAvroHFileReader(storage.getConf(), storage.getStorageStrategy(), getFilePath(), Option.empty());
   }
 
   @Override

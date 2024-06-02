@@ -46,8 +46,10 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath, StoragePathInfo}
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.strategy.StorageStrategy
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
@@ -653,7 +655,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
           requiredDataSchema = requiredDataSchema,
           filters = filters,
           options = options,
-          hadoopConf = hadoopConf
+          hadoopConf = hadoopConf,
+          storageStrategy = HoodieStorageUtils.getStorageStrategy(tableConfig.getProps)
         )
 
         (hfileReader, requiredDataSchema.structTypeSchema)
@@ -833,7 +836,8 @@ object HoodieBaseRelation extends SparkAdapterSupport {
                                 requiredDataSchema: HoodieTableSchema,
                                 filters: Seq[Filter],
                                 options: Map[String, String],
-                                hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+                                hadoopConf: Configuration,
+                                storageStrategy: StorageStrategy): PartitionedFile => Iterator[InternalRow] = {
     val hadoopConfBroadcast = spark.sparkContext.broadcast(new SerializableWritable(hadoopConf))
 
     partitionedFile => {
@@ -843,7 +847,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       hoodieConfig.setValue(USE_NATIVE_HFILE_READER,
         options.getOrElse(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue().toString))
       val reader = new HoodieSparkIOFactory(
-        new HoodieHadoopStorage(filePath, HadoopFSUtils.getStorageConf(hadoopConf)))
+        new HoodieHadoopStorage(filePath, HadoopFSUtils.getStorageConf(hadoopConf), storageStrategy))
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, filePath, HFILE)
 

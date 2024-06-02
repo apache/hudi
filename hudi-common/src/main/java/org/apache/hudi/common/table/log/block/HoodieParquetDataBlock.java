@@ -120,7 +120,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(inlineLogFilePath, inlineConf);
+    HoodieStorage inlineStorage = blockContentLoc.getStorage().newInstance(inlineLogFilePath, inlineConf,
+        blockContentLoc.getStorage().getStorageStrategy());
     Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     ClosableIterator<HoodieRecord<T>> iterator = HoodieIOFactory.getIOFactory(inlineStorage)
@@ -143,7 +144,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
-    HoodieStorage inlineStorage = blockContentLoc.getStorage().newInstance(inlineLogFilePath, inlineConf);
+    HoodieStorage inlineStorage = blockContentLoc.getStorage().newInstance(inlineLogFilePath, inlineConf,
+        blockContentLoc.getStorage().getStorageStrategy());
 
     Schema writerSchema =
         new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));

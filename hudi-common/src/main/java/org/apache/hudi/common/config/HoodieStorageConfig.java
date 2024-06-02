@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 /**
  * Storage related config.
@@ -244,6 +245,20 @@ public class HoodieStorageConfig extends HoodieConfig {
       .sinceVersion("0.15.0")
       .withDocumentation("The fully-qualified class name of the `HoodieStorage` implementation class to instantiate. "
           + "The provided class should implement `org.apache.hudi.storage.HoodieStorage`");
+
+  public static final ConfigProperty<String> STORAGE_STRATEGY_CLASS = ConfigProperty
+      .key("hoodie.storage.strategy.class")
+      .defaultValue(DefaultStorageStrategy.class.getName())
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("TODO");
+
+  public static final ConfigProperty<String> STORAGE_PREFIX = ConfigProperty
+      .key("hoodie.storage.prefix")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("TODO");
 
   public static final ConfigProperty<String> HOODIE_IO_FACTORY_CLASS = ConfigProperty
       .key("hoodie.io.factory.class")

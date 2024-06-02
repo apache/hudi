@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV2}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow

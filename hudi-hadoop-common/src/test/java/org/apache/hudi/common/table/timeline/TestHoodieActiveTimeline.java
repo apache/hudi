@@ -752,7 +752,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       HoodieStorage storage = metaClient.getStorage();
       FileSystem fs = (FileSystem) storage.getFileSystem();
       HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
-      metaClient.setStorage(new HoodieHadoopStorage(newFs));
+      metaClient.setStorage(new HoodieHadoopStorage(newFs, storage.getStorageStrategy()));
       try {
         fun.accept(metaClient);
       } finally {

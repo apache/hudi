@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -79,14 +80,14 @@ public class TestStreamSync {
   void testFetchNextBatchFromSource(Boolean useRowWriter, Boolean hasTransformer, Boolean hasSchemaProvider,
                                     Boolean isNullTargetSchema, Boolean hasErrorTable, Boolean shouldTryWriteToErrorTable) {
     //basic deltastreamer inputs
-    HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
-    SparkSession sparkSession = mock(SparkSession.class);
-    Configuration configuration = mock(Configuration.class);
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     cfg.targetTableName = "testTableName";
     cfg.targetBasePath = "/fake/table/name";
     cfg.tableType = "MERGE_ON_READ";
+    HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
+    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class), new DefaultStorageStrategy(cfg.targetBasePath));
+    SparkSession sparkSession = mock(SparkSession.class);
+    Configuration configuration = mock(Configuration.class);
 
     //Source format adapter
     SourceFormatAdapter sourceFormatAdapter = mock(SourceFormatAdapter.class);
@@ -155,7 +156,7 @@ public class TestStreamSync {
     // TODO(yihua): rewrite this tests
     /*
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
+    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class), new DefaultStorageStrategy(cfg.targetBasePath));
     TypedProperties props = new TypedProperties();
     SparkSession sparkSesion = mock(SparkSession.class);
     Configuration configuration = mock(Configuration.class);

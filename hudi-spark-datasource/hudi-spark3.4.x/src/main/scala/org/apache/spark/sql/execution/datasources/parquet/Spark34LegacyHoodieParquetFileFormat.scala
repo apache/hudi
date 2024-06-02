@@ -26,6 +26,8 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
@@ -175,7 +177,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
         //TODO: HARDCODED TIMELINE OBJECT
         val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
-        val storage = new HoodieHadoopStorage(tablePath, sharedConf)
+        val storage = new HoodieHadoopStorage(tablePath, sharedConf, new DefaultStorageStrategy(tablePath))
         InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath, storage,
           if (validCommits == null) "" else validCommits,
           layout.getInstantFileNameParser, layout.getCommitMetadataSerDe, layout.getInstantGenerator)

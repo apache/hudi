@@ -36,6 +36,7 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -105,7 +106,7 @@ public class HoodieSnapshotCopier implements Serializable {
         latestCommitTimestamp));
 
     List<String> partitions = FSUtils.getAllPartitionPaths(
-        context, new HoodieHadoopStorage(fs), baseDir, useFileListingFromMetadata);
+        context, new HoodieHadoopStorage(fs, new DefaultStorageStrategy(baseDir)), baseDir, useFileListingFromMetadata);
     if (partitions.size() > 0) {
       LOG.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 
