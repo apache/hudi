@@ -56,7 +56,7 @@
         "precision": 20,
         "scale": 0
       },
-      "default": "\u0000"
+      "default": "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"
     },
     {
       "name": "primitive_signed_int",
@@ -311,7 +311,7 @@
             {
               "name": "value",
               "type": "org.apache.hudi.protos.unsigned_long",
-              "default": "\u0000"
+              "default": "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"
             }
           ]
         }

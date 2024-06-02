@@ -20,10 +20,12 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.test.proto.Child;
+import org.apache.hudi.utilities.test.proto.FirstBatch;
 import org.apache.hudi.utilities.test.proto.Nested;
 import org.apache.hudi.utilities.test.proto.Parent;
 import org.apache.hudi.utilities.test.proto.Sample;
 import org.apache.hudi.utilities.test.proto.SampleEnum;
+import org.apache.hudi.utilities.test.proto.SecondBatch;
 import org.apache.hudi.utilities.test.proto.WithOneOf;
 
 import com.google.protobuf.BoolValue;
@@ -56,6 +58,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -174,6 +177,31 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals("10", toUnsignedBigInteger(10L).toString());
     // equivalent of lower 32 bits all set to 0 and upper 32 bits alternating 10
     Assertions.assertEquals("12297829379609722880", toUnsignedBigInteger(-6148914694099828736L).toString());
+  }
+
+  @Test
+  void validateOldProtoReadWithNewSchema() {
+    // validate that a proto message can be read with a newer schema with fields added/removed
+    // this case can happen when processing a mixed batch of protos during one round of StreamSync
+    ProtoConversionUtil.SchemaConfig schemaConfig = new ProtoConversionUtil.SchemaConfig(true, 1, true);
+    Schema evolvedSchema = ProtoConversionUtil.getAvroSchemaForMessageClass(SecondBatch.class, schemaConfig);
+    FirstBatch message = FirstBatch.newBuilder()
+        .setId(123L)
+        .setName("first_last")
+        .build();
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(evolvedSchema, message), evolvedSchema);
+    GenericData.Record expected = new GenericData.Record(evolvedSchema);
+    expected.put("id", 123L);
+    // required fields will be populated with defaults
+    expected.put("age", 0);
+    expected.put("address", Collections.emptyList());
+    expected.put("nullable_timestamp", null);
+    expected.put("nullable_long", null);
+    Schema decimalSchema = evolvedSchema.getField("primitive_unsigned_long").schema();
+    expected.put("primitive_unsigned_long", DECIMAL_CONVERSION.toFixed(new BigDecimal(BigInteger.ZERO), decimalSchema, decimalSchema.getLogicalType()));
+    expected.put("test_enum", "FIRST");
+    expected.put("binary", ByteBuffer.wrap(new byte[0]));
+    Assertions.assertEquals(expected, actual);
   }
 
   private void assertUnsignedLongCorrectness(Schema fieldSchema, long expectedValue, GenericFixed actual) {

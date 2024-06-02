@@ -241,9 +241,10 @@ public class ProtoConversionUtil {
       recursionDepths.put(descriptor, ++currentRecursionCount);
 
       List<Schema.Field> fields = new ArrayList<>(descriptor.getFields().size());
-      for (Descriptors.FieldDescriptor f : descriptor.getFields()) {
+      for (Descriptors.FieldDescriptor fieldDescriptor : descriptor.getFields()) {
         // each branch of the schema traversal requires its own recursion depth tracking so copy the recursionDepths map
-        fields.add(new Schema.Field(f.getName(), getFieldSchema(f, new CopyOnWriteMap<>(recursionDepths), path), null, getDefault(f)));
+        Schema fieldSchema = getFieldSchema(fieldDescriptor, new CopyOnWriteMap<>(recursionDepths), path);
+        fields.add(new Schema.Field(fieldDescriptor.getName(), fieldSchema, null, getDefault(fieldSchema, fieldDescriptor)));
       }
       result.setFields(fields);
       return result;
@@ -320,16 +321,16 @@ public class ProtoConversionUtil {
       return Schema.createUnion(Arrays.asList(NULL_SCHEMA, schema));
     }
 
-    private Object getDefault(Descriptors.FieldDescriptor f) {
-      if (f.isRepeated()) { // empty array as repeated fields' default value
+    private Object getDefault(Schema fieldSchema, Descriptors.FieldDescriptor fieldDescriptor) {
+      if (fieldDescriptor.isRepeated()) { // empty array as repeated fields' default value
         return Collections.emptyList();
       }
-      if (f.getContainingOneof() != null) {
+      if (fieldDescriptor.getContainingOneof() != null) {
         // fields inside oneof are nullable
         return Schema.Field.NULL_VALUE;
       }
 
-      switch (f.getType()) { // generate default for type
+      switch (fieldDescriptor.getType()) { // generate default for type
         case BOOL:
           return false;
         case FLOAT:
@@ -347,17 +348,17 @@ public class ProtoConversionUtil {
         case SFIXED64:
           return 0;
         case UINT64:
-          return "\u0000"; // requires bytes for decimal type
+          return DECIMAL_CONVERSION.toFixed(new BigDecimal(BigInteger.ZERO), fieldSchema, fieldSchema.getLogicalType()).bytes();
         case STRING:
         case BYTES:
           return "";
         case ENUM:
-          return f.getEnumType().getValues().get(0).getName();
+          return fieldDescriptor.getEnumType().getValues().get(0).getName();
         case MESSAGE:
           return Schema.Field.NULL_VALUE;
         case GROUP: // groups are deprecated
         default:
-          throw new RuntimeException("Unexpected type: " + f.getType());
+          throw new RuntimeException("Unexpected type: " + fieldDescriptor.getType());
       }
     }
 
@@ -399,6 +400,8 @@ public class ProtoConversionUtil {
             byteBufferValue = ((ByteString) value).asReadOnlyByteBuffer();
           } else if (value instanceof Message) {
             byteBufferValue = ((ByteString) getWrappedValue(value)).asReadOnlyByteBuffer();
+          } else if (value instanceof byte[]) {
+            byteBufferValue = ByteBuffer.wrap((byte[]) value);
           } else {
             byteBufferValue = (ByteBuffer) value;
           }
@@ -477,11 +480,13 @@ public class ProtoConversionUtil {
             int position = field.pos();
             Descriptors.FieldDescriptor fieldDescriptor = getOrderedFields(schema, messageValue)[position];
             Object convertedValue;
+            Schema fieldSchema = field.schema();
+            // if incoming message does not contain the field, fieldDescriptor will be null
             // if the field schema is a union, it is nullable
-            if (field.schema().getType() == Schema.Type.UNION && !fieldDescriptor.isRepeated() && !messageValue.hasField(fieldDescriptor)) {
+            if (fieldSchema.getType() == Schema.Type.UNION && (fieldDescriptor == null || (!fieldDescriptor.isRepeated() && !messageValue.hasField(fieldDescriptor)))) {
               convertedValue = null;
             } else {
-              convertedValue = convertObject(field.schema(), messageValue.getField(fieldDescriptor));
+              convertedValue = convertObject(fieldSchema, fieldDescriptor == null ? field.defaultVal() : messageValue.getField(fieldDescriptor));
             }
             newRecord.put(position, convertedValue);
           }
