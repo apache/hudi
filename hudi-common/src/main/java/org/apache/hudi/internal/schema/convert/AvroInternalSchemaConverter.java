@@ -127,7 +127,6 @@ public class AvroInternalSchemaConverter {
     return buildTypeFromAvroSchema(schema, existingFieldNameToPositionMapping);
   }
 
-
   /** Convert an avro schema into internalSchema. */
   public static InternalSchema convert(Schema schema, Map<String, Integer> existingFieldNameToPositionMapping) {
     return new InternalSchema((Types.RecordType) convertToField(schema, existingFieldNameToPositionMapping));
