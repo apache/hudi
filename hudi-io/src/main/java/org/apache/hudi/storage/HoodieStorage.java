@@ -23,8 +23,11 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,9 +51,25 @@ public abstract class HoodieStorage implements Closeable {
   public static final Logger LOG = LoggerFactory.getLogger(HoodieStorage.class);
 
   protected final StorageConfiguration<?> storageConf;
+  protected final StorageStrategy storageStrategy;
 
   public HoodieStorage(StorageConfiguration<?> storageConf) {
+    // TODO: Remove this constructor, all storage need to use storage strategy. And storage strategy
+    // is supposed to be instantiated outside and passed to HoodieStorage
     this.storageConf = storageConf;
+
+    String storageStrategyClass = storageConf.getString("hoodie.storage.strategy.class")
+        .orElse("org.apache.hudi.storage.strategy.DefaultStorageStrategy");
+    try {
+      this.storageStrategy = (StorageStrategy) ReflectionUtils.loadClass(
+          storageStrategyClass, new Class<?>[] {StoragePath.class, StorageConfiguration.class}, path, conf);
+    } catch (Exception e) {
+      throw new HoodieException("Unable to create " + storageStrategyClass, e);
+    }
+  }
+  public HoodieStorage(StorageConfiguration<?> storageConf, StorageStrategy storageStrategy) {
+    this.storageConf = storageConf;
+    this.storageStrategy = storageStrategy;
   }
 
   /**
