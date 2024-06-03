@@ -328,7 +328,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // commit to data table after committing to metadata table.
       writeTableMetadata(table, compactionCommitTime, metadata, context.emptyHoodieData());
       LOG.info("Committing Compaction {}", compactionCommitTime);
-      LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);      CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+      LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
+      CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
       releaseResources(compactionCommitTime);
