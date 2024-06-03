@@ -112,6 +112,11 @@ class LazyFileSystemView implements SyncableFileSystemView, Serializable {
   }
 
   @Override
+  public Stream<FileSlice> getLatestFileSlicesIncludingInflight(String partitionPath) {
+    return Stream.empty();
+  }
+
+  @Override
   public Stream<FileSlice> getLatestFileSlicesStateless(String partitionPath) {
     return getView().getLatestFileSlicesStateless(partitionPath);
   }
@@ -207,7 +212,12 @@ class LazyFileSystemView implements SyncableFileSystemView, Serializable {
   }
 
   @Override
-  public Void loadAllPartitions() {
-    return getView().loadAllPartitions();
+  public void loadAllPartitions() {
+    getView().loadAllPartitions();
+  }
+
+  @Override
+  public void loadPartitions(List<String> partitionPaths) {
+    getView().loadPartitions(partitionPaths);
   }
 }
