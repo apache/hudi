@@ -23,13 +23,14 @@ import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
 import org.apache.hudi.SecondaryIndexSupport.filterQueriesWithSecondaryKey
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
 
+import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
 
 class SecondaryIndexSupport(spark: SparkSession,
@@ -96,14 +97,11 @@ class SecondaryIndexSupport(spark: SparkSession,
    */
   private def getSecondaryKeyConfig(queryReferencedColumns: Seq[String],
                                     metaClient: HoodieTableMetaClient): Option[String] = {
-    val secondaryKeysConfigOpt = metaClient.getIndexMetadata.get.getIndexDefinitions.values().stream()
-      .filter((indexDef: HoodieIndexDefinition) => indexDef.getIndexType.equals(PARTITION_NAME_SECONDARY_INDEX) && queryReferencedColumns.contains(indexDef.getSourceFields.get(0)))
-      .findFirst()
-    if (secondaryKeysConfigOpt.isPresent) {
-      Option.apply(secondaryKeysConfigOpt.get().getSourceFields.get(0))
-    } else {
-      Option.empty
-    }
+    val indexDefinitions = metaClient.getIndexMetadata.get.getIndexDefinitions.asScala
+    indexDefinitions.values
+      .find(indexDef => indexDef.getIndexType.equals(PARTITION_NAME_SECONDARY_INDEX) &&
+        queryReferencedColumns.contains(indexDef.getSourceFields.get(0)))
+      .map(indexDef => indexDef.getSourceFields.get(0))
   }
 }
 
