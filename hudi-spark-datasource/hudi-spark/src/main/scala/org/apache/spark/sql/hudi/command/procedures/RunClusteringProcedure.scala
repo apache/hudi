@@ -204,7 +204,7 @@ class RunClusteringProcedure extends BaseProcedure
   override def build: Procedure = new RunClusteringProcedure()
 
   def prunePartition(metaClient: HoodieTableMetaClient, predicate: String): String = {
-    val options = Map(QUERY_TYPE.key() -> QUERY_TYPE_SNAPSHOT_OPT_VAL, "path" -> metaClient.getBasePath)
+    val options = Map(QUERY_TYPE.key() -> QUERY_TYPE_SNAPSHOT_OPT_VAL, "path" -> metaClient.getBasePath.toString)
     val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, None, options,
       FileStatusCache.getOrCreate(sparkSession))
 

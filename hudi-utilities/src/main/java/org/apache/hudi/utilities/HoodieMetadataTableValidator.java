@@ -483,7 +483,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   public boolean doMetadataTableValidation() {
     boolean finalResult = true;
     metaClient.reloadActiveTimeline();
-    String basePath = metaClient.getBasePath();
+    String basePath = metaClient.getBasePath().toString();
     Set<String> baseFilesForCleaning = Collections.emptySet();
 
     // check metadata table is available to read.
@@ -907,7 +907,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private void validateRecordIndexCount(HoodieSparkEngineContext sparkEngineContext,
                                         HoodieTableMetaClient metaClient) {
-    String basePath = metaClient.getBasePathV2().toString();
+    String basePath = metaClient.getBasePath().toString();
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
         .filterCompletedInstants().lastInstant().get().getTimestamp();
     long countKeyFromTable = sparkEngineContext.getSqlContext().read().format("hudi")
@@ -934,7 +934,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private void validateRecordIndexContent(HoodieSparkEngineContext sparkEngineContext,
                                           HoodieTableMetaClient metaClient) {
-    String basePath = metaClient.getBasePathV2().toString();
+    String basePath = metaClient.getBasePath().toString();
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
         .filterCompletedInstants().lastInstant().get().getTimestamp();
     JavaPairRDD<String, Pair<String, String>> keyToLocationOnFsRdd =
@@ -1204,7 +1204,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       return false;
     }
 
-    String basePath = metaClient.getBasePathV2().toString();
+    String basePath = metaClient.getBasePath().toString();
     HoodieTimeline commitsTimeline = metaClient.getCommitsTimeline();
     HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
@@ -1395,7 +1395,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       this.fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
           metaClient, metadataConfig);
       this.tableMetadata = HoodieTableMetadata.create(
-          engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePathV2().toString());
+          engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
       if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
         this.allColumnNameList = getAllColumnNames();
       }
@@ -1445,7 +1445,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return baseFileNameList.stream().flatMap(filename ->
                 formatUtils.readColumnStatsFromMetadata(
                         metaClient.getStorage(),
-                        new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath), filename),
+                        new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath), filename),
                         allColumnNameList).stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
@@ -1481,13 +1481,13 @@ public class HoodieMetadataTableValidator implements Serializable {
         return schemaResolver.getTableAvroSchema().getFields().stream()
             .map(Schema.Field::name).collect(Collectors.toList());
       } catch (Exception e) {
-        throw new HoodieException("Failed to get all column names for " + metaClient.getBasePathV2());
+        throw new HoodieException("Failed to get all column names for " + metaClient.getBasePath());
       }
     }
 
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
       StoragePath path = new StoragePath(
-          FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath).toString(), filename);
+          FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath).toString(), filename);
       BloomFilter bloomFilter;
       HoodieConfig hoodieConfig = new HoodieConfig();
       hoodieConfig.setValue(HoodieReaderConfig.USE_NATIVE_HFILE_READER,

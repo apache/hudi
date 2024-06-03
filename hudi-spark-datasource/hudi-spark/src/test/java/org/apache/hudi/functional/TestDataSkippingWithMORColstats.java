@@ -472,7 +472,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
 
   public void deleteLatestDeltacommit() {
     String filename = metaClient.getActiveTimeline().lastInstant().get().getFileName();
-    File deltacommit = new File(metaClient.getBasePathV2() + "/.hoodie/" + filename);
+    File deltacommit = new File(metaClient.getBasePath() + "/.hoodie/" + filename);
     deltacommit.delete();
   }
 

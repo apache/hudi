@@ -94,7 +94,7 @@ public abstract class HoodieJavaTable<T>
       deleteMetadataIndexIfNecessary();
       try {
         if (isMetadataTableExists || metaClient.getStorage().exists(
-            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePathV2()))) {
+            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))) {
           isMetadataTableExists = true;
           return Option.of(metadataWriter);
         }

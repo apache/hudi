@@ -160,7 +160,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.beginInstantTime = beginInstantTime;
     this.endInstantTime = endInstantTime;
 
-    this.basePath = metaClient.getBasePathV2();
+    this.basePath = metaClient.getBasePath();
 
     this.metaClient = metaClient;
     this.engineContext = engineContext;

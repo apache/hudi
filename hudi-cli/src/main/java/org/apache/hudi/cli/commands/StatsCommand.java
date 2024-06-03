@@ -116,7 +116,7 @@ public class StatsCommand {
 
     HoodieStorage storage = HoodieCLI.storage;
     String globPath =
-        String.format("%s/%s/*", HoodieCLI.getTableMetaClient().getBasePath(), globRegex);
+        String.format("%s/%s/*", HoodieCLI.getTableMetaClient().getBasePath().toString(), globRegex);
     List<StoragePathInfo> pathInfoList = FSUtils.getGlobStatusExcludingMetaFolder(storage,
         new StoragePath(globPath));
 

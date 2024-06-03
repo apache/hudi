@@ -87,7 +87,7 @@ public class InternalSchemaCache {
       // parse history schema and return directly
       return InternalSchemaUtils.searchSchema(versionID, getHistoricalSchemas(metaClient));
     }
-    String tablePath = metaClient.getBasePath();
+    String tablePath = metaClient.getBasePath().toString();
     // use segment lock to reduce competition.
     synchronized (lockList[tablePath.hashCode() & (lockList.length - 1)]) {
       TreeMap<Long, InternalSchema> historicalSchemas = HISTORICAL_SCHEMA_CACHE.getIfPresent(tablePath);
@@ -232,7 +232,7 @@ public class InternalSchemaCache {
   public static InternalSchema getInternalSchemaByVersionId(long versionId, HoodieTableMetaClient metaClient) {
     String validCommitLists = metaClient
         .getCommitsAndCompactionTimeline().filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getFileName).collect(Collectors.joining(","));
-    return getInternalSchemaByVersionId(versionId, metaClient.getBasePathV2().toString(), metaClient.getStorage(), validCommitLists);
+    return getInternalSchemaByVersionId(versionId, metaClient.getBasePath().toString(), metaClient.getStorage(), validCommitLists);
   }
 }
 

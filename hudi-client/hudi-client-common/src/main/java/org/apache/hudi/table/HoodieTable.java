@@ -746,7 +746,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
-      String basePath = getMetaClient().getBasePath();
+      String basePath = getMetaClient().getBasePath().toString();
       WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
 
       if (!markers.doesMarkerDirExist()) {
@@ -1004,8 +1004,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       if (shouldDeleteMetadataPartition(partitionType)) {
         try {
           LOG.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
-          if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType.getPartitionPath())) {
-            deleteMetadataPartition(metaClient.getBasePath(), context, partitionType.getPartitionPath());
+          if (metadataPartitionExists(metaClient.getBasePath().toString(), context, partitionType.getPartitionPath())) {
+            deleteMetadataPartition(metaClient.getBasePath().toString(), context, partitionType.getPartitionPath());
           }
           clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
         } catch (HoodieMetadataException e) {

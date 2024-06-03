@@ -167,7 +167,7 @@ public class TimelineCommand {
 
   private HoodieTableMetaClient getMetadataTableMetaClient(HoodieTableMetaClient metaClient) {
     return HoodieTableMetaClient.builder().setConf(HoodieCLI.conf.newInstance())
-        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))
+        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath().toString()))
         .setLoadActiveTimelineOnLoad(false)
         .setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
         .build();

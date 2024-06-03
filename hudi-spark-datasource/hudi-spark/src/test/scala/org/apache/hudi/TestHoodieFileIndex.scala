@@ -604,7 +604,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val metadata = HoodieTableMetadata.create(context,
       metaClient.getStorage,
       HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build(),
-      metaClient.getBasePathV2.toString)
+      metaClient.getBasePath.toString)
     assertEquals(
       Seq("1/2023/01/01", "1/2023/01/02"),
       metadata.getPartitionPathWithPathPrefixes(Seq("1").asJava).asScala.sorted)
@@ -676,7 +676,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   }
 
   private def extractPartitionPathFromFilePath(filePath: StoragePath): String = {
-    val relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePathV2, filePath)
+    val relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, filePath)
     val names = relativeFilePath.split("/")
     val fileName = names(names.length - 1)
     relativeFilePath.stripSuffix(fileName).stripSuffix("/")

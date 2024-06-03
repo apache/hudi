@@ -137,13 +137,13 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     metaClient = HoodieTableMetaClient.withPropertyBuilder()
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath().toString());
 
     HoodieInstant instant6 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "9");
     byte[] dummy = new byte[5];
     HoodieActiveTimeline oldTimeline = new HoodieActiveTimeline(
         HoodieTableMetaClient.builder().setConf(metaClient.getStorageConf().newInstance())
-            .setBasePath(metaClient.getBasePath())
+            .setBasePath(metaClient.getBasePath().toString())
             .setLoadActiveTimelineOnLoad(true)
             .setConsistencyGuardConfig(metaClient.getConsistencyGuardConfig())
             .setFileSystemRetryConfig(metaClient.getFileSystemRetryConfig())

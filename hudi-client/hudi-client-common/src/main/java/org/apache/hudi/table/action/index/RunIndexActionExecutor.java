@@ -156,7 +156,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
           LOG.info("Total remaining instants to index: " + instantsToCatchup.size());
 
           // reconcile with metadata table timeline
-          String metadataBasePath = getMetadataTableBasePath(table.getMetaClient().getBasePathV2().toString());
+          String metadataBasePath = getMetadataTableBasePath(table.getMetaClient().getBasePath().toString());
           HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
               .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
               .setBasePath(metadataBasePath).build();
@@ -220,8 +220,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
     // delete metadata partition
     requestedPartitions.forEach(partition -> {
-      if (metadataPartitionExists(table.getMetaClient().getBasePathV2().toString(), context, partition)) {
-        deleteMetadataPartition(table.getMetaClient().getBasePathV2().toString(), context, partition);
+      if (metadataPartitionExists(table.getMetaClient().getBasePath().toString(), context, partition)) {
+        deleteMetadataPartition(table.getMetaClient().getBasePath().toString(), context, partition);
       }
     });
 

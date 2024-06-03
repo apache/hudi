@@ -83,7 +83,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     CompletionTimeQueryView completionTimeQueryView = new CompletionTimeQueryView(metaClient);
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(
-        engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath());
+        engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath().toString());
 
     // filter the partition paths if needed to reduce list status
     partitionPaths = filterPartitionPathsByStrategy(writeConfig, partitionPaths);
@@ -152,12 +152,12 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     LOG.info("Total number of file slices " + totalFileSlices.value());
 
     if (operations.isEmpty()) {
-      LOG.warn("No operations are retrieved for {}", metaClient.getBasePathV2());
+      LOG.warn("No operations are retrieved for {}", metaClient.getBasePath());
       return null;
     }
 
     if (totalLogFiles.value() <= 0) {
-      LOG.warn("No log files are retrieved for {}", metaClient.getBasePathV2());
+      LOG.warn("No log files are retrieved for {}", metaClient.getBasePath());
       return null;
     }
 
@@ -170,7 +170,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
             + "Please fix your strategy implementation. FileIdsWithPendingCompactions :" + fgIdsInPendingCompactionAndClustering
             + ", Selected workload :" + compactionPlan);
     if (compactionPlan.getOperations().isEmpty()) {
-      LOG.warn("After filtering, Nothing to compact for {}", metaClient.getBasePathV2());
+      LOG.warn("After filtering, Nothing to compact for {}", metaClient.getBasePath());
     }
     return compactionPlan;
   }

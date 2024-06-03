@@ -67,7 +67,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
     }
 
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
-    LOG.info("Scheduling clustering for " + metaClient.getBasePath());
+    LOG.info("Scheduling clustering for {}", metaClient.getBasePath().toString());
 
     List<String> partitionPaths = getPartitionPathInActiveTimeline(hoodieTable);
 

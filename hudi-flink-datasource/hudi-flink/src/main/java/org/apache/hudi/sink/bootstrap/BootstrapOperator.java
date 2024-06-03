@@ -142,7 +142,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
    * Load the index records before {@link #processElement}.
    */
   protected void preLoadIndexRecords() throws Exception {
-    String basePath = hoodieTable.getMetaClient().getBasePath();
+    String basePath = hoodieTable.getMetaClient().getBasePath().toString();
     int taskID = getRuntimeContext().getIndexOfThisSubtask();
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
     for (String partitionPath : FSUtils.getAllPartitionPaths(

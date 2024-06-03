@@ -94,7 +94,7 @@ public class HoodieCDCExtractor {
       HoodieTableMetaClient metaClient,
       InstantRange range) {
     this.metaClient = metaClient;
-    this.basePath = metaClient.getBasePathV2();
+    this.basePath = metaClient.getBasePath();
     this.storage = metaClient.getStorage();
     this.supplementalLoggingMode = metaClient.getTableConfig().cdcSupplementalLoggingMode();
     this.instantRange = range;
@@ -242,7 +242,7 @@ public class HoodieCDCExtractor {
       HoodieInstant instant,
       HoodieWriteStat writeStat,
       WriteOperationType operation) {
-    final StoragePath basePath = metaClient.getBasePathV2();
+    final StoragePath basePath = metaClient.getBasePath();
     final HoodieStorage storage = metaClient.getStorage();
     final String instantTs = instant.getTimestamp();
 

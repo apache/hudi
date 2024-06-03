@@ -264,7 +264,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         engineContext, FileSystemViewStorageConfig.newBuilder().build(),
         HoodieCommonConfig.newBuilder().build(),
         mc -> HoodieTableMetadata.create(
-            engineContext, mc.getStorage(), metadataConfig, mc.getBasePathV2().toString()));
+            engineContext, mc.getStorage(), metadataConfig, mc.getBasePath().toString()));
     SyncableFileSystemView fsView = viewManager.getFileSystemView(metaClient);
     FileSlice fileSlice = fsView.getAllFileSlices(partitionPaths[0]).findFirst().get();
     List<String> logFilePathList = getLogFileListFromFileSlice(fileSlice);

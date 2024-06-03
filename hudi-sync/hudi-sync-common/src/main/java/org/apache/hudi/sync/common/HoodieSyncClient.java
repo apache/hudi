@@ -76,7 +76,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   }
 
   public String getBasePath() {
-    return metaClient.getBasePathV2().toString();
+    return metaClient.getBasePath().toString();
   }
 
   public boolean isBootstrap() {
@@ -183,7 +183,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       String storagePath = paths.get(storageValue);
       try {
         String relativePath = FSUtils.getRelativePartitionPath(
-            metaClient.getBasePathV2(), new StoragePath(storagePath));
+            metaClient.getBasePath(), new StoragePath(storagePath));
         events.add(PartitionEvent.newPartitionDropEvent(relativePath));
       } catch (IllegalArgumentException e) {
         LOG.error("Cannot parse the path stored in the metastore, ignoring it for "

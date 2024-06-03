@@ -66,7 +66,7 @@ public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
   }
 
   public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter, Option<HoodieEngineContext> context) {
-    return new HoodieSparkWriteableTestTable(metaClient.getBasePath(),
+    return new HoodieSparkWriteableTestTable(metaClient.getBasePath().toString(),
         metaClient.getRawHoodieStorage(),
         metaClient, schema, filter, null, context);
   }
@@ -78,7 +78,7 @@ public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
 
   public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter,
                                                  HoodieTableMetadataWriter metadataWriter, Option<HoodieEngineContext> context) {
-    return new HoodieSparkWriteableTestTable(metaClient.getBasePath(),
+    return new HoodieSparkWriteableTestTable(metaClient.getBasePath().toString(),
         metaClient.getRawHoodieStorage(),
         metaClient, schema, filter, metadataWriter, context);
   }

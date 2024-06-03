@@ -191,7 +191,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .collect(toList());
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
-        .withBasePath(metaClient.getBasePath())
+        .withBasePath(metaClient.getBasePath().toString())
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
         .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
@@ -211,7 +211,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =
-        operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
+        operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
 
     // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
     // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.

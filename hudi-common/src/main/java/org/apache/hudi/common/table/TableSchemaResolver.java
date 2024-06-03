@@ -258,15 +258,15 @@ public class TableSchemaResolver {
           // Determine the file format based on the file name, and then extract schema from it.
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
-            Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePathV2()).values().iterator();
+            Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().iterator();
             return Option.of(fetchSchemaFromFiles(filePaths));
           } else {
-            LOG.warn("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePathV2());
+            LOG.warn("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
             return Option.empty();
           }
         default:
           LOG.error("Unknown table type {}", metaClient.getTableType());
-          throw new InvalidTableException(metaClient.getBasePathV2().toString());
+          throw new InvalidTableException(metaClient.getBasePath().toString());
       }
     } catch (IOException e) {
       throw new HoodieException("Failed to read data schema", e);
@@ -302,9 +302,9 @@ public class TableSchemaResolver {
     // Read from the compacted file wrote
     HoodieCommitMetadata compactionMetadata = HoodieCommitMetadata
         .fromBytes(activeTimeline.getInstantDetails(lastCompactionCommit).get(), HoodieCommitMetadata.class);
-    String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePathV2()).values().stream().findAny()
+    String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
         .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for compaction "
-            + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
+            + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath().toString()));
     StoragePath path = new StoragePath(filePath);
     return HoodieIOFactory.getIOFactory(metaClient.getStorage())
         .getFileFormatUtils(path).readAvroSchema(metaClient.getStorage(), path);
@@ -512,6 +512,6 @@ public class TableSchemaResolver {
   }
 
   private Supplier<Exception> schemaNotFoundError() {
-    return () -> new HoodieSchemaNotFoundException("No schema found for table at " + metaClient.getBasePathV2().toString());
+    return () -> new HoodieSchemaNotFoundException("No schema found for table at " + metaClient.getBasePath().toString());
   }
 }

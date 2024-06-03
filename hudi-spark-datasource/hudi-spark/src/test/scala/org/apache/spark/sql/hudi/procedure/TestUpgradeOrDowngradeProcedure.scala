@@ -109,7 +109,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       assertResult(HoodieTableVersion.THREE.versionCode) {
         metaClient.getTableConfig.getTableVersion.versionCode()
       }
-      val metaPathDir = new StoragePath(metaClient.getBasePathV2, HoodieTableMetaClient.METAFOLDER_NAME)
+      val metaPathDir = new StoragePath(metaClient.getBasePath, HoodieTableMetaClient.METAFOLDER_NAME)
       // delete checksum from hoodie.properties
       val props = ConfigUtils.fetchConfigs(
         storage,

@@ -494,7 +494,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder(FILES.getPartitionPath())
         .withStorage(metadataMetaClient.getStorage())
-        .withBasePath(metadataMetaClient.getBasePath())
+        .withBasePath(metadataMetaClient.getBasePath().toString())
         .withLogFilePaths(logFilePaths)
         .withLatestInstantTime(latestCommitTimestamp)
         .withPartition(FILES.getPartitionPath())

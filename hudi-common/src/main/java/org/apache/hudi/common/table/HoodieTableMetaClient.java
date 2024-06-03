@@ -281,17 +281,8 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Returns base path of the table
    */
-  public StoragePath getBasePathV2() {
-    return basePath;
-  }
-
-  /**
-   * @return Base path
-   * @deprecated please use {@link #getBasePathV2()}
-   */
-  @Deprecated
-  public String getBasePath() {
-    return basePath.toString(); // this invocation is cached
+  public StoragePath getBasePath() {
+    return basePath; // this invocation is cached
   }
 
   /**
@@ -387,7 +378,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public Boolean isMetadataTable() {
-    return HoodieTableMetadata.isMetadataTable(getBasePathV2().toString());
+    return HoodieTableMetadata.isMetadataTable(getBasePath().toString());
   }
 
   public HoodieStorage getStorage() {

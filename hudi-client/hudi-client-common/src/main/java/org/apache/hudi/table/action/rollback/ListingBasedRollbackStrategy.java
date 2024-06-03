@@ -90,7 +90,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     try {
       HoodieTableMetaClient metaClient = table.getMetaClient();
       List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(context, table.getStorage(), table.getMetaClient().getBasePath(), false);
+          FSUtils.getAllPartitionPaths(context, table.getStorage(), table.getMetaClient().getBasePath().toString(), false);
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan: " + config.getTableName());
@@ -109,7 +109,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
 
         Supplier<FileStatus[]> filesToDelete = () -> {
           try {
-            return fetchFilesFromInstant(instantToRollback, partitionPath, metaClient.getBasePath(), baseFileExtension,
+            return fetchFilesFromInstant(instantToRollback, partitionPath, metaClient.getBasePath().toString(), baseFileExtension,
                 (FileSystem) metaClient.getStorage().getFileSystem(),
                 commitMetadataOptional, isCommitMetadataCompleted, tableType);
           } catch (IOException e) {

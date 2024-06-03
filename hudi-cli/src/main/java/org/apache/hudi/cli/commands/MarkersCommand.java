@@ -45,7 +45,7 @@ public class MarkersCommand {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.DELETE_MARKER.toString(), master, sparkMemory, instantTime,
-        metaClient.getBasePath());
+        metaClient.getBasePath().toString());
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

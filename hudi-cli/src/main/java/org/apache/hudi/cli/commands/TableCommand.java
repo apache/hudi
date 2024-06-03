@@ -269,7 +269,7 @@ public class TableCommand {
       throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     String tableName = client.getTableConfig().getTableName();
-    String tablePath = client.getBasePathV2().toString();
+    String tablePath = client.getBasePath().toString();
     Map<String, String> oldProps = client.getTableConfig().propsMap();
 
     HoodieTableType currentType = client.getTableType();

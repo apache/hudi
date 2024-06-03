@@ -65,7 +65,7 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
   @BeforeEach
   public void setup() throws IOException {
     metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, false);
-    basePath = metaClient.getBasePathV2().toString();
+    basePath = metaClient.getBasePath().toString();
     refreshFsView();
   }
 

@@ -109,7 +109,7 @@ public class UpgradeDowngrade {
     // Change metadata table version automatically
     if (toVersion.versionCode() >= HoodieTableVersion.FOUR.versionCode()) {
       String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(
-          metaClient.getBasePathV2().toString());
+          metaClient.getBasePath().toString());
       try {
         if (metaClient.getStorage().exists(new StoragePath(metadataTablePath))) {
           HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()

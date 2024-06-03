@@ -71,7 +71,7 @@ public class HoodieTablePreCommitFileSystemView {
     Map<String, HoodieBaseFile> newFilesWrittenForPartition = filesWritten.stream()
         .filter(file -> partitionStr.equals(file.getPartitionPath()))
         .collect(Collectors.toMap(HoodieWriteStat::getFileId, writeStat -> 
-            new HoodieBaseFile(new StoragePath(tableMetaClient.getBasePathV2(), writeStat.getPath()).toString(), writeStat.getFileId(), preCommitInstantTime, null)));
+            new HoodieBaseFile(new StoragePath(tableMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileId(), preCommitInstantTime, null)));
 
     Stream<HoodieBaseFile> committedBaseFiles = this.completedCommitsFileSystemView.getLatestBaseFiles(partitionStr);
     Map<String, HoodieBaseFile> allFileIds = committedBaseFiles

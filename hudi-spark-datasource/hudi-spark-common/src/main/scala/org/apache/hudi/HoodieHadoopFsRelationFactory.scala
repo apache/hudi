@@ -73,7 +73,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
   protected lazy val tableName: String = metaClient.getTableConfig.getTableName
   protected lazy val tableConfig: HoodieTableConfig = metaClient.getTableConfig
-  protected lazy val basePath: StoragePath = metaClient.getBasePathV2
+  protected lazy val basePath: StoragePath = metaClient.getBasePath
   protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   protected lazy val (tableAvroSchema: Schema, internalSchemaOpt: Option[InternalSchema]) = {

@@ -95,7 +95,7 @@ public class HoodieLogFileCommand {
         new HashMap<>();
     int numCorruptBlocks = 0;
     int dummyInstantTimeCount = 0;
-    String basePath = HoodieCLI.getTableMetaClient().getBasePathV2().toString();
+    String basePath = HoodieCLI.getTableMetaClient().getBasePath().toString();
 
     for (String logFilePath : logFilePaths) {
       StoragePath path = new StoragePath(logFilePath);
@@ -227,7 +227,7 @@ public class HoodieLogFileCommand {
       HoodieMergedLogRecordScanner scanner =
           HoodieMergedLogRecordScanner.newBuilder()
               .withStorage(storage)
-              .withBasePath(client.getBasePath())
+              .withBasePath(client.getBasePath().toString())
               .withLogFilePaths(logFilePaths)
               .withReaderSchema(readerSchema)
               .withLatestInstantTime(

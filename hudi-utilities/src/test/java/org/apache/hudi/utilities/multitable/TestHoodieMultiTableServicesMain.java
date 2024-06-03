@@ -133,7 +133,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     HoodieMultiTableServicesMain.Config cfg = getHoodieMultiServiceConfig();
     HoodieTableMetaClient metaClient1 = getMetaClient("table1");
     cfg.batch = true;
-    cfg.basePath = Collections.singletonList(metaClient1.getBasePath());
+    cfg.basePath = Collections.singletonList(metaClient1.getBasePath().toString());
     HoodieMultiTableServicesMain main = new HoodieMultiTableServicesMain(jsc, cfg);
     main.startServices();
     // Verify cleans
@@ -178,7 +178,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     cfg.batch = true;
     HoodieTableMetaClient metaClient1 = getMetaClient("table1");
     cfg.configs.add(String.format("%s=%s", TABLES_SKIP_WRONG_PATH, "true"));
-    cfg.configs.add(String.format("%s=%s", TABLES_TO_BE_SERVED_PROP, metaClient1.getBasePathV2() + ",file:///fakepath"));
+    cfg.configs.add(String.format("%s=%s", TABLES_TO_BE_SERVED_PROP, metaClient1.getBasePath() + ",file:///fakepath"));
     HoodieMultiTableServicesMain main = new HoodieMultiTableServicesMain(jsc, cfg);
     try {
       main.startServices();
@@ -218,11 +218,11 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     HoodieTableMetaClient metaClient1 = getMetaClient("table1");
     HoodieTableMetaClient metaClient2 = getMetaClient("table2");
     String instant1 = InProcessTimeGenerator.createNewInstantTime(0);
-    writeToTable(metaClient1.getBasePath(), instant1, false);
-    writeToTable(metaClient2.getBasePath(), instant1, false);
+    writeToTable(metaClient1.getBasePath().toString(), instant1, false);
+    writeToTable(metaClient2.getBasePath().toString(), instant1, false);
     String instant2 = InProcessTimeGenerator.createNewInstantTime(1);
-    writeToTable(metaClient1.getBasePath(), instant2, true);
-    writeToTable(metaClient2.getBasePath(), instant2, true);
+    writeToTable(metaClient1.getBasePath().toString(), instant2, true);
+    writeToTable(metaClient2.getBasePath().toString(), instant2, true);
     Assertions.assertEquals(0, metaClient1.reloadActiveTimeline().getCleanerTimeline().countInstants());
     Assertions.assertEquals(0, metaClient2.reloadActiveTimeline().getCleanerTimeline().countInstants());
   }

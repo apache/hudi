@@ -65,7 +65,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
 
   public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema,
                                                  BloomFilter filter) {
-    return new HoodieFlinkWriteableTestTable(metaClient.getBasePathV2().toString(),
+    return new HoodieFlinkWriteableTestTable(metaClient.getBasePath().toString(),
         metaClient.getRawHoodieStorage(), metaClient, schema, filter);
   }
 

@@ -101,7 +101,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
   public List<String> findConflictInstantsInPartition(HoodieTable hoodieTable, String partition, int bucketId, Set<String> pendingInstants) {
     List<String> instants = new ArrayList<>();
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    StoragePath partitionPath = new StoragePath(metaClient.getBasePathV2(), partition);
+    StoragePath partitionPath = new StoragePath(metaClient.getBasePath(), partition);
 
     List<StoragePathInfo> filesInPartition = listFilesFromPartition(metaClient, partitionPath);
 

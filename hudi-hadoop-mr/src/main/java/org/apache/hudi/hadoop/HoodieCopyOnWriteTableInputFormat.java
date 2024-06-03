@@ -274,7 +274,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
         // If hoodie.metadata.enabled is set to false and the table doesn't have the metadata,
         // read the table using fs view cache instead of file index.
         // This is because there's no file index in non-metadata table.
-        String basePath = tableMetaClient.getBasePathV2().toString();
+        String basePath = tableMetaClient.getBasePath().toString();
         Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
         HoodieTimeline timeline = getActiveTimeline(tableMetaClient, shouldIncludePendingCommits);
         Option<String> queryInstant = queryCommitInstant.or(() -> timeline.lastInstant().map(HoodieInstant::getTimestamp));

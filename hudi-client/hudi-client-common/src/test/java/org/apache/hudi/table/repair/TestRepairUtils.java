@@ -67,7 +67,7 @@ public class TestRepairUtils {
     initCommitInfoForRepairTests(BASE_FILE_INFO, LOG_FILE_INFO);
     metaClient =
         HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), HoodieTableType.COPY_ON_WRITE);
-    basePath = metaClient.getBasePath();
+    basePath = metaClient.getBasePath().toString();
   }
 
   public void setupTimelineInFS() throws IOException {
