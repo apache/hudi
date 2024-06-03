@@ -113,7 +113,7 @@ class LazyFileSystemView implements SyncableFileSystemView, Serializable {
 
   @Override
   public Stream<FileSlice> getLatestFileSlicesIncludingInflight(String partitionPath) {
-    return Stream.empty();
+    return getView().getLatestFileSlicesIncludingInflight(partitionPath);
   }
 
   @Override
